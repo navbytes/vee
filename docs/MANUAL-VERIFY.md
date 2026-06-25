@@ -30,10 +30,27 @@ command does not return — quit it with Ctrl-C or by killing the process.
 7. **Frecency** — after launching a few apps, reopen and note that
    recently/often-used apps rank higher on an empty query.
 
+## Visual reference & autonomous snapshots
+
+The launcher is rendered offscreen to a PNG by the built-in snapshot harness —
+this is how the UI was iterated to a Raycast-grade look without a live desktop,
+and it doubles as a visual-regression check:
+
+```sh
+VEE_SNAPSHOT_OUT=/tmp/vee.png swift run vee                 # dark, all apps
+VEE_SNAPSHOT_OUT=/tmp/vee.png VEE_SNAPSHOT_DARK=0 swift run vee   # light
+VEE_SNAPSHOT_OUT=/tmp/vee.png VEE_SNAPSHOT_QUERY=saf swift run vee  # filtered
+```
+
+Committed reference renders: [`docs/screenshots/launcher-dark.png`](screenshots/launcher-dark.png),
+`launcher-light.png`, `launcher-filtered.png` — real app icons, an
+"APPLICATIONS" section header, a right-aligned "Application" type accessory, a
+rounded neutral selection, and a footer (selected icon + Launch ↩ + Actions ⌘K).
+
 ## Known limitations in this build (by design / follow-ups)
 
-- **App icons** render as a generic SF Symbol — real per-app icons
-  (`NSWorkspace.icon(forFile:)`) are a follow-up.
+- **Real app icons** now render (full-color, via `NSWorkspace.icon`); ✅ done.
+- The footer's **Actions ⌘K** is presentational — the actions panel isn't wired yet.
 - **Clipboard history** is captured in memory and privacy-filtered
   (1Password/concealed/transient dropped) but has **no launcher surface yet** —
   it runs in the background; verify behavior via the unit tests, not the UI.

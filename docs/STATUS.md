@@ -21,6 +21,38 @@ Phase B ("make it actually launch") landed on top of the Wave-3 core. Deltas:
 
 **Revised verdict:** Vee is now a **runnable host-native app-search launcher** (pending your desktop confirmation of the visuals) on top of the tested engine core — no longer "not a runnable launcher." The remaining gap to the full spec is the networked JS plugins and the real out-of-process boundary.
 
+---
+
+## Update — Phase C, 2026-06-26: Raycast-grade launcher polish
+
+Driven autonomously via a self-rendering **offscreen snapshot harness**
+(`VEE_SNAPSHOT_OUT` renders the launcher to a PNG through the real pipeline —
+real app enumeration + coordinator projection — so the UI is verifiable without a
+live desktop). Iterated across visual cycles, each verified by reading the PNG:
+
+- **Cycle 1:** real full-color app icons (`NSWorkspace.icon`, pre-rasterized for
+  crisp/sync draw); borderless flush search field + magnifier; custom rounded
+  *neutral* selection (never the system blue); single-line rows; footer action bar.
+- **Cycle 2:** "APPLICATIONS" section header; right-aligned "Application" type
+  accessory; footer shows the selected app's real icon + primary action + ⌘K;
+  top-match selection on every filter (Return launches the best result).
+- **Cycle 3 / hardening:** duplicate-name dedup (no double rows); **async app
+  enumeration** (menu bar + hotkey ready instantly, list populates off-main);
+  release build; committed reference renders in `docs/screenshots/`.
+
+Verified: 147 Swift tests green (1 live-keychain skipped); release `swift build`
+clean; `vee` smoke-runs crash-free; dark + light + filtered snapshots read as
+Raycast-grade (see `docs/screenshots/`). App packaged to `~/Applications/Vee.app`
+(Info.plist, accessory/LSUIElement, ad-hoc signed) via `scripts/package-app.sh`.
+
+**Now solid:** the launcher is a genuinely polished, runnable app-search launcher
+— real icons, section header, type accessory, rounded selection, footer, light/dark,
+instant open, keyboard-first (type / ↑↓ / ↩ / esc). App search → **runnable + polished**.
+
+**Still deferred (feature scope, not polish):** the footer's **Actions ⌘K** is
+presentational (no actions panel yet); commands/clipboard/calendar have no launcher
+*surface* yet; the three networked JS plugins; the real out-of-process transport.
+
 *The original Wave-3 audit below is preserved as written (pre-Phase-B).*
 
 ## TL;DR verdict

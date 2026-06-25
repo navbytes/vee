@@ -80,12 +80,18 @@ MainActor.assumeIsolated {
     // this in-memory set natively per keystroke (never re-scans on a keypress).
     let appEnumerator = NSWorkspaceAppEnumerator()
     let appSearch = AppSearchProvider(enumerator: appEnumerator, clock: SystemClock())
-    let installedApps = appSearch.search(query: "", limit: 5000)
-    coordinator.showHostCandidates(installedApps,
-                                   sectionTitle: "Applications", accessory: "Application") { candidate in
-        appSearch.recordLaunch(bundleId: candidate.id)   // feeds frecency next time
-        appEnumerator.launch(bundleId: candidate.id)
-        window.hideLauncher()
+    // Enumerate installed apps OFF the main thread so the menu bar + hotkey are
+    // ready instantly; populate the launcher's candidate set when it's done.
+    DispatchQueue.global(qos: .userInitiated).async {
+        let installedApps = appSearch.search(query: "", limit: 5000)
+        DispatchQueue.main.async {
+            coordinator.showHostCandidates(installedApps,
+                                           sectionTitle: "Applications", accessory: "Application") { candidate in
+                appSearch.recordLaunch(bundleId: candidate.id)   // feeds frecency next time
+                appEnumerator.launch(bundleId: candidate.id)
+                window.hideLauncher()
+            }
+        }
     }
 
     // ── Clipboard history service (real NSPasteboard, privacy-filtered) ───────

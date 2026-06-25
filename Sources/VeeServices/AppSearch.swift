@@ -91,11 +91,17 @@ public final class AppSearchProvider {
         frecency.record(bundleId: bundleId, at: clock.now)
     }
 
-    /// Deduplicated app set (first occurrence of each bundleId wins).
+    /// Deduplicated app set: first occurrence of each bundle id wins, then a
+    /// second pass collapses duplicate display names (e.g. an app present in both
+    /// `/Applications` and a web-app shortcut) so the launcher never shows two
+    /// identical rows.
     private func dedupedApps() -> [AppRecord] {
-        var seen = Set<String>()
+        var seenIds = Set<String>()
+        var seenNames = Set<String>()
         var out: [AppRecord] = []
-        for app in enumerator.enumerateApps() where seen.insert(app.bundleId).inserted {
+        for app in enumerator.enumerateApps() {
+            guard seenIds.insert(app.bundleId).inserted else { continue }
+            guard seenNames.insert(app.name.lowercased()).inserted else { continue }
             out.append(app)
         }
         return out
