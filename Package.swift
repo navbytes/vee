@@ -74,6 +74,13 @@ let package = Package(
             swiftSettings: relaxedConcurrency
         ),
 
+        // MARK: Out-of-process plugin host (child process; JSC + real bridges)
+        .executableTarget(
+            name: "vee-plugin-host",
+            dependencies: ["VeeEngine", "VeeServices", "VeeProtocol"],
+            swiftSettings: relaxedConcurrency
+        ),
+
         // MARK: Test targets (one per source target)
         .testTarget(name: "VeeProtocolTests", dependencies: ["VeeProtocol"]),
         .testTarget(name: "VeeFuzzyTests", dependencies: ["VeeFuzzy", "VeeProtocol"]),
