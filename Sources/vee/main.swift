@@ -17,26 +17,44 @@ MainActor.assumeIsolated {
     // real icons and live filtering. Verifies/iterates the UI headlessly.
     if let snapOut = ProcessInfo.processInfo.environment["VEE_SNAPSHOT_OUT"] {
         _ = NSApplication.shared
-        let dark = ProcessInfo.processInfo.environment["VEE_SNAPSHOT_DARK"] != "0"
-        let query = ProcessInfo.processInfo.environment["VEE_SNAPSHOT_QUERY"] ?? ""
+        let env = ProcessInfo.processInfo.environment
+        let dark = env["VEE_SNAPSHOT_DARK"] != "0"
+        let query = env["VEE_SNAPSHOT_QUERY"] ?? ""
+        let state = env["VEE_SNAPSHOT_STATE"] ?? "list"
 
-        let loopback = LoopbackTransport()
-        let host = PluginHost(transport: loopback, clock: DispatchClock(),
-                              httpClient: URLSessionHTTPClient(), bundler: StaticBundler(source: ""))
         let window = AppKitLauncherWindow()
-        let coordinator = AppCoordinator(
-            pluginId: "com.vee.launcher",
-            transport: LoopbackCoordinatorTransport(loopback), host: host)
-        coordinator.window = window
-        let appSearch = AppSearchProvider(enumerator: NSWorkspaceAppEnumerator(), clock: SystemClock())
-        coordinator.showHostCandidates(appSearch.search(query: "", limit: 200),
-                                       sectionTitle: "Applications", accessory: "Application") { _ in }
-        if !query.isEmpty { coordinator.setQuery(query) }
+        var keepAlive: [AnyObject] = [window]
+
+        switch state {
+        case "empty":
+            window.setRootViewModel(.empty(EmptyViewModel(
+                title: "No Results",
+                description: "We couldn't find anything matching your search.")))
+        case "detail":
+            window.setRootViewModel(.detail(DetailViewModel(
+                title: "Vee",
+                markdown: "A keyboard-first, plugin-extensible launcher.\n\nPress ⌥Space anywhere to open Vee, type to search your apps and commands, then hit ↩ to run.")))
+        default: // "list" — the real app-search pipeline
+            let loopback = LoopbackTransport()
+            let host = PluginHost(transport: loopback, clock: DispatchClock(),
+                                  httpClient: URLSessionHTTPClient(), bundler: StaticBundler(source: ""))
+            let coordinator = AppCoordinator(
+                pluginId: "com.vee.launcher",
+                transport: LoopbackCoordinatorTransport(loopback), host: host)
+            coordinator.window = window
+            let appSearch = AppSearchProvider(enumerator: NSWorkspaceAppEnumerator(), clock: SystemClock())
+            coordinator.showHostCandidates(appSearch.search(query: "", limit: 200),
+                                           sectionTitle: "Applications") { _ in }
+            if !query.isEmpty { coordinator.setQuery(query) }
+            keepAlive.append(host)
+            keepAlive.append(coordinator)
+        }
 
         // Let IconServices deliver async app-icon reps before we capture.
         RunLoop.current.run(until: Date(timeIntervalSinceNow: 0.6))
         window.writeSnapshot(to: URL(fileURLWithPath: snapOut),
                              size: NSSize(width: 720, height: 470), dark: dark)
+        _ = keepAlive
         exit(0)
     }
 
@@ -86,7 +104,7 @@ MainActor.assumeIsolated {
         let installedApps = appSearch.search(query: "", limit: 5000)
         DispatchQueue.main.async {
             coordinator.showHostCandidates(installedApps,
-                                           sectionTitle: "Applications", accessory: "Application") { candidate in
+                                           sectionTitle: "Applications") { candidate in
                 appSearch.recordLaunch(bundleId: candidate.id)   // feeds frecency next time
                 appEnumerator.launch(bundleId: candidate.id)
                 window.hideLauncher()

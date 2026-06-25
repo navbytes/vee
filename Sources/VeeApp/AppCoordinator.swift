@@ -277,6 +277,18 @@ public final class AppCoordinator {
                     ? [ActionViewModel(actionId: Self.builtinActionId, title: "Open")]
                     : c.actions.map { ActionViewModel(actionId: $0.id, title: $0.title, shortcut: $0.shortcut) })
         }
+        // No matches → a proper empty state, never a section header with zero
+        // rows (which reads as a bug). Only when there's an active query, though:
+        // an empty candidate set with no query just means "not loaded yet".
+        if items.isEmpty && !query.isEmpty {
+            selectedID = nil
+            root = .empty(EmptyViewModel(
+                title: "No Results",
+                description: "No apps or commands match “\(query)”."))
+            pushToWindow()
+            return
+        }
+
         // Search semantics: the top (best-ranked) match is selected on every
         // (re)filter, so Return launches the most relevant result. Arrow-key
         // navigation goes through `moveSelection`, which doesn't re-filter, so it
