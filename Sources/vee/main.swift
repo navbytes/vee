@@ -29,7 +29,8 @@ MainActor.assumeIsolated {
             transport: LoopbackCoordinatorTransport(loopback), host: host)
         coordinator.window = window
         let appSearch = AppSearchProvider(enumerator: NSWorkspaceAppEnumerator(), clock: SystemClock())
-        coordinator.showHostCandidates(appSearch.search(query: "", limit: 200)) { _ in }
+        coordinator.showHostCandidates(appSearch.search(query: "", limit: 200),
+                                       sectionTitle: "Applications", accessory: "Application") { _ in }
         if !query.isEmpty { coordinator.setQuery(query) }
 
         // Let IconServices deliver async app-icon reps before we capture.
@@ -80,7 +81,8 @@ MainActor.assumeIsolated {
     let appEnumerator = NSWorkspaceAppEnumerator()
     let appSearch = AppSearchProvider(enumerator: appEnumerator, clock: SystemClock())
     let installedApps = appSearch.search(query: "", limit: 5000)
-    coordinator.showHostCandidates(installedApps) { candidate in
+    coordinator.showHostCandidates(installedApps,
+                                   sectionTitle: "Applications", accessory: "Application") { candidate in
         appSearch.recordLaunch(bundleId: candidate.id)   // feeds frecency next time
         appEnumerator.launch(bundleId: candidate.id)
         window.hideLauncher()

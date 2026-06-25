@@ -7,27 +7,27 @@ import VeeServices
 /// AppKit but contain NO branching/business logic — they only translate the
 /// coordinator's view models into native widgets and forward user gestures back
 /// through the `LauncherIntentHandling` sink. Every decision (filtering, the
-/// selection rule, action dispatch) lives in the (tested) `AppCoordinator`; this
-/// layer just renders the pushed projection and reports intent.
+/// selection rule, action dispatch) lives in the (tested) `AppCoordinator`.
 ///
 /// Everything here is `@MainActor` because AppKit demands the main thread.
 
-// MARK: - Design tokens (one place to tune the look)
+// MARK: - Design tokens
 
 private enum UI {
     static let panelWidth: CGFloat = 720
     static let panelHeight: CGFloat = 470
     static let cornerRadius: CGFloat = 14
     static let rowHeight: CGFloat = 48
-    static let contentInset: CGFloat = 8          // list inset from panel edges
+    static let contentInset: CGFloat = 8
     static let searchFont: CGFloat = 22
     static let titleFont: CGFloat = 14
     static let subtitleFont: CGFloat = 12
     static let iconSize: CGFloat = 28
     static let rowCornerRadius: CGFloat = 9
+    static let footerHeight: CGFloat = 40
 }
 
-// MARK: - Launcher window (NSPanel: search field + list + detail/empty panes)
+// MARK: - Launcher window
 
 @MainActor
 public final class AppKitLauncherWindow: NSObject, @MainActor LauncherWindowPresenting {
@@ -36,16 +36,16 @@ public final class AppKitLauncherWindow: NSObject, @MainActor LauncherWindowPres
 
     private var items: [ListItemViewModel] = []
     private var selectedID: String?
-    private var primaryActionForSelection: String? {
-        guard let selectedID,
-              let item = items.first(where: { $0.id == selectedID }) else { return nil }
-        return item.actions.first?.actionId
+    private var selectedItem: ListItemViewModel? {
+        guard let selectedID else { return nil }
+        return items.first(where: { $0.id == selectedID })
     }
+    private var primaryActionForSelection: String? { selectedItem?.actions.first?.actionId }
 
-    // Native widgets.
     private let panel: KeyForwardingPanel
     private let searchField: NSTextField
     private let magnifier: NSImageView
+    private let sectionLabel: NSTextField
     private let tableView: NSTableView
     private let listScroll: NSScrollView
     private let detailScroll: NSScrollView
@@ -58,11 +58,11 @@ public final class AppKitLauncherWindow: NSObject, @MainActor LauncherWindowPres
     private let footer: LauncherFooterView
     private let headerSeparator: NSBox
     private let footerSeparator: NSBox
+    private var sectionHeightConstraint: NSLayoutConstraint!
 
     private static let rowColumnID = NSUserInterfaceItemIdentifier("vee.row")
 
     public override init() {
-        // A borderless, non-activating HUD-style floating panel.
         panel = KeyForwardingPanel(
             contentRect: NSRect(x: 0, y: 0, width: UI.panelWidth, height: UI.panelHeight),
             styleMask: [.borderless, .nonactivatingPanel, .fullSizeContentView],
@@ -79,7 +79,6 @@ public final class AppKitLauncherWindow: NSObject, @MainActor LauncherWindowPres
         panel.backgroundColor = .clear
         panel.isOpaque = false
 
-        // Borderless, flush search field (no bezel) — Raycast-style.
         searchField = NSTextField()
         searchField.translatesAutoresizingMaskIntoConstraints = false
         searchField.isBordered = false
@@ -100,7 +99,12 @@ public final class AppKitLauncherWindow: NSObject, @MainActor LauncherWindowPres
         magnifier.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: 18, weight: .regular)
         magnifier.contentTintColor = .secondaryLabelColor
 
-        // List: single-column view-based table.
+        sectionLabel = NSTextField(labelWithString: "")
+        sectionLabel.translatesAutoresizingMaskIntoConstraints = false
+        sectionLabel.font = .systemFont(ofSize: 11, weight: .semibold)
+        sectionLabel.textColor = .tertiaryLabelColor
+        sectionLabel.lineBreakMode = .byTruncatingTail
+
         tableView = NSTableView()
         tableView.translatesAutoresizingMaskIntoConstraints = false
         tableView.headerView = nil
@@ -121,10 +125,9 @@ public final class AppKitLauncherWindow: NSObject, @MainActor LauncherWindowPres
         listScroll.hasVerticalScroller = true
         listScroll.autohidesScrollers = true
         listScroll.automaticallyAdjustsContentInsets = false
-        listScroll.contentInsets = NSEdgeInsets(top: 6, left: 0, bottom: 6, right: 0)
+        listScroll.contentInsets = NSEdgeInsets(top: 4, left: 0, bottom: 6, right: 0)
         listScroll.documentView = tableView
 
-        // Detail pane.
         detailTitleLabel = NSTextField(labelWithString: "")
         detailTitleLabel.translatesAutoresizingMaskIntoConstraints = false
         detailTitleLabel.font = .systemFont(ofSize: 18, weight: .semibold)
@@ -151,7 +154,6 @@ public final class AppKitLauncherWindow: NSObject, @MainActor LauncherWindowPres
         detailContainer.addSubview(detailTitleLabel)
         detailContainer.addSubview(detailScroll)
 
-        // Empty-state pane.
         emptyTitleLabel = NSTextField(labelWithString: "")
         emptyTitleLabel.font = .systemFont(ofSize: 16, weight: .semibold)
         emptyTitleLabel.alignment = .center
@@ -180,7 +182,6 @@ public final class AppKitLauncherWindow: NSObject, @MainActor LauncherWindowPres
 
         super.init()
 
-        // Vibrant rounded backdrop behind everything.
         let backdrop = NSVisualEffectView()
         backdrop.translatesAutoresizingMaskIntoConstraints = false
         backdrop.material = .sidebar
@@ -196,6 +197,7 @@ public final class AppKitLauncherWindow: NSObject, @MainActor LauncherWindowPres
         content.addSubview(magnifier)
         content.addSubview(searchField)
         content.addSubview(headerSeparator)
+        content.addSubview(sectionLabel)
         content.addSubview(listScroll)
         content.addSubview(detailContainer)
         content.addSubview(emptyContainer)
@@ -210,7 +212,8 @@ public final class AppKitLauncherWindow: NSObject, @MainActor LauncherWindowPres
         searchField.delegate = self
         panel.keyForwardingDelegate = self
 
-        let footerHeight: CGFloat = 38
+        sectionHeightConstraint = sectionLabel.heightAnchor.constraint(equalToConstant: 0)
+
         NSLayoutConstraint.activate([
             backdrop.leadingAnchor.constraint(equalTo: content.leadingAnchor),
             backdrop.trailingAnchor.constraint(equalTo: content.trailingAnchor),
@@ -230,9 +233,14 @@ public final class AppKitLauncherWindow: NSObject, @MainActor LauncherWindowPres
             headerSeparator.trailingAnchor.constraint(equalTo: content.trailingAnchor),
             headerSeparator.topAnchor.constraint(equalTo: searchField.bottomAnchor, constant: 16),
 
+            sectionLabel.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 22),
+            sectionLabel.trailingAnchor.constraint(lessThanOrEqualTo: content.trailingAnchor, constant: -22),
+            sectionLabel.topAnchor.constraint(equalTo: headerSeparator.bottomAnchor, constant: 10),
+            sectionHeightConstraint,
+
             listScroll.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: UI.contentInset),
             listScroll.trailingAnchor.constraint(equalTo: content.trailingAnchor, constant: -UI.contentInset),
-            listScroll.topAnchor.constraint(equalTo: headerSeparator.bottomAnchor),
+            listScroll.topAnchor.constraint(equalTo: sectionLabel.bottomAnchor, constant: 2),
             listScroll.bottomAnchor.constraint(equalTo: footerSeparator.topAnchor),
 
             detailContainer.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: 18),
@@ -259,7 +267,7 @@ public final class AppKitLauncherWindow: NSObject, @MainActor LauncherWindowPres
             footer.trailingAnchor.constraint(equalTo: content.trailingAnchor),
             footer.bottomAnchor.constraint(equalTo: content.bottomAnchor),
             footer.topAnchor.constraint(equalTo: footerSeparator.bottomAnchor),
-            footer.heightAnchor.constraint(equalToConstant: footerHeight),
+            footer.heightAnchor.constraint(equalToConstant: UI.footerHeight),
         ])
 
         renderPanes(for: nil)
@@ -267,35 +275,39 @@ public final class AppKitLauncherWindow: NSObject, @MainActor LauncherWindowPres
 
     // MARK: LauncherWindowPresenting
 
-    public func attach(intentHandler: LauncherIntentHandling) {
-        self.intent = intentHandler
-    }
+    public func attach(intentHandler: LauncherIntentHandling) { self.intent = intentHandler }
 
     public func setRootViewModel(_ root: RootViewModel?) {
         switch root {
         case .list(let list):
             items = list.items
             selectedID = list.selectedID
+            let title = list.sectionTitle
+            let hasTitle = !(title?.isEmpty ?? true)
+            sectionLabel.stringValue = (title ?? "").uppercased()
+            sectionLabel.isHidden = !hasTitle
+            sectionHeightConstraint.constant = hasTitle ? 16 : 0
             tableView.reloadData()
             syncTableSelection()
-            footer.update(primaryTitle: selectedPrimaryActionTitle(), hasItems: !items.isEmpty)
+            updateFooter()
         case .detail(let detail):
             detailTitleLabel.stringValue = detail.title ?? ""
             detailTextView.string = detail.markdown
-            footer.update(primaryTitle: nil, hasItems: false)
+            footer.update(icon: nil, primaryTitle: nil, hasItems: false)
         case .empty(let empty):
             emptyTitleLabel.stringValue = empty.title ?? "No Results"
             emptyDescriptionLabel.stringValue = empty.description ?? ""
-            footer.update(primaryTitle: nil, hasItems: false)
+            footer.update(icon: nil, primaryTitle: nil, hasItems: false)
         case .some(.none), nil:
-            footer.update(primaryTitle: nil, hasItems: false)
+            footer.update(icon: nil, primaryTitle: nil, hasItems: false)
         }
         renderPanes(for: root)
     }
 
-    private func selectedPrimaryActionTitle() -> String? {
-        guard let selectedID, let item = items.first(where: { $0.id == selectedID }) else { return nil }
-        return item.actions.first?.title
+    private func updateFooter() {
+        let item = selectedItem
+        let icon = item.flatMap { LauncherRowView.resolveIcon($0.icon).0 }
+        footer.update(icon: icon, primaryTitle: item?.actions.first?.title, hasItems: !items.isEmpty)
     }
 
     public func showLauncher() {
@@ -305,9 +317,7 @@ public final class AppKitLauncherWindow: NSObject, @MainActor LauncherWindowPres
         panel.makeFirstResponder(searchField)
     }
 
-    public func hideLauncher() {
-        panel.orderOut(nil)
-    }
+    public func hideLauncher() { panel.orderOut(nil) }
 
     // MARK: - Pane visibility
 
@@ -320,6 +330,7 @@ public final class AppKitLauncherWindow: NSObject, @MainActor LauncherWindowPres
         case .some(.none), nil: showList = false; showDetail = false; showEmpty = false
         }
         listScroll.isHidden = !showList
+        sectionLabel.isHidden = !showList || sectionLabel.stringValue.isEmpty
         detailContainer.isHidden = !showDetail
         emptyContainer.isHidden = !showEmpty
     }
@@ -343,8 +354,6 @@ public final class AppKitLauncherWindow: NSObject, @MainActor LauncherWindowPres
         panel.center()
     }
 
-    // MARK: - Gesture forwarding
-
     @objc private func rowDoubleClicked() { invokePrimaryAction() }
 
     fileprivate func invokePrimaryAction() {
@@ -354,10 +363,6 @@ public final class AppKitLauncherWindow: NSObject, @MainActor LauncherWindowPres
 
     // MARK: - Offscreen snapshot (autonomous visual testing / regression)
 
-    /// Render the launcher's content offscreen to a PNG. Drives the
-    /// `VEE_SNAPSHOT_OUT` harness so the UI can be verified/iterated without a
-    /// live desktop. The vibrant backdrop doesn't render offscreen, so we
-    /// composite the cached view tree over a solid, appearance-matched fill.
     public func writeSnapshot(to url: URL, size: NSSize, dark: Bool) {
         let appearance = NSAppearance(named: dark ? .darkAqua : .aqua)
         if let appearance { panel.appearance = appearance }
@@ -410,6 +415,7 @@ extension AppKitLauncherWindow: NSTableViewDataSource, NSTableViewDelegate {
         cell.configure(title: item.title,
                        subtitle: item.subtitle,
                        icon: item.icon,
+                       accessory: item.accessoryText,
                        shortcut: item.actions.first?.shortcut)
         return cell
     }
@@ -471,13 +477,10 @@ extension AppKitLauncherWindow: KeyForwardingPanelDelegate {
 
 // MARK: - Selection row view (rounded, neutral — never the emphasized blue)
 
-/// Draws the Raycast-style soft rounded selection pill regardless of focus, so
-/// the selected row reads the same whether or not the table is key (and in the
-/// offscreen snapshot).
 @MainActor
 final class LauncherSelectionRowView: NSTableRowView {
     override var isEmphasized: Bool {
-        get { false }            // keep selection neutral, never the system blue
+        get { false }
         set { }
     }
     override func drawSelection(in dirtyRect: NSRect) {
@@ -490,14 +493,14 @@ final class LauncherSelectionRowView: NSTableRowView {
     }
 }
 
-// MARK: - Row view (real app icon + title + subtitle + shortcut)
+// MARK: - Row view (real app icon + title + subtitle + accessory)
 
 @MainActor
 final class LauncherRowView: NSTableCellView {
     private let iconView = NSImageView()
     private let titleLabel = NSTextField(labelWithString: "")
     private let subtitleLabel = NSTextField(labelWithString: "")
-    private let shortcutLabel = NSTextField(labelWithString: "")
+    private let accessoryLabel = NSTextField(labelWithString: "")
 
     override init(frame frameRect: NSRect) { super.init(frame: frameRect); build() }
     required init?(coder: NSCoder) { super.init(coder: coder); build() }
@@ -516,12 +519,12 @@ final class LauncherRowView: NSTableCellView {
         subtitleLabel.textColor = .secondaryLabelColor
         subtitleLabel.lineBreakMode = .byTruncatingTail
 
-        shortcutLabel.translatesAutoresizingMaskIntoConstraints = false
-        shortcutLabel.font = .systemFont(ofSize: 12, weight: .regular)
-        shortcutLabel.textColor = .tertiaryLabelColor
-        shortcutLabel.alignment = .right
-        shortcutLabel.setContentHuggingPriority(.required, for: .horizontal)
-        shortcutLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
+        accessoryLabel.translatesAutoresizingMaskIntoConstraints = false
+        accessoryLabel.font = .systemFont(ofSize: 12, weight: .regular)
+        accessoryLabel.textColor = .tertiaryLabelColor
+        accessoryLabel.alignment = .right
+        accessoryLabel.setContentHuggingPriority(.required, for: .horizontal)
+        accessoryLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
 
         let textStack = NSStackView(views: [titleLabel, subtitleLabel])
         textStack.translatesAutoresizingMaskIntoConstraints = false
@@ -531,7 +534,7 @@ final class LauncherRowView: NSTableCellView {
 
         addSubview(iconView)
         addSubview(textStack)
-        addSubview(shortcutLabel)
+        addSubview(accessoryLabel)
 
         NSLayoutConstraint.activate([
             iconView.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 14),
@@ -542,32 +545,29 @@ final class LauncherRowView: NSTableCellView {
             textStack.leadingAnchor.constraint(equalTo: iconView.trailingAnchor, constant: 12),
             textStack.centerYAnchor.constraint(equalTo: centerYAnchor),
 
-            shortcutLabel.leadingAnchor.constraint(greaterThanOrEqualTo: textStack.trailingAnchor, constant: 8),
-            shortcutLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -16),
-            shortcutLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
+            accessoryLabel.leadingAnchor.constraint(greaterThanOrEqualTo: textStack.trailingAnchor, constant: 8),
+            accessoryLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -16),
+            accessoryLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
         ])
     }
 
-    func configure(title: String, subtitle: String?, icon: String?, shortcut: String?) {
+    func configure(title: String, subtitle: String?, icon: String?, accessory: String?, shortcut: String?) {
         titleLabel.stringValue = title
         subtitleLabel.stringValue = subtitle ?? ""
         subtitleLabel.isHidden = (subtitle?.isEmpty ?? true)
-        shortcutLabel.stringValue = shortcut ?? ""
+        accessoryLabel.stringValue = accessory ?? shortcut ?? ""
         let (image, isRealIcon) = LauncherRowView.resolveIcon(icon)
         iconView.image = image
-        // Real app icons are full-color; SF-symbol fallbacks tint to the label color.
         iconView.contentTintColor = isRealIcon ? nil : .secondaryLabelColor
     }
 
-    /// Resolve an icon hint to an image + whether it's a real (file-based) icon.
-    /// A filesystem path → the real app/file icon (full color); otherwise an SF
-    /// Symbol; otherwise a generic fallback glyph. Pure lookup.
+    /// Resolve an icon hint → (image, isRealFileIcon). A filesystem path → the
+    /// real (full-color) app/file icon, pre-rasterized so it draws synchronously
+    /// (IconServices reps otherwise blank in an offscreen capture); otherwise an
+    /// SF Symbol; otherwise a generic fallback glyph.
     static func resolveIcon(_ hint: String?) -> (NSImage?, Bool) {
         if let hint, !hint.isEmpty {
             if hint.hasPrefix("/"), FileManager.default.fileExists(atPath: hint) {
-                // Pre-rasterize into a fixed-size bitmap so the icon draws crisply
-                // and synchronously (IconServices reps otherwise render lazily,
-                // which blanks them in an offscreen capture).
                 let icon = NSWorkspace.shared.icon(forFile: hint)
                 let target = NSImage(size: NSSize(width: UI.iconSize, height: UI.iconSize))
                 target.lockFocus()
@@ -585,12 +585,11 @@ final class LauncherRowView: NSTableCellView {
     }
 }
 
-// MARK: - Footer / action bar (primary action + ⌘K hint)
+// MARK: - Footer / action bar (selected icon + primary action + ⌘K hint)
 
-/// A slim bottom bar echoing Raycast: the selected item's primary action on the
-/// right with a ↩ glyph, and an "Actions ⌘K" affordance. Pure presentation.
 @MainActor
 final class LauncherFooterView: NSView {
+    private let iconView = NSImageView()
     private let primaryLabel = NSTextField(labelWithString: "")
     private let returnGlyph = NSTextField(labelWithString: "↩")
     private let actionsLabel = NSTextField(labelWithString: "Actions")
@@ -600,6 +599,9 @@ final class LauncherFooterView: NSView {
     required init?(coder: NSCoder) { super.init(coder: coder); build() }
 
     private func build() {
+        iconView.translatesAutoresizingMaskIntoConstraints = false
+        iconView.imageScaling = .scaleProportionallyUpOrDown
+
         for label in [primaryLabel, returnGlyph, actionsLabel, actionsKey] {
             label.translatesAutoresizingMaskIntoConstraints = false
             label.font = .systemFont(ofSize: 12, weight: .regular)
@@ -608,13 +610,19 @@ final class LauncherFooterView: NSView {
         primaryLabel.textColor = .secondaryLabelColor
         returnGlyph.textColor = .secondaryLabelColor
 
+        addSubview(iconView)
         addSubview(primaryLabel)
         addSubview(returnGlyph)
         addSubview(actionsKey)
         addSubview(actionsLabel)
 
         NSLayoutConstraint.activate([
-            primaryLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 18),
+            iconView.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 14),
+            iconView.centerYAnchor.constraint(equalTo: centerYAnchor),
+            iconView.widthAnchor.constraint(equalToConstant: 18),
+            iconView.heightAnchor.constraint(equalToConstant: 18),
+
+            primaryLabel.leadingAnchor.constraint(equalTo: iconView.trailingAnchor, constant: 8),
             primaryLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
             returnGlyph.leadingAnchor.constraint(equalTo: primaryLabel.trailingAnchor, constant: 6),
             returnGlyph.centerYAnchor.constraint(equalTo: centerYAnchor),
@@ -626,10 +634,13 @@ final class LauncherFooterView: NSView {
         ])
     }
 
-    func update(primaryTitle: String?, hasItems: Bool) {
+    func update(icon: NSImage?, primaryTitle: String?, hasItems: Bool) {
+        iconView.image = icon
+        iconView.isHidden = (icon == nil)
         primaryLabel.stringValue = primaryTitle ?? (hasItems ? "Open" : "")
-        primaryLabel.isHidden = (primaryTitle == nil && !hasItems)
-        returnGlyph.isHidden = primaryLabel.isHidden
+        let showPrimary = (primaryTitle != nil) || hasItems
+        primaryLabel.isHidden = !showPrimary
+        returnGlyph.isHidden = !showPrimary
     }
 }
 
@@ -643,17 +654,14 @@ public final class AppKitMenuBar: @MainActor MenuBarPresenting {
     public init() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         statusItem.menu = menu
-        // Prefer a crisp template glyph over a text title in the menu bar.
         if let button = statusItem.button {
-            button.image = NSImage(systemSymbolName: "sparkle.magnifyingglass",
-                                   accessibilityDescription: "Vee")
+            button.image = NSImage(systemSymbolName: "sparkle.magnifyingglass", accessibilityDescription: "Vee")
                 ?? NSImage(systemSymbolName: "magnifyingglass", accessibilityDescription: "Vee")
             button.image?.isTemplate = true
         }
     }
 
     public func setMenuBarTitle(_ title: String?) {
-        // Keep the glyph; only show text if explicitly provided non-empty.
         if let title, !title.isEmpty { statusItem.button?.title = " \(title)" }
         else { statusItem.button?.title = "" }
     }

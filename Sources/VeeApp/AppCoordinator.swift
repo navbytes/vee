@@ -78,6 +78,8 @@ public final class AppCoordinator {
     /// This is the pluginless launcher surface (e.g. installed-app search).
     private var hostCandidateMode = false
     private var candidateInvoke: ((Candidate) -> Void)?
+    private var hostSectionTitle: String?
+    private var hostAccessory: String?
     /// Synthesized primary-action id for host candidates that declare none.
     private static let builtinActionId = "vee.builtin.invoke"
 
@@ -225,9 +227,13 @@ public final class AppCoordinator {
     /// list — the pluginless "root search" surface. `invoke` is called with the
     /// activated candidate (e.g. to launch the app). No plugin/transport involved.
     public func showHostCandidates(_ candidates: [Candidate],
+                                   sectionTitle: String? = nil,
+                                   accessory: String? = nil,
                                    invoke: @escaping (Candidate) -> Void) {
         hostCandidateMode = true
         candidateInvoke = invoke
+        hostSectionTitle = sectionTitle
+        hostAccessory = accessory
         self.candidates = candidates
         refilter()
     }
@@ -266,14 +272,17 @@ public final class AppCoordinator {
         let items = visibleCandidates.map { c in
             ListItemViewModel(
                 id: c.id, title: c.title, subtitle: c.subtitle, icon: c.icon,
+                accessoryText: hostAccessory,
                 actions: c.actions.isEmpty
                     ? [ActionViewModel(actionId: Self.builtinActionId, title: "Open")]
                     : c.actions.map { ActionViewModel(actionId: $0.id, title: $0.title, shortcut: $0.shortcut) })
         }
-        root = .list(ListViewModel(items: items))
-        let ids = items.map(\.id)
-        if let sel = selectedID, ids.contains(sel) { /* keep current selection */ }
-        else { selectedID = ids.first }
+        // Search semantics: the top (best-ranked) match is selected on every
+        // (re)filter, so Return launches the most relevant result. Arrow-key
+        // navigation goes through `moveSelection`, which doesn't re-filter, so it
+        // isn't clobbered.
+        selectedID = items.first?.id
+        root = .list(ListViewModel(items: items, selectedID: selectedID, sectionTitle: hostSectionTitle))
         pushToWindow()
     }
 

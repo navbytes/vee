@@ -36,9 +36,12 @@ public struct ListViewModel: Equatable, Sendable {
     /// The currently selected item id, if any (owned by the coordinator's
     /// selection rule; projected in for the view).
     public var selectedID: String?
-    public init(items: [ListItemViewModel], selectedID: String? = nil) {
+    /// Optional section header shown above the list (e.g. "Applications").
+    public var sectionTitle: String?
+    public init(items: [ListItemViewModel], selectedID: String? = nil, sectionTitle: String? = nil) {
         self.items = items
         self.selectedID = selectedID
+        self.sectionTitle = sectionTitle
     }
 }
 
@@ -47,11 +50,14 @@ public struct ListItemViewModel: Equatable, Identifiable, Sendable {
     public var title: String
     public var subtitle: String?
     public var icon: String?
+    /// Right-aligned secondary text (e.g. the result type, "Application").
+    public var accessoryText: String?
     public var actions: [ActionViewModel]
     public init(id: String, title: String, subtitle: String? = nil,
-                icon: String? = nil, actions: [ActionViewModel] = []) {
+                icon: String? = nil, accessoryText: String? = nil,
+                actions: [ActionViewModel] = []) {
         self.id = id; self.title = title; self.subtitle = subtitle
-        self.icon = icon; self.actions = actions
+        self.icon = icon; self.accessoryText = accessoryText; self.actions = actions
     }
 }
 
@@ -142,6 +148,7 @@ public enum ViewModelProjector {
             title: node.props["title"]?.stringValue ?? "",
             subtitle: node.props["subtitle"]?.stringValue,
             icon: node.props["icon"]?.stringValue,
+            accessoryText: node.props["accessory"]?.stringValue,
             actions: actions(in: node))
     }
 
