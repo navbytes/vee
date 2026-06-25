@@ -26,6 +26,11 @@ if [ -d "$ROOT/plugins/dist" ]; then
   mkdir -p "$APP/Contents/Resources/plugins"
   cp -R "$ROOT/plugins/dist" "$APP/Contents/Resources/plugins/" 2>/dev/null || true
 fi
+# Bundle the committed plugin fixtures the launcher loads at startup.
+if ls "$ROOT"/plugins/fixtures/*.bundle.js >/dev/null 2>&1; then
+  mkdir -p "$APP/Contents/Resources/vee-plugins"
+  cp "$ROOT"/plugins/fixtures/*.bundle.js "$APP/Contents/Resources/vee-plugins/" 2>/dev/null || true
+fi
 # Optional icon
 [ -f "$ROOT/packaging/Vee.icns" ] && cp "$ROOT/packaging/Vee.icns" "$APP/Contents/Resources/Vee.icns"
 

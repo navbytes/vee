@@ -66,8 +66,15 @@ MainActor.assumeIsolated {
                 transport: LoopbackCoordinatorTransport(loopback), host: host)
             coordinator.window = window
             let appSearch = AppSearchProvider(enumerator: NSWorkspaceAppEnumerator(), clock: SystemClock())
-            coordinator.showHostCandidates(appSearch.search(query: "", limit: 200),
-                                           sectionTitle: "Applications") { _ in }
+            let cmds = [
+                Candidate(id: "cmd:com.vee.essentials:view", title: "Essentials", icon: "command",
+                          actions: [CandidateAction(id: "run", title: "Open Command")]),
+                Candidate(id: "cmd:com.vee.clipboard:view", title: "Clipboard History", icon: "doc.on.clipboard",
+                          actions: [CandidateAction(id: "run", title: "Open Command")]),
+                Candidate(id: "cmd:com.vee.hacker-news:view", title: "Hacker News", icon: "newspaper",
+                          actions: [CandidateAction(id: "run", title: "Open Command")]),
+            ]
+            coordinator.showHostCandidates(cmds + appSearch.search(query: "", limit: 200)) { _ in }
             if !query.isEmpty { coordinator.setQuery(query) }
             keepAlive.append(host)
             keepAlive.append(coordinator)
@@ -116,6 +123,40 @@ MainActor.assumeIsolated {
     coordinator.menuBar = menuBar
     menuBar.setMenuBarTitle("Vee")
 
+    // ── Load bundled plugins; surface each command in the root ────────────────
+    // Resolve fixture bundles from the .app Resources (production) or the repo
+    // (dev). Each loaded plugin contributes a "cmd:<id>:<command>" root candidate;
+    // invoking it activates the plugin, which then renders into the launcher.
+    func resolvePluginBundle(_ file: String) -> String? {
+        if let res = Bundle.main.resourcePath {
+            let p = res + "/vee-plugins/" + file
+            if FileManager.default.fileExists(atPath: p) { return p }
+        }
+        let dev = FileManager.default.currentDirectoryPath + "/plugins/fixtures/" + file
+        return FileManager.default.fileExists(atPath: dev) ? dev : nil
+    }
+    let pluginSpecs: [(id: String, title: String, icon: String, bundle: String, caps: Capabilities)] = [
+        ("com.vee.essentials", "Essentials", "command", "com.vee.essentials.bundle.js", Capabilities()),
+        ("com.vee.clipboard", "Clipboard History", "doc.on.clipboard", "com.vee.clipboard.bundle.js",
+         Capabilities(clipboard: true)),
+        ("com.vee.hacker-news", "Hacker News", "newspaper", "com.vee.hacker-news.bundle.js",
+         Capabilities(network: ["hacker-news.firebaseio.com"])),
+    ]
+    var commandCandidates: [Candidate] = []
+    for spec in pluginSpecs {
+        guard let path = resolvePluginBundle(spec.bundle),
+              let source = try? String(contentsOfFile: path, encoding: .utf8) else { continue }
+        let manifest = PluginManifest(
+            id: spec.id, name: spec.title, version: "1.0.0", entrypoint: path,
+            commands: [PluginCommand(name: "view", title: spec.title, mode: .view)],
+            capabilities: spec.caps)
+        if (try? host.load(manifest: manifest, source: source)) != nil {
+            commandCandidates.append(Candidate(
+                id: "cmd:\(spec.id):view", title: spec.title, icon: spec.icon,
+                actions: [CandidateAction(id: "run", title: "Open Command")]))
+        }
+    }
+
     // ── Root surface: host-native app search (the pluginless launcher) ────────
     // One filesystem enumeration at startup (fetch once); the coordinator filters
     // this in-memory set natively per keystroke (never re-scans on a keypress).
@@ -126,11 +167,20 @@ MainActor.assumeIsolated {
     DispatchQueue.global(qos: .userInitiated).async {
         let installedApps = appSearch.search(query: "", limit: 5000)
         DispatchQueue.main.async {
-            coordinator.showHostCandidates(installedApps,
-                                           sectionTitle: "Applications") { candidate in
-                appSearch.recordLaunch(bundleId: candidate.id)   // feeds frecency next time
-                appEnumerator.launch(bundleId: candidate.id)
-                window.hideLauncher()
+            // Commands first, then apps. Invoking a "cmd:" candidate activates the
+            // plugin (which renders into the launcher); an app candidate launches it.
+            coordinator.showHostCandidates(commandCandidates + installedApps) { candidate in
+                if candidate.id.hasPrefix("cmd:") {
+                    let parts = candidate.id.split(separator: ":", maxSplits: 2).map(String.init)
+                    if parts.count == 3 {
+                        try? host.activate(ActivateParams(pluginId: parts[1], commandName: parts[2]))
+                    }
+                    // The plugin now drives the surface; keep the launcher open.
+                } else {
+                    appSearch.recordLaunch(bundleId: candidate.id)   // feeds frecency next time
+                    appEnumerator.launch(bundleId: candidate.id)
+                    window.hideLauncher()
+                }
             }
         }
     }
@@ -150,7 +200,10 @@ MainActor.assumeIsolated {
     let bindResult = hotkeys.bind(
         action: "toggle-launcher",
         chord: HotkeyChord(keyCode: 49 /* Space */, modifiers: [.option])) {
-            MainActor.assumeIsolated { window.showLauncher() }
+            MainActor.assumeIsolated {
+                coordinator.showRoot()   // back to the app/command root on every open
+                window.showLauncher()
+            }
         }
     if bindResult != .registered {
         FileHandle.standardError.write(Data("vee: launcher hotkey not registered: \(bindResult)\n".utf8))

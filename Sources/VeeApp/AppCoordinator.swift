@@ -160,6 +160,11 @@ public final class AppCoordinator {
         // anything not strictly newer is out of order and ignored.
         guard params.revision > lastRevision else { return }
 
+        // A plugin is now driving the surface — stop re-projecting the host-native
+        // root candidates over its render on the next keystroke. `showRoot()`
+        // re-enters host mode when the user backs out.
+        hostCandidateMode = false
+
         // Capture the selection BEFORE mutating the mirror so we can preserve it.
         let previousSelection = selectedID
         let previousIDs = currentItemIDs()
@@ -235,6 +240,15 @@ public final class AppCoordinator {
         hostSectionTitle = sectionTitle
         hostAccessory = accessory
         self.candidates = candidates
+        refilter()
+    }
+
+    /// Re-enter the host-native root surface (the app/command list) — e.g. when
+    /// the launcher reopens after a plugin command had taken over the surface.
+    /// Restores the last `showHostCandidates` set with a cleared query.
+    public func showRoot() {
+        query = ""
+        hostCandidateMode = true
         refilter()
     }
 

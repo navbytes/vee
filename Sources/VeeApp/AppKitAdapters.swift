@@ -325,6 +325,7 @@ public final class AppKitLauncherWindow: NSObject, @MainActor LauncherWindowPres
     }
 
     public func showLauncher() {
+        searchField.stringValue = ""   // always open on a fresh query
         layoutAndCenter()
         panel.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
