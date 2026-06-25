@@ -1,0 +1,24 @@
+{
+  "configurations": [
+    {
+      "type": "swift",
+      "request": "launch",
+      "args": [],
+      "cwd": "${workspaceFolder:vee}",
+      "name": "Debug vee",
+      "target": "vee",
+      "configuration": "debug",
+      "preLaunchTask": "swift: Build Debug vee"
+    },
+    {
+      "type": "swift",
+      "request": "launch",
+      "args": [],
+      "cwd": "${workspaceFolder:vee}",
+      "name": "Release vee",
+      "target": "vee",
+      "configuration": "release",
+      "preLaunchTask": "swift: Build Release vee"
+    }
+  ]
+}
