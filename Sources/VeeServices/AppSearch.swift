@@ -105,7 +105,7 @@ public final class AppSearchProvider {
     private func candidate(for app: AppRecord) -> Candidate {
         Candidate(id: app.bundleId,
                   title: app.name,
-                  subtitle: app.path,
+                  subtitle: nil,
                   icon: app.path,
                   actions: [CandidateAction(id: "launch", title: "Launch")])
     }

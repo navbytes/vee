@@ -10,6 +10,35 @@ import VeeProtocol
 // runs on the main thread, so AppKit (`@MainActor`) construction happens inside
 // `MainActor.assumeIsolated` — the run loop owns the main actor from here on.
 MainActor.assumeIsolated {
+    // ── Snapshot mode (autonomous visual testing) ────────────────────────────
+    // `VEE_SNAPSHOT_OUT=/path.png [VEE_SNAPSHOT_DARK=0] [VEE_SNAPSHOT_QUERY=saf]`
+    // renders the launcher offscreen and exits — through the REAL pipeline (real
+    // app enumeration + coordinator projection), so the snapshot faithfully shows
+    // real icons and live filtering. Verifies/iterates the UI headlessly.
+    if let snapOut = ProcessInfo.processInfo.environment["VEE_SNAPSHOT_OUT"] {
+        _ = NSApplication.shared
+        let dark = ProcessInfo.processInfo.environment["VEE_SNAPSHOT_DARK"] != "0"
+        let query = ProcessInfo.processInfo.environment["VEE_SNAPSHOT_QUERY"] ?? ""
+
+        let loopback = LoopbackTransport()
+        let host = PluginHost(transport: loopback, clock: DispatchClock(),
+                              httpClient: URLSessionHTTPClient(), bundler: StaticBundler(source: ""))
+        let window = AppKitLauncherWindow()
+        let coordinator = AppCoordinator(
+            pluginId: "com.vee.launcher",
+            transport: LoopbackCoordinatorTransport(loopback), host: host)
+        coordinator.window = window
+        let appSearch = AppSearchProvider(enumerator: NSWorkspaceAppEnumerator(), clock: SystemClock())
+        coordinator.showHostCandidates(appSearch.search(query: "", limit: 200)) { _ in }
+        if !query.isEmpty { coordinator.setQuery(query) }
+
+        // Let IconServices deliver async app-icon reps before we capture.
+        RunLoop.current.run(until: Date(timeIntervalSinceNow: 0.6))
+        window.writeSnapshot(to: URL(fileURLWithPath: snapOut),
+                             size: NSSize(width: 720, height: 470), dark: dark)
+        exit(0)
+    }
+
     // ── Plugin host + transport ──────────────────────────────────────────────
     // In-memory loopback for now (the JSON-RPC contract is shaped so a real
     // out-of-process fd/DispatchIO transport swaps in here later untouched). The
