@@ -1,0 +1,10 @@
+{
+  "name": "@vee-sample/essentials",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Sample Vee plugin: a static list of essential shortcuts (no bridges).",
+  "dependencies": {
+    "@vee/sdk": "*"
+  }
+}

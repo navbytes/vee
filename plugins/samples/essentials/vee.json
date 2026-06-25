@@ -1,0 +1,22 @@
+{
+  "id": "com.vee.essentials",
+  "name": "Essentials",
+  "version": "0.1.0",
+  "entrypoint": "../../dist/com.vee.essentials.js",
+  "commands": [
+    {
+      "name": "view",
+      "title": "Essentials",
+      "subtitle": "A handful of useful shortcuts",
+      "mode": "view"
+    }
+  ],
+  "capabilities": {
+    "network": [],
+    "filesystem": [],
+    "clipboard": false,
+    "calendar": false,
+    "keychainNamespaces": [],
+    "hotkeyActions": []
+  }
+}

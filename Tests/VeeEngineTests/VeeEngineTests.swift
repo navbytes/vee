@@ -1068,4 +1068,342 @@ final class VeeEngineTests: XCTestCase {
         XCTAssertEqual(recorder.logs().map(\.message), ["after:null"])
         XCTAssertNil(try store.get(pluginId: "com.vee.kc", namespace: "tokens", account: "api"))
     }
+
+    // MARK: - Real plugin fixtures (essentials / hacker-news / clipboard)
+    //
+    // These load the COMMITTED bundle each plugin's `bundle.mjs` produced
+    // (plugins/fixtures/<id>.bundle.js) into a real PluginInstance with the
+    // appropriate fakes, activate the `view` command, and assert the captured
+    // render is correct. They mirror `testHelloListFixtureHandshake` exactly for
+    // loading/injection — the end-to-end proof that the plugin platform runs real
+    // plugins in JavaScriptCore.
+
+    /// Read a committed fixture bundle by plugin id (robust to CWD).
+    private func fixtureBundle(_ pluginId: String) throws -> String {
+        let url = Self.repoRoot()
+            .appendingPathComponent("plugins/fixtures/\(pluginId).bundle.js")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    /// The `list` node under the rendered `root` tree (first child).
+    private func listNode(of tree: JSONValue) throws -> JSONValue {
+        let root = try XCTUnwrap(tree.objectValue)
+        XCTAssertEqual(root["tag"]?.stringValue, "root")
+        let children = try XCTUnwrap(root["children"]?.arrayValue)
+        return try XCTUnwrap(children.first)
+    }
+
+    /// Titles of every `list-item` child of a `list` node, in order.
+    private func itemTitles(in list: JSONValue) throws -> [String] {
+        let listObj = try XCTUnwrap(list.objectValue)
+        XCTAssertEqual(listObj["tag"]?.stringValue, "list")
+        let children = try XCTUnwrap(listObj["children"]?.arrayValue)
+        return children.compactMap { $0.objectValue?["props"]?.objectValue?["title"]?.stringValue }
+    }
+
+    // ── com.vee.essentials — static list, NO bridges (deterministic) ──────────
+
+    func testEssentialsFixtureRendersStaticList() throws {
+        let instance = try PluginInstance(
+            manifest: PluginManifest(
+                id: "com.vee.essentials", name: "Essentials", version: "1.0.0",
+                entrypoint: "com.vee.essentials.bundle.js",
+                commands: [PluginCommand(name: "view", title: "View", mode: .view)],
+                capabilities: Capabilities()),   // no capabilities — uses no bridges
+            transport: LoopbackTransport(),
+            clock: TestClock(),
+            httpClient: CannedHTTPClient())
+
+        var capturedTree: JSONValue?
+        instance.onRenderTree = { capturedTree = $0 }
+
+        try instance.evaluateOrThrow(fixtureBundle("com.vee.essentials"))
+        XCTAssertEqual(try instance.commandNames(), ["view"])
+        try instance.activateCommand("view", arguments: [:])
+
+        let tree = try XCTUnwrap(capturedTree, "vee.render was never called")
+        let list = try listNode(of: tree)
+        XCTAssertEqual(try itemTitles(in: list),
+                       ["Search Files", "Clipboard History", "Calculator",
+                        "System Settings", "Capture Screenshot", "Lock Screen"])
+    }
+
+    func testEssentialsFixtureViaHostMirrorsSixItems() throws {
+        // End-to-end through the host: the mirror holds the rendered tree and the
+        // first frame is a single replace at "".
+        let transport = LoopbackTransport()
+        let recorder = Recorder(transport)
+        let source = try fixtureBundle("com.vee.essentials")
+        let host = PluginHost(
+            transport: transport,
+            clock: TestClock(),
+            httpClient: CannedHTTPClient(),
+            fileWatcher: NoopFileWatcher(),
+            bundler: StaticBundler(source: source))
+        let id = "com.vee.essentials"
+        try host.load(
+            manifest: PluginManifest(
+                id: id, name: "Essentials", version: "1.0.0",
+                entrypoint: "com.vee.essentials.bundle.js",
+                commands: [PluginCommand(name: "view", title: "View", mode: .view)],
+                capabilities: Capabilities()),
+            source: source)
+        try host.activate(ActivateParams(pluginId: id, commandName: "view"))
+
+        let tree = try XCTUnwrap(host.instance(for: id)?.currentRenderTree())
+        XCTAssertEqual(tree.tag, "root")
+        let list = try XCTUnwrap(tree.children.first)
+        XCTAssertEqual(list.tag, "list")
+        XCTAssertEqual(list.children.count, 6)
+        // First child item carries an SF-symbol icon + an action-panel → action.
+        let firstItem = try XCTUnwrap(list.children.first)
+        XCTAssertEqual(firstItem.props["icon"]?.stringValue, "doc.text.magnifyingglass")
+        let firstAction = firstItem.children.first?.children.first
+        XCTAssertEqual(firstAction?.tag, "action")
+        XCTAssertEqual(firstAction?.props["actionId"]?.stringValue, "search-files")
+
+        let renders = recorder.renders()
+        XCTAssertEqual(renders.first?.patch.first?.op, .replace)
+        XCTAssertEqual(renders.first?.patch.first?.path, "")
+    }
+
+    // ── com.vee.hacker-news — vee.http.fetch (capability-gated) ───────────────
+
+    /// Canned HN client: topstories → [1,2,3], plus three item objects.
+    private func cannedHackerNews() -> CannedHTTPClient {
+        let http = CannedHTTPClient()
+        let base = "https://hacker-news.firebaseio.com/v0"
+        http.canned["\(base)/topstories.json"] = CannedHTTPClient.Response(
+            status: 200, headers: ["content-type": "application/json"],
+            body: Data("[1,2,3]".utf8))
+        http.canned["\(base)/item/1.json"] = CannedHTTPClient.Response(
+            status: 200, headers: [:],
+            body: Data(#"{"id":1,"title":"Rust 2.0 released","url":"https://blog.rust-lang.org/x","score":321,"by":"alice"}"#.utf8))
+        http.canned["\(base)/item/2.json"] = CannedHTTPClient.Response(
+            status: 200, headers: [:],
+            body: Data(#"{"id":2,"title":"Show HN: my side project","url":"https://github.com/me/proj","score":88,"by":"bob"}"#.utf8))
+        http.canned["\(base)/item/3.json"] = CannedHTTPClient.Response(
+            status: 200, headers: [:],
+            body: Data(#"{"id":3,"title":"Ask HN: best editor?","score":12,"by":"carol"}"#.utf8))
+        return http
+    }
+
+    func testHackerNewsFixtureRendersTopStories() throws {
+        let http = cannedHackerNews()
+        let instance = try PluginInstance(
+            manifest: PluginManifest(
+                id: "com.vee.hacker-news", name: "Hacker News", version: "1.0.0",
+                entrypoint: "com.vee.hacker-news.bundle.js",
+                commands: [PluginCommand(name: "view", title: "View", mode: .view)],
+                capabilities: Capabilities(network: ["hacker-news.firebaseio.com"])),
+            transport: LoopbackTransport(),
+            clock: TestClock(),
+            httpClient: http)
+
+        var capturedTree: JSONValue?
+        instance.onRenderTree = { capturedTree = $0 }
+
+        try instance.evaluateOrThrow(fixtureBundle("com.vee.hacker-news"))
+        XCTAssertEqual(try instance.commandNames(), ["view"])
+        try instance.activateCommand("view", arguments: [:])
+        // The activate handler chains awaited fetches; settle them deterministically.
+        instance.runUntilQuiescent()
+
+        let tree = try XCTUnwrap(capturedTree, "vee.render was never called")
+        let list = try listNode(of: tree)
+        XCTAssertEqual(try itemTitles(in: list),
+                       ["Rust 2.0 released", "Show HN: my side project", "Ask HN: best editor?"])
+        // It fetched topstories then each of the three items.
+        XCTAssertEqual(http.requested, [
+            "https://hacker-news.firebaseio.com/v0/topstories.json",
+            "https://hacker-news.firebaseio.com/v0/item/1.json",
+            "https://hacker-news.firebaseio.com/v0/item/2.json",
+            "https://hacker-news.firebaseio.com/v0/item/3.json",
+        ])
+        // Subtitle carries the score + parsed host.
+        let listObj = try XCTUnwrap(list.objectValue)
+        let firstItem = try XCTUnwrap(listObj["children"]?.arrayValue?.first?.objectValue)
+        XCTAssertEqual(firstItem["props"]?.objectValue?["subtitle"]?.stringValue, "321 points · blog.rust-lang.org")
+    }
+
+    func testHackerNewsFixtureRendersEmptyStateOnFetchFailure() throws {
+        // A client with NO canned topstories → 404 → JSON.parse fails → the plugin
+        // renders an empty-state list and toasts failure (never crashes/throws).
+        let transport = LoopbackTransport()
+        let recorder = Recorder(transport)
+        let instance = try PluginInstance(
+            manifest: PluginManifest(
+                id: "com.vee.hacker-news", name: "Hacker News", version: "1.0.0",
+                entrypoint: "com.vee.hacker-news.bundle.js",
+                commands: [PluginCommand(name: "view", title: "View", mode: .view)],
+                capabilities: Capabilities(network: ["hacker-news.firebaseio.com"])),
+            transport: transport,
+            clock: TestClock(),
+            httpClient: CannedHTTPClient())   // empty canned → 404 bodies
+
+        var capturedTree: JSONValue?
+        instance.onRenderTree = { capturedTree = $0 }
+
+        try instance.evaluateOrThrow(fixtureBundle("com.vee.hacker-news"))
+        XCTAssertNoThrow(try instance.activateCommand("view", arguments: [:]))
+        instance.runUntilQuiescent()
+
+        let tree = try XCTUnwrap(capturedTree)
+        let list = try listNode(of: tree)
+        let firstChild = try XCTUnwrap(list.objectValue?["children"]?.arrayValue?.first?.objectValue)
+        XCTAssertEqual(firstChild["tag"]?.stringValue, "empty-view")
+        // A failure toast was emitted.
+        let toasts = recorder.toasts()
+        XCTAssertEqual(toasts.count, 1)
+        XCTAssertEqual(toasts.first?.style, .failure)
+    }
+
+    func testHackerNewsFetchToNonAllowlistedHostIsDenied() throws {
+        // Capability-gating proof (mirrors testFetchToDisallowedHostIsDenied):
+        // the plugin's manifest allows only hacker-news.firebaseio.com, so a
+        // fetch to any other host is rejected with -32001 and NEVER reaches the
+        // client. We assert this against the SAME injected client the plugin uses.
+        let transport = LoopbackTransport()
+        let recorder = Recorder(transport)
+        let http = cannedHackerNews()
+        // Add a canned response for an off-allowlist host to prove it's not used.
+        http.canned["https://evil.example.com/v0/topstories.json"] = CannedHTTPClient.Response(
+            status: 200, headers: [:], body: Data("[1]".utf8))
+        let instance = try PluginInstance(
+            manifest: PluginManifest(
+                id: "com.vee.hacker-news", name: "Hacker News", version: "1.0.0",
+                entrypoint: "com.vee.hacker-news.bundle.js",
+                commands: [PluginCommand(name: "view", title: "View", mode: .view)],
+                capabilities: Capabilities(network: ["hacker-news.firebaseio.com"])),
+            transport: transport,
+            clock: TestClock(),
+            httpClient: http)
+        // Load the real bundle so the gate runs in the same context the plugin uses.
+        try instance.evaluateOrThrow(fixtureBundle("com.vee.hacker-news"))
+
+        // Drive a fetch to a disallowed host directly through the bridge.
+        instance.evaluate("""
+            vee.http.fetch('https://evil.example.com/v0/topstories.json')
+              .then(r => console.log('resolved'))
+              .catch(e => console.error('denied:' + e.code));
+        """)
+        instance.runUntilQuiescent()
+
+        XCTAssertFalse(http.requested.contains("https://evil.example.com/v0/topstories.json"),
+                       "a fetch to a non-allowlisted host must NEVER reach the client")
+        let logs = recorder.logs()
+        XCTAssertEqual(logs.last?.level, .error)
+        XCTAssertTrue((logs.last?.message ?? "").contains("-32001"), "got: \(logs.last?.message ?? "")")
+    }
+
+    // ── com.vee.clipboard — vee.clipboard.* (capability-gated) ────────────────
+
+    func testClipboardFixtureRendersHistoryItems() throws {
+        let provider = FakeClipboardProvider(items: [
+            ClipboardItem(id: "c1", text: "hello clipboard", copiedAt: Date(timeIntervalSince1970: 200)),
+            ClipboardItem(id: "c2", text: "https://example.com/page", copiedAt: Date(timeIntervalSince1970: 100)),
+        ])
+        let instance = try PluginInstance(
+            manifest: PluginManifest(
+                id: "com.vee.clipboard", name: "Clipboard History", version: "1.0.0",
+                entrypoint: "com.vee.clipboard.bundle.js",
+                commands: [PluginCommand(name: "view", title: "View", mode: .view)],
+                capabilities: Capabilities(clipboard: true)),
+            transport: LoopbackTransport(),
+            clock: TestClock(),
+            httpClient: CannedHTTPClient(),
+            clipboardProvider: provider)
+
+        var capturedTree: JSONValue?
+        instance.onRenderTree = { capturedTree = $0 }
+
+        try instance.evaluateOrThrow(fixtureBundle("com.vee.clipboard"))
+        XCTAssertEqual(try instance.commandNames(), ["view"])
+        try instance.activateCommand("view", arguments: [:])
+        instance.runUntilQuiescent()
+
+        let tree = try XCTUnwrap(capturedTree, "vee.render was never called")
+        let list = try listNode(of: tree)
+        XCTAssertEqual(try itemTitles(in: list), ["hello clipboard", "https://example.com/page"])
+        XCTAssertEqual(provider.historyQueries, [""], "the plugin pulled history once")
+        // The primary action is "Copy" carrying the item id.
+        let listObj = try XCTUnwrap(list.objectValue)
+        let firstItem = try XCTUnwrap(listObj["children"]?.arrayValue?.first?.objectValue)
+        let firstAction = try XCTUnwrap(firstItem["children"]?.arrayValue?.first?.objectValue?["children"]?.arrayValue?.first?.objectValue)
+        XCTAssertEqual(firstAction["tag"]?.stringValue, "action")
+        XCTAssertEqual(firstAction["props"]?.objectValue?["title"]?.stringValue, "Copy")
+        XCTAssertEqual(firstAction["props"]?.objectValue?["actionId"]?.stringValue, "c1")
+    }
+
+    func testClipboardFixtureCopyActionRoundTripsToProvider() throws {
+        // Activate, then fire host.invokeAction for an item id; the plugin's
+        // handler calls vee.clipboard.copy, which must reach the provider with the
+        // exact item (text + copiedAt preserved).
+        let transport = LoopbackTransport()
+        let provider = FakeClipboardProvider(items: [
+            ClipboardItem(id: "c1", text: "first", copiedAt: Date(timeIntervalSince1970: 200)),
+            ClipboardItem(id: "c2", text: "paste me back", copiedAt: Date(timeIntervalSince1970: 100)),
+        ])
+        let instance = try PluginInstance(
+            manifest: PluginManifest(
+                id: "com.vee.clipboard", name: "Clipboard History", version: "1.0.0",
+                entrypoint: "com.vee.clipboard.bundle.js",
+                commands: [PluginCommand(name: "view", title: "View", mode: .view)],
+                capabilities: Capabilities(clipboard: true)),
+            transport: transport,
+            clock: TestClock(),
+            httpClient: CannedHTTPClient(),
+            clipboardProvider: provider)
+
+        try instance.evaluateOrThrow(fixtureBundle("com.vee.clipboard"))
+        try instance.activateCommand("view", arguments: [:])
+        instance.runUntilQuiescent()
+
+        // The launcher fires the Copy action for c2. Dispatch it the same way the
+        // host's inbound router does (`instance.dispatch`), rather than through the
+        // loopback `sendFromPeer` — the plugin's handler emits a `showToast` on
+        // success, and `sendFromPeer` holds the transport's serial queue while the
+        // handler runs, so that outbound send would re-enter the same queue.
+        let params = InvokeActionParams(pluginId: "com.vee.clipboard", actionId: "c2", targetId: "c2")
+        instance.dispatch(.notification(JSONRPCNotification(
+            method: RPCMethods.invokeAction,
+            params: try encodeToJSONValue(params))))
+        instance.runUntilQuiescent()
+
+        XCTAssertEqual(provider.copied.map(\.id), ["c2"])
+        XCTAssertEqual(provider.copied.first?.text, "paste me back")
+        // The copied item round-tripped its original copiedAt exactly.
+        XCTAssertEqual(provider.copied.first?.copiedAt, Date(timeIntervalSince1970: 100))
+    }
+
+    func testClipboardFixtureRendersEmptyStateWhenDenied() throws {
+        // clipboard:false → history is denied; the plugin catches it and renders
+        // an empty-state list (and the provider is never touched).
+        let provider = FakeClipboardProvider(items: [
+            ClipboardItem(id: "c1", text: "secret", copiedAt: Date(timeIntervalSince1970: 1)),
+        ])
+        let instance = try PluginInstance(
+            manifest: PluginManifest(
+                id: "com.vee.clipboard", name: "Clipboard History", version: "1.0.0",
+                entrypoint: "com.vee.clipboard.bundle.js",
+                commands: [PluginCommand(name: "view", title: "View", mode: .view)],
+                capabilities: Capabilities(clipboard: false)),   // denied
+            transport: LoopbackTransport(),
+            clock: TestClock(),
+            httpClient: CannedHTTPClient(),
+            clipboardProvider: provider)
+
+        var capturedTree: JSONValue?
+        instance.onRenderTree = { capturedTree = $0 }
+
+        try instance.evaluateOrThrow(fixtureBundle("com.vee.clipboard"))
+        XCTAssertNoThrow(try instance.activateCommand("view", arguments: [:]))
+        instance.runUntilQuiescent()
+
+        let tree = try XCTUnwrap(capturedTree)
+        let list = try listNode(of: tree)
+        let firstChild = try XCTUnwrap(list.objectValue?["children"]?.arrayValue?.first?.objectValue)
+        XCTAssertEqual(firstChild["tag"]?.stringValue, "empty-view")
+        XCTAssertTrue(provider.historyQueries.isEmpty, "denied history must NEVER reach the provider")
+    }
 }

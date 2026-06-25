@@ -1,0 +1,22 @@
+{
+  "id": "com.vee.hacker-news",
+  "name": "Hacker News",
+  "version": "0.1.0",
+  "entrypoint": "../../dist/com.vee.hacker-news.js",
+  "commands": [
+    {
+      "name": "view",
+      "title": "Hacker News Top Stories",
+      "subtitle": "The current front page",
+      "mode": "view"
+    }
+  ],
+  "capabilities": {
+    "network": ["hacker-news.firebaseio.com"],
+    "filesystem": [],
+    "clipboard": false,
+    "calendar": false,
+    "keychainNamespaces": [],
+    "hotkeyActions": []
+  }
+}

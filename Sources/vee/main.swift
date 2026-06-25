@@ -34,6 +34,29 @@ MainActor.assumeIsolated {
             window.setRootViewModel(.detail(DetailViewModel(
                 title: "Vee",
                 markdown: "A keyboard-first, plugin-extensible launcher.\n\nPress ⌥Space anywhere to open Vee, type to search your apps and commands, then hit ↩ to run.")))
+        case "plugin":
+            // Load a REAL @vee/sdk plugin bundle through the JSC engine and render
+            // its output in the launcher — proves the full TS→esbuild→JSC→render-
+            // tree→AppKit pipeline end to end.
+            let loopback = LoopbackTransport()
+            let host = PluginHost(transport: loopback, clock: DispatchClock(),
+                                  httpClient: URLSessionHTTPClient(), bundler: StaticBundler(source: ""))
+            let coordinator = AppCoordinator(
+                pluginId: "com.vee.essentials",
+                transport: LoopbackCoordinatorTransport(loopback), host: host)
+            coordinator.window = window
+            let bundlePath = env["VEE_PLUGIN_BUNDLE"]
+                ?? (FileManager.default.currentDirectoryPath + "/plugins/fixtures/com.vee.essentials.bundle.js")
+            if let source = try? String(contentsOfFile: bundlePath, encoding: .utf8) {
+                let manifest = PluginManifest(
+                    id: "com.vee.essentials", name: "Essentials", version: "1.0.0",
+                    entrypoint: bundlePath,
+                    commands: [PluginCommand(name: "view", title: "Essentials", mode: .view)])
+                try? host.load(manifest: manifest, source: source)
+                try? host.activate(ActivateParams(pluginId: "com.vee.essentials", commandName: "view"))
+            }
+            keepAlive.append(host)
+            keepAlive.append(coordinator)
         default: // "list" — the real app-search pipeline
             let loopback = LoopbackTransport()
             let host = PluginHost(transport: loopback, clock: DispatchClock(),

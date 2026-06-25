@@ -1,0 +1,10 @@
+{
+  "name": "@vee-sample/clipboard",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Sample Vee plugin: recent clipboard history via vee.clipboard.*.",
+  "dependencies": {
+    "@vee/sdk": "*"
+  }
+}

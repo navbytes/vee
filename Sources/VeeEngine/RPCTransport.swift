@@ -50,9 +50,23 @@ public final class LoopbackTransport: RPCTransport {
     public var peerInbound: ((JSONRPCMessage) -> Void)?
 
     private let queue: DispatchQueue
+    private let queueKey = DispatchSpecificKey<UInt8>()
 
     public init(label: String = "vee.engine.transport") {
         self.queue = DispatchQueue(label: label)
+        self.queue.setSpecific(key: queueKey, value: 1)
+    }
+
+    /// Run `work` on the serial queue, but if we're ALREADY on it (a re-entrant
+    /// call — e.g. a plugin emits `showToast` from inside an inbound
+    /// `host.invokeAction` handler), run inline instead of `queue.sync`, which
+    /// would deadlock/trap. Preserves ordering and synchronous delivery.
+    private func onQueue(_ work: () -> Void) {
+        if DispatchQueue.getSpecific(key: queueKey) != nil {
+            work()
+        } else {
+            queue.sync(execute: work)
+        }
     }
 
     /// Host → peer. Round-trips through the codec to exercise real serialization,
@@ -71,7 +85,7 @@ public final class LoopbackTransport: RPCTransport {
             assertionFailure("RPCCodec.encode/decode failed: \(error)")
             decoded = message
         }
-        queue.sync {
+        onQueue {
             self.peerInbound?(decoded)
         }
     }
@@ -87,7 +101,7 @@ public final class LoopbackTransport: RPCTransport {
             assertionFailure("RPCCodec encode/decode failed for inbound: \(error)")
             decoded = message
         }
-        queue.sync {
+        onQueue {
             self.onReceive?(decoded)
         }
     }

@@ -1,0 +1,10 @@
+{
+  "name": "@vee-sample/hacker-news",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Sample Vee plugin: top Hacker News stories via vee.http.fetch.",
+  "dependencies": {
+    "@vee/sdk": "*"
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "id": "com.vee.clipboard",
+  "name": "Clipboard History",
+  "version": "0.1.0",
+  "entrypoint": "../../dist/com.vee.clipboard.js",
+  "commands": [
+    {
+      "name": "view",
+      "title": "Clipboard History",
+      "subtitle": "Recent clipboard items",
+      "mode": "view"
+    }
+  ],
+  "capabilities": {
+    "network": [],
+    "filesystem": [],
+    "clipboard": true,
+    "calendar": false,
+    "keychainNamespaces": [],
+    "hotkeyActions": []
+  }
+}
