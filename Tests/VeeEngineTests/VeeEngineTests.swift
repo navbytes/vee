@@ -1,13 +1,818 @@
 import XCTest
+import JavaScriptCore
 @testable import VeeEngine
 import VeeProtocol
+import VeeJSONPatch
 
-/// Wave 0 placeholder so the target builds. Wave 2a worker REPLACES this with
-/// the real TDD suite (build plan §4, 11 cases incl. microtask ordering and
-/// no-leak-after-reload) — write failing tests first.
+/// Wave 2a — the VeeEngine TDD suite (build plan §4).
+///
+/// Covers the JavaScriptCore plugin host end to end: evaluation + exception
+/// capture, the `console`/`vee` bridge, native timers backed by an injected
+/// Clock, the microtask-before-macrotask ordering hazard, capability-gated
+/// `fetch`, the render mirror (first replace + minimal incremental diffs),
+/// host→plugin event dispatch over the loopback transport, no-leak-after-reload,
+/// out-of-order render revisions, plugin-throw surfacing, and the real fixture
+/// handshake against `plugins/fixtures/hello-list.*`.
 final class VeeEngineTests: XCTestCase {
-    func testSkeletonBuilds() {
-        _ = PluginHost()
-        XCTAssertTrue(true)
+
+    // MARK: - Helpers
+
+    /// A manifest with a default-allow-nothing capability set unless overridden.
+    private func manifest(
+        id: String = "com.vee.test",
+        command: String = "view",
+        network: [String] = []
+    ) -> PluginManifest {
+        PluginManifest(
+            id: id, name: "Test", version: "1.0.0", entrypoint: "bundle.js",
+            commands: [PluginCommand(name: command, title: "View", mode: .view)],
+            capabilities: Capabilities(network: network)
+        )
+    }
+
+    /// Collects every notification/response a host emits toward the launcher.
+    private final class Recorder {
+        let transport: LoopbackTransport
+        private(set) var notifications: [JSONRPCNotification] = []
+        private(set) var requests: [JSONRPCRequest] = []
+        private(set) var responses: [JSONRPCResponse] = []
+
+        init(_ transport: LoopbackTransport) {
+            self.transport = transport
+            transport.peerInbound = { [weak self] message in
+                switch message {
+                case .notification(let n): self?.notifications.append(n)
+                case .request(let r): self?.requests.append(r)
+                case .response(let r): self?.responses.append(r)
+                }
+            }
+        }
+
+        func logs() -> [LogParams] {
+            decode(method: RPCMethods.log)
+        }
+        func renders() -> [RenderParams] {
+            decode(method: RPCMethods.render)
+        }
+        func toasts() -> [ToastParams] {
+            decode(method: RPCMethods.toast)
+        }
+
+        private func decode<T: Decodable>(method: String) -> [T] {
+            notifications.compactMap { note in
+                guard note.method == method, let params = note.params else { return nil }
+                let data = try? JSONEncoder().encode(params)
+                return data.flatMap { try? JSONDecoder().decode(T.self, from: $0) }
+            }
+        }
+    }
+
+    // MARK: - Test 1: evaluate + exception capture
+
+    func testEvaluateArithmeticReturnsValue() throws {
+        let instance = try PluginInstance(
+            manifest: manifest(),
+            transport: LoopbackTransport(),
+            clock: TestClock(),
+            httpClient: CannedHTTPClient()
+        )
+        let value = instance.evaluate("1+2+3")
+        XCTAssertEqual(value?.toInt32(), 6)
+    }
+
+    func testSyntaxErrorIsCapturedAsSwiftError() throws {
+        let instance = try PluginInstance(
+            manifest: manifest(),
+            transport: LoopbackTransport(),
+            clock: TestClock(),
+            httpClient: CannedHTTPClient()
+        )
+        // The exception handler MUST be installed before eval; a bad eval throws.
+        XCTAssertThrowsError(try instance.evaluateOrThrow("this is not ) valid js (")) { error in
+            // Surfaced as a JSONRPCError.pluginError (code -32000).
+            let rpc = error as? JSONRPCError
+            XCTAssertEqual(rpc?.code, -32000)
+        }
+    }
+
+    func testRuntimeErrorIsCapturedAsSwiftError() throws {
+        let instance = try PluginInstance(
+            manifest: manifest(),
+            transport: LoopbackTransport(),
+            clock: TestClock(),
+            httpClient: CannedHTTPClient()
+        )
+        XCTAssertThrowsError(try instance.evaluateOrThrow("throw new Error('boom')")) { error in
+            let rpc = error as? JSONRPCError
+            XCTAssertEqual(rpc?.code, -32000)
+            XCTAssertTrue((rpc?.message ?? "").contains("boom"))
+        }
+    }
+
+    // MARK: - Test 2: console.log → plugin.log
+
+    func testConsoleLogReachesHost() throws {
+        let transport = LoopbackTransport()
+        let recorder = Recorder(transport)
+        let instance = try PluginInstance(
+            manifest: manifest(),
+            transport: transport,
+            clock: TestClock(),
+            httpClient: CannedHTTPClient()
+        )
+        instance.evaluate("console.log('hello', 42)")
+        let logs = recorder.logs()
+        XCTAssertEqual(logs.count, 1)
+        XCTAssertEqual(logs.first?.level, .info)
+        XCTAssertEqual(logs.first?.message, "hello 42")
+        XCTAssertEqual(logs.first?.pluginId, "com.vee.test")
+    }
+
+    func testConsoleLevelsMapCorrectly() throws {
+        let transport = LoopbackTransport()
+        let recorder = Recorder(transport)
+        let instance = try PluginInstance(
+            manifest: manifest(),
+            transport: transport,
+            clock: TestClock(),
+            httpClient: CannedHTTPClient()
+        )
+        instance.evaluate("""
+            console.debug('d');
+            console.info('i');
+            console.log('l');
+            console.warn('w');
+            console.error('e');
+        """)
+        let logs = recorder.logs()
+        XCTAssertEqual(logs.map(\.level), [.debug, .info, .info, .warn, .error])
+        XCTAssertEqual(logs.map(\.message), ["d", "i", "l", "w", "e"])
+    }
+
+    func testConsoleStringifiesObjects() throws {
+        let transport = LoopbackTransport()
+        let recorder = Recorder(transport)
+        let instance = try PluginInstance(
+            manifest: manifest(),
+            transport: transport,
+            clock: TestClock(),
+            httpClient: CannedHTTPClient()
+        )
+        instance.evaluate("console.log({a:1, b:[2,3]})")
+        XCTAssertEqual(recorder.logs().first?.message, #"{"a":1,"b":[2,3]}"#)
+    }
+
+    // MARK: - Test 3: setTimeout fires on clock advance; clearTimeout cancels
+
+    func testSetTimeoutFiresWhenClockAdvances() throws {
+        let transport = LoopbackTransport()
+        let recorder = Recorder(transport)
+        let clock = TestClock()
+        let instance = try PluginInstance(
+            manifest: manifest(),
+            transport: transport,
+            clock: clock,
+            httpClient: CannedHTTPClient()
+        )
+        instance.evaluate("setTimeout(() => console.log('fired'), 50)")
+        XCTAssertEqual(recorder.logs().count, 0, "must not fire before the clock advances")
+        clock.advance(by: 0.049)
+        XCTAssertEqual(recorder.logs().count, 0, "must not fire early")
+        clock.advance(by: 0.001)
+        XCTAssertEqual(recorder.logs().map(\.message), ["fired"])
+    }
+
+    func testClearTimeoutCancels() throws {
+        let transport = LoopbackTransport()
+        let recorder = Recorder(transport)
+        let clock = TestClock()
+        let instance = try PluginInstance(
+            manifest: manifest(),
+            transport: transport,
+            clock: clock,
+            httpClient: CannedHTTPClient()
+        )
+        instance.evaluate("""
+            const id = setTimeout(() => console.log('should-not-fire'), 10);
+            clearTimeout(id);
+        """)
+        clock.advance(by: 1.0)
+        XCTAssertEqual(recorder.logs().count, 0)
+    }
+
+    func testSetIntervalRepeatsAndClearStops() throws {
+        let transport = LoopbackTransport()
+        let recorder = Recorder(transport)
+        let clock = TestClock()
+        let instance = try PluginInstance(
+            manifest: manifest(),
+            transport: transport,
+            clock: clock,
+            httpClient: CannedHTTPClient()
+        )
+        instance.evaluate("""
+            globalThis.__n = 0;
+            globalThis.__id = setInterval(() => {
+                globalThis.__n++;
+                console.log('tick' + globalThis.__n);
+                if (globalThis.__n >= 3) clearInterval(globalThis.__id);
+            }, 10);
+        """)
+        clock.advance(by: 100)
+        XCTAssertEqual(recorder.logs().map(\.message), ["tick1", "tick2", "tick3"])
+    }
+
+    // MARK: - Test 4: microtask ordering (PERMANENT regression)
+
+    func testMicrotaskRunsBeforeMacrotask() throws {
+        let transport = LoopbackTransport()
+        let recorder = Recorder(transport)
+        let clock = TestClock()
+        let instance = try PluginInstance(
+            manifest: manifest(),
+            transport: transport,
+            clock: clock,
+            httpClient: CannedHTTPClient()
+        )
+        // A Promise .then (microtask) registered alongside a setTimeout(...,0)
+        // (macrotask) MUST run first. JSC drains microtasks on return from a
+        // native→JS call; the host must never let a macrotask jump the queue.
+        instance.evaluate("""
+            setTimeout(() => console.log('macro'), 0);
+            Promise.resolve().then(() => console.log('micro'));
+        """)
+        // Before the clock advances, only the microtask has run.
+        XCTAssertEqual(recorder.logs().map(\.message), ["micro"])
+        clock.advance(by: 0)   // fire the 0ms macrotask
+        XCTAssertEqual(recorder.logs().map(\.message), ["micro", "macro"])
+    }
+
+    func testMicrotaskChainedFromTimerStillOrdersBeforeNextTimer() throws {
+        let transport = LoopbackTransport()
+        let recorder = Recorder(transport)
+        let clock = TestClock()
+        let instance = try PluginInstance(
+            manifest: manifest(),
+            transport: transport,
+            clock: clock,
+            httpClient: CannedHTTPClient()
+        )
+        // Two 0ms timers. The first schedules a microtask. That microtask must
+        // run before the SECOND timer's callback — i.e. the host drains the
+        // microtask queue between dequeuing macrotasks.
+        instance.evaluate("""
+            setTimeout(() => { console.log('t1'); Promise.resolve().then(() => console.log('m')); }, 0);
+            setTimeout(() => console.log('t2'), 0);
+        """)
+        clock.advance(by: 0)
+        XCTAssertEqual(recorder.logs().map(\.message), ["t1", "m", "t2"])
+    }
+
+    // MARK: - Test 5: vee.http.fetch + capability gating
+
+    func testFetchResolvesFromInjectedClient() throws {
+        let transport = LoopbackTransport()
+        let recorder = Recorder(transport)
+        let http = CannedHTTPClient()
+        http.canned["https://api.example.com/data"] = CannedHTTPClient.Response(
+            status: 200,
+            headers: ["content-type": "application/json"],
+            body: Data(#"{"ok":true}"#.utf8)
+        )
+        let instance = try PluginInstance(
+            manifest: manifest(network: ["api.example.com"]),
+            transport: transport,
+            clock: TestClock(),
+            httpClient: http
+        )
+        instance.evaluate("""
+            vee.http.fetch('https://api.example.com/data')
+              .then(r => r.text())
+              .then(t => console.log('got:' + t))
+              .catch(e => console.error('err:' + e));
+        """)
+        // The async response resolves on the host; drive the run loop so the
+        // injected client's completion fires and the Promise settles.
+        instance.runUntilQuiescent()
+        XCTAssertEqual(recorder.logs().map(\.message), [#"got:{"ok":true}"#])
+        XCTAssertEqual(http.requested, ["https://api.example.com/data"])
+    }
+
+    func testFetchToDisallowedHostIsDeniedWithoutCallingClient() throws {
+        let transport = LoopbackTransport()
+        let recorder = Recorder(transport)
+        let http = CannedHTTPClient()
+        http.canned["https://evil.example.com/x"] = CannedHTTPClient.Response(
+            status: 200, headers: [:], body: Data("nope".utf8)
+        )
+        // network allowlist does NOT include evil.example.com.
+        let instance = try PluginInstance(
+            manifest: manifest(network: ["api.example.com"]),
+            transport: transport,
+            clock: TestClock(),
+            httpClient: http
+        )
+        instance.evaluate("""
+            vee.http.fetch('https://evil.example.com/x')
+              .then(r => console.log('resolved'))
+              .catch(e => console.error('denied:' + e.code + ':' + e.message));
+        """)
+        instance.runUntilQuiescent()
+        XCTAssertTrue(http.requested.isEmpty, "the client must NEVER be called for a denied host")
+        let logs = recorder.logs()
+        XCTAssertEqual(logs.count, 1)
+        XCTAssertEqual(logs.first?.level, .error)
+        // capabilityDenied is code -32001.
+        XCTAssertTrue((logs.first?.message ?? "").contains("-32001"), "got: \(logs.first?.message ?? "")")
+    }
+
+    // MARK: - Test 6: first render → single replace "" ; mirror equals expected
+
+    func testFirstRenderEmitsReplaceRootAndMirrors() throws {
+        let transport = LoopbackTransport()
+        let recorder = Recorder(transport)
+        let instance = try PluginInstance(
+            manifest: manifest(),
+            transport: transport,
+            clock: TestClock(),
+            httpClient: CannedHTTPClient()
+        )
+        instance.evaluate("""
+            vee.render({ tag: 'root', props: {}, children: [
+                { tag: 'text', props: { value: 'hi' }, children: [] }
+            ]});
+        """)
+        let renders = recorder.renders()
+        XCTAssertEqual(renders.count, 1)
+        let params = try XCTUnwrap(renders.first)
+        XCTAssertEqual(params.revision, 1)
+        XCTAssertEqual(params.patch.count, 1)
+        XCTAssertEqual(params.patch.first?.op, .replace)
+        XCTAssertEqual(params.patch.first?.path, "")
+
+        // The mirror equals the rendered tree.
+        let expected = RenderNode(tag: "root", props: [:], children: [
+            RenderNode(tag: "text", props: ["value": .string("hi")], children: [])
+        ])
+        XCTAssertEqual(instance.currentRenderTree(), expected)
+    }
+
+    // MARK: - Test 7: incremental render → minimal patch at the prop path
+
+    func testIncrementalRenderEmitsMinimalPatch() throws {
+        let transport = LoopbackTransport()
+        let recorder = Recorder(transport)
+        let instance = try PluginInstance(
+            manifest: manifest(),
+            transport: transport,
+            clock: TestClock(),
+            httpClient: CannedHTTPClient()
+        )
+        // The host diffs the wire projection with VeeJSONPatch, whose array
+        // differ matches siblings by a top-level `id` member. A plugin therefore
+        // gives keyed children a top-level `id` (vee.render accepts a raw
+        // JSONValue tree, not only a RenderNode) so a per-item prop change yields
+        // a minimal recursive replace rather than a remove+add of the whole node.
+        let base = """
+            ({ tag: 'list', props: {}, children: [
+                { id: 'a', tag: 'list-item', props: { title: 'A', subtitle: 'sa' }, children: [] },
+                { id: 'b', tag: 'list-item', props: { title: 'B', subtitle: 'sb' }, children: [] }
+            ]})
+        """
+        instance.evaluate("vee.render(\(base))")
+        // Change ONE prop on the first item.
+        instance.evaluate("""
+            vee.render({ tag: 'list', props: {}, children: [
+                { id: 'a', tag: 'list-item', props: { title: 'A2', subtitle: 'sa' }, children: [] },
+                { id: 'b', tag: 'list-item', props: { title: 'B', subtitle: 'sb' }, children: [] }
+            ]});
+        """)
+        let renders = recorder.renders()
+        XCTAssertEqual(renders.count, 2)
+        let second = try XCTUnwrap(renders.last)
+        XCTAssertEqual(second.revision, 2)
+        // Exactly one op: replace the changed title.
+        XCTAssertEqual(second.patch.count, 1, "patch should be minimal, got \(second.patch)")
+        XCTAssertEqual(second.patch.first?.op, .replace)
+        XCTAssertEqual(second.patch.first?.path, "/children/0/props/title")
+        XCTAssertEqual(second.patch.first?.value, .string("A2"))
+    }
+
+    // MARK: - Test 8: host.invokeAction round-trips to the registered handler
+
+    func testInvokeActionReachesRegisteredHandler() throws {
+        let transport = LoopbackTransport()
+        let instance = try PluginInstance(
+            manifest: manifest(),
+            transport: transport,
+            clock: TestClock(),
+            httpClient: CannedHTTPClient()
+        )
+        instance.evaluate("""
+            globalThis.__seen = [];
+            vee.onInvokeAction((p) => {
+                globalThis.__seen.push(p.actionId + '/' + (p.targetId || ''));
+            });
+        """)
+        // The launcher sends a host.invokeAction notification over the wire.
+        let params = InvokeActionParams(pluginId: "com.vee.test", actionId: "open", targetId: "row-1")
+        let note = JSONRPCNotification(
+            method: RPCMethods.invokeAction,
+            params: try encodeToJSONValue(params)
+        )
+        transport.sendFromPeer(.notification(note))
+        instance.runUntilQuiescent()
+        let seen = instance.evaluate("globalThis.__seen.join(',')")?.toString()
+        XCTAssertEqual(seen, "open/row-1")
+    }
+
+    func testSearchTextChangePassesQueryFirst() throws {
+        let transport = LoopbackTransport()
+        let instance = try PluginInstance(
+            manifest: manifest(),
+            transport: transport,
+            clock: TestClock(),
+            httpClient: CannedHTTPClient()
+        )
+        instance.evaluate("""
+            globalThis.__q = '';
+            vee.onSearchTextChange((query, p) => { globalThis.__q = query + '|' + p.query; });
+        """)
+        let params = SearchTextChangeParams(pluginId: "com.vee.test", query: "abc")
+        transport.sendFromPeer(.notification(JSONRPCNotification(
+            method: RPCMethods.onSearchTextChange,
+            params: try encodeToJSONValue(params)
+        )))
+        instance.runUntilQuiescent()
+        XCTAssertEqual(instance.evaluate("globalThis.__q")?.toString(), "abc|abc")
+    }
+
+    // MARK: - Test 9: no leak after reload (the retain-cycle guard)
+
+    func testNoLeakAfterReload() throws {
+        let transport = LoopbackTransport()
+        // The bundler reproduces a registering bundle (reload rebuilds from it).
+        let bundleSource = """
+            globalThis.__veePlugin = {
+                commandNames: ['view'],
+                activateCommand(name, ctx) {
+                    // register a handler (stored callback → JSManagedValue): the
+                    // worst case for a context⇄callback retain cycle.
+                    vee.onInvokeAction(() => console.log('x'));
+                    setInterval(() => {}, 1000);   // a live managed timer too
+                    ctx.render({tag:'root',props:{},children:[]});
+                }
+            };
+        """
+        let host = PluginHost(
+            transport: transport,
+            clock: TestClock(),
+            httpClient: CannedHTTPClient(),
+            fileWatcher: NoopFileWatcher(),
+            bundler: StaticBundler(source: bundleSource)
+        )
+        weak var weakInstance: PluginInstance?
+        weak var weakVM: JSVirtualMachine?
+
+        try autoreleasepool {
+            let id = "com.vee.test"
+            let m = manifest(id: id)
+            try host.load(manifest: m, source: bundleSource)
+            let inst = try XCTUnwrap(host.instance(for: id))
+            weakInstance = inst
+            weakVM = inst.virtualMachine
+            // Activating registers a managed callback — the worst case for leaks.
+            try host.activate(ActivateParams(pluginId: id, commandName: "view"))
+            XCTAssertNotNil(weakInstance)
+            XCTAssertNotNil(weakVM)
+
+            // Reload tears down the old context/VM and builds a fresh one.
+            try host.reload(ReloadParams(pluginId: id))
+        }
+        autoreleasepool { }   // let the autorelease pool drop JSC internals
+
+        XCTAssertNil(weakInstance, "the old PluginInstance must deallocate after reload")
+        XCTAssertNil(weakVM, "the old JSVirtualMachine must deallocate after reload (no retain cycle)")
+    }
+
+    func testNoLeakAfterDeactivate() throws {
+        let transport = LoopbackTransport()
+        let host = PluginHost(
+            transport: transport,
+            clock: TestClock(),
+            httpClient: CannedHTTPClient(),
+            fileWatcher: NoopFileWatcher(),
+            bundler: StaticBundler(source: "")
+        )
+        weak var weakVM: JSVirtualMachine?
+        try autoreleasepool {
+            let id = "com.vee.test"
+            try host.load(manifest: manifest(id: id), source: """
+                globalThis.__veePlugin = {
+                    commandNames: ['view'],
+                    activateCommand(name, ctx) { vee.onInvokeAction(() => {}); }
+                };
+            """)
+            weakVM = host.instance(for: id)?.virtualMachine
+            try host.activate(ActivateParams(pluginId: id, commandName: "view"))
+            host.unload(pluginId: id)
+        }
+        autoreleasepool { }
+        XCTAssertNil(weakVM, "unloading must drop the VM with no retain cycle")
+    }
+
+    // MARK: - Test 10: out-of-order render revision is ignored
+
+    func testStaleRenderRevisionIsIgnored() throws {
+        // Drive the mirror directly with explicit revisions to prove the
+        // monotonic guard (a stale N after an N+1 is dropped).
+        let mirror = RenderMirror(pluginId: "com.vee.test")
+        let v1 = RenderNode(tag: "root", props: ["v": .number(1)], children: [])
+        let v2 = RenderNode(tag: "root", props: ["v": .number(2)], children: [])
+
+        let p1 = mirror.ingest(tree: v1.jsonValue, revision: 1)
+        XCTAssertNotNil(p1)
+        let p2 = mirror.ingest(tree: v2.jsonValue, revision: 2)
+        XCTAssertNotNil(p2)
+        XCTAssertEqual(mirror.revision, 2)
+
+        // A stale revision (1) arriving after 2 must be dropped — no patch, no
+        // mirror change.
+        let stale = mirror.ingest(tree: v1.jsonValue, revision: 1)
+        XCTAssertNil(stale, "a lower revision must be ignored")
+        XCTAssertEqual(mirror.revision, 2)
+        XCTAssertEqual(try mirror.currentTree(), v2)
+    }
+
+    func testHostDropsStaleRenderFromPlugin() throws {
+        // Same guard, but exercised through the live host pipeline: monkeypatch
+        // the revision counter is not exposed, so we assert the mirror stays at
+        // the latest tree after a re-render to an identical-but-later tree.
+        let transport = LoopbackTransport()
+        let recorder = Recorder(transport)
+        let instance = try PluginInstance(
+            manifest: manifest(),
+            transport: transport,
+            clock: TestClock(),
+            httpClient: CannedHTTPClient()
+        )
+        instance.evaluate("vee.render({tag:'root',props:{n:1},children:[]})")
+        instance.evaluate("vee.render({tag:'root',props:{n:2},children:[]})")
+        let renders = recorder.renders()
+        XCTAssertEqual(renders.map(\.revision), [1, 2])
+        XCTAssertEqual(instance.currentRenderTree(),
+                       RenderNode(tag: "root", props: ["n": .number(2)], children: []))
+    }
+
+    // MARK: - Test 11: plugin throws during render → pluginError, host survives
+
+    func testPluginThrowDuringActivateSurfacesPluginError() throws {
+        let transport = LoopbackTransport()
+        let host = PluginHost(
+            transport: transport,
+            clock: TestClock(),
+            httpClient: CannedHTTPClient(),
+            fileWatcher: NoopFileWatcher(),
+            bundler: StaticBundler(source: "")
+        )
+        let id = "com.vee.test"
+        try host.load(manifest: manifest(id: id), source: """
+            globalThis.__veePlugin = {
+                commandNames: ['view'],
+                activateCommand(name, ctx) { throw new Error('render-boom'); }
+            };
+        """)
+        XCTAssertThrowsError(try host.activate(ActivateParams(pluginId: id, commandName: "view"))) { error in
+            let rpc = error as? JSONRPCError
+            XCTAssertEqual(rpc?.code, -32000, "pluginError")
+            XCTAssertTrue((rpc?.message ?? "").contains("render-boom"))
+            // The JS stack rides in `data` when available.
+            XCTAssertNotNil(rpc?.data, "the JS stack should be attached in data")
+        }
+        // The host stays alive: a fresh, well-behaved activate works.
+        XCTAssertNotNil(host.instance(for: id))
+        try host.load(manifest: manifest(id: id), source: """
+            globalThis.__veePlugin = {
+                commandNames: ['view'],
+                activateCommand(name, ctx) { ctx.render({tag:'root',props:{},children:[]}); }
+            };
+        """)
+        XCTAssertNoThrow(try host.activate(ActivateParams(pluginId: id, commandName: "view")))
+    }
+
+    // MARK: - Test 12: fixture handshake (real bundle → expected projection)
+
+    func testHelloListFixtureHandshake() throws {
+        // Locate the fixtures relative to this source file (robust to CWD).
+        let repoRoot = Self.repoRoot()
+        let bundleURL = repoRoot
+            .appendingPathComponent("plugins/fixtures/hello-list.bundle.js")
+        let expectedURL = repoRoot
+            .appendingPathComponent("plugins/fixtures/hello-list.expected.json")
+
+        let bundleSource = try String(contentsOf: bundleURL, encoding: .utf8)
+        let expectedData = try Data(contentsOf: expectedURL)
+        let expected = try JSONDecoder().decode(JSONValue.self, from: expectedData)
+
+        // Create a real JSContext, inject console + vee whose render captures the tree.
+        let transport = LoopbackTransport()
+        let instance = try PluginInstance(
+            manifest: PluginManifest(
+                id: "com.vee.hello-list", name: "Hello List", version: "1.0.0",
+                entrypoint: "hello-list.bundle.js",
+                commands: [PluginCommand(name: "view", title: "View", mode: .view)],
+                capabilities: Capabilities()
+            ),
+            transport: transport,
+            clock: TestClock(),
+            httpClient: CannedHTTPClient()
+        )
+
+        var capturedTree: JSONValue?
+        instance.onRenderTree = { capturedTree = $0 }
+
+        // Evaluate the IIFE bundle (sets __veePlugin).
+        try instance.evaluateOrThrow(bundleSource)
+
+        // Read __veePlugin → commandNames == ["view"].
+        let commandNames = try instance.commandNames()
+        XCTAssertEqual(commandNames, ["view"])
+
+        // activateCommand("view", ctx) — drives vee.render which captures the tree.
+        try instance.activateCommand("view", arguments: [:])
+
+        let tree = try XCTUnwrap(capturedTree, "vee.render was never called")
+        // Deep-equal the wire projection against the committed expected JSON.
+        XCTAssertEqual(tree, expected)
+    }
+
+    func testHelloListFixtureViaHostRendersExpectedMirror() throws {
+        // End-to-end via the host: load + activate the real fixture, then assert
+        // the host's mirror equals the expected RenderNode.
+        let repoRoot = Self.repoRoot()
+        let bundleSource = try String(
+            contentsOf: repoRoot.appendingPathComponent("plugins/fixtures/hello-list.bundle.js"),
+            encoding: .utf8)
+        let expected = try RenderNode(jsonValue: JSONDecoder().decode(
+            JSONValue.self,
+            from: Data(contentsOf: repoRoot.appendingPathComponent("plugins/fixtures/hello-list.expected.json"))))
+
+        let transport = LoopbackTransport()
+        let recorder = Recorder(transport)
+        let host = PluginHost(
+            transport: transport,
+            clock: TestClock(),
+            httpClient: CannedHTTPClient(),
+            fileWatcher: NoopFileWatcher(),
+            bundler: StaticBundler(source: bundleSource))
+        let id = "com.vee.hello-list"
+        try host.load(
+            manifest: PluginManifest(
+                id: id, name: "Hello List", version: "1.0.0",
+                entrypoint: "hello-list.bundle.js",
+                commands: [PluginCommand(name: "view", title: "View", mode: .view)],
+                capabilities: Capabilities()),
+            source: bundleSource)
+        try host.activate(ActivateParams(pluginId: id, commandName: "view"))
+
+        XCTAssertEqual(host.instance(for: id)?.currentRenderTree(), expected)
+        let renders = recorder.renders()
+        XCTAssertEqual(renders.first?.patch.first?.op, .replace)
+        XCTAssertEqual(renders.first?.patch.first?.path, "")
+    }
+
+    // MARK: - vee.setCandidates, storage, showToast smoke tests
+
+    func testSetCandidatesReachesHost() throws {
+        let transport = LoopbackTransport()
+        let recorder = Recorder(transport)
+        let instance = try PluginInstance(
+            manifest: manifest(),
+            transport: transport,
+            clock: TestClock(),
+            httpClient: CannedHTTPClient()
+        )
+        instance.evaluate("""
+            vee.setCandidates([
+                { id: '1', title: 'One', keywords: ['uno'], actions: [{ id: 'open', title: 'Open' }] },
+                { id: '2', title: 'Two', subtitle: 'second', keywords: [], actions: [] }
+            ]);
+        """)
+        let notes = recorder.notifications.filter { $0.method == RPCMethods.setCandidates }
+        XCTAssertEqual(notes.count, 1)
+        let data = try JSONEncoder().encode(try XCTUnwrap(notes.first?.params))
+        let params = try JSONDecoder().decode(SetCandidatesParams.self, from: data)
+        XCTAssertEqual(params.candidates.map(\.id), ["1", "2"])
+        XCTAssertEqual(params.candidates.first?.keywords, ["uno"])
+        XCTAssertEqual(params.candidates.first?.actions.first?.id, "open")
+    }
+
+    func testShowToastReachesHost() throws {
+        let transport = LoopbackTransport()
+        let recorder = Recorder(transport)
+        let instance = try PluginInstance(
+            manifest: manifest(),
+            transport: transport,
+            clock: TestClock(),
+            httpClient: CannedHTTPClient()
+        )
+        instance.evaluate("vee.showToast('success', 'Saved', 'All good')")
+        let toasts = recorder.toasts()
+        XCTAssertEqual(toasts.count, 1)
+        XCTAssertEqual(toasts.first?.style, .success)
+        XCTAssertEqual(toasts.first?.title, "Saved")
+        XCTAssertEqual(toasts.first?.message, "All good")
+    }
+
+    func testStorageRoundTripsThroughBridge() throws {
+        let transport = LoopbackTransport()
+        let recorder = Recorder(transport)
+        let instance = try PluginInstance(
+            manifest: manifest(),
+            transport: transport,
+            clock: TestClock(),
+            httpClient: CannedHTTPClient()
+        )
+        instance.evaluate("""
+            vee.storage.set('k', { hello: 'world' })
+              .then(() => vee.storage.get('k'))
+              .then(v => console.log('stored:' + JSON.stringify(v)))
+              .catch(e => console.error('err:' + e));
+        """)
+        instance.runUntilQuiescent()
+        XCTAssertEqual(recorder.logs().map(\.message), [#"stored:{"hello":"world"}"#])
+    }
+
+    func testPluginIdExposedToJS() throws {
+        let instance = try PluginInstance(
+            manifest: manifest(id: "com.vee.identity"),
+            transport: LoopbackTransport(),
+            clock: TestClock(),
+            httpClient: CannedHTTPClient()
+        )
+        XCTAssertEqual(instance.evaluate("vee.pluginId")?.toString(), "com.vee.identity")
+    }
+
+    // MARK: - Hot reload behaviour
+
+    func testHotReloadReevaluatesNewBundle() throws {
+        let transport = LoopbackTransport()
+        let recorder = Recorder(transport)
+        let watcher = ManualFileWatcher()
+        let bundler = StaticBundler(source: """
+            globalThis.__veePlugin = {
+                commandNames: ['view'],
+                activateCommand(name, ctx) { ctx.render({tag:'text',props:{v:'old'},children:[]}); }
+            };
+        """)
+        let host = PluginHost(
+            transport: transport,
+            clock: TestClock(),
+            httpClient: CannedHTTPClient(),
+            fileWatcher: watcher,
+            bundler: bundler)
+        let id = "com.vee.test"
+        try host.load(manifest: manifest(id: id), source: bundler.source)
+        try host.activate(ActivateParams(pluginId: id, commandName: "view"))
+        XCTAssertEqual(host.instance(for: id)?.currentRenderTree(),
+                       RenderNode(tag: "text", props: ["v": .string("old")], children: []))
+
+        // The bundler now produces a new bundle; a file change triggers reload.
+        bundler.source = """
+            globalThis.__veePlugin = {
+                commandNames: ['view'],
+                activateCommand(name, ctx) { ctx.render({tag:'text',props:{v:'new'},children:[]}); }
+            };
+        """
+        watcher.fire(pluginId: id)
+        instanceQuiesce(host.instance(for: id))
+
+        XCTAssertEqual(host.instance(for: id)?.currentRenderTree(),
+                       RenderNode(tag: "text", props: ["v": .string("new")], children: []))
+        _ = recorder
+    }
+
+    // MARK: - private helpers
+
+    private func instanceQuiesce(_ instance: PluginInstance?) {
+        instance?.runUntilQuiescent()
+    }
+
+    private func encodeToJSONValue<T: Encodable>(_ value: T) throws -> JSONValue {
+        let data = try JSONEncoder().encode(value)
+        return try JSONDecoder().decode(JSONValue.self, from: data)
+    }
+
+    /// Resolve the repository root from this test file's path (`#filePath` is
+    /// `<repo>/Tests/VeeEngineTests/VeeEngineTests.swift`). Falls back to an env
+    /// override (`VEE_REPO_ROOT`) so it stays robust in alternate layouts.
+    static func repoRoot() -> URL {
+        if let env = ProcessInfo.processInfo.environment["VEE_REPO_ROOT"] {
+            return URL(fileURLWithPath: env, isDirectory: true)
+        }
+        return URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()   // VeeEngineTests
+            .deletingLastPathComponent()   // Tests
+            .deletingLastPathComponent()   // repo root
     }
 }
