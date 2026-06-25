@@ -941,5 +941,46 @@ public final class AppKitMenuBar: @MainActor MenuBarPresenting {
             menu.addItem(menuItem)
         }
     }
+
+    // MARK: - Closure-backed action items (app wiring: "Settings…", "Quit Vee")
+
+    /// Retains the closure targets for menu items added via `addActionItem`, so
+    /// they outlive this call (NSMenuItem's target is unowned).
+    private var actionTargets: [MenuItemActionTarget] = []
+
+    /// Append a menu item that runs `action` when chosen. `keyEquivalent` is an
+    /// optional shortcut (e.g. "," for Settings, "q" for Quit) shown in the menu;
+    /// it carries the Command modifier by default, matching app-menu convention.
+    /// Returns nothing — the menubar owns the item + its closure for the process
+    /// lifetime. (`setMenuBarItems` clears only the view-model items it manages;
+    /// these closure items are appended on top and not part of that set, so call
+    /// this AFTER any `setMenuBarItems` so the persistent actions sit at the
+    /// bottom of the menu.)
+    public func addActionItem(title: String,
+                              keyEquivalent: String = "",
+                              action: @escaping () -> Void) {
+        let target = MenuItemActionTarget(action: action)
+        actionTargets.append(target)
+        let item = NSMenuItem(title: title,
+                              action: #selector(MenuItemActionTarget.fire),
+                              keyEquivalent: keyEquivalent)
+        item.target = target
+        menu.addItem(item)
+    }
+
+    /// Append a separator line to the menubar menu.
+    public func addSeparator() {
+        menu.addItem(.separator())
+    }
+}
+
+/// Tiny target wrapper turning a closure into an Objective-C action selector for
+/// an `NSMenuItem`. Held strongly by `AppKitMenuBar` (the menu item's `target` is
+/// a weak/unowned reference).
+@MainActor
+private final class MenuItemActionTarget: NSObject {
+    private let action: () -> Void
+    init(action: @escaping () -> Void) { self.action = action }
+    @objc func fire() { action() }
 }
 #endif

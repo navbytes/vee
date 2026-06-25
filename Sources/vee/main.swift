@@ -3,6 +3,7 @@ import VeeApp
 import VeeEngine
 import VeeServices
 import VeeProtocol
+import VeeKeychain
 
 // Thin executable entrypoint — NSApplication bootstrap + wiring ONLY. Every
 // decision lives in the tested libraries (VeeApp/VeeEngine/VeeServices/VeeFuzzy);
@@ -101,6 +102,56 @@ MainActor.assumeIsolated {
             .appendingPathComponent("plugins")
     }()
 
+    // ── Persisted settings (hotkey chord, clipboard history size + blocklist) ─
+    // Loaded up front so the clipboard monitor is sized correctly at birth and
+    // the hotkey binds to the user's saved chord.
+    let settings = SettingsModel()
+
+    // ── Clipboard history service (real NSPasteboard, privacy-filtered) ───────
+    // Captures into an in-memory, concealed/transient-respecting history on a
+    // background poll. Constructed BEFORE the host so its provider adapter can be
+    // injected. The history cap comes from saved settings (the cap is fixed at
+    // init); the user-added blocklist UTIs are layered on top of the always-on
+    // privacy conventions.
+    let clipboard = ClipboardMonitor(pasteboard: NSPasteboardReader(),
+                                     clock: SystemClock(),
+                                     historyLimit: settings.historySize)
+    for type in settings.blocklist { clipboard.addToBlocklist(type) }
+    let clipboardPoll = ClipboardPollDriver(monitor: clipboard)
+    clipboardPoll.start()
+
+    // ── Real bridge providers (app-side adapters over live services) ──────────
+    // The engine ships safe defaults; here we wire the REAL backends so a loaded
+    // plugin's `vee.*` calls actually function: clipboard history/copy, calendar
+    // (lazy EventKit), open/openApp (NSWorkspace), fs (FileManager), per-plugin
+    // disk storage under Application Support, and keychain-backed secrets (used
+    // by e.g. the GitHub plugin once a token is saved in Settings).
+    let storageRoot = FileManager.default
+        .urls(for: .applicationSupportDirectory, in: .userDomainMask).first?
+        .appendingPathComponent("Vee", isDirectory: true)
+        .appendingPathComponent("storage", isDirectory: true)
+        ?? URL(fileURLWithPath: NSTemporaryDirectory())
+            .appendingPathComponent("Vee/storage", isDirectory: true)
+
+    // Bind each provider to an explicitly-typed local first; this gives the type
+    // checker firm anchors for the multi-argument `PluginHost(...)` call (an
+    // inline tower of differently-typed args otherwise defeats inference here).
+    let clipboardProvider: ClipboardProviding = ClipboardMonitorProvider(monitor: clipboard)
+    let calendarProvider: CalendarProviding = EventKitCalendarAdapter()
+    let openProvider: OpenProviding = NSWorkspaceOpenProvider()
+    let fileProvider: FileProviding = FileManagerFileProvider()
+    let secretStore: any SecretStore = VeeKeychain.KeychainStore()
+    let storageFactory: () -> StorageBackend = {
+        // One disk-backed store rooted under Application Support/Vee/storage. The
+        // factory signature carries no plugin id, so all plugins share this
+        // namespace subfolder (acceptable for self-authored plugins; this is
+        // capability gating, not a hostile sandbox). A failure to create the
+        // directory degrades to in-memory storage rather than crashing the host.
+        // (`as StorageBackend?` so `??` unifies the two concrete impls cleanly.)
+        ((try? DiskStorageBackend(directory: storageRoot, pluginId: "plugins")) as StorageBackend?)
+            ?? InMemoryStorage()
+    }
+
     let loopback = LoopbackTransport()
     let host = PluginHost(
         transport: loopback,
@@ -109,7 +160,13 @@ MainActor.assumeIsolated {
         fileWatcher: FSEventsFileWatcher(pathForPlugin: { id in
             pluginsDir.appendingPathComponent("dist/\(id).js").path
         }),
-        bundler: EsbuildBundler(workingDirectory: pluginsDir))
+        bundler: EsbuildBundler(workingDirectory: pluginsDir),
+        storageFactory: storageFactory,
+        clipboardProvider: clipboardProvider,
+        secretStore: secretStore,
+        openProvider: openProvider,
+        fileProvider: fileProvider,
+        calendarProvider: calendarProvider)
 
     let coordinator = AppCoordinator(
         pluginId: "com.vee.launcher",
@@ -123,38 +180,22 @@ MainActor.assumeIsolated {
     coordinator.menuBar = menuBar
     menuBar.setMenuBarTitle("Vee")
 
-    // ── Load bundled plugins; surface each command in the root ────────────────
-    // Resolve fixture bundles from the .app Resources (production) or the repo
-    // (dev). Each loaded plugin contributes a "cmd:<id>:<command>" root candidate;
-    // invoking it activates the plugin, which then renders into the launcher.
-    func resolvePluginBundle(_ file: String) -> String? {
-        if let res = Bundle.main.resourcePath {
-            let p = res + "/vee-plugins/" + file
-            if FileManager.default.fileExists(atPath: p) { return p }
-        }
-        let dev = FileManager.default.currentDirectoryPath + "/plugins/fixtures/" + file
-        return FileManager.default.fileExists(atPath: dev) ? dev : nil
+    // ── Settings window + menubar actions ─────────────────────────────────────
+    // Tokens are stored in the real Keychain (namespace "tokens"); the Settings
+    // window edits the hotkey chord, clipboard history size + blocklist, and the
+    // per-plugin tokens. Construct it lazily-once and surface "Settings…" / "Quit
+    // Vee" in the menubar.
+    let tokenStore = KeychainTokenStore()
+    let settingsController = SettingsWindowController(
+        model: settings,
+        tokenStore: tokenStore,
+        onIgnoreNextCopy: { [weak clipboard] in clipboard?.ignoreNextCopy() })
+    menuBar.addActionItem(title: "Settings…", keyEquivalent: ",") {
+        settingsController.show()
     }
-    let pluginSpecs: [(id: String, title: String, icon: String, bundle: String, caps: Capabilities)] = [
-        ("com.vee.essentials", "Essentials", "command", "com.vee.essentials.bundle.js", Capabilities()),
-        ("com.vee.clipboard", "Clipboard History", "doc.on.clipboard", "com.vee.clipboard.bundle.js",
-         Capabilities(clipboard: true)),
-        ("com.vee.hacker-news", "Hacker News", "newspaper", "com.vee.hacker-news.bundle.js",
-         Capabilities(network: ["hacker-news.firebaseio.com"])),
-    ]
-    var commandCandidates: [Candidate] = []
-    for spec in pluginSpecs {
-        guard let path = resolvePluginBundle(spec.bundle),
-              let source = try? String(contentsOfFile: path, encoding: .utf8) else { continue }
-        let manifest = PluginManifest(
-            id: spec.id, name: spec.title, version: "1.0.0", entrypoint: path,
-            commands: [PluginCommand(name: "view", title: spec.title, mode: .view)],
-            capabilities: spec.caps)
-        if (try? host.load(manifest: manifest, source: source)) != nil {
-            commandCandidates.append(Candidate(
-                id: "cmd:\(spec.id):view", title: spec.title, icon: spec.icon,
-                actions: [CandidateAction(id: "run", title: "Open Command")]))
-        }
+    menuBar.addSeparator()
+    menuBar.addActionItem(title: "Quit Vee", keyEquivalent: "q") {
+        NSApp.terminate(nil)
     }
 
     // ── Root surface: host-native app search (the pluginless launcher) ────────
@@ -162,56 +203,94 @@ MainActor.assumeIsolated {
     // this in-memory set natively per keystroke (never re-scans on a keypress).
     let appEnumerator = NSWorkspaceAppEnumerator()
     let appSearch = AppSearchProvider(enumerator: appEnumerator, clock: SystemClock())
-    // Enumerate installed apps OFF the main thread so the menu bar + hotkey are
-    // ready instantly; populate the launcher's candidate set when it's done.
+
+    // ── Discover + load plugins from disk; surface each command in the root ───
+    // Production: Resources/vee-plugins/<id>/{vee.json,bundle.js}. Dev fallback:
+    // plugins/samples/*/vee.json + plugins/fixtures/<id>.bundle.js. Each loaded
+    // plugin contributes a "cmd:<id>:<command>" root candidate per command;
+    // invoking it activates the plugin, which then renders into the launcher.
+    //
+    // Discovery (filesystem reads) + bundle evaluation happen OFF the main thread
+    // so the menu bar + hotkey are ready instantly; we hop back to the main thread
+    // to mutate the host (instances dictionary) and publish candidates. App
+    // enumeration runs on the same background hop.
     DispatchQueue.global(qos: .userInitiated).async {
+        let discovered = PluginDiscovery.discoverAll()
         let installedApps = appSearch.search(query: "", limit: 5000)
+
         DispatchQueue.main.async {
-            // Commands first, then apps. Invoking a "cmd:" candidate activates the
-            // plugin (which renders into the launcher); an app candidate launches it.
-            coordinator.showHostCandidates(commandCandidates + installedApps) { candidate in
-                if candidate.id.hasPrefix("cmd:") {
-                    let parts = candidate.id.split(separator: ":", maxSplits: 2).map(String.init)
-                    if parts.count == 3 {
-                        try? host.activate(ActivateParams(pluginId: parts[1], commandName: parts[2]))
+            MainActor.assumeIsolated {
+                var commandCandidates: [Candidate] = []
+                for plugin in discovered {
+                    guard (try? host.load(manifest: plugin.manifest, source: plugin.source)) != nil
+                    else { continue }
+                    // One root candidate per declared command (most plugins ship a
+                    // single "view" command, but honor multiples).
+                    for command in plugin.manifest.commands {
+                        commandCandidates.append(Candidate(
+                            id: "cmd:\(plugin.manifest.id):\(command.name)",
+                            title: command.title,
+                            subtitle: command.subtitle,
+                            icon: plugin.icon,
+                            actions: [CandidateAction(id: "run", title: "Open Command")]))
                     }
-                    // The plugin now drives the surface; keep the launcher open.
-                } else {
-                    appSearch.recordLaunch(bundleId: candidate.id)   // feeds frecency next time
-                    appEnumerator.launch(bundleId: candidate.id)
-                    window.hideLauncher()
+                }
+
+                // Commands first, then apps. Invoking a "cmd:" candidate activates
+                // the plugin (which renders into the launcher); an app candidate
+                // launches it.
+                coordinator.showHostCandidates(commandCandidates + installedApps) { candidate in
+                    if candidate.id.hasPrefix("cmd:") {
+                        let parts = candidate.id.split(separator: ":", maxSplits: 2).map(String.init)
+                        if parts.count == 3 {
+                            try? host.activate(ActivateParams(pluginId: parts[1], commandName: parts[2]))
+                        }
+                        // The plugin now drives the surface; keep the launcher open.
+                    } else {
+                        appSearch.recordLaunch(bundleId: candidate.id)   // feeds frecency next time
+                        appEnumerator.launch(bundleId: candidate.id)
+                        window.hideLauncher()
+                    }
                 }
             }
         }
     }
 
-    // ── Clipboard history service (real NSPasteboard, privacy-filtered) ───────
-    // Captures into an in-memory, concealed/transient-respecting history on a
-    // background poll. (A clipboard command/UI surface is a follow-up.)
-    let clipboard = ClipboardMonitor(pasteboard: NSPasteboardReader(), clock: SystemClock())
-    let clipboardPoll = ClipboardPollDriver(monitor: clipboard)
-    clipboardPoll.start()
-
-    // ── Global launcher hotkey (Option+Space, Alfred-style) ───────────────────
+    // ── Global launcher hotkey (saved chord, fallback ⌥Space) ─────────────────
     // Cmd+Space is intentionally avoided (Spotlight owns it system-wide and the
-    // OS would refuse the registration). Option+Space is a conventional launcher
-    // chord; rebind here as desired. (A recorder UI is a follow-up.)
+    // OS would refuse the registration). The bound chord comes from saved settings
+    // (default ⌥Space); the recorder in Settings re-binds it live via the model's
+    // change callback below.
     let hotkeys = HotkeyDispatcher(registry: CarbonHotkeyRegistry())
-    let bindResult = hotkeys.bind(
-        action: "toggle-launcher",
-        chord: HotkeyChord(keyCode: 49 /* Space */, modifiers: [.option])) {
-            MainActor.assumeIsolated {
-                coordinator.showRoot()   // back to the app/command root on every open
-                window.showLauncher()
-            }
+    let toggleLauncher: () -> Void = {
+        MainActor.assumeIsolated {
+            coordinator.showRoot()   // back to the app/command root on every open
+            window.showLauncher()
         }
-    if bindResult != .registered {
-        FileHandle.standardError.write(Data("vee: launcher hotkey not registered: \(bindResult)\n".utf8))
     }
+    func bindLauncherHotkey(_ chord: HotkeyChord) {
+        let result = hotkeys.bind(action: "toggle-launcher", chord: chord, handler: toggleLauncher)
+        if result != .registered {
+            FileHandle.standardError.write(
+                Data("vee: launcher hotkey not registered (\(chord)): \(result)\n".utf8))
+        }
+    }
+    bindLauncherHotkey(settings.hotkey)
+
+    // ── Live settings → running services ──────────────────────────────────────
+    // Re-bind the global hotkey when the recorder reports a new chord; apply
+    // blocklist edits to the live clipboard monitor immediately. (Owned by a small
+    // helper so the bootstrap closure stays lean.)
+    let settingsBinder = SettingsBinder(
+        model: settings,
+        clipboard: clipboard,
+        rebindHotkey: { chord in bindLauncherHotkey(chord) })
+    settingsBinder.activate()
 
     // Keep strong references alive for the process lifetime (the run loop owns
     // the app; these would otherwise deallocate at the end of this scope).
-    _ = (host, coordinator, clipboard, clipboardPoll, hotkeys)
+    _ = (host, coordinator, clipboard, clipboardPoll, hotkeys, settings,
+         settingsController, settingsBinder, calendarProvider)
 
     // ── Run loop: menubar accessory (no Dock icon) ────────────────────────────
     let app = NSApplication.shared
