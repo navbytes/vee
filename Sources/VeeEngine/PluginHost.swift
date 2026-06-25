@@ -206,6 +206,19 @@ public final class PluginHost {
 
     // MARK: - Inbound routing (host → plugin notifications)
 
+    /// Route a host→plugin notification (`host.invokeAction` /
+    /// `host.onSearchTextChange` / `host.submitForm`) to its addressed instance.
+    ///
+    /// This is the same logic the host installs as its transport `onReceive` in
+    /// `init`. It is exposed publicly so an owner that takes over the transport's
+    /// `onReceive` for its own framing/control layer (e.g. the out-of-process
+    /// `vee-plugin-host` child, which must also handle control *requests* the
+    /// host's router ignores) can still delegate plugin event delivery here
+    /// instead of reaching into `PluginInstance`.
+    public func routeHostEvent(_ message: JSONRPCMessage) {
+        routeInbound(message)
+    }
+
     private func routeInbound(_ message: JSONRPCMessage) {
         guard case .notification(let note) = message,
               let params = note.params,

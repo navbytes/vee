@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <!--
+    Hardened-runtime entitlements for the notarized release (used by
+    .github/workflows/release.yml when signing secrets are present).
+
+    JavaScriptCore JITs plugin code; under the hardened runtime it needs these
+    two entitlements or the plugin engine falls back/crashes once notarized.
+    This file is NOT a sandbox profile — Vee currently ships un-sandboxed (see
+    docs/AUDIT.md, finding MAC-3). Add App Sandbox + capability entitlements here
+    if/when the app is sandboxed.
+  -->
+  <key>com.apple.security.cs.allow-jit</key>
+  <true/>
+  <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+  <true/>
+</dict>
+</plist>

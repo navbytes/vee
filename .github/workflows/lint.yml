@@ -1,0 +1,19 @@
+name: Lint
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  swiftlint:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install SwiftLint
+        run: brew install swiftlint
+      # Advisory by default: the starter .swiftlint.yml is lenient and warnings
+      # do NOT fail the build. To make lint a hard gate (like nt's golangci-lint),
+      # add `--strict` here once the tree is clean.
+      - name: SwiftLint
+        run: swiftlint lint --reporter github-actions-logging

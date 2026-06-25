@@ -316,6 +316,19 @@ public final class StaticBundler: Bundler {
     public func build(pluginId: String) throws -> String { source }
 }
 
+/// A bundler that refuses to build. Used by the out-of-process child host, where
+/// `PluginHost.reload` is never invoked locally — the parent re-sends the bundle
+/// source over the pipe (`host.loadPlugin`) instead of the child rebuilding from
+/// disk. If `build` is ever called it's a programming error, surfaced as a clear
+/// `internalError` rather than a silent empty bundle.
+public final class UnsupportedBundler: Bundler {
+    public init() {}
+    public func build(pluginId: String) throws -> String {
+        throw JSONRPCError.internalError(
+            "UnsupportedBundler: out-of-process host does not rebuild locally (reload is driven by the parent)")
+    }
+}
+
 /// Production bundler that shells out to esbuild via the repo's `bundle.mjs`.
 ///
 /// Runs `node <workingDir>/bundle.mjs --once` from `workingDir` (the repo's
@@ -523,6 +536,38 @@ public final class NSWorkspaceOpenProvider: OpenProviding {
         NSWorkspace.shared.openApplication(at: appURL, configuration: NSWorkspace.OpenConfiguration()) { _, error in
             if let error { completion(.failure(error)) } else { completion(.success(())) }
         }
+    }
+}
+
+/// `NSPasteboard`-backed `ClipboardProviding` for the real out-of-process host.
+///
+/// The OS pasteboard exposes only its *current* contents, not a history (a
+/// persistent clipboard-history store lives in the app layer). So `history`
+/// returns at most the single current plain-text item (filtered by `query`), and
+/// `copy` writes the item's text to the general pasteboard. This is a pragmatic
+/// real implementation for the child process; the app can inject a
+/// history-backed provider instead. Logic-light and not unit-tested (touches the
+/// real pasteboard); the bridge that consumes a `ClipboardProviding` is covered
+/// via `FakeClipboardProvider`.
+public final class NSPasteboardClipboardProvider: ClipboardProviding {
+    public init() {}
+
+    public func history(query: String, limit: Int, completion: @escaping (Result<[ClipboardItem], Error>) -> Void) {
+        guard limit > 0, let text = NSPasteboard.general.string(forType: .string), !text.isEmpty else {
+            completion(.success([])); return
+        }
+        if !query.isEmpty, !text.localizedCaseInsensitiveContains(query) {
+            completion(.success([])); return
+        }
+        let item = ClipboardItem(id: "pasteboard.current", text: text, copiedAt: Date())
+        completion(.success([item]))
+    }
+
+    public func copy(_ item: ClipboardItem, completion: @escaping (Result<Void, Error>) -> Void) {
+        let pb = NSPasteboard.general
+        pb.clearContents()
+        pb.setString(item.text, forType: .string)
+        completion(.success(()))
     }
 }
 #endif
