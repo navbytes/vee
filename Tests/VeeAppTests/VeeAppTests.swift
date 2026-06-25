@@ -385,6 +385,36 @@ final class VeeAppTests: XCTestCase {
             XCTFail("expected the root projection to be a list, got \(String(describing: window.lastRoot))")
         }
     }
+
+    // MARK: - Host-native candidate mode (pluginless root search)
+
+    func testHostCandidatesRenderAndInvokeLocallyWithoutTransport() {
+        let (coordinator, transport, _) = makeCoordinator()
+        var invoked: Candidate?
+        let apps = [
+            Candidate(id: "safari", title: "Safari"),
+            Candidate(id: "mail", title: "Mail"),
+            Candidate(id: "messages", title: "Messages"),
+        ]
+        coordinator.showHostCandidates(apps) { invoked = $0 }
+
+        // Projected into the list surface (the pluginless root search).
+        XCTAssertEqual(coordinator.listViewModel?.items.map(\.id), ["safari", "mail", "messages"])
+        XCTAssertEqual(coordinator.selectedID, "safari", "default selection is the first item")
+
+        // Native fuzzy filter narrows the list with no IPC.
+        coordinator.setQuery("mes")
+        XCTAssertEqual(coordinator.listViewModel?.items.map(\.id), ["messages"])
+
+        // Activating a row invokes the host callback locally — NOT a transport frame.
+        coordinator.setQuery("")
+        coordinator.select(id: "mail")
+        coordinator.invoke(action: "vee.builtin.invoke")
+        XCTAssertEqual(invoked?.id, "mail")
+        XCTAssertTrue(
+            outboundParams(transport, method: RPCMethods.invokeAction, as: InvokeActionParams.self).isEmpty,
+            "host-native invoke must not send a host.invokeAction frame")
+    }
 }
 
 // MARK: - Test doubles

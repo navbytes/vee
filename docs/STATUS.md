@@ -2,6 +2,27 @@
 
 *Audited 2026-06-25 against the committed tree at Wave 3 (`2982523`). The whole package builds (`swift build` clean) and `swift test` reports **136 executed, 1 skipped, 0 failures** — independently reproduced. This is an honest completeness-critic read, not a sign-off.*
 
+---
+
+## Update — Phase B, 2026-06-26: a runnable app-search launcher
+
+Phase B ("make it actually launch") landed on top of the Wave-3 core. Deltas:
+
+- **Real OS adapters** (VeeServices): `NSWorkspaceAppEnumerator` (scan + launch via `NSWorkspace.openApplication`), `NSPasteboardReader` (+ `ClipboardPollDriver` ticking `changeCount` on a `DispatchSourceTimer`).
+- **JS bridges now callable** (VeeEngine): `vee.clipboard.{history,copy}` and `vee.keychain.{get,set,delete}`, capability-gated, with tests. Real `FSEventsFileWatcher` + `EsbuildBundler` (hot-reload infra) wired into `PluginHost` (dormant until a plugin loads).
+- **Real NSView GUI** (VeeApp): NSPanel launcher — search field + NSTableView list + detail + keyboard nav — driven by the coordinator projection.
+- **Coordinator host-native candidate mode**: pluginless "root search" — `showHostCandidates` projects a candidate set into the list and invokes a host callback locally (no transport frame). +1 test.
+- **`main.swift` wiring**: installed-app search as the launcher surface (one enumeration at startup, native fuzzy filter per keystroke), launch-on-Return, background clipboard capture, Option+Space global hotkey, menubar accessory run loop.
+- **Verified**: whole package + `vee` executable build clean; **147 Swift tests pass** (1 live-keychain skipped); the `vee` binary **smoke-runs without crashing** (5s run → killed by timeout, exit 124, no crash trace/report, hotkey registered). The visible GUI/menubar/hotkey-fire/app-launch is desktop-manual — see [MANUAL-VERIFY.md](MANUAL-VERIFY.md).
+
+**Status changes from the matrix below:** App search → **runnable** (real adapter + wired launcher; GUI manual-verify). Clipboard → capture loop wired on real `NSPasteboard` (no launcher UI surface yet). Global hotkeys → wired + registers (firing manual-verify). clipboard/keychain bridges → **callable from JS**. GUI → **real** (manual-verify). Hot-reload infra → **real but dormant** (no plugin auto-loaded).
+
+**Still deferred (unchanged):** out-of-process transport (still in-process loopback); the three network plugins (API-to-menubar, PRs/Jiras, meeting-bar); EventKit TCC + signing/entitlements; real per-app icons; frecency in the *live* filter (startup ordering only); a clipboard launcher surface.
+
+**Revised verdict:** Vee is now a **runnable host-native app-search launcher** (pending your desktop confirmation of the visuals) on top of the tested engine core — no longer "not a runnable launcher." The remaining gap to the full spec is the networked JS plugins and the real out-of-process boundary.
+
+*The original Wave-3 audit below is preserved as written (pre-Phase-B).*
+
 ## TL;DR verdict
 
 Vee today is a **rigorously tested, headless engine core with a thin, unverified GUI/OS skin** — not yet a runnable launcher. The architecturally hard, logic-dense parts the spec calls out (the JSC bridge with its two memory rules, the fuzzy matcher, the SWR cache, RFC-6902 patch, the clipboard privacy filter, the render mirror + view-model projection) are genuinely built and well-tested. But the **spec's headline — "run plugins out-of-process" — is not realized**: everything runs in-process over an in-memory `LoopbackTransport`. Four of the six bridges named in the contract (fs, keychain, clipboard, calendar) are **not wired into JS** — they exist only as method-name constants. **Five of the six launch plugins do not exist** (only `hello-list` does; clipboard and app-search exist as host-native Swift services, not plugins). The GUI, global hotkey, calendar TCC, and all real OS adapters are **compiled but never executed by a test**. "Complete" here means *Stage 1–2 substantially done and tested; Stage 3 partially (the two host-native providers' logic only); the out-of-process boundary and the network plugins deferred.*

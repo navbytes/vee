@@ -72,6 +72,15 @@ public final class AppCoordinator {
     /// The natively-filtered candidates for the current query.
     public private(set) var visibleCandidates: [Candidate] = []
 
+    /// Host-native "root search" mode (no plugin). When on, `visibleCandidates`
+    /// are projected directly into the list surface and activating a row calls
+    /// `candidateInvoke` instead of sending a `host.invokeAction` transport frame.
+    /// This is the pluginless launcher surface (e.g. installed-app search).
+    private var hostCandidateMode = false
+    private var candidateInvoke: ((Candidate) -> Void)?
+    /// Synthesized primary-action id for host candidates that declare none.
+    private static let builtinActionId = "vee.builtin.invoke"
+
     // MARK: Selection state
 
     /// The selected item id (list surface), preserved by id across patches.
@@ -212,6 +221,17 @@ public final class AppCoordinator {
         refilter()
     }
 
+    /// Display a host-native candidate set (e.g. installed apps) as the launcher
+    /// list — the pluginless "root search" surface. `invoke` is called with the
+    /// activated candidate (e.g. to launch the app). No plugin/transport involved.
+    public func showHostCandidates(_ candidates: [Candidate],
+                                   invoke: @escaping (Candidate) -> Void) {
+        hostCandidateMode = true
+        candidateInvoke = invoke
+        self.candidates = candidates
+        refilter()
+    }
+
     // MARK: - Query / native filter (filter natively per keystroke)
 
     /// Set the search query. Filters the candidate set natively (no IPC). If the
@@ -236,6 +256,25 @@ public final class AppCoordinator {
         } else {
             visibleCandidates = fuzzy.match(query: query, in: candidates).map(\.candidate)
         }
+        if hostCandidateMode { projectHostCandidates() }
+    }
+
+    /// Project `visibleCandidates` into the list surface (host-native mode only).
+    /// Each candidate becomes a list item; candidates with no actions get a
+    /// synthesized primary "Open" action so the GUI has something to invoke.
+    private func projectHostCandidates() {
+        let items = visibleCandidates.map { c in
+            ListItemViewModel(
+                id: c.id, title: c.title, subtitle: c.subtitle, icon: c.icon,
+                actions: c.actions.isEmpty
+                    ? [ActionViewModel(actionId: Self.builtinActionId, title: "Open")]
+                    : c.actions.map { ActionViewModel(actionId: $0.id, title: $0.title, shortcut: $0.shortcut) })
+        }
+        root = .list(ListViewModel(items: items))
+        let ids = items.map(\.id)
+        if let sel = selectedID, ids.contains(sel) { /* keep current selection */ }
+        else { selectedID = ids.first }
+        pushToWindow()
     }
 
     // MARK: - Selection control (from the view)
@@ -265,8 +304,18 @@ public final class AppCoordinator {
         invoke(action: actionId, targetId: selectedID)
     }
 
-    /// Invoke an action with an explicit target id.
+    /// Invoke an action with an explicit target id. In host-native mode this
+    /// activates the targeted candidate locally (e.g. launches the app) instead
+    /// of sending a `host.invokeAction` frame; otherwise it forwards to the plugin.
     public func invoke(action actionId: String, targetId: String?) {
+        if hostCandidateMode {
+            let id = targetId ?? selectedID
+            if let id, let candidate = visibleCandidates.first(where: { $0.id == id })
+                ?? candidates.first(where: { $0.id == id }) {
+                candidateInvoke?(candidate)
+            }
+            return
+        }
         transport.notify(
             method: RPCMethods.invokeAction,
             params: InvokeActionParams(pluginId: pluginId, actionId: actionId, targetId: targetId))
