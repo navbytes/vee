@@ -88,6 +88,9 @@
   function http() {
     return host().http;
   }
+  function clipboard() {
+    return host().clipboard;
+  }
   function onInvokeAction(handler) {
     return host().onInvokeAction(handler);
   }
@@ -155,7 +158,7 @@
       const row = rows.find((r) => r.id === p.actionId);
       if (!row) return;
       try {
-        await vee.clipboard.copy({ id: row.id, text: row.value, copiedAt: (/* @__PURE__ */ new Date()).toISOString() });
+        await clipboard().copy({ id: row.id, text: row.value, copiedAt: (/* @__PURE__ */ new Date()).toISOString() });
         showToast("success", "Copied", preview(row.value));
       } catch (err) {
         showToast("failure", "Copy failed", String(err));

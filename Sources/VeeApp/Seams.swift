@@ -18,6 +18,15 @@ public protocol LauncherIntentHandling: AnyObject {
     func invoke(action actionId: String)
 }
 
+/// Visual style for a transient toast banner. Mirrors `VeeProtocol.ToastParams.Style`
+/// (success / failure / info) so the coordinator can map a plugin's toast 1:1 onto
+/// the window seam without VeeApp importing the wire enum at the seam boundary.
+public enum ToastStyle: Sendable, Equatable, Hashable {
+    case success
+    case failure
+    case info
+}
+
 /// The AppKit launcher-window seam. The coordinator hands it projected view
 /// models and asks it to show/hide; the thin `NSPanel`/`NSView` adapter
 /// (`AppKitLauncherWindow`) translates these to native views with NO branching
@@ -36,11 +45,21 @@ public protocol LauncherWindowPresenting: AnyObject {
     /// concrete coordinator type. Optional: a default no-op keeps headless spies
     /// (which never originate intent) source-compatible.
     func attach(intentHandler: LauncherIntentHandling)
+    /// Present a transient, auto-dismissing toast banner over the launcher
+    /// surface (UX-5). The coordinator routes a plugin's `plugin.showToast` here
+    /// so expected errors / confirmations get a user-visible surface instead of
+    /// being silently dropped. `style` selects the accent; `message` is an
+    /// optional secondary line. Optional: a default no-op keeps headless spies
+    /// (which never present UI) source-compatible.
+    func presentToast(style: ToastStyle, title: String, message: String?)
 }
 
 public extension LauncherWindowPresenting {
     /// Default no-op: spies and non-interactive presenters ignore intent wiring.
     func attach(intentHandler: LauncherIntentHandling) {}
+    /// Default no-op: spies and non-interactive presenters drop toasts. The real
+    /// `AppKitLauncherWindow` overrides this with a banner implementation.
+    func presentToast(style: ToastStyle, title: String, message: String?) {}
 }
 
 /// The menubar seam (`NSStatusItem`). The coordinator sets a title + items; the

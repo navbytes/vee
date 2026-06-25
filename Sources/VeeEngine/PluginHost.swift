@@ -117,7 +117,11 @@ public final class PluginHost {
             secretStore: secretStore,
             openProvider: openProvider,
             fileProvider: fileProvider,
-            calendarProvider: calendarProvider)
+            calendarProvider: calendarProvider,
+            // The host owns the transport's `onReceive` multiplexer (installed in
+            // init, routing to every instance by id). Instances must NOT seize it
+            // or only the last-loaded plugin would get events (ARCH-2).
+            ownsTransportInbound: false)
 
         // Evaluate the bundle; a malformed bundle throws pluginError.
         try instance.evaluateOrThrow(source)

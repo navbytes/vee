@@ -15,6 +15,7 @@
 import {
   action,
   actionPanel,
+  clipboard,
   definePlugin,
   empty,
   list,
@@ -22,16 +23,9 @@ import {
   onInvokeAction,
   root,
   showToast,
+  type ClipboardItem,
   type RenderNode,
 } from "@vee/sdk";
-
-/** The clipboard-history item shape the host returns (mirrors ClipboardItem). */
-interface ClipboardItem {
-  id: string;
-  text: string;
-  /** ISO-8601 date string. */
-  copiedAt: string;
-}
 
 const HISTORY_LIMIT = 20;
 
@@ -65,13 +59,6 @@ export function historyTree(items: ClipboardItem[]): RenderNode {
   return root({}, [list({ key: "clipboard", filtering: true }, items.map(clipboardItemRow))]);
 }
 
-declare const vee: {
-  clipboard: {
-    history(query?: string, limit?: number): Promise<ClipboardItem[]>;
-    copy(item: ClipboardItem): Promise<void>;
-  };
-};
-
 /** Load history + render; render an empty state on any failure. */
 async function loadHistory(ctx: { render: (n: RenderNode) => void }): Promise<void> {
   // Remember items by id so the Copy action can round-trip the exact item
@@ -82,7 +69,7 @@ async function loadHistory(ctx: { render: (n: RenderNode) => void }): Promise<vo
     const item = byId.get(p.actionId);
     if (!item) return;
     try {
-      await vee.clipboard.copy(item);
+      await clipboard().copy(item);
       showToast("success", "Copied", preview(item.text));
     } catch (err) {
       showToast("failure", "Copy failed", String(err));
@@ -90,7 +77,7 @@ async function loadHistory(ctx: { render: (n: RenderNode) => void }): Promise<vo
   });
 
   try {
-    const items = await vee.clipboard.history("", HISTORY_LIMIT);
+    const items = await clipboard().history("", HISTORY_LIMIT);
     for (const item of items) byId.set(item.id, item);
     ctx.render(historyTree(items));
   } catch (err) {

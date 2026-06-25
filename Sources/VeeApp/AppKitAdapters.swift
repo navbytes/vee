@@ -27,6 +27,175 @@ private enum UI {
     static let emptyGlyph: CGFloat = 32
 }
 
+// MARK: - Icon LRU cache (PERF-1)
+
+/// A tiny capacity-bounded, recency-ordered cache used to memoize resolved row
+/// icons by path (PERF-1). Generic over the value so the eviction/hit behavior
+/// can be unit-tested with a value type; production keys `String → NSImage`.
+///
+/// `@MainActor`-isolated: icon resolution only ever happens during main-thread
+/// row configuration, so this needs no lock. It is deliberately *not* the
+/// `Sendable`-constrained `InMemoryLRUStorage` (NSImage is not `Sendable`); this
+/// stays single-threaded by construction.
+@MainActor
+public final class IconLRUCache<Value> {
+    private final class Node {
+        let key: String
+        var value: Value
+        var prev: Node?
+        var next: Node?
+        init(key: String, value: Value) { self.key = key; self.value = value }
+    }
+
+    private let capacity: Int
+    private var map: [String: Node] = [:]
+    private var head: Node?   // most-recently-used
+    private var tail: Node?   // least-recently-used
+
+    public init(capacity: Int) {
+        precondition(capacity >= 1, "IconLRUCache capacity must be >= 1")
+        self.capacity = capacity
+    }
+
+    /// Live entry count (test/introspection aid).
+    public var count: Int { map.count }
+
+    /// Fetch a value, refreshing its recency on a hit.
+    public func value(forKey key: String) -> Value? {
+        guard let node = map[key] else { return nil }
+        moveToHead(node)
+        return node.value
+    }
+
+    /// Insert/replace a value, refreshing recency; evicts the LRU entry on overflow.
+    public func setValue(_ value: Value, forKey key: String) {
+        if let node = map[key] {
+            node.value = value
+            moveToHead(node)
+            return
+        }
+        let node = Node(key: key, value: value)
+        map[key] = node
+        addToHead(node)
+        if map.count > capacity { evictTail() }
+    }
+
+    private func addToHead(_ node: Node) {
+        node.prev = nil
+        node.next = head
+        head?.prev = node
+        head = node
+        if tail == nil { tail = node }
+    }
+
+    private func unlink(_ node: Node) {
+        node.prev?.next = node.next
+        node.next?.prev = node.prev
+        if head === node { head = node.next }
+        if tail === node { tail = node.prev }
+        node.prev = nil; node.next = nil
+    }
+
+    private func moveToHead(_ node: Node) {
+        guard head !== node else { return }
+        unlink(node)
+        addToHead(node)
+    }
+
+    private func evictTail() {
+        guard let tail else { return }
+        map.removeValue(forKey: tail.key)
+        unlink(tail)
+    }
+}
+
+// MARK: - Keyboard shortcut glyph translation (UI-2 / UX-2)
+
+/// Pure translation of a plugin's textual shortcut (e.g. `"cmd+enter"`,
+/// `"shift+opt+space"`) into display + accessibility forms. Factored out as a
+/// stateless helper so it is unit-testable without any AppKit view.
+public enum ShortcutGlyphs {
+    /// Token → display glyph (e.g. `cmd` → `⌘`, `enter` → `⏎`). Tokens are matched
+    /// case-insensitively; an unrecognized token is passed through capitalized.
+    static func glyph(for token: String) -> String {
+        switch token.lowercased() {
+        case "cmd", "command", "meta", "super": return "⌘"
+        case "opt", "option", "alt": return "⌥"
+        case "shift": return "⇧"
+        case "ctrl", "control": return "⌃"
+        case "enter", "return": return "⏎"
+        case "space", "spacebar": return "Space"
+        case "esc", "escape": return "⎋"
+        case "tab": return "⇥"
+        case "del", "delete", "backspace": return "⌫"
+        case "up": return "↑"
+        case "down": return "↓"
+        case "left": return "←"
+        case "right": return "→"
+        case "": return ""
+        default:
+            // Single letters/digits read best uppercased ("k" → "K"); leave
+            // longer unknown tokens capitalized rather than mangling them.
+            return token.count == 1 ? token.uppercased() : token.capitalized
+        }
+    }
+
+    /// Token → spoken accessibility word (e.g. `cmd` → "Command", `enter` →
+    /// "Return") for VoiceOver labels (UX-2). Unknown tokens pass through.
+    static func spoken(for token: String) -> String {
+        switch token.lowercased() {
+        case "cmd", "command", "meta", "super": return "Command"
+        case "opt", "option", "alt": return "Option"
+        case "shift": return "Shift"
+        case "ctrl", "control": return "Control"
+        case "enter", "return": return "Return"
+        case "space", "spacebar": return "Space"
+        case "esc", "escape": return "Escape"
+        case "tab": return "Tab"
+        case "del", "delete", "backspace": return "Delete"
+        case "up": return "Up Arrow"
+        case "down": return "Down Arrow"
+        case "left": return "Left Arrow"
+        case "right": return "Right Arrow"
+        case "": return ""
+        default: return token.count == 1 ? token.uppercased() : token.capitalized
+        }
+    }
+
+    /// Split a `+`-joined shortcut into its glyph tokens, preserving order and
+    /// dropping empties. `"cmd+enter"` → `["⌘", "⏎"]`. A nil/blank shortcut → `[]`.
+    static func caps(for shortcut: String?) -> [String] {
+        tokens(in: shortcut).map(glyph(for:))
+    }
+
+    /// The concatenated display string for a shortcut. `"cmd+enter"` → `"⌘⏎"`.
+    static func display(for shortcut: String?) -> String {
+        caps(for: shortcut).joined()
+    }
+
+    /// The spoken accessibility phrase for a shortcut, comma-joined so VoiceOver
+    /// pauses between modifiers. `"cmd+enter"` → `"Command, Return"`.
+    static func spokenPhrase(for shortcut: String?) -> String {
+        tokens(in: shortcut).map(spoken(for:)).joined(separator: ", ")
+    }
+
+    /// Normalized comparison key so a per-row shortcut can be detected as
+    /// identical to the footer's primary regardless of token spelling/case
+    /// (`"cmd+enter"` ≡ `"command+return"`, both → `"⌘⏎"`). Synonyms collapse
+    /// because the key is built from the resolved glyphs. Empty → no shortcut.
+    static func canonical(_ shortcut: String?) -> String {
+        display(for: shortcut)
+    }
+
+    private static func tokens(in shortcut: String?) -> [String] {
+        guard let shortcut, !shortcut.isEmpty else { return [] }
+        return shortcut
+            .split(separator: "+", omittingEmptySubsequences: true)
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+    }
+}
+
 // MARK: - Launcher window
 
 @MainActor
@@ -67,6 +236,12 @@ public final class AppKitLauncherWindow: NSObject, @MainActor LauncherWindowPres
     private let footerSeparator: NSBox
     private var sectionHeightConstraint: NSLayoutConstraint!
 
+    /// The currently-shown transient toast banner (UX-5), if any, and the work
+    /// item scheduled to auto-dismiss it — so a new toast cancels the prior
+    /// dismissal rather than dropping the second banner.
+    private var currentToast: ToastBannerView?
+    private var toastDismissal: DispatchWorkItem?
+
     private static let rowColumnID = NSUserInterfaceItemIdentifier("vee.row")
 
     public override init() {
@@ -98,12 +273,16 @@ public final class AppKitLauncherWindow: NSObject, @MainActor LauncherWindowPres
         searchField.usesSingleLineMode = true
         searchField.cell?.wraps = false
         searchField.cell?.isScrollable = true
+        // UX-2: name the search field for VoiceOver (it has no visible label).
+        searchField.setAccessibilityLabel("Search for apps and commands")
 
         magnifier = NSImageView()
         magnifier.translatesAutoresizingMaskIntoConstraints = false
         magnifier.image = NSImage(systemSymbolName: "magnifyingglass", accessibilityDescription: "Search")
         magnifier.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: 17, weight: .regular)
         magnifier.contentTintColor = .tertiaryLabelColor
+        // UX-2: the magnifier is decorative — the search field carries the label.
+        magnifier.setAccessibilityElement(false)
 
         sectionLabel = NSTextField(labelWithString: "")
         sectionLabel.translatesAutoresizingMaskIntoConstraints = false
@@ -198,6 +377,8 @@ public final class AppKitLauncherWindow: NSObject, @MainActor LauncherWindowPres
         emptyGlyph.image = NSImage(systemSymbolName: "magnifyingglass", accessibilityDescription: nil)
         emptyGlyph.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: UI.emptyGlyph, weight: .regular)
         emptyGlyph.contentTintColor = .tertiaryLabelColor
+        // UX-2: decorative — the empty-state title/description carry the meaning.
+        emptyGlyph.setAccessibilityElement(false)
         emptyTitleLabel = NSTextField(labelWithString: "")
         emptyTitleLabel.font = .systemFont(ofSize: 15, weight: .semibold)
         emptyTitleLabel.alignment = .center
@@ -340,6 +521,64 @@ public final class AppKitLauncherWindow: NSObject, @MainActor LauncherWindowPres
 
     public func attach(intentHandler: LauncherIntentHandling) { self.intent = intentHandler }
 
+    /// UX-5: present a transient banner near the top of the launcher, styled by
+    /// `style`, auto-dismissing after ~2.5s. A subsequent toast replaces the
+    /// current one (and resets the timer). Implemented here so the capability
+    /// exists; the coordinator (owned by the lead) wires `plugin.showToast` to it.
+    public func presentToast(style: ToastStyle, title: String, message: String?) {
+        guard let content = panel.contentView else { return }
+
+        // Cancel any pending dismissal and remove a prior banner so only one shows.
+        toastDismissal?.cancel()
+        toastDismissal = nil
+        currentToast?.removeFromSuperview()
+
+        let banner = ToastBannerView(style: style, title: title, message: message)
+        banner.translatesAutoresizingMaskIntoConstraints = false
+        content.addSubview(banner, positioned: .above, relativeTo: nil)
+        NSLayoutConstraint.activate([
+            banner.centerXAnchor.constraint(equalTo: content.centerXAnchor),
+            // Sit just under the header separator so it doesn't cover the field.
+            banner.topAnchor.constraint(equalTo: headerSeparator.bottomAnchor, constant: 10),
+            banner.leadingAnchor.constraint(greaterThanOrEqualTo: content.leadingAnchor, constant: 24),
+            banner.trailingAnchor.constraint(lessThanOrEqualTo: content.trailingAnchor, constant: -24),
+        ])
+        currentToast = banner
+
+        // Respect Reduce Motion: fade in unless motion is reduced (then instant).
+        if NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
+            banner.alphaValue = 1
+        } else {
+            banner.alphaValue = 0
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = 0.12
+                banner.animator().alphaValue = 1
+            }
+        }
+
+        let dismissal = DispatchWorkItem { [weak self, weak banner] in
+            guard let self, let banner, banner === self.currentToast else { return }
+            self.dismissToast(banner)
+        }
+        toastDismissal = dismissal
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5, execute: dismissal)
+    }
+
+    private func dismissToast(_ banner: ToastBannerView) {
+        if NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
+            banner.removeFromSuperview()
+        } else {
+            NSAnimationContext.runAnimationGroup({ context in
+                context.duration = 0.18
+                banner.animator().alphaValue = 0
+            }, completionHandler: { [weak banner] in
+                banner?.removeFromSuperview()
+            })
+        }
+        if banner === currentToast { currentToast = nil }
+        toastDismissal = nil
+    }
+
     public func setRootViewModel(_ root: RootViewModel?) {
         switch root {
         case .list(let list):
@@ -396,7 +635,60 @@ public final class AppKitLauncherWindow: NSObject, @MainActor LauncherWindowPres
         }
 
         rebuildMetadataRows(detail.metadata)
-        detailTextView.string = detail.markdown
+        applyMarkdown(detail.markdown, to: detailTextView)
+    }
+
+    /// UI-1: render the detail body as Markdown into the text view's
+    /// `textStorage` (macOS 12+ `NSAttributedString(markdown:)`), so a plugin
+    /// emitting `# Heading`/`**bold**`/`- bullet` shows rich text rather than
+    /// literal hashes/asterisks. Falls back to plain text if parsing fails or
+    /// yields nothing. `.full` interpretation keeps block elements (headings,
+    /// lists) rather than collapsing to a single inline run.
+    private func applyMarkdown(_ markdown: String, to textView: NSTextView) {
+        guard let storage = textView.textStorage else {
+            textView.string = markdown
+            return
+        }
+        let baseFont = textView.font ?? .systemFont(ofSize: 13)
+        let attributed = AppKitLauncherWindow.attributedMarkdown(markdown, baseFont: baseFont)
+        storage.setAttributedString(attributed)
+        // Re-assert the view defaults the attributed string may not carry, so an
+        // empty/plain body still inherits the label color + body font.
+        textView.textColor = .labelColor
+        textView.font = baseFont
+    }
+
+    /// Pure(ish) Markdown→attributed conversion with a plain-text fallback,
+    /// factored static so the fallback path is unit-testable (UI-1). On a parse
+    /// failure (or a throw) it returns the original text as a plain attributed
+    /// string carrying the body font + label color.
+    static func attributedMarkdown(_ markdown: String, baseFont: NSFont) -> NSAttributedString {
+        let plain: () -> NSAttributedString = {
+            NSAttributedString(string: markdown, attributes: [
+                .font: baseFont,
+                .foregroundColor: NSColor.labelColor,
+            ])
+        }
+        guard !markdown.isEmpty else { return plain() }
+        var options = AttributedString.MarkdownParsingOptions()
+        options.interpretedSyntax = .full
+        options.failurePolicy = .returnPartiallyParsedIfPossible
+        guard let parsed = try? AttributedString(markdown: markdown, options: options) else {
+            return plain()
+        }
+        let result = NSMutableAttributedString(parsed)
+        guard result.length > 0 else { return plain() }
+        // Markdown attributes carry semantic intents, not concrete fonts/colors;
+        // apply the body font + label color as the baseline so unstyled runs match
+        // the view, while attributed inline traits (bold/italic) still resolve.
+        let full = NSRange(location: 0, length: result.length)
+        result.addAttribute(.foregroundColor, value: NSColor.labelColor, range: full)
+        result.enumerateAttribute(.font, in: full) { value, range, _ in
+            if value == nil {
+                result.addAttribute(.font, value: baseFont, range: range)
+            }
+        }
+        return result
     }
 
     /// Rebuild the metadata rail's rows from the view model. Each row is a
@@ -454,9 +746,35 @@ public final class AppKitLauncherWindow: NSObject, @MainActor LauncherWindowPres
         searchField.stringValue = ""   // always open on a fresh query
         layoutAndCenter()
 
+        // UX-7: honor Reduce Motion. When set, skip the 6pt rise + scale entirely
+        // and do a short (≤0.1s) cross-fade — no positional/scale motion. Hide is
+        // already instant, so this keeps the launcher fully usable for motion-
+        // sensitive users without a jarring hard cut.
+        let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+
+        let finalFrame = panel.frame
+        let contentLayer = panel.contentView?.layer
+
+        if reduceMotion {
+            panel.alphaValue = 0
+            panel.setFrame(finalFrame, display: false)
+            contentLayer?.transform = CATransform3DIdentity
+
+            panel.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+            panel.makeFirstResponder(searchField)
+
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = 0.1
+                context.timingFunction = CAMediaTimingFunction(name: .easeOut)
+                context.allowsImplicitAnimation = true
+                panel.animator().alphaValue = 1
+            }
+            return
+        }
+
         // Capture the centered (final) frame, then start 6pt lower so the panel
         // settles upward as it fades in — a fast, subtle entrance (~0.12s).
-        let finalFrame = panel.frame
         let startFrame = finalFrame.offsetBy(dx: 0, dy: -6)
 
         panel.alphaValue = 0
@@ -466,7 +784,6 @@ public final class AppKitLauncherWindow: NSObject, @MainActor LauncherWindowPres
         // the backing layer's anchorPoint/position, so instead of moving the
         // anchor we scale about the layer's center explicitly (translate to
         // center → scale → translate back). That keeps the panel from shifting.
-        let contentLayer = panel.contentView?.layer
         if let contentLayer {
             let mid = CGPoint(x: contentLayer.bounds.midX, y: contentLayer.bounds.midY)
             var t = CATransform3DMakeTranslation(mid.x, mid.y, 0)
@@ -592,8 +909,20 @@ extension AppKitLauncherWindow: NSTableViewDataSource, NSTableViewDelegate {
         cell.identifier = AppKitLauncherWindow.rowColumnID
         cell.configure(title: item.title, subtitle: item.subtitle, icon: item.icon,
                        accessory: item.accessoryText, shortcut: item.actions.first?.shortcut,
-                       matchedIndices: item.matchedIndices)
+                       matchedIndices: item.matchedIndices,
+                       suppressedShortcutCanonical: AppKitLauncherWindow.footerPrimaryCanonical,
+                       roleDescription: AppKitLauncherWindow.roleDescription(for: item))
         return cell
+    }
+
+    /// The footer always renders the primary action under a `↩` (Return) cap, so
+    /// a per-row shortcut that's also Return is redundant and suppressed (UI-2).
+    static let footerPrimaryCanonical = ShortcutGlyphs.canonical("return")
+
+    /// UX-2 role description: app-search rows (file-path icon) read as
+    /// "application"; everything else (plugin command rows) reads as "command".
+    static func roleDescription(for item: ListItemViewModel) -> String {
+        (item.icon?.hasPrefix("/") ?? false) ? "application" : "command"
     }
 
     public func tableViewSelectionDidChange(_ notification: Notification) {
@@ -673,6 +1002,9 @@ final class LauncherRowView: NSTableCellView {
     private let titleLabel = NSTextField(labelWithString: "")
     private let subtitleLabel = NSTextField(labelWithString: "")
     private let accessoryLabel = NSTextField(labelWithString: "")
+    /// Right-edge key-cap chips for a per-row shortcut (UI-2). Reuses the footer's
+    /// `KeyCapView` chip so a row shortcut reads as ⌘⏎ caps, not literal text.
+    private let shortcutStack = NSStackView(views: [])
 
     override init(frame frameRect: NSRect) { super.init(frame: frameRect); build() }
     required init?(coder: NSCoder) { super.init(coder: coder); build() }
@@ -680,6 +1012,9 @@ final class LauncherRowView: NSTableCellView {
     private func build() {
         iconView.translatesAutoresizingMaskIntoConstraints = false
         iconView.imageScaling = .scaleProportionallyUpOrDown
+        // UX-2: the row icon is decorative — the composed row label (set in
+        // `configure`) already speaks the title/subtitle/accessory.
+        iconView.setAccessibilityElement(false)
 
         titleLabel.translatesAutoresizingMaskIntoConstraints = false
         titleLabel.font = .systemFont(ofSize: UI.titleFont, weight: .medium)
@@ -698,6 +1033,13 @@ final class LauncherRowView: NSTableCellView {
         accessoryLabel.setContentHuggingPriority(.required, for: .horizontal)
         accessoryLabel.setContentCompressionResistancePriority(.required, for: .horizontal)
 
+        shortcutStack.translatesAutoresizingMaskIntoConstraints = false
+        shortcutStack.orientation = .horizontal
+        shortcutStack.alignment = .centerY
+        shortcutStack.spacing = 4
+        shortcutStack.setContentHuggingPriority(.required, for: .horizontal)
+        shortcutStack.setContentCompressionResistancePriority(.required, for: .horizontal)
+
         let textStack = NSStackView(views: [titleLabel, subtitleLabel])
         textStack.translatesAutoresizingMaskIntoConstraints = false
         textStack.orientation = .vertical
@@ -707,6 +1049,7 @@ final class LauncherRowView: NSTableCellView {
         addSubview(iconView)
         addSubview(textStack)
         addSubview(accessoryLabel)
+        addSubview(shortcutStack)
 
         NSLayoutConstraint.activate([
             iconView.leadingAnchor.constraint(equalTo: leadingAnchor, constant: UI.gutter - UI.listInset),
@@ -717,47 +1060,128 @@ final class LauncherRowView: NSTableCellView {
             textStack.leadingAnchor.constraint(equalTo: iconView.trailingAnchor, constant: 11),
             textStack.centerYAnchor.constraint(equalTo: centerYAnchor),
 
+            // The shortcut chips sit at the right edge; the accessory text sits to
+            // their left (both right-anchored). Only one is populated per row in
+            // practice — accessory text OR caps — so they never visually collide.
+            shortcutStack.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -(UI.gutter - UI.listInset)),
+            shortcutStack.centerYAnchor.constraint(equalTo: centerYAnchor),
+
             accessoryLabel.leadingAnchor.constraint(greaterThanOrEqualTo: textStack.trailingAnchor, constant: 8),
-            accessoryLabel.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -(UI.gutter - UI.listInset)),
+            accessoryLabel.trailingAnchor.constraint(equalTo: shortcutStack.leadingAnchor, constant: -6),
             accessoryLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
         ])
     }
 
+    /// Configure the row. `accessory` is right-aligned secondary text; `shortcut`
+    /// is the per-row primary-action shortcut rendered as key-cap chips (UI-2),
+    /// suppressed when it equals `suppressedShortcutCanonical` (the footer's
+    /// primary, so we don't repeat "⏎" on every row — UI-2). `roleDescription`
+    /// drives VoiceOver's role announcement (UX-2).
     func configure(title: String, subtitle: String?, icon: String?, accessory: String?,
-                   shortcut: String?, matchedIndices: [Int] = []) {
+                   shortcut: String?, matchedIndices: [Int] = [],
+                   suppressedShortcutCanonical: String = "",
+                   roleDescription: String = "command") {
         titleLabel.attributedStringValue =
             LauncherRowView.highlightedTitle(title, matchedIndices: matchedIndices)
         subtitleLabel.stringValue = subtitle ?? ""
         subtitleLabel.isHidden = (subtitle?.isEmpty ?? true)
-        accessoryLabel.stringValue = accessory ?? shortcut ?? ""
+        accessoryLabel.stringValue = accessory ?? ""
+        accessoryLabel.isHidden = (accessory?.isEmpty ?? true)
+
+        let caps = LauncherRowView.shortcutCaps(for: shortcut,
+                                                suppressedCanonical: suppressedShortcutCanonical)
+        rebuildShortcutCaps(caps)
+
         let (image, isRealIcon) = LauncherRowView.resolveIcon(icon)
         iconView.image = image
         iconView.contentTintColor = isRealIcon ? nil : .secondaryLabelColor
+
+        applyAccessibility(title: title, subtitle: subtitle, accessory: accessory,
+                           shortcut: shortcut, roleDescription: roleDescription)
+    }
+
+    /// The key-cap glyphs to render for a row shortcut, or `[]` when there's no
+    /// shortcut or it's the suppressed (footer-primary) one. Pure → testable.
+    static func shortcutCaps(for shortcut: String?, suppressedCanonical: String) -> [String] {
+        let canonical = ShortcutGlyphs.canonical(shortcut)
+        guard !canonical.isEmpty, canonical != suppressedCanonical else { return [] }
+        return ShortcutGlyphs.caps(for: shortcut)
+    }
+
+    private func rebuildShortcutCaps(_ caps: [String]) {
+        for view in shortcutStack.arrangedSubviews {
+            shortcutStack.removeArrangedSubview(view)
+            view.removeFromSuperview()
+        }
+        for cap in caps {
+            shortcutStack.addArrangedSubview(KeyCapView(cap))
+        }
+        shortcutStack.isHidden = caps.isEmpty
+    }
+
+    /// UX-2: expose the row to VoiceOver as a single element with a composed
+    /// label ("Title, Subtitle, Accessory[, ⌘⏎ shortcut]"), the right role +
+    /// role description, so an assistive-tech user hears one actionable item
+    /// rather than disjoint fragments. Selected state is reflected by the
+    /// enclosing `LauncherSelectionRowView`'s standard table selection.
+    private func applyAccessibility(title: String, subtitle: String?, accessory: String?,
+                                    shortcut: String?, roleDescription: String) {
+        setAccessibilityElement(true)
+        setAccessibilityRole(.button)
+        setAccessibilityRoleDescription(roleDescription)
+        var parts = [title]
+        if let subtitle, !subtitle.isEmpty { parts.append(subtitle) }
+        if let accessory, !accessory.isEmpty { parts.append(accessory) }
+        let spoken = ShortcutGlyphs.spokenPhrase(for: shortcut)
+        if !spoken.isEmpty { parts.append(spoken) }
+        setAccessibilityLabel(parts.joined(separator: ", "))
     }
 
     /// Resolve an icon hint → (image, isRealFileIcon). A filesystem path → the
-    /// real (full-color) app/file icon, pre-rasterized at 2× so it draws crisply
-    /// and synchronously; otherwise an SF Symbol; otherwise a fallback glyph.
+    /// real (full-color) multi-representation app/file icon; otherwise an SF
+    /// Symbol; otherwise a fallback glyph.
+    ///
+    /// PERF-1: file-path icons are resolved at most once per path for the process
+    /// lifetime via a small main-thread LRU cache, so the `fileExists` stat +
+    /// `NSWorkspace.icon(forFile:)` Launch-Services hit no longer run per visible
+    /// row per keystroke. We hand the icon's native multi-rep `NSImage` straight
+    /// to the `NSImageView` (sized 26pt by Auto Layout) rather than flattening it
+    /// into a 1× raster — AppKit then picks the matching representation for the
+    /// backing scale, so HiDPI stays crisp instead of the old soft 1× draw.
     static func resolveIcon(_ hint: String?) -> (NSImage?, Bool) {
-        if let hint, !hint.isEmpty {
-            if hint.hasPrefix("/"), FileManager.default.fileExists(atPath: hint) {
-                let icon = NSWorkspace.shared.icon(forFile: hint)
-                let px = UI.iconSize * 2
-                let target = NSImage(size: NSSize(width: UI.iconSize, height: UI.iconSize))
-                target.lockFocus()
-                NSGraphicsContext.current?.imageInterpolation = .high
-                icon.draw(in: NSRect(x: 0, y: 0, width: UI.iconSize, height: UI.iconSize),
-                          from: .zero, operation: .sourceOver, fraction: 1)
-                target.unlockFocus()
-                _ = px
-                return (target, true)
-            }
-            if let image = NSImage(systemSymbolName: hint, accessibilityDescription: nil) {
-                return (image, false)
-            }
+        guard let hint, !hint.isEmpty else {
+            return (fallbackGlyph, false)
         }
-        return (NSImage(systemSymbolName: "app.dashed", accessibilityDescription: nil), false)
+        if hint.hasPrefix("/") {
+            if let cached = iconCache.value(forKey: hint) {
+                return (cached, true)
+            }
+            guard FileManager.default.fileExists(atPath: hint) else {
+                return (fallbackGlyph, false)
+            }
+            // The multi-rep system icon; let NSImageView scale it for HiDPI.
+            let icon = NSWorkspace.shared.icon(forFile: hint)
+            icon.size = NSSize(width: UI.iconSize, height: UI.iconSize)
+            iconCache.setValue(icon, forKey: hint)
+            return (icon, true)
+        }
+        if let image = NSImage(systemSymbolName: hint, accessibilityDescription: nil) {
+            return (image, false)
+        }
+        return (fallbackGlyph, false)
     }
+
+    /// Process-wide, main-thread LRU cache mapping a resolved file path → its
+    /// rendered `NSImage`, so a given app/file icon is fetched from Launch
+    /// Services exactly once (capped to avoid unbounded growth across a long
+    /// session). Confined to the main thread (all icon resolution happens during
+    /// `@MainActor` row configuration), so no locking is needed.
+    static let iconCache = IconLRUCache<NSImage>(capacity: 256)
+
+    /// The shared fallback glyph for hints that don't resolve to a file icon or
+    /// SF Symbol. Resolved once.
+    private static let fallbackGlyph: NSImage? =
+        NSImage(systemSymbolName: "app.dashed", accessibilityDescription: nil)
 
     /// Render the row title with fuzzy-matched characters accent-tinted +
     /// semibold and the rest in `labelColor`/medium (the row's normal weight).
@@ -796,7 +1220,11 @@ final class LauncherRowView: NSTableCellView {
 @MainActor
 final class KeyCapView: NSView {
     private let label = NSTextField(labelWithString: "")
-    init(_ text: String) {
+    /// `text` is the displayed glyph (e.g. "↩", "⌘K"); `accessibilityLabel` is the
+    /// spoken form for VoiceOver (e.g. "Return", "Command-K" — UX-2). When nil the
+    /// glyph itself is announced (fine for row caps, which already sit inside a
+    /// composed row label and are not themselves accessibility elements).
+    init(_ text: String, accessibilityLabel: String? = nil) {
         super.init(frame: .zero)
         wantsLayer = true
         translatesAutoresizingMaskIntoConstraints = false
@@ -805,14 +1233,28 @@ final class KeyCapView: NSView {
         label.textColor = .secondaryLabelColor
         label.alignment = .center
         label.stringValue = text
+        if let accessibilityLabel {
+            setAccessibilityElement(true)
+            setAccessibilityRole(.staticText)
+            setAccessibilityLabel(accessibilityLabel)
+        }
         addSubview(label)
+        // Downward pressure so the cap sizes to its glyph (`max(label+10, 22)`)
+        // instead of floating wide: the width floors below are all `>=`, so without
+        // a low-priority "be small" constraint a cap inside a trailing-pinned stack
+        // resolves ambiguously and stretches into a half-row pill.
+        let shrink = widthAnchor.constraint(equalToConstant: 1)
+        shrink.priority = .defaultLow
         NSLayoutConstraint.activate([
             label.centerXAnchor.constraint(equalTo: centerXAnchor),
             label.centerYAnchor.constraint(equalTo: centerYAnchor),
             heightAnchor.constraint(equalToConstant: 18),
             widthAnchor.constraint(greaterThanOrEqualTo: label.widthAnchor, constant: 10),
             widthAnchor.constraint(greaterThanOrEqualToConstant: 22),  // parity floor for ↩ and ⌘K
+            shrink,
         ])
+        setContentHuggingPriority(.required, for: .horizontal)
+        setContentCompressionResistancePriority(.required, for: .horizontal)
     }
     required init?(coder: NSCoder) { fatalError() }
     override var wantsUpdateLayer: Bool { true }
@@ -833,12 +1275,12 @@ final class KeyCapView: NSView {
 final class LauncherFooterView: NSView {
     private let iconView = NSImageView()
     private let primaryLabel = NSTextField(labelWithString: "")
-    private let returnCap = KeyCapView("↩")
+    private let returnCap = KeyCapView("↩", accessibilityLabel: "Return")
     /// Muted contextual hint shown on the left when there's no selectable primary
     /// action (empty / detail / none) — keeps the bar from reading half-empty.
     private let hintLabel = NSTextField(labelWithString: "")
     private let actionsLabel = NSTextField(labelWithString: "Actions")
-    private let actionsCap = KeyCapView("⌘K")
+    private let actionsCap = KeyCapView("⌘K", accessibilityLabel: "Command-K")
 
     /// Wordmark shown when no primary action is selectable. Quiet, not a CTA.
     static let idleHint = "Vee"
@@ -849,6 +1291,9 @@ final class LauncherFooterView: NSView {
     private func build() {
         iconView.translatesAutoresizingMaskIntoConstraints = false
         iconView.imageScaling = .scaleProportionallyUpOrDown
+        // UX-2: the footer icon mirrors the selected row's icon — decorative; the
+        // primary label + Return cap carry the actionable meaning.
+        iconView.setAccessibilityElement(false)
 
         for label in [primaryLabel, actionsLabel] {
             label.translatesAutoresizingMaskIntoConstraints = false
@@ -982,5 +1427,92 @@ private final class MenuItemActionTarget: NSObject {
     private let action: () -> Void
     init(action: @escaping () -> Void) { self.action = action }
     @objc func fire() { action() }
+}
+
+// MARK: - Toast banner (UX-5)
+
+/// A small transient banner shown over the launcher to surface a plugin's toast.
+/// Styled by `ToastStyle`: a leading SF-Symbol glyph + accent tint (green/red/
+/// blue) over a translucent rounded capsule, with a bold title and optional
+/// secondary line. Non-interactive and decorative-by-composition: it exposes a
+/// single composed accessibility label so VoiceOver announces it as one notice.
+@MainActor
+final class ToastBannerView: NSView {
+    init(style: ToastStyle, title: String, message: String?) {
+        super.init(frame: .zero)
+        wantsLayer = true
+        layer?.cornerRadius = 9
+        layer?.masksToBounds = true
+        layer?.backgroundColor = NSColor.windowBackgroundColor.withAlphaComponent(0.92).cgColor
+        layer?.borderWidth = 0.5
+        layer?.borderColor = NSColor.separatorColor.cgColor
+
+        let (symbol, tint) = ToastBannerView.appearance(for: style)
+        let icon = NSImageView()
+        icon.translatesAutoresizingMaskIntoConstraints = false
+        icon.image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)
+        icon.symbolConfiguration = NSImage.SymbolConfiguration(pointSize: 14, weight: .semibold)
+        icon.contentTintColor = tint
+        icon.setAccessibilityElement(false)
+
+        let titleLabel = NSTextField(labelWithString: title)
+        titleLabel.translatesAutoresizingMaskIntoConstraints = false
+        titleLabel.font = .systemFont(ofSize: 13, weight: .semibold)
+        titleLabel.textColor = .labelColor
+        titleLabel.lineBreakMode = .byTruncatingTail
+
+        let textStack = NSStackView(views: [titleLabel])
+        textStack.translatesAutoresizingMaskIntoConstraints = false
+        textStack.orientation = .vertical
+        textStack.alignment = .leading
+        textStack.spacing = 1
+
+        if let message, !message.isEmpty {
+            let messageLabel = NSTextField(labelWithString: message)
+            messageLabel.translatesAutoresizingMaskIntoConstraints = false
+            messageLabel.font = .systemFont(ofSize: 12, weight: .regular)
+            messageLabel.textColor = .secondaryLabelColor
+            messageLabel.lineBreakMode = .byTruncatingTail
+            messageLabel.maximumNumberOfLines = 2
+            textStack.addArrangedSubview(messageLabel)
+        }
+
+        let row = NSStackView(views: [icon, textStack])
+        row.translatesAutoresizingMaskIntoConstraints = false
+        row.orientation = .horizontal
+        row.alignment = .centerY
+        row.spacing = 8
+        addSubview(row)
+        NSLayoutConstraint.activate([
+            row.leadingAnchor.constraint(equalTo: leadingAnchor, constant: 12),
+            row.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -12),
+            row.topAnchor.constraint(equalTo: topAnchor, constant: 8),
+            row.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -8),
+        ])
+
+        // UX-2: one composed label so the banner reads as a single notice.
+        setAccessibilityElement(true)
+        setAccessibilityRole(.staticText)
+        let spokenStyle: String
+        switch style {
+        case .success: spokenStyle = "Success"
+        case .failure: spokenStyle = "Error"
+        case .info: spokenStyle = "Info"
+        }
+        setAccessibilityLabel([spokenStyle, title, message ?? ""]
+            .filter { !$0.isEmpty }
+            .joined(separator: ", "))
+    }
+
+    required init?(coder: NSCoder) { fatalError("ToastBannerView is code-only") }
+
+    /// SF-Symbol + accent tint for each style.
+    static func appearance(for style: ToastStyle) -> (symbol: String, tint: NSColor) {
+        switch style {
+        case .success: return ("checkmark.circle.fill", .systemGreen)
+        case .failure: return ("exclamationmark.triangle.fill", .systemRed)
+        case .info:    return ("info.circle.fill", .systemBlue)
+        }
+    }
 }
 #endif

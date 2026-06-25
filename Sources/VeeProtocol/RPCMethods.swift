@@ -77,6 +77,14 @@ public enum RPCMethods {
     /// `vee.storage.get/set` — the SWR-backed plugin key/value store.
     public static let storageGet = "bridge.storage.get"
     public static let storageSet = "bridge.storage.set"
+
+    /// `vee.open(url)` — open a URL/file in the default handler.
+    /// `vee.openApp(bundleId)` — launch an app by bundle id.
+    /// Both are capability-gated by `Capabilities.open` (SEC-1/SEC-2). Migrated
+    /// here from the former VeeEngine-local `BridgeMethods` so the catalog is the
+    /// single source of truth for every bridge method string.
+    public static let open    = "bridge.open"
+    public static let openApp = "bridge.openApp"
 }
 
 // MARK: - Payload structs (typed, Codable, Sendable)

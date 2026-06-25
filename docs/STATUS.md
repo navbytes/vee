@@ -4,6 +4,26 @@
 
 ---
 
+## Update — R3 + Audit remediation, 2026-06-26 (current state)
+
+*This section supersedes the older verdicts below (which are kept as historical record). The package builds clean and `swift test` reports **254 tests — 253 pass, 1 skipped (live keychain), 0 failures**.*
+
+**R3 integration** wired the live providers (open / clipboard / calendar / fs) into the running app, added plugin discovery (`Resources/vee-plugins/<id>/{vee.json,bundle.js}`), surfaced all **8 plugins** in the launcher, and produced a **hardened-runtime ad-hoc-signed `Vee.app`** (`scripts/package-app.sh release`, JIT entitlements for JavaScriptCore; `codesign --verify --deep --strict` passes). Notarized distribution still needs Apple Developer credentials — see `.github/workflows/release.yml` (the one true external blocker).
+
+**Audit remediation** (full pass over [AUDIT.md](AUDIT.md), 4 parallel streams converged):
+- **ARCH-1/2/3 (P0 plugin pipeline):** coordinator now retargets to the active plugin id on `activatePlugin` (real plugin renders reach the window) and resets the revision/mirror so a new plugin's first frame isn't dropped as stale; the host owns the transport's inbound multiplexer (`ownsTransportInbound: false`) so events route to the addressed plugin, not just the last-loaded one. Regression tests: `PipelineTests`, `MultiPluginRoutingTests`.
+- **SEC-1/2/3/4/6:** `vee.open`/`openApp` gated by a `Capabilities.open` allowlist (scheme + `bundleId:` conventions; http/https opens re-checked against the network allowlist to close the exfil bypass); fetch is https-only with an SSRF/redirect guard; keychain is `WhenUnlockedThisDeviceOnly`. `SecurityHardeningTests` (18).
+- **PERF-1/2/3:** process-wide LRU icon cache; coordinator caches `[PreparedCandidate]` and scores the prepared set per keystroke (no per-keystroke Unicode re-fold); projection bounded to a top-K so a keystroke never builds thousands of view models. (Debounce + diff-reload-changed-rows deferred — the per-keystroke matched set is small once PERF-1/2 land; documented, not done.)
+- **MAC-1:** `AppSearchProvider` frecency state lock-guarded (`AppSearchConcurrencyTests`).
+- **UI-1/2, UX-2/5/7:** Markdown detail rendering, key-cap shortcut chips, VoiceOver labels/roles, plugin toasts wired to a window seam, Reduce-Motion honored. A layout bug in the new key-caps (a single glyph stretching into a half-row pill) was caught in snapshot review and fixed (`KeyCapLayoutTests`).
+- **PLT-1/2:** `vee.clipboard` in the `@vee/sdk` typings; `RUNTIME.md` de-future-tensed.
+
+**Deferred (non-blocking, documented):** UX-1 (context-aware Esc→root) needs window/coordinator coordination; PERF-3 debounce/diff-reload (see above); notarization (external credentials).
+
+**Verdict:** a polished, tested, signed Raycast-class launcher with a real out-of-process JS plugin platform and the audit's P0/P1 findings remediated. Visuals re-verified via the offscreen snapshot harness (list/empty/detail/plugin × light/dark). The only thing standing between this and Gatekeeper-distributable is Apple notarization credentials.
+
+---
+
 ## Update — Phase B, 2026-06-26: a runnable app-search launcher
 
 Phase B ("make it actually launch") landed on top of the Wave-3 core. Deltas:

@@ -195,6 +195,7 @@ enum PluginDiscovery {
 
     private struct LenientCapabilities: Decodable {
         var network: [String]?
+        var open: [String]?
         var filesystem: [String]?
         var clipboard: Bool?
         var calendar: Bool?
@@ -204,6 +205,7 @@ enum PluginDiscovery {
         func toCapabilities() -> Capabilities {
             Capabilities(
                 network: network ?? [],
+                open: open ?? [],
                 filesystem: filesystem ?? [],
                 clipboard: clipboard ?? false,
                 calendar: calendar ?? false,

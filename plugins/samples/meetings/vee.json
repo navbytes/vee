@@ -12,7 +12,8 @@
     }
   ],
   "capabilities": {
-    "network": [],
+    "network": [".zoom.us", ".meet.google.com", ".teams.microsoft.com", ".webex.com"],
+    "open": ["https"],
     "filesystem": [],
     "clipboard": false,
     "calendar": true,

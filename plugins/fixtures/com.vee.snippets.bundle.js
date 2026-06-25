@@ -94,6 +94,9 @@
   function storage() {
     return host().storage;
   }
+  function clipboard() {
+    return host().clipboard;
+  }
   function onInvokeAction(handler) {
     return host().onInvokeAction(handler);
   }
@@ -179,7 +182,7 @@
       if (!snippet) return;
       if (verb === "copy") {
         try {
-          await vee.clipboard.copy({ id: snippet.id, text: snippet.text, copiedAt: (/* @__PURE__ */ new Date()).toISOString() });
+          await clipboard().copy({ id: snippet.id, text: snippet.text, copiedAt: (/* @__PURE__ */ new Date()).toISOString() });
           showToast("success", "Copied", preview(snippet.text));
         } catch (err) {
           showToast("failure", "Copy failed", String(err));

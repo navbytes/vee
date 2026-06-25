@@ -88,22 +88,88 @@ public final class TestClock: Clock {
     var hasPending: Bool { !timers.isEmpty }
 }
 
+// MARK: - SSRF host classifier (SEC-4 / SEC-3)
+
+/// Best-effort literal-host SSRF guard shared by the fetch gate (SEC-4) and the
+/// redirect re-check (SEC-3). Returns true for hosts that must never be fetched:
+/// loopback, link-local, and RFC-1918 private ranges, matched on the literal
+/// host string (defence against the most common SSRF/metadata targets). This is
+/// intentionally a string match — full DNS-resolution pinning is out of scope —
+/// but it blocks the literal forms an attacker reaches for
+/// (`169.254.169.254`, `localhost`, `127.x`, `10.x`, `192.168.x`, `172.16-31.x`,
+/// `::1`). Comparison is case-insensitive and tolerates bracketed IPv6.
+public func isBlockedNetworkHost(_ host: String) -> Bool {
+    var h = host.lowercased()
+    if h.hasPrefix("["), h.hasSuffix("]") { h = String(h.dropFirst().dropLast()) }   // [::1] → ::1
+    guard !h.isEmpty else { return false }
+
+    // Loopback (names + IPv4/IPv6 literals).
+    if h == "localhost" || h.hasSuffix(".localhost") { return true }
+    if h == "::1" || h == "0.0.0.0" { return true }
+    if h.hasPrefix("127.") { return true }
+
+    // Link-local (IPv4 169.254/16, including the cloud metadata IP) + IPv6 fe80::.
+    if h.hasPrefix("169.254.") { return true }
+    if h.hasPrefix("fe80:") || h.hasPrefix("fc") || h.hasPrefix("fd") { return true }   // fc00::/7 unique-local
+
+    // RFC-1918 private IPv4.
+    if h.hasPrefix("10.") { return true }
+    if h.hasPrefix("192.168.") { return true }
+    if h.hasPrefix("172.") {
+        // 172.16.0.0 – 172.31.255.255
+        let parts = h.split(separator: ".")
+        if parts.count >= 2, let second = Int(parts[1]), (16...31).contains(second) { return true }
+    }
+    return false
+}
+
 // MARK: - HTTPClient
 
 /// Injectable HTTP backend for `vee.http.fetch`. Production uses URLSession; the
 /// test double returns canned responses. The completion is always invoked on a
 /// background thread; the bridge hops back to the instance's serial queue to
 /// resolve the JS Promise (and drain microtasks) safely.
+///
+/// `allowedHosts` carries the calling plugin's `Capabilities.network` so the
+/// real client can re-apply the allowlist to redirect targets (SEC-3). Test
+/// doubles ignore it.
 public protocol HTTPClient: AnyObject {
-    func perform(_ request: FetchParams, completion: @escaping (Result<FetchResult, Error>) -> Void)
+    func perform(_ request: FetchParams, allowedHosts: [String],
+                 completion: @escaping (Result<FetchResult, Error>) -> Void)
+}
+
+public extension HTTPClient {
+    /// Back-compat overload: no allowlist threaded (used where redirect
+    /// re-checking is not required, e.g. existing tests/clients).
+    func perform(_ request: FetchParams, completion: @escaping (Result<FetchResult, Error>) -> Void) {
+        perform(request, allowedHosts: [], completion: completion)
+    }
 }
 
 /// URLSession-backed client used by the real host.
+///
+/// SEC-3: cross-origin redirects are re-checked. Each request runs on a private
+/// `URLSession` whose delegate (`RedirectGuard`) re-applies the per-request
+/// network-host allowlist (and the SSRF classifier) to every 3xx `Location`
+/// target, refusing the redirect (`completion(nil)`) when the new host is not
+/// allowed — so a granted host's open-redirect can't bounce the request to
+/// `169.254.169.254`, `localhost`, or an off-allowlist exfil host.
 public final class URLSessionHTTPClient: HTTPClient {
-    private let session: URLSession
-    public init(session: URLSession = .shared) { self.session = session }
+    private let configuration: URLSessionConfiguration
 
-    public func perform(_ request: FetchParams, completion: @escaping (Result<FetchResult, Error>) -> Void) {
+    public init(configuration: URLSessionConfiguration = .ephemeral) {
+        self.configuration = configuration
+    }
+
+    /// Back-compat initializer. A caller-supplied `URLSession` cannot carry our
+    /// per-request redirect delegate, so we adopt its configuration instead and
+    /// build guarded sessions from it (SEC-3 still applies).
+    public convenience init(session: URLSession) {
+        self.init(configuration: session.configuration)
+    }
+
+    public func perform(_ request: FetchParams, allowedHosts: [String],
+                        completion: @escaping (Result<FetchResult, Error>) -> Void) {
         guard let url = URL(string: request.url) else {
             completion(.failure(JSONRPCError.invalidParams("bad url: \(request.url)")))
             return
@@ -114,7 +180,13 @@ public final class URLSessionHTTPClient: HTTPClient {
         if let b64 = request.bodyBase64, let body = Data(base64Encoded: b64) {
             urlRequest.httpBody = body
         }
+
+        // One guarded session per request: the delegate owns the allowlist and
+        // invalidates the session once the task completes (so it doesn't leak).
+        let guardDelegate = RedirectGuard(allowedHosts: allowedHosts)
+        let session = URLSession(configuration: configuration, delegate: guardDelegate, delegateQueue: nil)
         let task = session.dataTask(with: urlRequest) { data, response, error in
+            defer { session.finishTasksAndInvalidate() }
             if let error {
                 completion(.failure(error)); return
             }
@@ -130,6 +202,41 @@ public final class URLSessionHTTPClient: HTTPClient {
             completion(.success(result))
         }
         task.resume()
+    }
+
+    /// `URLSessionTaskDelegate` that re-applies the network-host allowlist (and
+    /// the literal SSRF guard) to each redirect target (SEC-3). Refusing returns
+    /// `nil` to the completion handler, which cancels the redirect; URLSession
+    /// then delivers the 3xx response itself rather than following it.
+    ///
+    /// `internal` (not private) so the SEC-3 decision can be unit-tested directly
+    /// without standing up a live redirecting server.
+    final class RedirectGuard: NSObject, URLSessionTaskDelegate {
+        private let allowedHosts: [String]
+        init(allowedHosts: [String]) { self.allowedHosts = allowedHosts }
+
+        /// Whether a redirect to `host` (with `scheme`) is permitted: http(s)
+        /// only, not an SSRF target, and in the per-request allowlist.
+        func allowsRedirect(scheme: String, host: String) -> Bool {
+            let s = scheme.lowercased()
+            guard s == "http" || s == "https" else { return false }
+            if isBlockedNetworkHost(host) { return false }
+            return Capabilities(network: allowedHosts).allowsNetworkHost(host)
+        }
+
+        func urlSession(_ session: URLSession,
+                        task: URLSessionTask,
+                        willPerformHTTPRedirection response: HTTPURLResponse,
+                        newRequest request: URLRequest,
+                        completionHandler: @escaping (URLRequest?) -> Void) {
+            let scheme = request.url?.scheme ?? ""
+            let host = request.url?.host ?? ""
+            guard allowsRedirect(scheme: scheme, host: host) else {
+                completionHandler(nil)   // refuse: do not follow the redirect
+                return
+            }
+            completionHandler(request)
+        }
     }
 }
 
@@ -148,14 +255,19 @@ public final class CannedHTTPClient: HTTPClient {
 
     public var canned: [String: Response] = [:]
     public private(set) var requested: [String] = []
+    /// The `allowedHosts` threaded into the most recent `perform` call (SEC-3),
+    /// so a test can assert the bridge passed the plugin's `network` allowlist.
+    public private(set) var lastAllowedHosts: [String] = []
     /// When true, invoke completion synchronously (default) so the deterministic
     /// `runUntilQuiescent` can settle the Promise without real async hops.
     public var synchronous = true
 
     public init() {}
 
-    public func perform(_ request: FetchParams, completion: @escaping (Result<FetchResult, Error>) -> Void) {
+    public func perform(_ request: FetchParams, allowedHosts: [String],
+                        completion: @escaping (Result<FetchResult, Error>) -> Void) {
         requested.append(request.url)
+        lastAllowedHosts = allowedHosts
         let response = canned[request.url] ?? Response(status: 404, headers: [:], body: Data())
         let result = FetchResult(
             status: response.status,
@@ -378,9 +490,18 @@ public final class EsbuildBundler: Bundler {
         } catch {
             throw JSONRPCError.internalError("EsbuildBundler: failed to launch node: \(error)")
         }
-        // Drain stdout/stderr to avoid deadlocking on a full pipe buffer.
+        // MAC-6: drain stdout AND stderr CONCURRENTLY. Reading one pipe fully
+        // before the other deadlocks if the child fills the second pipe's buffer
+        // while we're still blocked on the first. Read stdout on a background
+        // queue while this thread drains stderr, then join before waitUntilExit.
+        let stdoutGroup = DispatchGroup()
+        stdoutGroup.enter()
+        DispatchQueue.global().async {
+            _ = stdoutPipe.fileHandleForReading.readDataToEndOfFile()
+            stdoutGroup.leave()
+        }
         let errData = stderrPipe.fileHandleForReading.readDataToEndOfFile()
-        _ = stdoutPipe.fileHandleForReading.readDataToEndOfFile()
+        stdoutGroup.wait()
         process.waitUntilExit()
 
         guard process.terminationStatus == 0 else {

@@ -1,5 +1,7 @@
 # Vee — Multi-Faceted Engineering Audit
 
+> **REMEDIATION STATUS (2026-06-26):** All P0 findings (ARCH-1/2/3, SEC-1/SEC-2/SEC-INERT, PERF-1/2/3, MAC-1) and the tracked P1s (SEC-3/4/6, UI-1/2, UX-2/5/7, PLT-1/2) have been fixed and verified — see the "Audit remediation" section at the top of [STATUS.md](STATUS.md). The findings below are the original point-in-time report; do not action them without checking current source. PERF-3's debounce/diff-reload sub-items were intentionally deferred (documented in STATUS.md); UX-1 (Esc→root) remains a follow-up.
+
 *Audited 2026-06-26 against the working tree at `HEAD` = `69608e7` **plus uncommitted changes** (1,213 insertions across 11 tracked files + new untracked plugin samples `api/github/jira/meetings/snippets`). Build verified clean (`swift build`, one warning); test suite verified **168 executed, 1 skipped, 0 failures** (`swift test`) + ~34 node tests. This audit reads the live code, not the docs — `docs/STATUS.md` and `docs/ARCHITECTURE.md` claims were treated skeptically and cross-checked against source.*
 
 **Method:** seven parallel specialist passes (macOS/Swift, architecture, security, UI, UX/accessibility, performance, plugin-platform/testing), each producing file-and-line-cited findings, followed by central verification of the highest-impact claims (the two architecture Criticals, the menubar gap, the test totals, and the production provider wiring were re-read in source by the orchestrator).

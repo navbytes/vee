@@ -85,6 +85,9 @@
   function showToast(style, title, message) {
     host().showToast(style, title, message);
   }
+  function clipboard() {
+    return host().clipboard;
+  }
   function onInvokeAction(handler) {
     return host().onInvokeAction(handler);
   }
@@ -121,14 +124,14 @@
       const item = byId.get(p.actionId);
       if (!item) return;
       try {
-        await vee.clipboard.copy(item);
+        await clipboard().copy(item);
         showToast("success", "Copied", preview(item.text));
       } catch (err) {
         showToast("failure", "Copy failed", String(err));
       }
     });
     try {
-      const items = await vee.clipboard.history("", HISTORY_LIMIT);
+      const items = await clipboard().history("", HISTORY_LIMIT);
       for (const item of items) byId.set(item.id, item);
       ctx.render(historyTree(items));
     } catch (err) {

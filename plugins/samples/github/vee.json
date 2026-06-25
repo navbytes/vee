@@ -12,7 +12,8 @@
     }
   ],
   "capabilities": {
-    "network": ["api.github.com"],
+    "network": ["api.github.com", "github.com"],
+    "open": ["https"],
     "filesystem": [],
     "clipboard": false,
     "calendar": false,

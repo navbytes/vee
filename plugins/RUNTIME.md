@@ -1,9 +1,9 @@
 # Vee plugin runtime contract (JS ↔ host)
 
 This document specifies the **exact** contract between a built plugin bundle and
-the Vee host (the JavaScriptCore embedder). **Wave 2a (VeeEngine) implements the
-host side from this document.** Every global, signature, and lifecycle step is
-normative.
+the Vee host (the JavaScriptCore embedder). The host side (`VeeEngine`)
+implements every global, bridge, and lifecycle step described here. Every
+global, signature, and lifecycle step is normative.
 
 The companion TypeScript types live in `@vee/sdk` (`packages/sdk/src/`). The wire
 shapes mirror `Sources/VeeProtocol/*.swift` byte-for-byte. Where this doc and the
@@ -85,6 +85,11 @@ interface VeeHost {
   onSubmitForm(handler: (p: SubmitFormParams) => void | Promise<void>): () => void;
 
   // ── Bridges (plugin → host; capability-gated, async) ─────────────────────
+  // All of the following are installed by the host (JSBridge.installVee) and
+  // exposed via accessors in @vee/sdk. Each is gated by the matching field in
+  // the plugin's Capabilities (vee.json); a denied call rejects with
+  // JSONRPCError.capabilityDenied (-32001).
+
   readonly http: {
     // Capability-gated by Capabilities.network. The host performs the request
     // natively (URLSession) → bridge.http.fetch (FetchParams → FetchResult).
@@ -109,23 +114,80 @@ interface VeeHost {
     set(key: string, value: JSONValue, ttlSeconds?: number): Promise<void>;
   };
 
+  readonly fs: {
+    // Capability-gated by Capabilities.filesystem: the path must canonicalize
+    // under a declared root (traversal → capabilityDenied). bridge.fs.read /
+    // bridge.fs.write (FSReadParams / FSWriteParams). The façade speaks UTF-8;
+    // the wire uses base64.
+    read(path: string): Promise<string>;
+    write(path: string, contents: string): Promise<void>;
+  };
+
+  readonly calendar: {
+    // Capability-gated by Capabilities.calendar (the app handles the TCC
+    // prompt). bridge.calendar.upcoming → CalendarEvent[], soonest first.
+    upcoming(): Promise<CalendarEvent[]>;
+  };
+
+  readonly keychain: {
+    // Capability-gated by Capabilities.keychainNamespaces: a plugin may only
+    // touch namespaces it declared. Items are scoped (namespace, account) under
+    // the plugin's own id, which is bound natively — never passed from JS.
+    // bridge.keychain.get / set / delete (KeychainGet/Set/DeleteParams).
+    get(namespace: string, account: string): Promise<string | null>;
+    set(namespace: string, account: string, value: string): Promise<void>;
+    delete(namespace: string, account: string): Promise<void>;
+  };
+
+  readonly clipboard: {
+    // Capability-gated by the coarse Capabilities.clipboard boolean. The host
+    // captures pasteboard changes behind a privacy filter (concealed /
+    // transient / password-manager items are dropped at capture time) and
+    // exposes the surviving history. bridge.clipboard.history / .copy
+    // (ClipboardHistoryParams / ClipboardItem).
+    history(query?: string, limit?: number): Promise<ClipboardItem[]>;
+    copy(item: ClipboardItem): Promise<void>;
+  };
+
+  // ── System affordances (plugin → host; async) ────────────────────────────
+  // open(url) opens a URL in the user's default handler; openApp(bundleId)
+  // launches/activates an app. Backed by the host's OpenProviding. These are
+  // gated by Capabilities.open (scheme allowlist for open; a "bundleId:"-
+  // prefixed allowlist for openApp) — see "Capability enforcement" below.
+  open(url: string): Promise<void>;
+  openApp(bundleId: string): Promise<void>;
+
   // ── UI affordances ─────────────────────────────────────────────────────────
   // Show a transient toast (RPCMethods.toast = "plugin.showToast", ToastParams).
   showToast(style: "success" | "failure" | "info", title: string, message?: string): void;
 }
 ```
 
-> **Capability enforcement.** `http`, `storage`, and any future bridges are
-> gated by the plugin's `Capabilities` (`vee.json`). The host rejects a call to
-> a disallowed resource with `JSONRPCError.capabilityDenied` (code `-32001`);
-> the SDK surfaces that as a rejected Promise. A `fetch` to a host not in
-> `capabilities.network` MUST be denied (see `Capabilities.allowsNetworkHost`).
+> **Capability enforcement.** Every bridge is gated by the plugin's
+> `Capabilities` (`vee.json`). The host rejects a call to a disallowed resource
+> with `JSONRPCError.capabilityDenied` (code `-32001`); the SDK surfaces that as
+> a rejected Promise. Mapping:
+>
+> | Bridge | Capability field | Denied when |
+> |---|---|---|
+> | `http.fetch` | `network` | host not in the allowlist (`allowsNetworkHost`) |
+> | `fs.read` / `fs.write` | `filesystem` | path canonicalizes outside the declared roots |
+> | `calendar.upcoming` | `calendar` | `calendar` is `false` |
+> | `keychain.*` | `keychainNamespaces` | namespace not declared |
+> | `clipboard.*` | `clipboard` | `clipboard` is `false` |
+> | `open` | `open` | URL scheme (and, for `http(s)`, host) not allowed (`allowsOpen`) |
+> | `openApp` | `open` | bundle id not allowed (`allowsOpenApp`) |
+>
+> **`open`/`openApp` gating is being added** (closing SEC-1/SEC-2): the
+> `Capabilities.open` allowlist and the `allowsOpen` / `allowsOpenApp` checks
+> are the in-flight mechanism. Until that lands everywhere, treat `open` as
+> default-deny and declare the schemes/bundle ids you need in the manifest.
 
-> **Extensibility.** The SDK ships accessors for `http` and `storage` today. The
-> Swift `RPCMethods` enumerates further bridges (`fs.*`, `keychain.*`,
-> `clipboard.*`, `calendar.*`). When the host implements those, add matching
-> members to `vee` and accessors to `@vee/sdk`; the method-name constants are
-> already defined in `RPCMethods` (types.ts).
+> **Surface parity.** `@vee/sdk` ships an accessor for every member above
+> (`http()`, `storage()`, `fs()`, `calendar()`, `keychain()`, `clipboard()`,
+> `open()`, `openApp()`, `showToast()`), each typed against the `VeeHost`
+> interface in `packages/sdk/src/runtime.ts`. The matching JSON-RPC method-name
+> constants live in `RPCMethods` (`types.ts`).
 
 ---
 

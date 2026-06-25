@@ -16,6 +16,7 @@
 import {
   action,
   actionPanel,
+  clipboard,
   definePlugin,
   empty,
   field,
@@ -99,10 +100,6 @@ export function snippetsTree(snippets: Snippet[]): RenderNode {
   return root({}, [list({ key: "snippets", filtering: snippets.length > 0 }, children)]);
 }
 
-declare const vee: {
-  clipboard: { copy(item: { id: string; text: string; copiedAt: string }): Promise<void> };
-};
-
 /** Load snippets from storage, defaulting to an empty set on any failure. */
 async function readSnippets(): Promise<Snippet[]> {
   try {
@@ -134,7 +131,7 @@ async function loadSnippets(ctx: { render: (n: RenderNode) => void }): Promise<v
     if (!snippet) return;
     if (verb === "copy") {
       try {
-        await vee.clipboard.copy({ id: snippet.id, text: snippet.text, copiedAt: new Date().toISOString() });
+        await clipboard().copy({ id: snippet.id, text: snippet.text, copiedAt: new Date().toISOString() });
         showToast("success", "Copied", preview(snippet.text));
       } catch (err) {
         showToast("failure", "Copy failed", String(err));

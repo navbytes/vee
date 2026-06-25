@@ -13,6 +13,7 @@
   ],
   "capabilities": {
     "network": [".atlassian.net"],
+    "open": ["https"],
     "filesystem": [],
     "clipboard": false,
     "calendar": false,

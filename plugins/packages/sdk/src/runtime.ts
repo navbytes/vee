@@ -10,12 +10,13 @@
  *
  * IMPORTANT: nothing here imports a runtime or touches Node/DOM APIs. The only
  * ambient dependency is the injected `vee` global. See `plugins/RUNTIME.md` for
- * the full host-side contract (Wave 2a implements the host from that doc).
+ * the full host-side contract (the host implements every member below).
  */
 
 import type {
   CalendarEvent,
   Candidate,
+  ClipboardItem,
   InvokeActionParams,
   JSONValue,
   RenderNode,
@@ -24,6 +25,10 @@ import type {
   ToastStyle,
 } from "./types.js";
 import { renderNodeToJSON } from "./dom.js";
+
+// Re-export the clipboard item shape so plugins can `import { ClipboardItem }
+// from "@vee/sdk"` instead of hand-declaring it.
+export type { ClipboardItem } from "./types.js";
 
 // ───────────────────────────────────────────────────────────────────────────
 // The injected `vee` global — the host↔plugin bridge surface.
@@ -113,9 +118,31 @@ export interface VeeKeychain {
 }
 
 /**
- * The full surface the host injects as the global `vee`. Wave 2a MUST provide
- * every member below with these exact signatures. All async members return
- * Promises the host settles when the corresponding JSON-RPC response arrives.
+ * The clipboard bridge (`vee.clipboard`). Capability-gated by the coarse
+ * `capabilities.clipboard` boolean. The host captures pasteboard changes behind
+ * a privacy filter (concealed/transient/password-manager items are dropped at
+ * capture time, so they never appear here) and exposes the surviving history.
+ *
+ * Mirrors the host install in `Sources/VeeEngine/JSBridge.swift`
+ * (`vee.clipboard.{history,copy}`) and the wire params in
+ * `Sources/VeeProtocol` (`ClipboardHistoryParams` / `ClipboardItem`).
+ */
+export interface VeeClipboard {
+  /**
+   * Recent clipboard items, most-recent first. `query` fuzzy-filters the text
+   * (omit or pass `""` for the full set); `limit` caps the count. Both are
+   * optional — the host applies its own defaults when omitted.
+   */
+  history(query?: string, limit?: number): Promise<ClipboardItem[]>;
+  /** Place an item's text back on the pasteboard. */
+  copy(item: ClipboardItem): Promise<void>;
+}
+
+/**
+ * The full surface the host injects as the global `vee`. The host provides
+ * every member below with these exact signatures (see `plugins/RUNTIME.md`).
+ * All async members return Promises the host settles when the corresponding
+ * JSON-RPC response arrives.
  */
 export interface VeeHost {
   /** Reverse-DNS id of the running plugin (from the manifest). */
@@ -153,6 +180,7 @@ export interface VeeHost {
   readonly fs: VeeFs;
   readonly calendar: VeeCalendar;
   readonly keychain: VeeKeychain;
+  readonly clipboard: VeeClipboard;
 
   // ── System affordances (plugin → host; async) ──────────────────────────────
   /**
@@ -318,6 +346,11 @@ export function calendar(): VeeCalendar {
 /** The keychain bridge. */
 export function keychain(): VeeKeychain {
   return host().keychain;
+}
+
+/** The clipboard bridge. */
+export function clipboard(): VeeClipboard {
+  return host().clipboard;
 }
 
 /** Open a URL in the user's default handler. */

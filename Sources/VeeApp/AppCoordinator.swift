@@ -32,7 +32,13 @@ public final class AppCoordinator {
 
     // MARK: Identity & collaborators
 
-    public let pluginId: String
+    /// The id whose inbound `plugin.render`/`setCandidates` frames this coordinator
+    /// accepts, and that its outbound frames target. Starts as the launcher root id
+    /// and is RETARGETED to a plugin's id when its command is activated (ARCH-1),
+    /// so the plugin's renders are no longer filtered out. `showRoot()` restores it.
+    public private(set) var pluginId: String
+    /// The launcher root identity, restored by `showRoot()`.
+    private let rootPluginId: String
     private let transport: CoordinatorTransport
     private let host: PluginActivating
     private let fuzzy: FuzzyMatching
@@ -68,7 +74,14 @@ public final class AppCoordinator {
 
     private var query: String = ""
     /// The full candidate set pushed by the plugin (`plugin.setCandidates`).
-    private var candidates: [Candidate] = []
+    /// PERF-2: assigning it re-folds the corpus ONCE (here), so the per-keystroke
+    /// `refilter` scores the pre-prepared set without re-normalizing.
+    private var candidates: [Candidate] = [] {
+        didSet { preparedCandidates = fuzzy.prepare(candidates) }
+    }
+    /// Folded/boundary-masked projection of `candidates`, rebuilt only when the
+    /// candidate set changes (once per open/refresh) — the PERF-2 hot-path cache.
+    private var preparedCandidates: [PreparedCandidate] = []
     /// The natively-filtered candidates for the current query.
     public private(set) var visibleCandidates: [Candidate] = []
     /// Matched character positions per visible candidate id (from
@@ -87,6 +100,11 @@ public final class AppCoordinator {
     private var hostAccessory: String?
     /// Synthesized primary-action id for host candidates that declare none.
     private static let builtinActionId = "vee.builtin.invoke"
+    /// PERF-3: cap how many rows are turned into view models per (re)filter. The
+    /// launcher shows ~10 rows and the set is score-ranked (best first), so
+    /// building thousands of `ListItemViewModel`s per keystroke is pure waste;
+    /// 200 is far beyond what a user scrolls yet bounds the pathological case.
+    private static let maxProjectedRows = 200
 
     // MARK: Selection state
 
@@ -101,6 +119,7 @@ public final class AppCoordinator {
                 fuzzy: FuzzyMatching = LiveFuzzyMatcher(),
                 serverSideFiltering: Bool = false) {
         self.pluginId = pluginId
+        self.rootPluginId = pluginId
         self.transport = transport
         self.host = host
         self.fuzzy = fuzzy
@@ -148,8 +167,17 @@ public final class AppCoordinator {
         case RPCMethods.setCandidates:
             if let p = try? decode(SetCandidatesParams.self, from: params) { applyCandidates(p.candidates) }
         case RPCMethods.toast:
-            // UI affordance; surfaced via the window seam in production. No state.
-            break
+            // UX-5: surface plugin toasts through the window seam (no coordinator
+            // state). Style maps 1:1 onto the AppKit banner's appearance.
+            if let p = try? decode(ToastParams.self, from: params) {
+                let style: ToastStyle
+                switch p.style {
+                case .success: style = .success
+                case .failure: style = .failure
+                case .info:    style = .info
+                }
+                window?.presentToast(style: style, title: p.title, message: p.message)
+            }
         case RPCMethods.log:
             // Logs are streamed to the console in production; no launcher state.
             break
@@ -252,9 +280,26 @@ public final class AppCoordinator {
     /// the launcher reopens after a plugin command had taken over the surface.
     /// Restores the last `showHostCandidates` set with a cleared query.
     public func showRoot() {
+        pluginId = rootPluginId   // ARCH-1: back to the launcher identity
+        lastRevision = 0          // ARCH-3: drop the plugin's mirror + revision seq
+        mirror = nil
         query = ""
         hostCandidateMode = true
         refilter()
+    }
+
+    /// Activate a plugin command and RETARGET this coordinator to that plugin's id
+    /// so its `plugin.render`/`setCandidates` frames are accepted (ARCH-1), with a
+    /// fresh render-revision sequence (ARCH-3, mirror reset so the plugin's first
+    /// `revision: 1` isn't dropped as stale). Leaves the host-native root surface;
+    /// `showRoot()` returns to it.
+    public func activatePlugin(_ pluginId: String, command: String,
+                               arguments: [String: JSONValue] = [:]) {
+        self.pluginId = pluginId
+        hostCandidateMode = false
+        lastRevision = 0
+        mirror = nil
+        try? host.activate(ActivateParams(pluginId: pluginId, commandName: command, arguments: arguments))
     }
 
     // MARK: - Query / native filter (filter natively per keystroke)
@@ -283,7 +328,7 @@ public final class AppCoordinator {
             visibleCandidates = candidates
             matchedIndicesByID = [:]
         } else {
-            let scored = fuzzy.match(query: query, in: candidates)
+            let scored = fuzzy.match(query: query, inPrepared: preparedCandidates)
             visibleCandidates = scored.map(\.candidate)
             matchedIndicesByID = Dictionary(
                 scored.map { ($0.candidate.id, $0.matchedIndices) },
@@ -296,7 +341,7 @@ public final class AppCoordinator {
     /// Each candidate becomes a list item; candidates with no actions get a
     /// synthesized primary "Open" action so the GUI has something to invoke.
     private func projectHostCandidates() {
-        let items = visibleCandidates.map { c in
+        let items = visibleCandidates.prefix(Self.maxProjectedRows).map { c in
             ListItemViewModel(
                 id: c.id, title: c.title, subtitle: c.subtitle, icon: c.icon,
                 accessoryText: hostAccessory,

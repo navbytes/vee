@@ -19,6 +19,26 @@
       "target": "vee",
       "configuration": "release",
       "preLaunchTask": "swift: Build Release vee"
+    },
+    {
+      "type": "swift",
+      "request": "launch",
+      "args": [],
+      "cwd": "${workspaceFolder:vee}",
+      "name": "Debug vee-plugin-host",
+      "target": "vee-plugin-host",
+      "configuration": "debug",
+      "preLaunchTask": "swift: Build Debug vee-plugin-host"
+    },
+    {
+      "type": "swift",
+      "request": "launch",
+      "args": [],
+      "cwd": "${workspaceFolder:vee}",
+      "name": "Release vee-plugin-host",
+      "target": "vee-plugin-host",
+      "configuration": "release",
+      "preLaunchTask": "swift: Build Release vee-plugin-host"
     }
   ]
 }

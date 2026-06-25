@@ -89,7 +89,7 @@ let package = Package(
         .testTarget(name: "VeeJSONPatchTests", dependencies: ["VeeJSONPatch", "VeeProtocol"]),
         .testTarget(
             name: "VeeEngineTests",
-            dependencies: ["VeeEngine", "VeeProtocol", "VeeJSONPatch"],
+            dependencies: ["VeeEngine", "VeeProtocol", "VeeJSONPatch", "VeeKeychain"],
             swiftSettings: relaxedConcurrency
         ),
         .testTarget(

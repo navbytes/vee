@@ -243,7 +243,10 @@ MainActor.assumeIsolated {
                     if candidate.id.hasPrefix("cmd:") {
                         let parts = candidate.id.split(separator: ":", maxSplits: 2).map(String.init)
                         if parts.count == 3 {
-                            try? host.activate(ActivateParams(pluginId: parts[1], commandName: parts[2]))
+                            // Retarget the coordinator to this plugin's id (ARCH-1)
+                            // AND activate it, so the plugin's render reaches the
+                            // window instead of being filtered out.
+                            coordinator.activatePlugin(parts[1], command: parts[2])
                         }
                         // The plugin now drives the surface; keep the launcher open.
                     } else {

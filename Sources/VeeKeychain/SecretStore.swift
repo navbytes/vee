@@ -162,7 +162,9 @@ public final class CapabilityCheckedSecretStore: SecretStore, @unchecked Sendabl
 ///
 /// - `kSecAttrService` is exactly `com.vee.<pluginId>.<namespace>`.
 /// - `kSecAttrAccount` is the account.
-/// - `kSecAttrAccessible` is `kSecAttrAccessibleWhenUnlocked`.
+/// - `kSecAttrAccessible` is `kSecAttrAccessibleWhenUnlockedThisDeviceOnly`
+///   (SEC-6): plugin OAuth tokens / API keys must NOT migrate into encrypted
+///   backups or to a restored/new device, so the item is pinned to this device.
 /// - `set` adds via `SecItemAdd`; on `errSecDuplicateItem` it switches to
 ///   `SecItemUpdate`.
 /// - `get` on a missing item returns `nil` (not an error).
@@ -179,6 +181,17 @@ public struct KeychainStore: SecretStore {
             kSecAttrService as String: keychainServiceString(pluginId: pluginId, namespace: namespace),
             kSecAttrAccount as String: account,
         ]
+    }
+
+    /// The exact attribute dictionary `set` passes to `SecItemAdd` for a new
+    /// item. Pure (no Keychain access) so a test can assert SEC-6 holds: the
+    /// `kSecAttrAccessible` value is `kSecAttrAccessibleWhenUnlockedThisDeviceOnly`.
+    public func addQueryForTesting(pluginId: String, namespace: String,
+                                   account: String, secret: String) -> [String: Any] {
+        var addQuery = baseQuery(pluginId: pluginId, namespace: namespace, account: account)
+        addQuery[kSecValueData as String] = Data(secret.utf8)
+        addQuery[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
+        return addQuery
     }
 
     public func get(pluginId: String, namespace: String, account: String) throws -> String? {
@@ -205,9 +218,8 @@ public struct KeychainStore: SecretStore {
 
     public func set(pluginId: String, namespace: String, account: String, secret: String) throws {
         let data = Data(secret.utf8)
-        var addQuery = baseQuery(pluginId: pluginId, namespace: namespace, account: account)
-        addQuery[kSecValueData as String] = data
-        addQuery[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlocked
+        let addQuery = addQueryForTesting(pluginId: pluginId, namespace: namespace,
+                                          account: account, secret: secret)
 
         let addStatus = SecItemAdd(addQuery as CFDictionary, nil)
         switch addStatus {

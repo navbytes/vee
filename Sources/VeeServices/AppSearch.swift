@@ -61,9 +61,22 @@ struct FrecencyModel {
 ///
 /// Ranking is fully above the seam and deterministic given an injected clock +
 /// launch log, so case 8/9 assert exact ordering.
-public final class AppSearchProvider {
+///
+/// Thread-safety: production calls `recordLaunch` on the main thread while
+/// `search` runs on a background queue (see `vee-plugin-host/main.swift`). The
+/// mutable frecency state (a `Dictionary` that `record` mutates and `score`
+/// iterates) is therefore guarded by an `NSLock`, mirroring
+/// `VeeKeychain.InMemorySecretStore`. Every read/write of `frecency` happens
+/// while the lock is held, so it is safe to use the provider from any queue.
+/// `@unchecked Sendable` because the only mutable state is the lock-protected
+/// `frecency`; everything else is immutable after `init`.
+public final class AppSearchProvider: @unchecked Sendable {
     private let enumerator: AppEnumerating
     private let clock: Clock
+
+    /// Lock guarding `frecency`. Held for the (short) duration of each record
+    /// and each score read; never held across a call back into JS or the seam.
+    private let frecencyLock = NSLock()
     private var frecency = FrecencyModel()
 
     /// Blend weights. Fuzzy dominates the base relevance; frecency is a tie/near-
@@ -86,9 +99,18 @@ public final class AppSearchProvider {
     }
 
     /// Record an app launch (frequency × recency input). Production calls this
-    /// when the user actually opens an app.
+    /// when the user actually opens an app (main thread), concurrently with
+    /// `search` on a background queue — so the mutation is lock-guarded.
     public func recordLaunch(bundleId: String) {
+        frecencyLock.lock(); defer { frecencyLock.unlock() }
         frecency.record(bundleId: bundleId, at: clock.now)
+    }
+
+    /// Lock-guarded frecency read. A tiny helper so every `score` access goes
+    /// through the lock without re-entrancy or holding it across other work.
+    private func frecencyScore(bundleId: String, now: Date) -> Double {
+        frecencyLock.lock(); defer { frecencyLock.unlock() }
+        return frecency.score(bundleId: bundleId, now: now)
     }
 
     /// Deduplicated app set: first occurrence of each bundle id wins, then a
@@ -127,8 +149,8 @@ public final class AppSearchProvider {
         if query.isEmpty {
             // Stable-rank by frecency desc, then name for determinism.
             let ranked = apps.sorted { a, b in
-                let fa = frecency.score(bundleId: a.bundleId, now: now)
-                let fb = frecency.score(bundleId: b.bundleId, now: now)
+                let fa = frecencyScore(bundleId: a.bundleId, now: now)
+                let fb = frecencyScore(bundleId: b.bundleId, now: now)
                 if fa != fb { return fa > fb }
                 return a.name.localizedCaseInsensitiveCompare(b.name) == .orderedAscending
             }
@@ -141,7 +163,7 @@ public final class AppSearchProvider {
             let cand = candidate(for: app)
             guard let fuzzy = FuzzyMatcher.score(query: query, candidate: cand) else { continue }
             var blended = fuzzyWeight * fuzzy
-                + frecencyWeight * frecency.score(bundleId: app.bundleId, now: now)
+                + frecencyWeight * frecencyScore(bundleId: app.bundleId, now: now)
             if app.name.lowercased().hasPrefix(q) {
                 blended += prefixBonus
             }

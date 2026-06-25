@@ -18,6 +18,7 @@
 import {
   action,
   actionPanel,
+  clipboard,
   definePlugin,
   empty,
   http,
@@ -108,10 +109,6 @@ async function parseJsonOk(res: { status: number; text(): Promise<string> }): Pr
   }
 }
 
-declare const vee: {
-  clipboard: { copy(item: { id: string; text: string; copiedAt: string }): Promise<void> };
-};
-
 /** Fetch the endpoint + render; render an empty state on any failure. */
 async function loadEndpoint(ctx: {
   arguments: Record<string, JSONValue>;
@@ -124,7 +121,7 @@ async function loadEndpoint(ctx: {
     const row = rows.find((r) => r.id === p.actionId);
     if (!row) return;
     try {
-      await vee.clipboard.copy({ id: row.id, text: row.value, copiedAt: new Date().toISOString() });
+      await clipboard().copy({ id: row.id, text: row.value, copiedAt: new Date().toISOString() });
       showToast("success", "Copied", preview(row.value));
     } catch (err) {
       showToast("failure", "Copy failed", String(err));

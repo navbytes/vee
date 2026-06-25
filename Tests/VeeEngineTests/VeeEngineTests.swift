@@ -1441,15 +1441,28 @@ final class VeeEngineTests: XCTestCase {
         XCTAssertTrue(provider.historyQueries.isEmpty, "denied history must NEVER reach the provider")
     }
 
-    // MARK: - vee.open / vee.openApp (NOT capability-gated)
+    // MARK: - vee.open / vee.openApp (capability-gated by Capabilities.open — SEC-1/SEC-2)
+
+    /// A manifest granting `vee.open`/`vee.openApp` for everything: the `"*"`
+    /// scheme catch-all (waives the per-host re-check) plus `"bundleId:*"`.
+    /// (SEC-1/SEC-2 made open/openApp capability-gated; these "reaches the
+    /// provider" tests therefore declare the capability, mirroring how the
+    /// fetch/fs/keychain tests declare theirs. The denial paths are covered by
+    /// SecurityHardeningTests.)
+    private func openAllManifest(id: String = "com.vee.test") -> PluginManifest {
+        PluginManifest(
+            id: id, name: "Test", version: "1.0.0", entrypoint: "bundle.js",
+            commands: [PluginCommand(name: "view", title: "View", mode: .view)],
+            capabilities: Capabilities(open: ["*", "bundleId:*"])
+        )
+    }
 
     func testOpenReachesProviderWithURL() throws {
         let transport = LoopbackTransport()
         let recorder = Recorder(transport)
         let opener = RecordingOpenProvider()
-        // No "open" capability exists — a default-cap manifest must still open.
         let instance = try PluginInstance(
-            manifest: manifest(),
+            manifest: openAllManifest(),
             transport: transport,
             clock: TestClock(),
             httpClient: CannedHTTPClient(),
@@ -1471,7 +1484,7 @@ final class VeeEngineTests: XCTestCase {
         let recorder = Recorder(transport)
         let opener = RecordingOpenProvider()
         let instance = try PluginInstance(
-            manifest: manifest(),
+            manifest: openAllManifest(),
             transport: transport,
             clock: TestClock(),
             httpClient: CannedHTTPClient(),
@@ -1494,7 +1507,7 @@ final class VeeEngineTests: XCTestCase {
         let opener = RecordingOpenProvider()
         opener.failure = JSONRPCError.internalError("no handler")
         let instance = try PluginInstance(
-            manifest: manifest(),
+            manifest: openAllManifest(),
             transport: transport,
             clock: TestClock(),
             httpClient: CannedHTTPClient(),

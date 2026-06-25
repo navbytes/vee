@@ -272,9 +272,10 @@ final class JSBridge {
         keychain.setObject(unsafeBitCast(keychainDelete, to: AnyObject.self), forKeyedSubscript: "delete" as NSString)
         vee.setObject(keychain, forKeyedSubscript: "keychain" as NSString)
 
-        // open(url) / openApp(bundleId) → Promise<void>. NOT capability-gated
-        // (opening is a core launcher action; the frozen Capabilities has no flag
-        // for it — see handleOpen). Backed by the injected OpenProviding.
+        // open(url) / openApp(bundleId) → Promise<void>. Capability-gated by
+        // Capabilities.open (SEC-1/SEC-2): the scheme/bundle must be allowlisted,
+        // file:/custom schemes are default-denied, and http(s) opens are re-checked
+        // against the network allowlist. Backed by the injected OpenProviding.
         let open: @convention(block) (JSValue) -> JSValue? = { [weak self] url in
             self?.handleOpen(url: url)
         }
@@ -389,18 +390,47 @@ final class JSBridge {
         let params = FetchParams(url: urlString, method: method, headers: headers, bodyBase64: bodyBase64)
 
         return PromiseFactory.make(in: ctx) { resolve, reject in
-            // Capability gate: reject without ever touching the client when the
-            // host is not in the network allowlist.
-            let host = URL(string: urlString)?.host ?? ""
-            guard instance.capabilities.allowsNetworkHost(host) else {
-                instance.runOnQueue {
-                    let err = JSONRPCError.capabilityDenied("network host not allowed: \(host)")
-                    reject(JSBridge.errorValue(in: ctx, code: err.code, message: err.message))
-                    instance.drainMicrotasks()
+            // SEC-4 scheme/SSRF gate, then the host allowlist. Each failure
+            // rejects WITHOUT ever touching the HTTP client.
+            let comps = URLComponents(string: urlString)
+            let scheme = comps?.scheme?.lowercased() ?? ""
+            let host = comps?.host ?? ""
+
+            // (1) https-only; http permitted only when the host is explicitly
+            //     allowlisted. Any other scheme (file:, ftp:, data:…) is rejected.
+            if scheme == "https" {
+                // ok — subject to the host allowlist below
+            } else if scheme == "http" {
+                guard instance.capabilities.allowsNetworkHost(host) else {
+                    JSBridge.rejectFetch(instance: instance, ctx: ctx, reject: reject,
+                                         message: "network host not allowed: \(host)")
+                    return
                 }
+            } else {
+                JSBridge.rejectFetch(instance: instance, ctx: ctx, reject: reject,
+                                     message: "fetch scheme not allowed: \(scheme.isEmpty ? "(none)" : scheme)")
                 return
             }
-            instance.performFetch(params) { result in
+
+            // (2) SSRF: reject literal loopback / link-local / private targets,
+            //     and userinfo (`user@host`) forms, before any DNS resolution.
+            if isBlockedNetworkHost(host) || (comps?.user != nil) {
+                JSBridge.rejectFetch(instance: instance, ctx: ctx, reject: reject,
+                                     message: "fetch target not allowed (loopback/link-local/private/userinfo): \(host)")
+                return
+            }
+
+            // (3) Capability gate: the host must be in the network allowlist.
+            guard instance.capabilities.allowsNetworkHost(host) else {
+                JSBridge.rejectFetch(instance: instance, ctx: ctx, reject: reject,
+                                     message: "network host not allowed: \(host)")
+                return
+            }
+            // Thread the per-request allowlist to the client so it can re-apply it
+            // to redirect targets (SEC-3). Call the client directly (rather than
+            // `instance.performFetch`) to carry `allowedHosts` without changing the
+            // instance's API.
+            instance.httpClient.perform(params, allowedHosts: instance.capabilities.network) { result in
                 // Hop back onto the instance's serial queue to settle the Promise.
                 instance.runOnQueue {
                     switch result {
@@ -619,18 +649,32 @@ final class JSBridge {
         }
     }
 
-    // MARK: - open / openApp (NOT capability-gated)
+    // MARK: - open / openApp (capability-gated by Capabilities.open — SEC-1/SEC-2)
 
-    /// `vee.open(url)`. NOTE: deliberately NOT capability-gated. Opening a URL or
-    /// file in the default handler is a core launcher action — the launcher's
-    /// entire purpose is to open things — and the frozen `Capabilities` has no
-    /// flag to gate it against (no "open"/launch capability exists). We therefore
-    /// forward straight to the injected `OpenProviding`, which the app backs with
-    /// `NSWorkspace`. (Contrast fetch/fs/calendar, each gated by a manifest flag.)
+    /// `vee.open(url)`. Capability-gated (SEC-1). The scheme must be allowlisted
+    /// in `Capabilities.open`; `file:`/custom schemes are default-denied; and an
+    /// `http`/`https` open is additionally re-checked against the network
+    /// allowlist so it can't be used to exfiltrate to a host outside `network`.
+    /// A denied open is rejected with `capabilityDenied` (-32001) WITHOUT ever
+    /// touching the `OpenProviding`.
     private func handleOpen(url: JSValue) -> JSValue? {
         guard let ctx = JSContext.current(), let instance else { return nil }
         let urlString = url.toString() ?? ""
         return PromiseFactory.make(in: ctx) { resolve, reject in
+            // Parse scheme + host. A URL with no scheme (bare path) is treated as
+            // `file:` so it falls under the file-open gate (an unqualified path is
+            // a filesystem open, which is exactly what SEC-1 wants gated).
+            let parsed = URLComponents(string: urlString)
+            let scheme = parsed?.scheme?.lowercased() ?? "file"
+            let host = parsed?.host ?? ""
+            guard instance.capabilities.allowsOpen(scheme: scheme, host: host) else {
+                instance.runOnQueue {
+                    let err = JSONRPCError.capabilityDenied("open not allowed: \(urlString)")
+                    reject(JSBridge.errorValue(in: ctx, code: err.code, message: err.message))
+                    instance.drainMicrotasks()
+                }
+                return
+            }
             instance.performOpen(url: urlString) { result in
                 instance.runOnQueue {
                     switch result {
@@ -646,11 +690,22 @@ final class JSBridge {
         }
     }
 
-    /// `vee.openApp(bundleId)`. Same rationale as `handleOpen` — not gated.
+    /// `vee.openApp(bundleId)`. Capability-gated (SEC-2): the bundle id must be
+    /// allowlisted via a `"bundleId:<id>"` (or `"bundleId:*"`) entry in
+    /// `Capabilities.open`. A denied launch is rejected with `capabilityDenied`
+    /// (-32001) WITHOUT ever touching the `OpenProviding`.
     private func handleOpenApp(bundleId: JSValue) -> JSValue? {
         guard let ctx = JSContext.current(), let instance else { return nil }
         let bid = bundleId.toString() ?? ""
         return PromiseFactory.make(in: ctx) { resolve, reject in
+            guard instance.capabilities.allowsOpenApp(bundleId: bid) else {
+                instance.runOnQueue {
+                    let err = JSONRPCError.capabilityDenied("openApp not allowed: \(bid)")
+                    reject(JSBridge.errorValue(in: ctx, code: err.code, message: err.message))
+                    instance.drainMicrotasks()
+                }
+                return
+            }
             instance.performOpenApp(bundleId: bid) { result in
                 instance.runOnQueue {
                     switch result {
@@ -791,5 +846,16 @@ final class JSBridge {
     static func errorValue(in ctx: JSContext, code: Int, message: String) -> JSValue {
         let factory = ctx.evaluateScript("(function(code, msg){ var e = new Error(msg); e.code = code; return e; })")!
         return factory.call(withArguments: [code, message]) ?? JSValue(newErrorFromMessage: message, in: ctx)
+    }
+
+    /// Reject a fetch Promise with `capabilityDenied` on the instance's serial
+    /// queue (then drain microtasks), mirroring the other gate rejections.
+    private static func rejectFetch(instance: PluginInstance, ctx: JSContext,
+                                    reject: @escaping (JSValue) -> Void, message: String) {
+        instance.runOnQueue {
+            let err = JSONRPCError.capabilityDenied(message)
+            reject(JSBridge.errorValue(in: ctx, code: err.code, message: err.message))
+            instance.drainMicrotasks()
+        }
     }
 }

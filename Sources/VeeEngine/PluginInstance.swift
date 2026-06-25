@@ -61,7 +61,8 @@ public final class PluginInstance {
         secretStore: any SecretStore = InMemorySecretStore(),
         openProvider: OpenProviding = RecordingOpenProvider(),
         fileProvider: FileProviding = DenyingFileProvider(),
-        calendarProvider: CalendarProviding = EmptyCalendarProvider()
+        calendarProvider: CalendarProviding = EmptyCalendarProvider(),
+        ownsTransportInbound: Bool = true
     ) throws {
         self.manifest = manifest
         self.transport = transport
@@ -101,16 +102,20 @@ public final class PluginInstance {
         self.bridge.instance = self
         self.bridge.install()
 
-        // Self-subscribe to inbound host→plugin frames addressed to this plugin.
-        // When this instance is owned by a `PluginHost`, the host installs its
-        // own multiplexing `onReceive` (overriding this) and forwards via
-        // `dispatch`. For a standalone instance + loopback (the round-trip test
-        // path) this self-subscription is what delivers `host.invokeAction` etc.
+        // Inbound host→plugin frame delivery (ARCH-2). When owned by a
+        // `PluginHost` (the normal case), the host owns the transport's single
+        // `onReceive` slot — a multiplexer that routes each frame to the addressed
+        // instance via `dispatch`. The instance MUST NOT seize that slot, or with
+        // several plugins loaded only the last one would receive events (and the
+        // host router would be clobbered). So we self-subscribe ONLY when we own
+        // the transport (a standalone instance + loopback, e.g. a round-trip test).
         // The closure captures [weak self] — never the context.
-        self.transport.onReceive = { [weak self] message in
-            guard let self else { return }
-            if self.isAddressedToUs(message) {
-                self.dispatch(message)
+        if ownsTransportInbound {
+            self.transport.onReceive = { [weak self] message in
+                guard let self else { return }
+                if self.isAddressedToUs(message) {
+                    self.dispatch(message)
+                }
             }
         }
     }
