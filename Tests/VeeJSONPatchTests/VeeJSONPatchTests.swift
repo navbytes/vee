@@ -367,6 +367,42 @@ final class VeeJSONPatchTests: XCTestCase {
         let patch = JSONPatch.diff(a, b)
         XCTAssertEqual(try JSONPatch.apply(patch, to: a), b)
     }
+
+    // MARK: - Keyed RenderNode identity (top-level `key`, what the SDK emits)
+    // These exercise the contract's real projection — not a hand-built top-level
+    // `id` — and lock the §3/§5 minimal-diff win for keyed render-tree lists.
+
+    func testKeyedRenderNodeReorderProducesMoves() {
+        func li(_ k: String, _ title: String) -> JSONValue {
+            RenderNode(tag: "list-item", key: k, props: ["title": .string(title)]).jsonValue
+        }
+        let a = RenderNode(tag: "list", children: [
+            try! RenderNode(jsonValue: li("a", "A")),
+            try! RenderNode(jsonValue: li("b", "B")),
+            try! RenderNode(jsonValue: li("c", "C"))]).jsonValue
+        let b = RenderNode(tag: "list", children: [
+            try! RenderNode(jsonValue: li("c", "C")),
+            try! RenderNode(jsonValue: li("a", "A")),
+            try! RenderNode(jsonValue: li("b", "B"))]).jsonValue
+        let patch = JSONPatch.diff(a, b)
+        XCTAssertEqual(try? JSONPatch.apply(patch, to: a), b)
+        XCTAssertTrue(patch.allSatisfy { $0.op == .move },
+                      "keyed reorder must be moves, got \(patch.map(\.op))")
+        XCTAssertFalse(patch.contains { $0.op == .replace && $0.path == "/children" })
+    }
+
+    func testKeyedRenderNodeSinglePropChangeIsMinimal() {
+        func li(_ k: String, _ t: String) -> RenderNode {
+            RenderNode(tag: "list-item", key: k, props: ["title": .string(t)])
+        }
+        let a = RenderNode(tag: "list", children: [li("a", "A"), li("b", "B")]).jsonValue
+        let b = RenderNode(tag: "list", children: [li("a", "A2"), li("b", "B")]).jsonValue
+        let patch = JSONPatch.diff(a, b)
+        XCTAssertEqual(try? JSONPatch.apply(patch, to: a), b)
+        XCTAssertEqual(patch.count, 1)
+        XCTAssertEqual(patch.first?.op, .replace)
+        XCTAssertEqual(patch.first?.path, "/children/0/props/title")  // recursive, not remove+add
+    }
 }
 
 // MARK: - Test support: seeded RNG + JSONValue generator

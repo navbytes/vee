@@ -351,8 +351,18 @@ extension JSONPatch {
         at path: String, into ops: inout [PatchOp]
     ) {
         // Identity for matching elements across the two arrays.
+        //
+        // `key` wins over `id`: `key` is the render-tree reconciliation identity
+        // (the top-level field `RenderNode.jsonValue` projects and `@vee/sdk`
+        // lifts out of props), while `id` is the data identity of a
+        // Candidate-style / legacy element. A keyed `RenderNode` child whose
+        // prop changes must reconcile as a recursive `replace`, not remove+add —
+        // this is the §3/§5 minimal-diff (perceived-latency) win.
         func identity(_ v: JSONValue) -> IdentityKey {
-            if case .object(let o) = v, let id = o["id"] { return .id(id) }
+            if case .object(let o) = v {
+                if let key = o["key"] { return .id(key) }
+                if let id = o["id"] { return .id(id) }
+            }
             return .value(v)
         }
 
