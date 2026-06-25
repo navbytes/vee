@@ -1,0 +1,22 @@
+{
+  "id": "com.vee.snippets",
+  "name": "Snippets",
+  "version": "0.1.0",
+  "entrypoint": "../../dist/com.vee.snippets.js",
+  "commands": [
+    {
+      "name": "view",
+      "title": "Snippets",
+      "subtitle": "Save and copy reusable text snippets",
+      "mode": "view"
+    }
+  ],
+  "capabilities": {
+    "network": [],
+    "filesystem": [],
+    "clipboard": true,
+    "calendar": false,
+    "keychainNamespaces": [],
+    "hotkeyActions": []
+  }
+}

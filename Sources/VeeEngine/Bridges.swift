@@ -449,6 +449,249 @@ public final class FakeClipboardProvider: ClipboardProviding {
     }
 }
 
+// MARK: - OpenProviding (vee.open / vee.openApp)
+
+/// Injectable host-native launcher backing `vee.open(url)` and
+/// `vee.openApp(bundleId)`. Production wires this to `NSWorkspace`
+/// (`open(_:)` / `openApplication(at:configuration:)`), supplied by the app;
+/// tests use a recording fake.
+///
+/// NOT capability-gated: opening a URL or launching an app is a core launcher
+/// action (the launcher's entire job is to open things), and the frozen
+/// `Capabilities` has no flag to gate it against. The bridge therefore forwards
+/// straight to this provider — see the note on `JSBridge.handleOpen`. The
+/// completion is invoked synchronously by the in-memory/test impls; the bridge
+/// always hops back to the instance's serial queue to settle the JS Promise.
+///
+/// `AnyObject`/class-bound to match the other engine providers — the bridge
+/// holds it via the instance and never copies it.
+public protocol OpenProviding: AnyObject {
+    /// Open `url` (a web URL or `file://`/path) in the default handler.
+    func open(url: String, completion: @escaping (Result<Void, Error>) -> Void)
+    /// Launch the application with bundle id `bundleId`.
+    func openApp(bundleId: String, completion: @escaping (Result<Void, Error>) -> Void)
+}
+
+/// Recording fake `OpenProviding` for tests. Records every requested url /
+/// bundle id (so a bridge call can be proven to have reached the provider with
+/// the right argument). Succeeds by default; set `failure` to make every call
+/// reject. This is ALSO the safe default injected when a host wires no real
+/// provider — opening is non-destructive and not capability-gated, so a no-op
+/// recording default is preferable to a hard denial.
+public final class RecordingOpenProvider: OpenProviding {
+    public private(set) var openedURLs: [String] = []
+    public private(set) var openedApps: [String] = []
+    /// When set, every call rejects with this error instead of succeeding.
+    public var failure: Error?
+
+    public init() {}
+
+    public func open(url: String, completion: @escaping (Result<Void, Error>) -> Void) {
+        openedURLs.append(url)
+        if let failure { completion(.failure(failure)) } else { completion(.success(())) }
+    }
+
+    public func openApp(bundleId: String, completion: @escaping (Result<Void, Error>) -> Void) {
+        openedApps.append(bundleId)
+        if let failure { completion(.failure(failure)) } else { completion(.success(())) }
+    }
+}
+
+#if canImport(AppKit)
+import AppKit
+
+/// Thin `NSWorkspace`-backed `OpenProviding` for the real host. Logic-light and
+/// not unit-tested (it touches the real workspace); the bridge that consumes an
+/// `OpenProviding` is covered via `RecordingOpenProvider`.
+public final class NSWorkspaceOpenProvider: OpenProviding {
+    public init() {}
+
+    public func open(url: String, completion: @escaping (Result<Void, Error>) -> Void) {
+        // A `file://` URL or absolute path both resolve; prefer a real URL, fall
+        // back to a file URL for bare paths.
+        let resolved = URL(string: url) ?? URL(fileURLWithPath: url)
+        let ok = NSWorkspace.shared.open(resolved)
+        if ok { completion(.success(())) }
+        else { completion(.failure(JSONRPCError.internalError("failed to open: \(url)"))) }
+    }
+
+    public func openApp(bundleId: String, completion: @escaping (Result<Void, Error>) -> Void) {
+        guard let appURL = NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleId) else {
+            completion(.failure(JSONRPCError.invalidParams("no application for bundle id: \(bundleId)")))
+            return
+        }
+        NSWorkspace.shared.openApplication(at: appURL, configuration: NSWorkspace.OpenConfiguration()) { _, error in
+            if let error { completion(.failure(error)) } else { completion(.success(())) }
+        }
+    }
+}
+#endif
+
+// MARK: - FileProviding (vee.fs.read / vee.fs.write — capability-gated)
+
+/// Injectable file backend behind `vee.fs.read` / `vee.fs.write`. Reads and
+/// writes UTF-8 text by ABSOLUTE, already-canonicalized path. The bridge runs
+/// the capability gate FIRST (`Capabilities.filesystem`: the path must resolve,
+/// after symlink canonicalization, under one of the declared roots; traversal is
+/// rejected with `capabilityDenied`), so a provider call only ever happens for a
+/// path the manifest permits — a provider WITHOUT a confined path never sees it.
+///
+/// Production wires this to a thin `FileManager` adapter (`FileManagerFileProvider`);
+/// tests use a sandboxed temp-backed fake (`TempDirFileProvider`).
+///
+/// `AnyObject`/class-bound to match the other engine providers.
+public protocol FileProviding: AnyObject {
+    /// Read the file at absolute `path` as UTF-8 text.
+    func read(path: String, completion: @escaping (Result<String, Error>) -> Void)
+    /// Write `contents` (UTF-8) to absolute `path`, creating/overwriting it.
+    func write(path: String, contents: String, completion: @escaping (Result<Void, Error>) -> Void)
+}
+
+/// Default-deny file provider: every call fails with `capabilityDenied`. Injected
+/// when a host wires no real provider so a plugin holding `filesystem` roots
+/// against a host that hasn't implemented the service gets a clear rejection
+/// rather than silent success. (The bridge's path-confinement gate runs FIRST,
+/// so a plugin whose path is outside its roots never reaches this.)
+public final class DenyingFileProvider: FileProviding {
+    public init() {}
+    public func read(path: String, completion: @escaping (Result<String, Error>) -> Void) {
+        completion(.failure(JSONRPCError.capabilityDenied("file provider not available")))
+    }
+    public func write(path: String, contents: String, completion: @escaping (Result<Void, Error>) -> Void) {
+        completion(.failure(JSONRPCError.capabilityDenied("file provider not available")))
+    }
+}
+
+/// Sandboxed in-memory file provider for tests. Backed by a real temp directory
+/// it owns and cleans up; `read`/`write` operate on absolute paths and are
+/// confined to `root` as defence-in-depth (the bridge already gates, but the
+/// provider refuses anything outside its own root too). Records `reads`/`writes`
+/// so a denied call can be proven to have NEVER reached the provider (mirrors
+/// `CannedHTTPClient.requested`).
+public final class TempDirFileProvider: FileProviding {
+    /// The canonicalized absolute root this provider is confined to.
+    public let root: String
+    public private(set) var reads: [String] = []
+    public private(set) var writes: [(path: String, contents: String)] = []
+
+    private let fileManager = FileManager.default
+
+    /// Create a provider rooted at a fresh unique temp directory (default), or at
+    /// an explicit (already-existing) directory.
+    public init(root: String? = nil) {
+        if let root {
+            self.root = (root as NSString).standardizingPath
+        } else {
+            let dir = NSTemporaryDirectory() + "vee-fs-" + UUID().uuidString
+            try? FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
+            // Resolve symlinks so confinement checks compare like for like
+            // (`/var` → `/private/var` on macOS).
+            self.root = (dir as NSString).resolvingSymlinksInPath
+        }
+    }
+
+    private func isConfined(_ path: String) -> Bool {
+        let resolved = (path as NSString).resolvingSymlinksInPath
+        let standardized = (path as NSString).standardizingPath
+        let rootSlash = root.hasSuffix("/") ? root : root + "/"
+        for candidate in [resolved, standardized] {
+            if candidate == root || candidate.hasPrefix(rootSlash) { return true }
+        }
+        return false
+    }
+
+    public func read(path: String, completion: @escaping (Result<String, Error>) -> Void) {
+        reads.append(path)
+        guard isConfined(path) else {
+            completion(.failure(JSONRPCError.capabilityDenied("path escapes provider root"))); return
+        }
+        do {
+            let text = try String(contentsOfFile: path, encoding: .utf8)
+            completion(.success(text))
+        } catch {
+            completion(.failure(JSONRPCError.internalError("fs.read failed: \(error)")))
+        }
+    }
+
+    public func write(path: String, contents: String, completion: @escaping (Result<Void, Error>) -> Void) {
+        writes.append((path, contents))
+        guard isConfined(path) else {
+            completion(.failure(JSONRPCError.capabilityDenied("path escapes provider root"))); return
+        }
+        do {
+            // Ensure the parent directory exists, then write atomically.
+            let parent = (path as NSString).deletingLastPathComponent
+            try fileManager.createDirectory(atPath: parent, withIntermediateDirectories: true)
+            try contents.write(toFile: path, atomically: true, encoding: .utf8)
+            completion(.success(()))
+        } catch {
+            completion(.failure(JSONRPCError.internalError("fs.write failed: \(error)")))
+        }
+    }
+}
+
+/// Thin `FileManager`-backed `FileProviding` for the real host. Logic-light and
+/// not unit-tested (touches the real filesystem); confinement is enforced by the
+/// bridge's capability gate before any call lands here. Provided so the app can
+/// wire a working `vee.fs`.
+public final class FileManagerFileProvider: FileProviding {
+    public init() {}
+    public func read(path: String, completion: @escaping (Result<String, Error>) -> Void) {
+        do { completion(.success(try String(contentsOfFile: path, encoding: .utf8))) }
+        catch { completion(.failure(JSONRPCError.internalError("fs.read failed: \(error)"))) }
+    }
+    public func write(path: String, contents: String, completion: @escaping (Result<Void, Error>) -> Void) {
+        do {
+            try contents.write(toFile: path, atomically: true, encoding: .utf8)
+            completion(.success(()))
+        } catch { completion(.failure(JSONRPCError.internalError("fs.write failed: \(error)"))) }
+    }
+}
+
+// MARK: - CalendarProviding (vee.calendar.upcoming — capability-gated)
+
+/// Injectable host-native calendar service behind `vee.calendar.upcoming()`,
+/// gated by `Capabilities.calendar`. DISTINCT from `VeeServices.CalendarProvider`
+/// (which yields raw EventKit-shaped values below the service seam): this returns
+/// already-resolved wire `CalendarEvent`s (with `meetingURL` detected), because
+/// VeeEngine must not depend on VeeServices. Production adapts the VeeServices
+/// `CalendarService` to this protocol in the app layer; tests use a fake.
+///
+/// The bridge runs the capability gate FIRST, so a plugin WITHOUT `calendar`
+/// never reaches this provider. The completion is invoked synchronously by the
+/// fake; the bridge always hops back to the instance's serial queue to settle.
+public protocol CalendarProviding: AnyObject {
+    /// Upcoming events (host decides the window + sorting). Wire `CalendarEvent`s.
+    func upcoming(completion: @escaping (Result<[CalendarEvent], Error>) -> Void)
+}
+
+/// Default calendar provider returning an empty list. This is the safe default
+/// injected when a host wires no real provider: a plugin holding `calendar:true`
+/// against a host without the service simply sees no events (rather than an
+/// error), matching "no upcoming meetings". (The capability gate runs FIRST, so
+/// a plugin WITHOUT the capability never reaches this.)
+public final class EmptyCalendarProvider: CalendarProviding {
+    public init() {}
+    public func upcoming(completion: @escaping (Result<[CalendarEvent], Error>) -> Void) {
+        completion(.success([]))
+    }
+}
+
+/// Fake calendar provider for tests. Returns the canned `events` and records the
+/// number of `calls` so a denied request can be proven to have NEVER reached the
+/// provider (mirrors `CannedHTTPClient.requested`).
+public final class FakeCalendarProvider: CalendarProviding {
+    public var events: [CalendarEvent]
+    public private(set) var calls = 0
+
+    public init(events: [CalendarEvent] = []) { self.events = events }
+
+    public func upcoming(completion: @escaping (Result<[CalendarEvent], Error>) -> Void) {
+        calls += 1
+        completion(.success(events))
+    }
+}
+
 // MARK: - SecretStore test double (visible from `import VeeEngine`)
 
 /// An in-memory `SecretStore` re-exposed by VeeEngine so the engine's bridge

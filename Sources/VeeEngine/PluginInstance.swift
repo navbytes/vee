@@ -32,6 +32,9 @@ public final class PluginInstance {
     let storage: StorageBackend
     let clipboardProvider: ClipboardProviding
     let secretStore: any SecretStore
+    let openProvider: OpenProviding
+    let fileProvider: FileProviding
+    let calendarProvider: CalendarProviding
 
     /// Serial queue for all JS execution & frame handling, so frames stay
     /// ordered and JSC's single-threaded-per-VM rule is never violated. The
@@ -55,7 +58,10 @@ public final class PluginInstance {
         httpClient: HTTPClient,
         storage: StorageBackend = InMemoryStorage(),
         clipboardProvider: ClipboardProviding = DenyingClipboardProvider(),
-        secretStore: any SecretStore = InMemorySecretStore()
+        secretStore: any SecretStore = InMemorySecretStore(),
+        openProvider: OpenProviding = RecordingOpenProvider(),
+        fileProvider: FileProviding = DenyingFileProvider(),
+        calendarProvider: CalendarProviding = EmptyCalendarProvider()
     ) throws {
         self.manifest = manifest
         self.transport = transport
@@ -64,6 +70,9 @@ public final class PluginInstance {
         self.storage = storage
         self.clipboardProvider = clipboardProvider
         self.secretStore = secretStore
+        self.openProvider = openProvider
+        self.fileProvider = fileProvider
+        self.calendarProvider = calendarProvider
         self.queue = DispatchQueue(label: "vee.engine.instance.\(manifest.id)")
         self.mirror = RenderMirror(pluginId: manifest.id)
 
@@ -353,6 +362,64 @@ public final class PluginInstance {
 
     func keychainDelete(namespace: String, account: String) throws {
         try secretStore.delete(pluginId: pluginId, namespace: namespace, account: account)
+    }
+
+    // MARK: - Open bridge service calls (NOT capability-gated)
+
+    func performOpen(url: String, completion: @escaping (Result<Void, Error>) -> Void) {
+        openProvider.open(url: url, completion: completion)
+    }
+
+    func performOpenApp(bundleId: String, completion: @escaping (Result<Void, Error>) -> Void) {
+        openProvider.openApp(bundleId: bundleId, completion: completion)
+    }
+
+    // MARK: - Filesystem bridge service calls (capability-gated by Capabilities.filesystem)
+    //
+    // The bridge resolves a JS path to a confined ABSOLUTE path with
+    // `resolveConfinedPath` BEFORE calling these; a path that does not canonicalize
+    // under a declared root yields nil there and is rejected with capabilityDenied
+    // (the provider is never touched).
+
+    /// Canonicalize `rawPath` and confine it to the plugin's declared `filesystem`
+    /// roots. Returns the resolved absolute path iff it lies at/under one root
+    /// (after `~` expansion + symlink resolution, which collapses `..` traversal);
+    /// otherwise nil (denied). An empty roots list denies everything.
+    func resolveConfinedPath(_ rawPath: String) -> String? {
+        let roots = capabilities.filesystem
+        guard !roots.isEmpty else { return nil }
+
+        // Expand `~`, make absolute, resolve symlinks + `..` segments.
+        let expanded = (rawPath as NSString).expandingTildeInPath
+        let absolute: String = (expanded as NSString).isAbsolutePath
+            ? expanded
+            : (FileManager.default.currentDirectoryPath as NSString).appendingPathComponent(expanded)
+        let resolved = (absolute as NSString).standardizingPath
+
+        for root in roots {
+            let rootExpanded = (root as NSString).expandingTildeInPath
+            let rootResolved = (rootExpanded as NSString).standardizingPath
+            let rootSlash = rootResolved.hasSuffix("/") ? rootResolved : rootResolved + "/"
+            if resolved == rootResolved || resolved.hasPrefix(rootSlash) {
+                return resolved
+            }
+        }
+        return nil
+    }
+
+    func performFileRead(path: String, completion: @escaping (Result<String, Error>) -> Void) {
+        fileProvider.read(path: path, completion: completion)
+    }
+
+    func performFileWrite(path: String, contents: String,
+                          completion: @escaping (Result<Void, Error>) -> Void) {
+        fileProvider.write(path: path, contents: contents, completion: completion)
+    }
+
+    // MARK: - Calendar bridge service calls (capability-gated by Capabilities.calendar)
+
+    func performCalendarUpcoming(completion: @escaping (Result<[CalendarEvent], Error>) -> Void) {
+        calendarProvider.upcoming(completion: completion)
     }
 
     // MARK: - Host → plugin event dispatch (RUNTIME.md §6)

@@ -32,6 +32,9 @@ public final class PluginHost {
     private let makeStorage: () -> StorageBackend
     private let clipboardProvider: ClipboardProviding
     private let secretStore: any SecretStore
+    private let openProvider: OpenProviding
+    private let fileProvider: FileProviding
+    private let calendarProvider: CalendarProviding
 
     /// Live instances by plugin id.
     private var instances: [String: PluginInstance] = [:]
@@ -48,7 +51,10 @@ public final class PluginHost {
         bundler: Bundler,
         storageFactory: @escaping () -> StorageBackend = { InMemoryStorage() },
         clipboardProvider: ClipboardProviding = DenyingClipboardProvider(),
-        secretStore: any SecretStore = InMemorySecretStore()
+        secretStore: any SecretStore = InMemorySecretStore(),
+        openProvider: OpenProviding = RecordingOpenProvider(),
+        fileProvider: FileProviding = DenyingFileProvider(),
+        calendarProvider: CalendarProviding = EmptyCalendarProvider()
     ) {
         self.transport = transport
         self.clock = clock
@@ -58,6 +64,9 @@ public final class PluginHost {
         self.makeStorage = storageFactory
         self.clipboardProvider = clipboardProvider
         self.secretStore = secretStore
+        self.openProvider = openProvider
+        self.fileProvider = fileProvider
+        self.calendarProvider = calendarProvider
 
         // Route inbound peer frames (host→plugin notifications) to the matching
         // instance. The transport delivers on its serial queue.
@@ -105,7 +114,10 @@ public final class PluginHost {
             httpClient: httpClient,
             storage: makeStorage(),
             clipboardProvider: clipboardProvider,
-            secretStore: secretStore)
+            secretStore: secretStore,
+            openProvider: openProvider,
+            fileProvider: fileProvider,
+            calendarProvider: calendarProvider)
 
         // Evaluate the bundle; a malformed bundle throws pluginError.
         try instance.evaluateOrThrow(source)

@@ -1,0 +1,10 @@
+{
+  "name": "@vee-sample/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Sample Vee plugin: generic JSON API monitor (the API → list pattern) via vee.http.fetch.",
+  "dependencies": {
+    "@vee/sdk": "*"
+  }
+}

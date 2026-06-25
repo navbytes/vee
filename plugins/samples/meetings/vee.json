@@ -1,0 +1,22 @@
+{
+  "id": "com.vee.meetings",
+  "name": "Upcoming Meetings",
+  "version": "0.1.0",
+  "entrypoint": "../../dist/com.vee.meetings.js",
+  "commands": [
+    {
+      "name": "view",
+      "title": "Upcoming Meetings",
+      "subtitle": "Your next calendar events",
+      "mode": "view"
+    }
+  ],
+  "capabilities": {
+    "network": [],
+    "filesystem": [],
+    "clipboard": false,
+    "calendar": true,
+    "keychainNamespaces": [],
+    "hotkeyActions": []
+  }
+}

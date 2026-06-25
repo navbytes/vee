@@ -1,0 +1,10 @@
+{
+  "name": "@vee-sample/snippets",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Sample Vee plugin: save/list text snippets via vee.storage; copy via vee.clipboard.",
+  "dependencies": {
+    "@vee/sdk": "*"
+  }
+}

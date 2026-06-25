@@ -1440,4 +1440,251 @@ final class VeeEngineTests: XCTestCase {
         XCTAssertEqual(firstChild["tag"]?.stringValue, "empty-view")
         XCTAssertTrue(provider.historyQueries.isEmpty, "denied history must NEVER reach the provider")
     }
+
+    // MARK: - vee.open / vee.openApp (NOT capability-gated)
+
+    func testOpenReachesProviderWithURL() throws {
+        let transport = LoopbackTransport()
+        let recorder = Recorder(transport)
+        let opener = RecordingOpenProvider()
+        // No "open" capability exists — a default-cap manifest must still open.
+        let instance = try PluginInstance(
+            manifest: manifest(),
+            transport: transport,
+            clock: TestClock(),
+            httpClient: CannedHTTPClient(),
+            openProvider: opener
+        )
+        instance.evaluate("""
+            vee.open('https://example.com/page')
+              .then(() => console.log('opened'))
+              .catch(e => console.error('err:' + e));
+        """)
+        instance.runUntilQuiescent()
+        XCTAssertEqual(recorder.logs().map(\.message), ["opened"])
+        XCTAssertEqual(opener.openedURLs, ["https://example.com/page"])
+        XCTAssertTrue(opener.openedApps.isEmpty)
+    }
+
+    func testOpenAppReachesProviderWithBundleId() throws {
+        let transport = LoopbackTransport()
+        let recorder = Recorder(transport)
+        let opener = RecordingOpenProvider()
+        let instance = try PluginInstance(
+            manifest: manifest(),
+            transport: transport,
+            clock: TestClock(),
+            httpClient: CannedHTTPClient(),
+            openProvider: opener
+        )
+        instance.evaluate("""
+            vee.openApp('com.apple.Safari')
+              .then(() => console.log('launched'))
+              .catch(e => console.error('err:' + e));
+        """)
+        instance.runUntilQuiescent()
+        XCTAssertEqual(recorder.logs().map(\.message), ["launched"])
+        XCTAssertEqual(opener.openedApps, ["com.apple.Safari"])
+        XCTAssertTrue(opener.openedURLs.isEmpty)
+    }
+
+    func testOpenRejectsWhenProviderFails() throws {
+        let transport = LoopbackTransport()
+        let recorder = Recorder(transport)
+        let opener = RecordingOpenProvider()
+        opener.failure = JSONRPCError.internalError("no handler")
+        let instance = try PluginInstance(
+            manifest: manifest(),
+            transport: transport,
+            clock: TestClock(),
+            httpClient: CannedHTTPClient(),
+            openProvider: opener
+        )
+        instance.evaluate("""
+            vee.open('https://example.com')
+              .then(() => console.log('opened'))
+              .catch(e => console.error('err:' + e.code));
+        """)
+        instance.runUntilQuiescent()
+        // The provider was reached (recorded) but the Promise rejected.
+        XCTAssertEqual(opener.openedURLs, ["https://example.com"])
+        XCTAssertEqual(recorder.logs().map(\.message), ["err:-32603"])
+    }
+
+    // MARK: - vee.fs.read / vee.fs.write (capability-gated by Capabilities.filesystem)
+
+    /// A manifest granting `filesystem` roots (the existing helpers don't vary fs).
+    private func fsManifest(id: String = "com.vee.fs", roots: [String]) -> PluginManifest {
+        PluginManifest(
+            id: id, name: "Test", version: "1.0.0", entrypoint: "bundle.js",
+            commands: [PluginCommand(name: "view", title: "View", mode: .view)],
+            capabilities: Capabilities(filesystem: roots)
+        )
+    }
+
+    func testFileWriteThenReadRoundTripsWithinRoot() throws {
+        let transport = LoopbackTransport()
+        let recorder = Recorder(transport)
+        let provider = TempDirFileProvider()
+        // Declare the provider's own temp root as the plugin's fs root.
+        let instance = try PluginInstance(
+            manifest: fsManifest(roots: [provider.root]),
+            transport: transport,
+            clock: TestClock(),
+            httpClient: CannedHTTPClient(),
+            fileProvider: provider
+        )
+        let target = (provider.root as NSString).appendingPathComponent("note.txt")
+        instance.evaluate("""
+            vee.fs.write('\(target)', 'hello fs')
+              .then(() => vee.fs.read('\(target)'))
+              .then(t => console.log('read:' + t))
+              .catch(e => console.error('err:' + e));
+        """)
+        instance.runUntilQuiescent()
+        XCTAssertEqual(recorder.logs().map(\.message), ["read:hello fs"])
+        XCTAssertEqual(provider.writes.map(\.contents), ["hello fs"])
+        XCTAssertEqual(provider.reads.count, 1)
+    }
+
+    func testFileReadOutsideDeclaredRootsIsDeniedWithoutTouchingProvider() throws {
+        let transport = LoopbackTransport()
+        let recorder = Recorder(transport)
+        let provider = TempDirFileProvider()
+        // Root is the provider's temp dir; the plugin tries to read OUTSIDE it.
+        let instance = try PluginInstance(
+            manifest: fsManifest(roots: [provider.root]),
+            transport: transport,
+            clock: TestClock(),
+            httpClient: CannedHTTPClient(),
+            fileProvider: provider
+        )
+        instance.evaluate("""
+            vee.fs.read('/etc/hosts')
+              .then(t => console.log('read:' + t))
+              .catch(e => console.error('denied:' + e.code + ':' + e.message));
+        """)
+        instance.runUntilQuiescent()
+        XCTAssertTrue(provider.reads.isEmpty, "a path outside the roots must NEVER reach the provider")
+        let logs = recorder.logs()
+        XCTAssertEqual(logs.count, 1)
+        XCTAssertEqual(logs.first?.level, .error)
+        XCTAssertTrue((logs.first?.message ?? "").contains("-32001"), "got: \(logs.first?.message ?? "")")
+    }
+
+    func testFilePathTraversalEscapingRootIsDenied() throws {
+        let transport = LoopbackTransport()
+        let recorder = Recorder(transport)
+        let provider = TempDirFileProvider()
+        let instance = try PluginInstance(
+            manifest: fsManifest(roots: [provider.root]),
+            transport: transport,
+            clock: TestClock(),
+            httpClient: CannedHTTPClient(),
+            fileProvider: provider
+        )
+        // `<root>/../../etc/passwd` canonicalizes outside the root → denied.
+        let escaping = (provider.root as NSString).appendingPathComponent("../../etc/passwd")
+        instance.evaluate("""
+            vee.fs.read('\(escaping)')
+              .then(t => console.log('read:' + t))
+              .catch(e => console.error('denied:' + e.code));
+        """)
+        instance.runUntilQuiescent()
+        XCTAssertTrue(provider.reads.isEmpty, "a traversal path must NEVER reach the provider")
+        XCTAssertEqual(recorder.logs().map(\.message), ["denied:-32001"])
+    }
+
+    func testFileAccessDeniedWhenFilesystemRootsEmpty() throws {
+        let transport = LoopbackTransport()
+        let recorder = Recorder(transport)
+        let provider = TempDirFileProvider()
+        // filesystem: [] denies ALL paths, even one that physically exists.
+        let target = (provider.root as NSString).appendingPathComponent("x.txt")
+        let instance = try PluginInstance(
+            manifest: fsManifest(roots: []),
+            transport: transport,
+            clock: TestClock(),
+            httpClient: CannedHTTPClient(),
+            fileProvider: provider
+        )
+        instance.evaluate("""
+            vee.fs.write('\(target)', 'data')
+              .then(() => console.log('wrote'))
+              .catch(e => console.error('denied:' + e.code));
+        """)
+        instance.runUntilQuiescent()
+        XCTAssertTrue(provider.writes.isEmpty, "filesystem:[] must deny all writes")
+        XCTAssertEqual(recorder.logs().map(\.message), ["denied:-32001"])
+    }
+
+    // MARK: - vee.calendar.upcoming (capability-gated by Capabilities.calendar)
+
+    /// A manifest granting (or not) the calendar capability.
+    private func calManifest(id: String = "com.vee.cal", calendar: Bool) -> PluginManifest {
+        PluginManifest(
+            id: id, name: "Test", version: "1.0.0", entrypoint: "bundle.js",
+            commands: [PluginCommand(name: "view", title: "View", mode: .view)],
+            capabilities: Capabilities(calendar: calendar)
+        )
+    }
+
+    func testCalendarUpcomingReturnsFakeEventsWhenAllowed() throws {
+        let transport = LoopbackTransport()
+        let recorder = Recorder(transport)
+        let provider = FakeCalendarProvider(events: [
+            CalendarEvent(id: "e1", title: "Standup",
+                          start: Date(timeIntervalSince1970: 1000),
+                          end: Date(timeIntervalSince1970: 2000),
+                          meetingURL: "https://meet.google.com/abc"),
+            CalendarEvent(id: "e2", title: "1:1",
+                          start: Date(timeIntervalSince1970: 3000),
+                          end: Date(timeIntervalSince1970: 4000),
+                          meetingURL: nil),
+        ])
+        let instance = try PluginInstance(
+            manifest: calManifest(calendar: true),
+            transport: transport,
+            clock: TestClock(),
+            httpClient: CannedHTTPClient(),
+            calendarProvider: provider
+        )
+        instance.evaluate("""
+            vee.calendar.upcoming()
+              .then(evs => console.log('titles:' + evs.map(e => e.title).join(',') + '|url0:' + evs[0].meetingURL))
+              .catch(e => console.error('err:' + e));
+        """)
+        instance.runUntilQuiescent()
+        XCTAssertEqual(recorder.logs().map(\.message), ["titles:Standup,1:1|url0:https://meet.google.com/abc"])
+        XCTAssertEqual(provider.calls, 1)
+    }
+
+    func testCalendarUpcomingDeniedWhenCapabilityFalseWithoutTouchingProvider() throws {
+        let transport = LoopbackTransport()
+        let recorder = Recorder(transport)
+        let provider = FakeCalendarProvider(events: [
+            CalendarEvent(id: "e1", title: "Secret meeting",
+                          start: Date(timeIntervalSince1970: 1000),
+                          end: Date(timeIntervalSince1970: 2000)),
+        ])
+        // calendar:false → denied.
+        let instance = try PluginInstance(
+            manifest: calManifest(calendar: false),
+            transport: transport,
+            clock: TestClock(),
+            httpClient: CannedHTTPClient(),
+            calendarProvider: provider
+        )
+        instance.evaluate("""
+            vee.calendar.upcoming()
+              .then(evs => console.log('resolved:' + evs.length))
+              .catch(e => console.error('denied:' + e.code + ':' + e.message));
+        """)
+        instance.runUntilQuiescent()
+        XCTAssertEqual(provider.calls, 0, "provider must NEVER be called when calendar is denied")
+        let logs = recorder.logs()
+        XCTAssertEqual(logs.count, 1)
+        XCTAssertEqual(logs.first?.level, .error)
+        XCTAssertTrue((logs.first?.message ?? "").contains("-32001"), "got: \(logs.first?.message ?? "")")
+    }
 }

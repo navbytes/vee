@@ -415,6 +415,87 @@ final class VeeAppTests: XCTestCase {
             outboundParams(transport, method: RPCMethods.invokeAction, as: InvokeActionParams.self).isEmpty,
             "host-native invoke must not send a host.invokeAction frame")
     }
+
+    // MARK: - UX backlog #1: match highlighting threads matchedIndices through
+
+    func testVisibleItemsCarryMatchedIndicesForQuery() {
+        // Stub returns specific matched positions per candidate so we can assert
+        // the indices survive the candidate → list-item projection (by id).
+        let stub = IndexedFuzzyMatcher(matches: [
+            "fo": [0, 1],      // "Foo Bar" → F, o
+            "foo": [0, 1, 3],  // "Foobar Two" → F, o, b
+        ])
+        let (coordinator, transport, _) = makeCoordinator(serverSideFiltering: false, fuzzy: stub)
+
+        let candidates = [
+            Candidate(id: "fo", title: "Foo Bar"),
+            Candidate(id: "ba", title: "Baz Qux"),
+            Candidate(id: "foo", title: "Foobar Two"),
+        ]
+        transport.deliverInbound(.notification(try! setCandidatesNotification(candidates)))
+        // Enter host-candidate mode so the candidates project into the list surface.
+        coordinator.showHostCandidates(candidates) { _ in }
+
+        coordinator.setQuery("fo")
+
+        let items = try! XCTUnwrap(coordinator.listViewModel?.items)
+        XCTAssertEqual(items.map(\.id), ["fo", "foo"], "filtered to the stub's matches")
+        XCTAssertEqual(items.first { $0.id == "fo" }?.matchedIndices, [0, 1])
+        XCTAssertEqual(items.first { $0.id == "foo" }?.matchedIndices, [0, 1, 3])
+
+        // Clearing the query drops highlighting (empty query → plain titles).
+        coordinator.setQuery("")
+        let cleared = try! XCTUnwrap(coordinator.listViewModel?.items)
+        XCTAssertTrue(cleared.allSatisfy { $0.matchedIndices.isEmpty },
+                      "no query → no matched indices (plain titles)")
+    }
+
+    // MARK: - UX backlog #2: detail metadata rail parsing
+
+    func testDetailViewModelParsesIconAndMetadata() throws {
+        let (coordinator, transport, _) = makeCoordinator()
+        let tree = RenderNode(tag: RenderNode.Tag.root, props: [:], children: [
+            RenderNode(tag: RenderNode.Tag.detail, props: [
+                "title": .string("Report.pdf"),
+                "icon": .string("doc.richtext"),
+                "markdown": .string("# Summary\nbody"),
+                "metadata": .array([
+                    .object(["label": .string("Size"), "value": .string("4.2 MB")]),
+                    .object(["label": .string("Kind"), "value": .string("PDF")]),
+                    // Malformed entries are skipped (missing value / not an object).
+                    .object(["label": .string("Orphan")]),
+                    .string("ignored"),
+                ]),
+            ], children: []),
+        ])
+        transport.deliverInbound(.notification(try renderNotification(
+            revision: 1, patch: [.replace("", tree.jsonValue)])))
+
+        let detail = try XCTUnwrap(coordinator.detailViewModel)
+        XCTAssertEqual(detail.title, "Report.pdf")
+        XCTAssertEqual(detail.icon, "doc.richtext")
+        XCTAssertEqual(detail.markdown, "# Summary\nbody")
+        XCTAssertEqual(detail.metadata, [
+            DetailMetadataRow(label: "Size", value: "4.2 MB"),
+            DetailMetadataRow(label: "Kind", value: "PDF"),
+        ], "well-formed {label,value} rows kept in order; malformed entries dropped")
+    }
+
+    func testDetailWithoutMetadataDefaultsToEmpty() throws {
+        let (coordinator, transport, _) = makeCoordinator()
+        let tree = RenderNode(tag: RenderNode.Tag.root, props: [:], children: [
+            RenderNode(tag: RenderNode.Tag.detail, props: [
+                "title": .string("Plain"),
+                "markdown": .string("body"),
+            ], children: []),
+        ])
+        transport.deliverInbound(.notification(try renderNotification(
+            revision: 1, patch: [.replace("", tree.jsonValue)])))
+
+        let detail = try XCTUnwrap(coordinator.detailViewModel)
+        XCTAssertNil(detail.icon)
+        XCTAssertEqual(detail.metadata, [], "no metadata prop → empty rail")
+    }
 }
 
 // MARK: - Test doubles
@@ -471,6 +552,20 @@ final class StubFuzzyMatcher: FuzzyMatching {
         let byID = Dictionary(candidates.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
         return keepIDs.compactMap { id in
             byID[id].map { ScoredCandidate(candidate: $0, score: 1, matchedIndices: []) }
+        }
+    }
+}
+
+/// Fuzzy stub that returns explicit matched-character positions per candidate id
+/// (and keeps only the ids present in `matches`, in dictionary-unstable order →
+/// callers assert by id, not position). Exercises matchedIndices threading.
+final class IndexedFuzzyMatcher: FuzzyMatching {
+    let matches: [String: [Int]]
+    init(matches: [String: [Int]]) { self.matches = matches }
+    func match(query: String, in candidates: [Candidate]) -> [ScoredCandidate] {
+        candidates.compactMap { c in
+            guard let indices = matches[c.id] else { return nil }
+            return ScoredCandidate(candidate: c, score: 1, matchedIndices: indices)
         }
     }
 }

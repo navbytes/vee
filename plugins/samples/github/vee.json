@@ -1,0 +1,22 @@
+{
+  "id": "com.vee.github",
+  "name": "GitHub Pull Requests",
+  "version": "0.1.0",
+  "entrypoint": "../../dist/com.vee.github.js",
+  "commands": [
+    {
+      "name": "view",
+      "title": "GitHub Pull Requests",
+      "subtitle": "Your open PRs across GitHub",
+      "mode": "view"
+    }
+  ],
+  "capabilities": {
+    "network": ["api.github.com"],
+    "filesystem": [],
+    "clipboard": false,
+    "calendar": false,
+    "keychainNamespaces": ["github"],
+    "hotkeyActions": []
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "name": "@vee-sample/github",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Sample Vee plugin: your open GitHub pull requests via vee.http.fetch + vee.keychain.",
+  "dependencies": {
+    "@vee/sdk": "*"
+  }
+}

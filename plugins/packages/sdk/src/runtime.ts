@@ -14,6 +14,7 @@
  */
 
 import type {
+  CalendarEvent,
   Candidate,
   InvokeActionParams,
   JSONValue,
@@ -76,6 +77,42 @@ export interface VeeStorage {
 }
 
 /**
+ * The filesystem bridge (`vee.fs`). Capability-gated by `capabilities.filesystem`
+ * (the plugin may only read/write under its allowed roots). The host reads/writes
+ * the file natively; the plugin-facing façade speaks UTF-8 text (the wire uses
+ * base64 — `FSReadParams` / `FSWriteParams` — and the SDK hides that).
+ */
+export interface VeeFs {
+  /** Read a UTF-8 text file. Rejects if the path is outside the allowed roots. */
+  read(path: string): Promise<string>;
+  /** Write a UTF-8 text file. Rejects if the path is outside the allowed roots. */
+  write(path: string, contents: string): Promise<void>;
+}
+
+/**
+ * The calendar bridge (`vee.calendar`). Capability-gated by `capabilities.calendar`.
+ * `upcoming()` returns the user's near-future events (the host decides the window).
+ */
+export interface VeeCalendar {
+  /** Upcoming calendar events, soonest first. */
+  upcoming(): Promise<CalendarEvent[]>;
+}
+
+/**
+ * The keychain bridge (`vee.keychain`). Capability-gated by
+ * `capabilities.keychainNamespaces`: a plugin may only touch namespaces it
+ * declared. Items are scoped `(namespace, account)` under the plugin's own id.
+ */
+export interface VeeKeychain {
+  /** Read a secret, or `null` when the item is absent. */
+  get(namespace: string, account: string): Promise<string | null>;
+  /** Create or update a secret. */
+  set(namespace: string, account: string, value: string): Promise<void>;
+  /** Delete a secret. No-op when the item is absent. */
+  delete(namespace: string, account: string): Promise<void>;
+}
+
+/**
  * The full surface the host injects as the global `vee`. Wave 2a MUST provide
  * every member below with these exact signatures. All async members return
  * Promises the host settles when the corresponding JSON-RPC response arrives.
@@ -113,6 +150,18 @@ export interface VeeHost {
   // ── Bridges (plugin → host; capability-gated, async) ───────────────────────
   readonly http: VeeHttp;
   readonly storage: VeeStorage;
+  readonly fs: VeeFs;
+  readonly calendar: VeeCalendar;
+  readonly keychain: VeeKeychain;
+
+  // ── System affordances (plugin → host; async) ──────────────────────────────
+  /**
+   * Open a URL in the user's default handler (web link, `mailto:`, custom
+   * scheme…). Resolves once the host has dispatched the open.
+   */
+  open(url: string): Promise<void>;
+  /** Launch (or activate) an application by its bundle id, e.g. `com.apple.Safari`. */
+  openApp(bundleId: string): Promise<void>;
 
   // ── UI affordances ─────────────────────────────────────────────────────────
   /** Show a transient toast (`plugin.showToast`). */
@@ -254,6 +303,31 @@ export function http(): VeeHttp {
 /** The key/value storage bridge. */
 export function storage(): VeeStorage {
   return host().storage;
+}
+
+/** The filesystem bridge. */
+export function fs(): VeeFs {
+  return host().fs;
+}
+
+/** The calendar bridge. */
+export function calendar(): VeeCalendar {
+  return host().calendar;
+}
+
+/** The keychain bridge. */
+export function keychain(): VeeKeychain {
+  return host().keychain;
+}
+
+/** Open a URL in the user's default handler. */
+export function open(url: string): Promise<void> {
+  return host().open(url);
+}
+
+/** Launch (or activate) an application by its bundle id. */
+export function openApp(bundleId: string): Promise<void> {
+  return host().openApp(bundleId);
 }
 
 /** Register an action handler. */

@@ -312,11 +312,19 @@ export interface FSWriteParams {
 }
 
 export interface KeychainGetParams {
-  key: string;
+  /** Keychain namespace the plugin declared in `capabilities.keychainNamespaces`. */
+  namespace: string;
+  /** Account/key within the namespace. */
+  account: string;
 }
 export interface KeychainSetParams {
-  key: string;
+  namespace: string;
+  account: string;
   value: string;
+}
+export interface KeychainDeleteParams {
+  namespace: string;
+  account: string;
 }
 
 export interface ClipboardHistoryParams {

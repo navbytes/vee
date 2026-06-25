@@ -49,7 +49,13 @@ public final class AppKitLauncherWindow: NSObject, @MainActor LauncherWindowPres
     private let tableView: NSTableView
     private let listScroll: NSScrollView
     private let detailScroll: NSScrollView
+    private let detailIconView: NSImageView
     private let detailTitleLabel: NSTextField
+    private let detailSubtitleLabel: NSTextField
+    private let detailHeaderText: NSStackView
+    private let detailHeaderStack: NSStackView
+    private let detailHeaderSeparator: NSBox
+    private let detailMetadataStack: NSStackView
     private let detailTextView: NSTextView
     private let detailContainer: NSView
     private let emptyGlyph: NSImageView
@@ -127,11 +133,43 @@ public final class AppKitLauncherWindow: NSObject, @MainActor LauncherWindowPres
         listScroll.contentInsets = NSEdgeInsets(top: 4, left: 0, bottom: 6, right: 0)
         listScroll.documentView = tableView
 
+        detailIconView = NSImageView()
+        detailIconView.translatesAutoresizingMaskIntoConstraints = false
+        detailIconView.imageScaling = .scaleProportionallyUpOrDown
+
         detailTitleLabel = NSTextField(labelWithString: "")
         detailTitleLabel.translatesAutoresizingMaskIntoConstraints = false
         detailTitleLabel.font = .systemFont(ofSize: 16, weight: .semibold)
         detailTitleLabel.textColor = .labelColor
         detailTitleLabel.lineBreakMode = .byTruncatingTail
+
+        detailSubtitleLabel = NSTextField(labelWithString: "")
+        detailSubtitleLabel.translatesAutoresizingMaskIntoConstraints = false
+        detailSubtitleLabel.font = .systemFont(ofSize: 12, weight: .regular)
+        detailSubtitleLabel.textColor = .secondaryLabelColor
+        detailSubtitleLabel.lineBreakMode = .byTruncatingTail
+
+        detailHeaderText = NSStackView(views: [detailTitleLabel, detailSubtitleLabel])
+        detailHeaderText.translatesAutoresizingMaskIntoConstraints = false
+        detailHeaderText.orientation = .vertical
+        detailHeaderText.alignment = .leading
+        detailHeaderText.spacing = 1
+
+        detailHeaderStack = NSStackView(views: [detailIconView, detailHeaderText])
+        detailHeaderStack.translatesAutoresizingMaskIntoConstraints = false
+        detailHeaderStack.orientation = .horizontal
+        detailHeaderStack.alignment = .centerY
+        detailHeaderStack.spacing = 11
+
+        detailHeaderSeparator = NSBox()
+        detailHeaderSeparator.translatesAutoresizingMaskIntoConstraints = false
+        detailHeaderSeparator.boxType = .separator
+
+        detailMetadataStack = NSStackView(views: [])
+        detailMetadataStack.translatesAutoresizingMaskIntoConstraints = false
+        detailMetadataStack.orientation = .vertical
+        detailMetadataStack.alignment = .leading
+        detailMetadataStack.spacing = 6
 
         detailTextView = NSTextView()
         detailTextView.isEditable = false
@@ -150,7 +188,9 @@ public final class AppKitLauncherWindow: NSObject, @MainActor LauncherWindowPres
 
         detailContainer = NSView()
         detailContainer.translatesAutoresizingMaskIntoConstraints = false
-        detailContainer.addSubview(detailTitleLabel)
+        detailContainer.addSubview(detailHeaderStack)
+        detailContainer.addSubview(detailHeaderSeparator)
+        detailContainer.addSubview(detailMetadataStack)
         detailContainer.addSubview(detailScroll)
 
         emptyGlyph = NSImageView()
@@ -259,12 +299,24 @@ public final class AppKitLauncherWindow: NSObject, @MainActor LauncherWindowPres
             detailContainer.topAnchor.constraint(equalTo: headerSeparator.bottomAnchor, constant: 14),
             detailContainer.bottomAnchor.constraint(equalTo: footerSeparator.topAnchor, constant: -10),
 
-            detailTitleLabel.leadingAnchor.constraint(equalTo: detailContainer.leadingAnchor),
-            detailTitleLabel.trailingAnchor.constraint(equalTo: detailContainer.trailingAnchor),
-            detailTitleLabel.topAnchor.constraint(equalTo: detailContainer.topAnchor),
+            detailIconView.widthAnchor.constraint(equalToConstant: 40),
+            detailIconView.heightAnchor.constraint(equalToConstant: 40),
+
+            detailHeaderStack.leadingAnchor.constraint(equalTo: detailContainer.leadingAnchor),
+            detailHeaderStack.trailingAnchor.constraint(equalTo: detailContainer.trailingAnchor),
+            detailHeaderStack.topAnchor.constraint(equalTo: detailContainer.topAnchor),
+
+            detailHeaderSeparator.leadingAnchor.constraint(equalTo: detailContainer.leadingAnchor),
+            detailHeaderSeparator.trailingAnchor.constraint(equalTo: detailContainer.trailingAnchor),
+            detailHeaderSeparator.topAnchor.constraint(equalTo: detailHeaderStack.bottomAnchor, constant: 12),
+
+            detailMetadataStack.leadingAnchor.constraint(equalTo: detailContainer.leadingAnchor),
+            detailMetadataStack.trailingAnchor.constraint(equalTo: detailContainer.trailingAnchor),
+            detailMetadataStack.topAnchor.constraint(equalTo: detailHeaderSeparator.bottomAnchor, constant: 12),
+
             detailScroll.leadingAnchor.constraint(equalTo: detailContainer.leadingAnchor),
             detailScroll.trailingAnchor.constraint(equalTo: detailContainer.trailingAnchor),
-            detailScroll.topAnchor.constraint(equalTo: detailTitleLabel.bottomAnchor, constant: 10),
+            detailScroll.topAnchor.constraint(equalTo: detailMetadataStack.bottomAnchor, constant: 12),
             detailScroll.bottomAnchor.constraint(equalTo: detailContainer.bottomAnchor),
 
             emptyContainer.centerXAnchor.constraint(equalTo: content.centerXAnchor),
@@ -305,8 +357,7 @@ public final class AppKitLauncherWindow: NSObject, @MainActor LauncherWindowPres
             syncTableSelection()
             updateFooter()
         case .detail(let detail):
-            detailTitleLabel.stringValue = detail.title ?? ""
-            detailTextView.string = detail.markdown
+            renderDetail(detail)
             footer.update(icon: nil, primaryTitle: nil, hasItems: false)
         case .empty(let empty):
             emptyTitleLabel.stringValue = empty.title ?? "No Results"
@@ -324,15 +375,127 @@ public final class AppKitLauncherWindow: NSObject, @MainActor LauncherWindowPres
         footer.update(icon: icon, primaryTitle: item?.actions.first?.title, hasItems: !items.isEmpty)
     }
 
+    /// Populate the detail pane: header (icon + title + optional subtitle), a
+    /// hairline, the metadata rail, and the markdown body. Header/metadata
+    /// elements collapse (hide) when their data is absent so a bare detail still
+    /// reads as a clean title + body.
+    private func renderDetail(_ detail: DetailViewModel) {
+        detailTitleLabel.stringValue = detail.title ?? ""
+        // No subtitle field on the view model yet → header stays title-only.
+        detailSubtitleLabel.stringValue = ""
+        detailSubtitleLabel.isHidden = true
+
+        if let hint = detail.icon, !hint.isEmpty {
+            let (image, isRealIcon) = LauncherRowView.resolveIcon(hint)
+            detailIconView.image = image
+            detailIconView.contentTintColor = isRealIcon ? nil : .secondaryLabelColor
+            detailIconView.isHidden = false
+        } else {
+            detailIconView.image = nil
+            detailIconView.isHidden = true
+        }
+
+        rebuildMetadataRows(detail.metadata)
+        detailTextView.string = detail.markdown
+    }
+
+    /// Rebuild the metadata rail's rows from the view model. Each row is a
+    /// label (12pt secondary, right-aligned in a ~90pt column) and a value
+    /// (12pt primary). An empty rail hides the separator+stack so the body sits
+    /// directly under the header.
+    private func rebuildMetadataRows(_ rows: [DetailMetadataRow]) {
+        for view in detailMetadataStack.arrangedSubviews {
+            detailMetadataStack.removeArrangedSubview(view)
+            view.removeFromSuperview()
+        }
+        for row in rows {
+            detailMetadataStack.addArrangedSubview(AppKitLauncherWindow.makeMetadataRow(row))
+        }
+        let hasMetadata = !rows.isEmpty
+        detailMetadataStack.isHidden = !hasMetadata
+        detailHeaderSeparator.isHidden = !hasMetadata
+    }
+
+    /// One label/value metadata row. Label gets a fixed ~90pt right-aligned
+    /// column so values line up into a tidy left edge.
+    private static func makeMetadataRow(_ row: DetailMetadataRow) -> NSView {
+        let label = NSTextField(labelWithString: row.label)
+        label.translatesAutoresizingMaskIntoConstraints = false
+        label.font = .systemFont(ofSize: 12, weight: .regular)
+        label.textColor = .secondaryLabelColor
+        label.alignment = .right
+        label.lineBreakMode = .byTruncatingTail
+        label.setContentHuggingPriority(.required, for: .horizontal)
+
+        let value = NSTextField(labelWithString: row.value)
+        value.translatesAutoresizingMaskIntoConstraints = false
+        value.font = .systemFont(ofSize: 12, weight: .regular)
+        value.textColor = .labelColor
+        value.lineBreakMode = .byTruncatingTail
+        value.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+
+        let rowView = NSView()
+        rowView.translatesAutoresizingMaskIntoConstraints = false
+        rowView.addSubview(label)
+        rowView.addSubview(value)
+        NSLayoutConstraint.activate([
+            label.leadingAnchor.constraint(equalTo: rowView.leadingAnchor),
+            label.topAnchor.constraint(equalTo: rowView.topAnchor),
+            label.bottomAnchor.constraint(equalTo: rowView.bottomAnchor),
+            label.widthAnchor.constraint(equalToConstant: 90),
+            value.leadingAnchor.constraint(equalTo: label.trailingAnchor, constant: 12),
+            value.trailingAnchor.constraint(equalTo: rowView.trailingAnchor),
+            value.centerYAnchor.constraint(equalTo: label.centerYAnchor),
+        ])
+        return rowView
+    }
+
     public func showLauncher() {
         searchField.stringValue = ""   // always open on a fresh query
         layoutAndCenter()
+
+        // Capture the centered (final) frame, then start 6pt lower so the panel
+        // settles upward as it fades in — a fast, subtle entrance (~0.12s).
+        let finalFrame = panel.frame
+        let startFrame = finalFrame.offsetBy(dx: 0, dy: -6)
+
+        panel.alphaValue = 0
+        panel.setFrame(startFrame, display: false)
+
+        // Subtle ~0.98→1.0 scale-in on the layer-backed content view. AppKit owns
+        // the backing layer's anchorPoint/position, so instead of moving the
+        // anchor we scale about the layer's center explicitly (translate to
+        // center → scale → translate back). That keeps the panel from shifting.
+        let contentLayer = panel.contentView?.layer
+        if let contentLayer {
+            let mid = CGPoint(x: contentLayer.bounds.midX, y: contentLayer.bounds.midY)
+            var t = CATransform3DMakeTranslation(mid.x, mid.y, 0)
+            t = CATransform3DScale(t, 0.98, 0.98, 1)
+            contentLayer.transform = CATransform3DTranslate(t, -mid.x, -mid.y, 0)
+        }
+
         panel.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
+        // Focus immediately so typing works during the fade (non-blocking).
         panel.makeFirstResponder(searchField)
+
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = 0.12
+            context.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            context.allowsImplicitAnimation = true
+            panel.animator().alphaValue = 1
+            panel.animator().setFrame(finalFrame, display: true)
+            contentLayer?.transform = CATransform3DIdentity
+        }
     }
 
-    public func hideLauncher() { panel.orderOut(nil) }
+    /// Hide is immediate (no fade) — the launcher should vanish the instant the
+    /// user dismisses it. Reset alpha so the next show starts from a clean state.
+    public func hideLauncher() {
+        panel.orderOut(nil)
+        panel.alphaValue = 1
+        panel.contentView?.layer?.transform = CATransform3DIdentity
+    }
 
     // MARK: - Pane visibility
 
@@ -428,7 +591,8 @@ extension AppKitLauncherWindow: NSTableViewDataSource, NSTableViewDelegate {
             as? LauncherRowView) ?? LauncherRowView()
         cell.identifier = AppKitLauncherWindow.rowColumnID
         cell.configure(title: item.title, subtitle: item.subtitle, icon: item.icon,
-                       accessory: item.accessoryText, shortcut: item.actions.first?.shortcut)
+                       accessory: item.accessoryText, shortcut: item.actions.first?.shortcut,
+                       matchedIndices: item.matchedIndices)
         return cell
     }
 
@@ -559,8 +723,10 @@ final class LauncherRowView: NSTableCellView {
         ])
     }
 
-    func configure(title: String, subtitle: String?, icon: String?, accessory: String?, shortcut: String?) {
-        titleLabel.stringValue = title
+    func configure(title: String, subtitle: String?, icon: String?, accessory: String?,
+                   shortcut: String?, matchedIndices: [Int] = []) {
+        titleLabel.attributedStringValue =
+            LauncherRowView.highlightedTitle(title, matchedIndices: matchedIndices)
         subtitleLabel.stringValue = subtitle ?? ""
         subtitleLabel.isHidden = (subtitle?.isEmpty ?? true)
         accessoryLabel.stringValue = accessory ?? shortcut ?? ""
@@ -591,6 +757,37 @@ final class LauncherRowView: NSTableCellView {
             }
         }
         return (NSImage(systemSymbolName: "app.dashed", accessibilityDescription: nil), false)
+    }
+
+    /// Render the row title with fuzzy-matched characters accent-tinted +
+    /// semibold and the rest in `labelColor`/medium (the row's normal weight).
+    /// Empty indices (no query / no match) → a plain medium `labelColor` title,
+    /// visually identical to the pre-highlight look. Out-of-range indices are
+    /// ignored so a stale match position can never crash or mis-bold.
+    static func highlightedTitle(_ title: String, matchedIndices: [Int]) -> NSAttributedString {
+        let base = NSFont.systemFont(ofSize: UI.titleFont, weight: .medium)
+        let attributed = NSMutableAttributedString(string: title, attributes: [
+            .font: base,
+            .foregroundColor: NSColor.labelColor,
+        ])
+        guard !matchedIndices.isEmpty else { return attributed }
+
+        let emphasis = NSFont.systemFont(ofSize: UI.titleFont, weight: .semibold)
+        let chars = Array(title)
+        for index in matchedIndices where index >= 0 && index < chars.count {
+            // Map the character offset onto the string's UTF-16 range so the
+            // attribute lands on the right glyph even with multi-unit scalars.
+            let start = title.utf16.index(title.utf16.startIndex, offsetBy: index)
+            guard let lower = start.samePosition(in: title),
+                  lower < title.endIndex else { continue }
+            let upper = title.index(after: lower)
+            let range = NSRange(lower..<upper, in: title)
+            attributed.addAttributes([
+                .font: emphasis,
+                .foregroundColor: NSColor.controlAccentColor,
+            ], range: range)
+        }
+        return attributed
     }
 }
 
@@ -637,8 +834,14 @@ final class LauncherFooterView: NSView {
     private let iconView = NSImageView()
     private let primaryLabel = NSTextField(labelWithString: "")
     private let returnCap = KeyCapView("↩")
+    /// Muted contextual hint shown on the left when there's no selectable primary
+    /// action (empty / detail / none) — keeps the bar from reading half-empty.
+    private let hintLabel = NSTextField(labelWithString: "")
     private let actionsLabel = NSTextField(labelWithString: "Actions")
     private let actionsCap = KeyCapView("⌘K")
+
+    /// Wordmark shown when no primary action is selectable. Quiet, not a CTA.
+    static let idleHint = "Vee"
 
     override init(frame frameRect: NSRect) { super.init(frame: frameRect); build() }
     required init?(coder: NSCoder) { super.init(coder: coder); build() }
@@ -654,9 +857,17 @@ final class LauncherFooterView: NSView {
         primaryLabel.textColor = .secondaryLabelColor
         actionsLabel.textColor = .tertiaryLabelColor
 
+        hintLabel.translatesAutoresizingMaskIntoConstraints = false
+        // Slightly heavier than the actions hint so the wordmark reads as a quiet
+        // brand mark, but still muted (tertiary) so it never competes with "Open".
+        hintLabel.font = .systemFont(ofSize: 12, weight: .medium)
+        hintLabel.textColor = .tertiaryLabelColor
+        hintLabel.isHidden = true
+
         addSubview(iconView)
         addSubview(primaryLabel)
         addSubview(returnCap)
+        addSubview(hintLabel)
         addSubview(actionsCap)
         addSubview(actionsLabel)
 
@@ -671,6 +882,10 @@ final class LauncherFooterView: NSView {
             returnCap.leadingAnchor.constraint(equalTo: primaryLabel.trailingAnchor, constant: 7),
             returnCap.centerYAnchor.constraint(equalTo: centerYAnchor),
 
+            // Hint sits on the shared gutter, same baseline as the primary block.
+            hintLabel.leadingAnchor.constraint(equalTo: leadingAnchor, constant: UI.gutter - 4),
+            hintLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
+
             actionsCap.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -16),
             actionsCap.centerYAnchor.constraint(equalTo: centerYAnchor),
             actionsLabel.trailingAnchor.constraint(equalTo: actionsCap.leadingAnchor, constant: -7),
@@ -678,13 +893,21 @@ final class LauncherFooterView: NSView {
         ])
     }
 
-    func update(icon: NSImage?, primaryTitle: String?, hasItems: Bool) {
-        iconView.image = icon
-        iconView.isHidden = (icon == nil)
-        primaryLabel.stringValue = primaryTitle ?? (hasItems ? "Open" : "")
+    /// `hint` is the muted left-side text shown when there's no primary action;
+    /// defaults to the `Vee` wordmark. The "Actions ⌘K" cluster on the right is
+    /// always visible and untouched here.
+    func update(icon: NSImage?, primaryTitle: String?, hasItems: Bool,
+                hint: String = LauncherFooterView.idleHint) {
         let showPrimary = (primaryTitle != nil) || hasItems
+        iconView.image = icon
+        iconView.isHidden = (icon == nil) || !showPrimary
+        primaryLabel.stringValue = primaryTitle ?? (hasItems ? "Open" : "")
         primaryLabel.isHidden = !showPrimary
         returnCap.isHidden = !showPrimary
+        // No selectable primary action → show the contextual hint instead of a
+        // blank left half.
+        hintLabel.stringValue = hint
+        hintLabel.isHidden = showPrimary || hint.isEmpty
     }
 }
 

@@ -53,19 +53,39 @@ public struct ListItemViewModel: Equatable, Identifiable, Sendable {
     /// Right-aligned secondary text (e.g. the result type, "Application").
     public var accessoryText: String?
     public var actions: [ActionViewModel]
+    /// Character positions in `title` that matched the current query, for
+    /// highlighting. Empty when there's no active query/match (→ plain title).
+    /// Threaded in by the coordinator from `ScoredCandidate.matchedIndices`.
+    public var matchedIndices: [Int]
     public init(id: String, title: String, subtitle: String? = nil,
                 icon: String? = nil, accessoryText: String? = nil,
-                actions: [ActionViewModel] = []) {
+                actions: [ActionViewModel] = [], matchedIndices: [Int] = []) {
         self.id = id; self.title = title; self.subtitle = subtitle
         self.icon = icon; self.accessoryText = accessoryText; self.actions = actions
+        self.matchedIndices = matchedIndices
+    }
+}
+
+/// One label/value pair in a detail pane's metadata rail (e.g. "Size" → "4.2 MB").
+public struct DetailMetadataRow: Equatable, Sendable {
+    public var label: String
+    public var value: String
+    public init(label: String, value: String) {
+        self.label = label; self.value = value
     }
 }
 
 public struct DetailViewModel: Equatable, Sendable {
     public var title: String?
     public var markdown: String
-    public init(title: String?, markdown: String) {
+    /// Optional icon hint shown in the detail header (SF Symbol / path / URL).
+    public var icon: String?
+    /// Label/value rows shown in the metadata rail above the body. Default [].
+    public var metadata: [DetailMetadataRow]
+    public init(title: String?, markdown: String,
+                icon: String? = nil, metadata: [DetailMetadataRow] = []) {
         self.title = title; self.markdown = markdown
+        self.icon = icon; self.metadata = metadata
     }
 }
 
@@ -158,7 +178,21 @@ public enum ViewModelProjector {
             // Accept either `markdown` or `value` so a plain text detail still projects.
             markdown: node.props["markdown"]?.stringValue
                 ?? node.props["value"]?.stringValue
-                ?? "")
+                ?? "",
+            icon: node.props["icon"]?.stringValue,
+            metadata: metadataRows(from: node.props["metadata"]))
+    }
+
+    /// Parse a `metadata` prop into label/value rows. The wire shape is an array
+    /// of objects `{label, value}`; both must be strings. Rows missing either
+    /// field are skipped (forward-compatible). Anything but an array → no rows.
+    public static func metadataRows(from value: JSONValue?) -> [DetailMetadataRow] {
+        guard let entries = value?.arrayValue else { return [] }
+        return entries.compactMap { entry in
+            guard let label = entry["label"]?.stringValue,
+                  let value = entry["value"]?.stringValue else { return nil }
+            return DetailMetadataRow(label: label, value: value)
+        }
     }
 
     public static func emptyViewModel(from node: RenderNode) -> EmptyViewModel {

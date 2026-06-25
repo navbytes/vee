@@ -1,0 +1,10 @@
+{
+  "name": "@vee-sample/meetings",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Sample Vee plugin: upcoming calendar meetings via vee.calendar + vee.open.",
+  "dependencies": {
+    "@vee/sdk": "*"
+  }
+}

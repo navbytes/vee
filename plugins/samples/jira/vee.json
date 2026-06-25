@@ -1,0 +1,22 @@
+{
+  "id": "com.vee.jira",
+  "name": "Jira Issues",
+  "version": "0.1.0",
+  "entrypoint": "../../dist/com.vee.jira.js",
+  "commands": [
+    {
+      "name": "view",
+      "title": "Jira Issues",
+      "subtitle": "Issues assigned to you",
+      "mode": "view"
+    }
+  ],
+  "capabilities": {
+    "network": [".atlassian.net"],
+    "filesystem": [],
+    "clipboard": false,
+    "calendar": false,
+    "keychainNamespaces": ["jira"],
+    "hotkeyActions": []
+  }
+}

@@ -272,6 +272,41 @@ final class JSBridge {
         keychain.setObject(unsafeBitCast(keychainDelete, to: AnyObject.self), forKeyedSubscript: "delete" as NSString)
         vee.setObject(keychain, forKeyedSubscript: "keychain" as NSString)
 
+        // open(url) / openApp(bundleId) → Promise<void>. NOT capability-gated
+        // (opening is a core launcher action; the frozen Capabilities has no flag
+        // for it — see handleOpen). Backed by the injected OpenProviding.
+        let open: @convention(block) (JSValue) -> JSValue? = { [weak self] url in
+            self?.handleOpen(url: url)
+        }
+        vee.setObject(unsafeBitCast(open, to: AnyObject.self), forKeyedSubscript: "open" as NSString)
+        let openApp: @convention(block) (JSValue) -> JSValue? = { [weak self] bundleId in
+            self?.handleOpenApp(bundleId: bundleId)
+        }
+        vee.setObject(unsafeBitCast(openApp, to: AnyObject.self), forKeyedSubscript: "openApp" as NSString)
+
+        // fs.read(path) → Promise<string> / fs.write(path, contents) → Promise<void>.
+        // Capability-gated by Capabilities.filesystem (the path must canonicalize
+        // under a declared root; traversal → capabilityDenied). Backed by FileProviding.
+        let fs = JSValue(newObjectIn: context)!
+        let fsRead: @convention(block) (JSValue) -> JSValue? = { [weak self] path in
+            self?.handleFileRead(path: path)
+        }
+        let fsWrite: @convention(block) (JSValue, JSValue) -> JSValue? = { [weak self] path, contents in
+            self?.handleFileWrite(path: path, contents: contents)
+        }
+        fs.setObject(unsafeBitCast(fsRead, to: AnyObject.self), forKeyedSubscript: "read" as NSString)
+        fs.setObject(unsafeBitCast(fsWrite, to: AnyObject.self), forKeyedSubscript: "write" as NSString)
+        vee.setObject(fs, forKeyedSubscript: "fs" as NSString)
+
+        // calendar.upcoming() → Promise<CalendarEvent[]>. Capability-gated by
+        // Capabilities.calendar. Backed by the injected CalendarProviding.
+        let calendar = JSValue(newObjectIn: context)!
+        let calendarUpcoming: @convention(block) () -> JSValue? = { [weak self] in
+            self?.handleCalendarUpcoming()
+        }
+        calendar.setObject(unsafeBitCast(calendarUpcoming, to: AnyObject.self), forKeyedSubscript: "upcoming" as NSString)
+        vee.setObject(calendar, forKeyedSubscript: "calendar" as NSString)
+
         context.setObject(vee, forKeyedSubscript: "vee" as NSString)
     }
 
@@ -581,6 +616,144 @@ final class JSBridge {
         return keychainPromise(namespace: namespace, in: ctx, instance: instance) { ns in
             try instance.keychainDelete(namespace: ns, account: acct)
             return JSValue(undefinedIn: ctx)
+        }
+    }
+
+    // MARK: - open / openApp (NOT capability-gated)
+
+    /// `vee.open(url)`. NOTE: deliberately NOT capability-gated. Opening a URL or
+    /// file in the default handler is a core launcher action — the launcher's
+    /// entire purpose is to open things — and the frozen `Capabilities` has no
+    /// flag to gate it against (no "open"/launch capability exists). We therefore
+    /// forward straight to the injected `OpenProviding`, which the app backs with
+    /// `NSWorkspace`. (Contrast fetch/fs/calendar, each gated by a manifest flag.)
+    private func handleOpen(url: JSValue) -> JSValue? {
+        guard let ctx = JSContext.current(), let instance else { return nil }
+        let urlString = url.toString() ?? ""
+        return PromiseFactory.make(in: ctx) { resolve, reject in
+            instance.performOpen(url: urlString) { result in
+                instance.runOnQueue {
+                    switch result {
+                    case .success:
+                        resolve(JSValue(undefinedIn: ctx))
+                    case .failure(let error):
+                        let code = (error as? JSONRPCError)?.code ?? -32000
+                        reject(JSBridge.errorValue(in: ctx, code: code, message: "\(error)"))
+                    }
+                    instance.drainMicrotasks()
+                }
+            }
+        }
+    }
+
+    /// `vee.openApp(bundleId)`. Same rationale as `handleOpen` — not gated.
+    private func handleOpenApp(bundleId: JSValue) -> JSValue? {
+        guard let ctx = JSContext.current(), let instance else { return nil }
+        let bid = bundleId.toString() ?? ""
+        return PromiseFactory.make(in: ctx) { resolve, reject in
+            instance.performOpenApp(bundleId: bid) { result in
+                instance.runOnQueue {
+                    switch result {
+                    case .success:
+                        resolve(JSValue(undefinedIn: ctx))
+                    case .failure(let error):
+                        let code = (error as? JSONRPCError)?.code ?? -32000
+                        reject(JSBridge.errorValue(in: ctx, code: code, message: "\(error)"))
+                    }
+                    instance.drainMicrotasks()
+                }
+            }
+        }
+    }
+
+    // MARK: - fs.read / fs.write (capability-gated by Capabilities.filesystem)
+
+    private func handleFileRead(path: JSValue) -> JSValue? {
+        guard let ctx = JSContext.current(), let instance else { return nil }
+        let rawPath = path.toString() ?? ""
+        return PromiseFactory.make(in: ctx) { resolve, reject in
+            // Capability gate: canonicalize + confine to a declared root. A path
+            // outside the roots (or `filesystem: []`) is rejected WITHOUT touching
+            // the provider.
+            guard let confined = instance.resolveConfinedPath(rawPath) else {
+                instance.runOnQueue {
+                    let err = JSONRPCError.capabilityDenied("filesystem path not allowed: \(rawPath)")
+                    reject(JSBridge.errorValue(in: ctx, code: err.code, message: err.message))
+                    instance.drainMicrotasks()
+                }
+                return
+            }
+            instance.performFileRead(path: confined) { result in
+                instance.runOnQueue {
+                    switch result {
+                    case .success(let text):
+                        resolve(JSValue(object: text, in: ctx))
+                    case .failure(let error):
+                        let code = (error as? JSONRPCError)?.code ?? -32000
+                        reject(JSBridge.errorValue(in: ctx, code: code, message: "\(error)"))
+                    }
+                    instance.drainMicrotasks()
+                }
+            }
+        }
+    }
+
+    private func handleFileWrite(path: JSValue, contents: JSValue) -> JSValue? {
+        guard let ctx = JSContext.current(), let instance else { return nil }
+        let rawPath = path.toString() ?? ""
+        let text = contents.toString() ?? ""
+        return PromiseFactory.make(in: ctx) { resolve, reject in
+            guard let confined = instance.resolveConfinedPath(rawPath) else {
+                instance.runOnQueue {
+                    let err = JSONRPCError.capabilityDenied("filesystem path not allowed: \(rawPath)")
+                    reject(JSBridge.errorValue(in: ctx, code: err.code, message: err.message))
+                    instance.drainMicrotasks()
+                }
+                return
+            }
+            instance.performFileWrite(path: confined, contents: text) { result in
+                instance.runOnQueue {
+                    switch result {
+                    case .success:
+                        resolve(JSValue(undefinedIn: ctx))
+                    case .failure(let error):
+                        let code = (error as? JSONRPCError)?.code ?? -32000
+                        reject(JSBridge.errorValue(in: ctx, code: code, message: "\(error)"))
+                    }
+                    instance.drainMicrotasks()
+                }
+            }
+        }
+    }
+
+    // MARK: - calendar.upcoming (capability-gated by Capabilities.calendar)
+
+    private func handleCalendarUpcoming() -> JSValue? {
+        guard let ctx = JSContext.current(), let instance else { return nil }
+        return PromiseFactory.make(in: ctx) { resolve, reject in
+            // Capability gate: reject WITHOUT touching the provider when the
+            // manifest does not grant calendar.
+            guard instance.capabilities.calendar else {
+                instance.runOnQueue {
+                    let err = JSONRPCError.capabilityDenied("calendar not allowed")
+                    reject(JSBridge.errorValue(in: ctx, code: err.code, message: err.message))
+                    instance.drainMicrotasks()
+                }
+                return
+            }
+            instance.performCalendarUpcoming { result in
+                instance.runOnQueue {
+                    switch result {
+                    case .success(let events):
+                        let value = (try? JSONValueCoder.encode(events)) ?? .array([])
+                        resolve(JSONBridge.toJSValue(value, in: ctx))
+                    case .failure(let error):
+                        let code = (error as? JSONRPCError)?.code ?? -32000
+                        reject(JSBridge.errorValue(in: ctx, code: code, message: "\(error)"))
+                    }
+                    instance.drainMicrotasks()
+                }
+            }
         }
     }
 

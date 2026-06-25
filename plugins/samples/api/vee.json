@@ -1,0 +1,22 @@
+{
+  "id": "com.vee.api",
+  "name": "API Monitor",
+  "version": "0.1.0",
+  "entrypoint": "../../dist/com.vee.api.js",
+  "commands": [
+    {
+      "name": "view",
+      "title": "API Monitor",
+      "subtitle": "Fetch a JSON endpoint and list the result",
+      "mode": "view"
+    }
+  ],
+  "capabilities": {
+    "network": ["api.github.com"],
+    "filesystem": [],
+    "clipboard": false,
+    "calendar": false,
+    "keychainNamespaces": [],
+    "hotkeyActions": []
+  }
+}

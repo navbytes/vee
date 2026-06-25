@@ -71,6 +71,11 @@ public final class AppCoordinator {
     private var candidates: [Candidate] = []
     /// The natively-filtered candidates for the current query.
     public private(set) var visibleCandidates: [Candidate] = []
+    /// Matched character positions per visible candidate id (from
+    /// `ScoredCandidate.matchedIndices`), used to highlight the result title.
+    /// Empty for the no-query pass (plain titles). Keyed by candidate id so it
+    /// survives the candidate→list-item projection without index coupling.
+    private var matchedIndicesByID: [String: [Int]] = [:]
 
     /// Host-native "root search" mode (no plugin). When on, `visibleCandidates`
     /// are projected directly into the list surface and activating a row calls
@@ -269,12 +274,20 @@ public final class AppCoordinator {
 
     public var currentQuery: String { query }
 
-    /// Re-run the native fuzzy filter over the held candidate set.
+    /// Re-run the native fuzzy filter over the held candidate set. Keeps the
+    /// scored results (NOT just `.candidate`) so match positions survive into the
+    /// projected items for title highlighting.
     private func refilter() {
         if query.isEmpty {
+            // No query → all candidates in input order, plain titles (no indices).
             visibleCandidates = candidates
+            matchedIndicesByID = [:]
         } else {
-            visibleCandidates = fuzzy.match(query: query, in: candidates).map(\.candidate)
+            let scored = fuzzy.match(query: query, in: candidates)
+            visibleCandidates = scored.map(\.candidate)
+            matchedIndicesByID = Dictionary(
+                scored.map { ($0.candidate.id, $0.matchedIndices) },
+                uniquingKeysWith: { first, _ in first })
         }
         if hostCandidateMode { projectHostCandidates() }
     }
@@ -289,7 +302,8 @@ public final class AppCoordinator {
                 accessoryText: hostAccessory,
                 actions: c.actions.isEmpty
                     ? [ActionViewModel(actionId: Self.builtinActionId, title: "Open")]
-                    : c.actions.map { ActionViewModel(actionId: $0.id, title: $0.title, shortcut: $0.shortcut) })
+                    : c.actions.map { ActionViewModel(actionId: $0.id, title: $0.title, shortcut: $0.shortcut) },
+                matchedIndices: matchedIndicesByID[c.id] ?? [])
         }
         // No matches → a proper empty state, never a section header with zero
         // rows (which reads as a bug). Only when there's an active query, though:
