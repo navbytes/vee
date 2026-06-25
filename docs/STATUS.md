@@ -53,6 +53,37 @@ instant open, keyboard-first (type / ↑↓ / ↩ / esc). App search → **runna
 presentational (no actions panel yet); commands/clipboard/calendar have no launcher
 *surface* yet; the three networked JS plugins; the real out-of-process transport.
 
+---
+
+## Update — Phase D, 2026-06-26: UX-reviewed polish + first plugins
+
+**UX polish (autonomous, via a hired UX-expert agent + Dribbble/web research):** three
+critique cycles, each verified by reading offscreen renders of every screen
+(list / filtered / empty / detail / light+dark). Cycle 1 (5.8/10) → fixed row
+density (48→40), accent-tinted floating selection, removed the redundant
+"Application" accessory, glyph empty state, type ramp, 20pt gutter, key-cap
+footer. Cycle 2 (7.8) → fixed inverted light-mode key caps, cap parity, selection
+inset/saturation. Cycle 3 → **independent ship-bar sign-off at 8.6/10 ("Raycast-grade,
+ship it")**. Backlog (non-gating): fuzzy match-highlighting, detail metadata rail.
+
+**First plugins (`@vee/sdk`):** `essentials` (static command list), `hacker-news`
+(`vee.http.fetch`, public API), `clipboard` (`vee.clipboard`). Built to committed
+fixtures; each **proven by VeeEngine tests** that load the bundle in real JSC with
+faked bridges and assert load→activate→render (incl. capability-deny paths), plus
+node tests. **Surfaced in the launcher root** — their commands list above the apps
+(⌥Space → select → ↩ activates the plugin, which renders into the launcher). Also
+fixed a real `LoopbackTransport` re-entrancy crash found while wiring them.
+
+**Verified:** 155 Swift tests + 19 node tests green; release build clean; the app
+loads all 3 plugins at startup and runs crash-free; the live plugin render and the
+root-with-commands are captured in `docs/screenshots/`. App packaged to
+`~/Applications/Vee.app` with plugin bundles in `Resources/vee-plugins/`.
+
+**Still deferred (feature scope):** an `open URL` / `run` bridge so plugin actions
+can act on their targets; a live `vee.clipboard` provider wired into the app host
+(proven against a fake in tests); the GitHub/Jira networked plugins; the real
+out-of-process transport.
+
 *The original Wave-3 audit below is preserved as written (pre-Phase-B).*
 
 ## TL;DR verdict

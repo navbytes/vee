@@ -42,10 +42,32 @@ VEE_SNAPSHOT_OUT=/tmp/vee.png VEE_SNAPSHOT_DARK=0 swift run vee   # light
 VEE_SNAPSHOT_OUT=/tmp/vee.png VEE_SNAPSHOT_QUERY=saf swift run vee  # filtered
 ```
 
-Committed reference renders: [`docs/screenshots/launcher-dark.png`](screenshots/launcher-dark.png),
-`launcher-light.png`, `launcher-filtered.png` — real app icons, an
-"APPLICATIONS" section header, a right-aligned "Application" type accessory, a
-rounded neutral selection, and a footer (selected icon + Launch ↩ + Actions ⌘K).
+Committed reference renders in [`docs/screenshots/`](screenshots/): `launcher-dark.png`
+/ `launcher-light.png` (app list), `launcher-root-commands.png` (plugin commands +
+apps in the root), `launcher-plugin.png` (a plugin rendering in the launcher), and
+`launcher-empty.png` — real app icons, accent-tinted floating selection, key-cap
+footer (↩ / ⌘K). The launcher UI passed an independent UX review at 8.6/10
+("Raycast-grade, ship it").
+
+## Plugins
+
+Three plugins ship as `@vee/sdk` bundles (`plugins/samples/`, built to
+`plugins/fixtures/*.bundle.js`, bundled into the app at `Resources/vee-plugins/`):
+
+| Plugin | Bridge | What it does |
+|---|---|---|
+| **Essentials** | none | Static command list (Search Files, Clipboard History, Calculator, …) |
+| **Hacker News** | `vee.http.fetch` | Live top stories from the public HN API |
+| **Clipboard History** | `vee.clipboard` | Recent privacy-filtered clipboard items; ↩ copies |
+
+They appear at the top of the launcher root (⌥Space → they're listed above your
+apps); selecting one and pressing ↩ activates the plugin, which renders its list
+in the launcher. Each is proven by VeeEngine tests (load → activate → render in
+real JSC with faked bridges) and node tests. **Backlog:** an `open URL` / `run`
+bridge (so a Hacker News story or an Essentials command can actually open its
+target), and wiring the live `vee.clipboard` provider into the app host (today the
+Clipboard plugin renders live only if a `ClipboardProviding` is injected — it's
+proven against a fake in tests).
 
 ## Known limitations in this build (by design / follow-ups)
 
