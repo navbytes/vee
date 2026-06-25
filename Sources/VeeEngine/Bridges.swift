@@ -1,5 +1,6 @@
 import Foundation
 import VeeProtocol
+import VeeKeychain
 
 // MARK: - Clock
 
@@ -216,6 +217,87 @@ public final class ManualFileWatcher: FileWatcher {
     public func fire(pluginId: String) { handlers[pluginId]?(pluginId) }
 }
 
+/// Production file watcher backed by `DispatchSource.makeFileSystemObjectSource`.
+///
+/// For each watched plugin it opens a file descriptor on the plugin's bundle
+/// file (or directory) — resolved via the injected `pathForPlugin` closure — and
+/// arms a vnode dispatch source for write/extend/delete/rename/link/revoke
+/// events. On any such event it invokes the registered reload callback on its
+/// own serial queue.
+///
+/// Atomic-save handling: many editors and `bundle.mjs` write a new file and
+/// rename it over the old one, which fires `.delete`/`.rename` and invalidates
+/// the original fd. On those events we fire the callback AND re-arm by reopening
+/// the path, so subsequent edits keep being observed. This impl is logic-light
+/// and not unit-tested (it touches the real filesystem + GCD); the hot-reload
+/// pipeline itself is covered via `ManualFileWatcher`.
+public final class FSEventsFileWatcher: FileWatcher {
+    /// Resolve a plugin id to the absolute path to watch (its built bundle file
+    /// or containing directory).
+    private let pathForPlugin: (String) -> String
+    private let queue = DispatchQueue(label: "vee.engine.filewatcher")
+
+    private struct Watch {
+        var source: DispatchSourceFileSystemObject
+        var fileDescriptor: Int32
+        var onChange: (String) -> Void
+        var path: String
+    }
+    private var watches: [String: Watch] = [:]
+
+    public init(pathForPlugin: @escaping (String) -> String) {
+        self.pathForPlugin = pathForPlugin
+    }
+
+    public func watch(pluginId: String, _ onChange: @escaping (String) -> Void) {
+        queue.async { [weak self] in
+            self?.arm(pluginId: pluginId, path: self?.pathForPlugin(pluginId) ?? "", onChange: onChange)
+        }
+    }
+
+    public func unwatch(pluginId: String) {
+        queue.async { [weak self] in
+            self?.disarm(pluginId: pluginId)
+        }
+    }
+
+    // MUST run on `queue`.
+    private func arm(pluginId: String, path: String, onChange: @escaping (String) -> Void) {
+        disarm(pluginId: pluginId)   // idempotent re-arm
+        let fd = open(path, O_EVTONLY)
+        guard fd >= 0 else { return }   // path not present yet; caller may retry on next watch()
+        let source = DispatchSource.makeFileSystemObjectSource(
+            fileDescriptor: fd,
+            eventMask: [.write, .extend, .delete, .rename, .link, .revoke],
+            queue: queue)
+        source.setEventHandler { [weak self] in
+            guard let self else { return }
+            let flags = source.data
+            onChange(pluginId)
+            // On delete/rename/revoke the fd is stale — reopen so future edits
+            // (atomic saves) keep firing.
+            if !flags.intersection([.delete, .rename, .revoke]).isEmpty {
+                self.arm(pluginId: pluginId, path: path, onChange: onChange)
+            }
+        }
+        source.setCancelHandler { close(fd) }
+        watches[pluginId] = Watch(source: source, fileDescriptor: fd, onChange: onChange, path: path)
+        source.resume()
+    }
+
+    // MUST run on `queue`.
+    private func disarm(pluginId: String) {
+        if let existing = watches.removeValue(forKey: pluginId) {
+            existing.source.cancel()   // cancel handler closes the fd
+        }
+    }
+
+    deinit {
+        // Cancel any live sources so their fds close.
+        for (_, w) in watches { w.source.cancel() }
+    }
+}
+
 // MARK: - Bundler
 
 /// Injectable bundler that (re)produces a plugin's single-file IIFE JS bundle.
@@ -232,4 +314,172 @@ public final class StaticBundler: Bundler {
     public var source: String
     public init(source: String) { self.source = source }
     public func build(pluginId: String) throws -> String { source }
+}
+
+/// Production bundler that shells out to esbuild via the repo's `bundle.mjs`.
+///
+/// Runs `node <workingDir>/bundle.mjs --once` from `workingDir` (the repo's
+/// `plugins/` directory by default), which performs one incremental build of
+/// every sample plugin and writes `dist/<pluginId>.js`. On success it reads and
+/// returns that file's contents (the single-file IIFE the host evaluates).
+///
+/// This is logic-light and not unit-tested (it spawns `node` and touches the
+/// filesystem); the reload pipeline that consumes a `Bundler` is covered via
+/// `StaticBundler`. Build failures throw a `JSONRPCError.internalError` carrying
+/// `bundle.mjs`'s captured stderr so the host can surface a clear message.
+public final class EsbuildBundler: Bundler {
+    /// Directory containing `bundle.mjs` and the `dist/` output (the repo's
+    /// `plugins/` dir).
+    private let workingDirectory: URL
+    /// `node` (or a custom path/interpreter).
+    private let nodeExecutable: String
+    /// Bundler script name, relative to `workingDirectory`.
+    private let scriptName: String
+
+    public init(workingDirectory: URL,
+                nodeExecutable: String = "/usr/bin/env",
+                scriptName: String = "bundle.mjs") {
+        self.workingDirectory = workingDirectory
+        self.nodeExecutable = nodeExecutable
+        self.scriptName = scriptName
+    }
+
+    public func build(pluginId: String) throws -> String {
+        let process = Process()
+        process.currentDirectoryURL = workingDirectory
+        process.executableURL = URL(fileURLWithPath: nodeExecutable)
+        // `/usr/bin/env node bundle.mjs --once` — `env` resolves node on PATH.
+        if nodeExecutable.hasSuffix("/env") {
+            process.arguments = ["node", scriptName, "--once"]
+        } else {
+            process.arguments = [scriptName, "--once"]
+        }
+
+        let stderrPipe = Pipe()
+        let stdoutPipe = Pipe()
+        process.standardError = stderrPipe
+        process.standardOutput = stdoutPipe
+
+        do {
+            try process.run()
+        } catch {
+            throw JSONRPCError.internalError("EsbuildBundler: failed to launch node: \(error)")
+        }
+        // Drain stdout/stderr to avoid deadlocking on a full pipe buffer.
+        let errData = stderrPipe.fileHandleForReading.readDataToEndOfFile()
+        _ = stdoutPipe.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit()
+
+        guard process.terminationStatus == 0 else {
+            let stderr = String(decoding: errData, as: UTF8.self)
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            throw JSONRPCError.internalError(
+                "EsbuildBundler: build failed for \(pluginId) (exit \(process.terminationStatus)): \(stderr)")
+        }
+
+        let outfile = workingDirectory
+            .appendingPathComponent("dist")
+            .appendingPathComponent("\(pluginId).js")
+        do {
+            return try String(contentsOf: outfile, encoding: .utf8)
+        } catch {
+            throw JSONRPCError.internalError(
+                "EsbuildBundler: build succeeded but no bundle at \(outfile.path): \(error)")
+        }
+    }
+}
+
+// MARK: - ClipboardProviding
+
+/// Injectable host-native clipboard service backing `vee.clipboard.*`. Production
+/// wires this to the app's clipboard-history store (NSPasteboard-backed); tests
+/// use a fake returning canned items. The completion is invoked synchronously by
+/// the in-memory/test impls; the bridge always hops back to the instance's serial
+/// queue to settle the JS Promise (and drain microtasks) regardless.
+///
+/// `AnyObject`/class-bound to match the other engine providers (`HTTPClient`,
+/// `StorageBackend`) — the bridge holds it via the instance and never copies it.
+public protocol ClipboardProviding: AnyObject {
+    /// Return up to `limit` clipboard-history items matching `query` (most-recent
+    /// first). An empty `query` returns the most recent items.
+    func history(query: String, limit: Int, completion: @escaping (Result<[ClipboardItem], Error>) -> Void)
+    /// Copy `item` onto the pasteboard (and record it at the head of history).
+    func copy(_ item: ClipboardItem, completion: @escaping (Result<Void, Error>) -> Void)
+}
+
+/// Default-deny clipboard provider: every call fails with `capabilityDenied`.
+/// This is the safe default injected when a host wires no real provider, so a
+/// plugin holding `clipboard:true` against a host that hasn't implemented the
+/// service gets a clear rejection rather than silent success. (The capability
+/// gate in the bridge runs FIRST, so a plugin WITHOUT the capability never even
+/// reaches this.)
+public final class DenyingClipboardProvider: ClipboardProviding {
+    public init() {}
+    public func history(query: String, limit: Int, completion: @escaping (Result<[ClipboardItem], Error>) -> Void) {
+        completion(.failure(JSONRPCError.capabilityDenied("clipboard provider not available")))
+    }
+    public func copy(_ item: ClipboardItem, completion: @escaping (Result<Void, Error>) -> Void) {
+        completion(.failure(JSONRPCError.capabilityDenied("clipboard provider not available")))
+    }
+}
+
+/// In-memory clipboard provider for tests. `items` is the canned history (most
+/// recent first); `history` filters by substring and truncates to `limit`.
+/// `copied` records every item handed to `copy`, and a copy prepends to `items`
+/// so a subsequent `history` reflects it. Records `historyQueries` so a denied
+/// call can be proven to have NEVER reached the provider (mirrors
+/// `CannedHTTPClient.requested`).
+public final class FakeClipboardProvider: ClipboardProviding {
+    public var items: [ClipboardItem]
+    public private(set) var copied: [ClipboardItem] = []
+    public private(set) var historyQueries: [String] = []
+
+    public init(items: [ClipboardItem] = []) { self.items = items }
+
+    public func history(query: String, limit: Int, completion: @escaping (Result<[ClipboardItem], Error>) -> Void) {
+        historyQueries.append(query)
+        let filtered = query.isEmpty ? items : items.filter { $0.text.localizedCaseInsensitiveContains(query) }
+        completion(.success(Array(filtered.prefix(max(0, limit)))))
+    }
+
+    public func copy(_ item: ClipboardItem, completion: @escaping (Result<Void, Error>) -> Void) {
+        copied.append(item)
+        items.insert(item, at: 0)
+        completion(.success(()))
+    }
+}
+
+// MARK: - SecretStore test double (visible from `import VeeEngine`)
+
+/// An in-memory `SecretStore` re-exposed by VeeEngine so the engine's bridge
+/// tests can inject one without depending on the `VeeKeychain` module directly
+/// (the `VeeEngineTests` target links `VeeEngine` but not `VeeKeychain`). Mirrors
+/// `VeeKeychain.InMemorySecretStore`: composite key is the pure service string
+/// (`com.vee.<pluginId>.<namespace>`) + account, so per-plugin/per-namespace
+/// isolation falls out for free.
+///
+/// `@unchecked Sendable`: the dictionary is only touched under the lock.
+public final class FakeSecretStore: SecretStore, @unchecked Sendable {
+    private struct Key: Hashable { let service: String; let account: String }
+    private let lock = NSLock()
+    private var items: [Key: String] = [:]
+
+    public init() {}
+
+    private func key(_ pluginId: String, _ namespace: String, _ account: String) -> Key {
+        Key(service: keychainServiceString(pluginId: pluginId, namespace: namespace), account: account)
+    }
+
+    public func get(pluginId: String, namespace: String, account: String) throws -> String? {
+        lock.lock(); defer { lock.unlock() }
+        return items[key(pluginId, namespace, account)]
+    }
+    public func set(pluginId: String, namespace: String, account: String, secret: String) throws {
+        lock.lock(); defer { lock.unlock() }
+        items[key(pluginId, namespace, account)] = secret
+    }
+    public func delete(pluginId: String, namespace: String, account: String) throws {
+        lock.lock(); defer { lock.unlock() }
+        items[key(pluginId, namespace, account)] = nil
+    }
 }

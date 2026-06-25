@@ -1,6 +1,7 @@
 import Foundation
 import JavaScriptCore
 import VeeProtocol
+import VeeKeychain
 
 /// The native bridge injected into a plugin's `JSContext`: `console`, `vee`,
 /// timers, and `fetch`. **All `@convention(block)` closures live in this one
@@ -240,6 +241,37 @@ final class JSBridge {
         storage.setObject(unsafeBitCast(storageSet, to: AnyObject.self), forKeyedSubscript: "set" as NSString)
         vee.setObject(storage, forKeyedSubscript: "storage" as NSString)
 
+        // clipboard.history(query?, limit?) → Promise<ClipboardItem[]>
+        // clipboard.copy(item)             → Promise<void>
+        let clipboard = JSValue(newObjectIn: context)!
+        let clipboardHistory: @convention(block) (JSValue, JSValue) -> JSValue? = { [weak self] query, limit in
+            self?.handleClipboardHistory(query: query, limit: limit)
+        }
+        let clipboardCopy: @convention(block) (JSValue) -> JSValue? = { [weak self] item in
+            self?.handleClipboardCopy(item: item)
+        }
+        clipboard.setObject(unsafeBitCast(clipboardHistory, to: AnyObject.self), forKeyedSubscript: "history" as NSString)
+        clipboard.setObject(unsafeBitCast(clipboardCopy, to: AnyObject.self), forKeyedSubscript: "copy" as NSString)
+        vee.setObject(clipboard, forKeyedSubscript: "clipboard" as NSString)
+
+        // keychain.get(namespace, account) / set(namespace, account, value) /
+        // delete(namespace, account) → Promise. Namespace is the capability-gated
+        // unit; the plugin id is bound natively (never passed from JS).
+        let keychain = JSValue(newObjectIn: context)!
+        let keychainGet: @convention(block) (JSValue, JSValue) -> JSValue? = { [weak self] namespace, account in
+            self?.handleKeychainGet(namespace: namespace, account: account)
+        }
+        let keychainSet: @convention(block) (JSValue, JSValue, JSValue) -> JSValue? = { [weak self] namespace, account, value in
+            self?.handleKeychainSet(namespace: namespace, account: account, value: value)
+        }
+        let keychainDelete: @convention(block) (JSValue, JSValue) -> JSValue? = { [weak self] namespace, account in
+            self?.handleKeychainDelete(namespace: namespace, account: account)
+        }
+        keychain.setObject(unsafeBitCast(keychainGet, to: AnyObject.self), forKeyedSubscript: "get" as NSString)
+        keychain.setObject(unsafeBitCast(keychainSet, to: AnyObject.self), forKeyedSubscript: "set" as NSString)
+        keychain.setObject(unsafeBitCast(keychainDelete, to: AnyObject.self), forKeyedSubscript: "delete" as NSString)
+        vee.setObject(keychain, forKeyedSubscript: "keychain" as NSString)
+
         context.setObject(vee, forKeyedSubscript: "vee" as NSString)
     }
 
@@ -405,6 +437,150 @@ final class JSBridge {
                 resolve(JSValue(undefinedIn: ctx))
                 instance.drainMicrotasks()
             }
+        }
+    }
+
+    // MARK: - clipboard (capability-gated by Capabilities.clipboard)
+
+    private func handleClipboardHistory(query: JSValue, limit: JSValue) -> JSValue? {
+        guard let ctx = JSContext.current(), let instance else { return nil }
+        let queryStr = (query.isUndefined || query.isNull) ? "" : (query.toString() ?? "")
+        // Default limit mirrors ClipboardHistoryParams (100); a non-finite/absent
+        // value falls back to the default.
+        let limitInt: Int = {
+            guard !limit.isUndefined, !limit.isNull else { return 100 }
+            let d = limit.toDouble()
+            return d.isFinite ? Int(d) : 100
+        }()
+
+        return PromiseFactory.make(in: ctx) { resolve, reject in
+            // Capability gate: reject WITHOUT touching the provider when the
+            // manifest does not grant clipboard.
+            guard instance.capabilities.clipboard else {
+                instance.runOnQueue {
+                    let err = JSONRPCError.capabilityDenied("clipboard not allowed")
+                    reject(JSBridge.errorValue(in: ctx, code: err.code, message: err.message))
+                    instance.drainMicrotasks()
+                }
+                return
+            }
+            instance.performClipboardHistory(query: queryStr, limit: limitInt) { result in
+                instance.runOnQueue {
+                    switch result {
+                    case .success(let items):
+                        let value = (try? JSONValueCoder.encode(items)) ?? .array([])
+                        resolve(JSONBridge.toJSValue(value, in: ctx))
+                    case .failure(let error):
+                        let code = (error as? JSONRPCError)?.code ?? -32000
+                        reject(JSBridge.errorValue(in: ctx, code: code, message: "\(error)"))
+                    }
+                    instance.drainMicrotasks()
+                }
+            }
+        }
+    }
+
+    private func handleClipboardCopy(item: JSValue) -> JSValue? {
+        guard let ctx = JSContext.current(), let instance else { return nil }
+        let itemValue = JSONBridge.toJSONValue(item) ?? .null
+
+        return PromiseFactory.make(in: ctx) { resolve, reject in
+            guard instance.capabilities.clipboard else {
+                instance.runOnQueue {
+                    let err = JSONRPCError.capabilityDenied("clipboard not allowed")
+                    reject(JSBridge.errorValue(in: ctx, code: err.code, message: err.message))
+                    instance.drainMicrotasks()
+                }
+                return
+            }
+            // Decode the JS item to a typed ClipboardItem. A malformed item is an
+            // invalid-params rejection (never reaches the provider).
+            guard let clipItem = try? JSONValueCoder.decode(ClipboardItem.self, from: itemValue) else {
+                instance.runOnQueue {
+                    let err = JSONRPCError.invalidParams("clipboard.copy: invalid ClipboardItem")
+                    reject(JSBridge.errorValue(in: ctx, code: err.code, message: err.message))
+                    instance.drainMicrotasks()
+                }
+                return
+            }
+            instance.performClipboardCopy(clipItem) { result in
+                instance.runOnQueue {
+                    switch result {
+                    case .success:
+                        resolve(JSValue(undefinedIn: ctx))
+                    case .failure(let error):
+                        let code = (error as? JSONRPCError)?.code ?? -32000
+                        reject(JSBridge.errorValue(in: ctx, code: code, message: "\(error)"))
+                    }
+                    instance.drainMicrotasks()
+                }
+            }
+        }
+    }
+
+    // MARK: - keychain (capability-gated by Capabilities.keychainNamespaces)
+
+    /// Shared gate+settle: reject without touching the store when `namespace` is
+    /// not declared; otherwise run `body` (which returns the resolved value or
+    /// throws) on the instance's serial queue and settle the Promise.
+    private func keychainPromise(
+        namespace: JSValue,
+        in ctx: JSContext,
+        instance: PluginInstance,
+        _ body: @escaping (_ namespace: String) throws -> JSValue
+    ) -> JSValue {
+        let ns = namespace.toString() ?? ""
+        return PromiseFactory.make(in: ctx) { resolve, reject in
+            guard instance.capabilities.permitsKeychainNamespace(ns) else {
+                instance.runOnQueue {
+                    let err = JSONRPCError.capabilityDenied("keychain namespace not allowed: \(ns)")
+                    reject(JSBridge.errorValue(in: ctx, code: err.code, message: err.message))
+                    instance.drainMicrotasks()
+                }
+                return
+            }
+            instance.runOnQueue {
+                do {
+                    resolve(try body(ns))
+                } catch {
+                    // Map a keychain capability denial (defense in depth) to -32001;
+                    // any other store error to internalError.
+                    let code: Int
+                    if case KeychainError.namespaceNotPermitted = error { code = -32001 }
+                    else { code = -32603 }
+                    reject(JSBridge.errorValue(in: ctx, code: code, message: "\(error)"))
+                }
+                instance.drainMicrotasks()
+            }
+        }
+    }
+
+    private func handleKeychainGet(namespace: JSValue, account: JSValue) -> JSValue? {
+        guard let ctx = JSContext.current(), let instance else { return nil }
+        let acct = account.toString() ?? ""
+        return keychainPromise(namespace: namespace, in: ctx, instance: instance) { ns in
+            let value = try instance.keychainGet(namespace: ns, account: acct)
+            // Missing key → null (mirrors SecretStore: missing is not an error).
+            return value.map { JSValue(object: $0, in: ctx) } ?? JSValue(nullIn: ctx)
+        }
+    }
+
+    private func handleKeychainSet(namespace: JSValue, account: JSValue, value: JSValue) -> JSValue? {
+        guard let ctx = JSContext.current(), let instance else { return nil }
+        let acct = account.toString() ?? ""
+        let secret = value.toString() ?? ""
+        return keychainPromise(namespace: namespace, in: ctx, instance: instance) { ns in
+            try instance.keychainSet(namespace: ns, account: acct, value: secret)
+            return JSValue(undefinedIn: ctx)
+        }
+    }
+
+    private func handleKeychainDelete(namespace: JSValue, account: JSValue) -> JSValue? {
+        guard let ctx = JSContext.current(), let instance else { return nil }
+        let acct = account.toString() ?? ""
+        return keychainPromise(namespace: namespace, in: ctx, instance: instance) { ns in
+            try instance.keychainDelete(namespace: ns, account: acct)
+            return JSValue(undefinedIn: ctx)
         }
     }
 

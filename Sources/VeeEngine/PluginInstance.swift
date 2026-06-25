@@ -2,6 +2,7 @@ import Foundation
 import JavaScriptCore
 import VeeProtocol
 import VeeJSONPatch
+import VeeKeychain
 
 /// One live plugin: a single `JSContext` on its own `JSVirtualMachine`, the
 /// injected bridge, the render mirror, and the serial execution context.
@@ -29,6 +30,8 @@ public final class PluginInstance {
     let clock: Clock
     let httpClient: HTTPClient
     let storage: StorageBackend
+    let clipboardProvider: ClipboardProviding
+    let secretStore: any SecretStore
 
     /// Serial queue for all JS execution & frame handling, so frames stay
     /// ordered and JSC's single-threaded-per-VM rule is never violated. The
@@ -50,13 +53,17 @@ public final class PluginInstance {
         transport: RPCTransport,
         clock: Clock,
         httpClient: HTTPClient,
-        storage: StorageBackend = InMemoryStorage()
+        storage: StorageBackend = InMemoryStorage(),
+        clipboardProvider: ClipboardProviding = DenyingClipboardProvider(),
+        secretStore: any SecretStore = InMemorySecretStore()
     ) throws {
         self.manifest = manifest
         self.transport = transport
         self.clock = clock
         self.httpClient = httpClient
         self.storage = storage
+        self.clipboardProvider = clipboardProvider
+        self.secretStore = secretStore
         self.queue = DispatchQueue(label: "vee.engine.instance.\(manifest.id)")
         self.mirror = RenderMirror(pluginId: manifest.id)
 
@@ -314,6 +321,38 @@ public final class PluginInstance {
 
     func performFetch(_ params: FetchParams, completion: @escaping (Result<FetchResult, Error>) -> Void) {
         httpClient.perform(params, completion: completion)
+    }
+
+    // MARK: - Clipboard bridge service calls
+
+    func performClipboardHistory(query: String, limit: Int,
+                                 completion: @escaping (Result<[ClipboardItem], Error>) -> Void) {
+        clipboardProvider.history(query: query, limit: limit, completion: completion)
+    }
+
+    func performClipboardCopy(_ item: ClipboardItem,
+                              completion: @escaping (Result<Void, Error>) -> Void) {
+        clipboardProvider.copy(item, completion: completion)
+    }
+
+    // MARK: - Keychain bridge service calls
+    //
+    // Namespacing per the plugin id is enforced here: the `SecretStore` is always
+    // keyed by THIS instance's `pluginId`, so the JS layer can never name another
+    // plugin's id. The bridge gates the `namespace` against
+    // `Capabilities.keychainNamespaces` BEFORE calling these (denial never
+    // reaches the store).
+
+    func keychainGet(namespace: String, account: String) throws -> String? {
+        try secretStore.get(pluginId: pluginId, namespace: namespace, account: account)
+    }
+
+    func keychainSet(namespace: String, account: String, value: String) throws {
+        try secretStore.set(pluginId: pluginId, namespace: namespace, account: account, secret: value)
+    }
+
+    func keychainDelete(namespace: String, account: String) throws {
+        try secretStore.delete(pluginId: pluginId, namespace: namespace, account: account)
     }
 
     // MARK: - Host → plugin event dispatch (RUNTIME.md §6)

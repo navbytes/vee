@@ -815,4 +815,257 @@ final class VeeEngineTests: XCTestCase {
             .deletingLastPathComponent()   // Tests
             .deletingLastPathComponent()   // repo root
     }
+
+    // MARK: - Clipboard bridge (capability-gated by Capabilities.clipboard)
+
+    /// A manifest granting the clipboard capability and a set of keychain
+    /// namespaces (the existing `manifest(...)` helper only varies `network`).
+    private func capManifest(
+        id: String = "com.vee.test",
+        clipboard: Bool = false,
+        keychainNamespaces: [String] = []
+    ) -> PluginManifest {
+        PluginManifest(
+            id: id, name: "Test", version: "1.0.0", entrypoint: "bundle.js",
+            commands: [PluginCommand(name: "view", title: "View", mode: .view)],
+            capabilities: Capabilities(clipboard: clipboard, keychainNamespaces: keychainNamespaces)
+        )
+    }
+
+    func testClipboardHistoryResolvesFromInjectedProvider() throws {
+        let transport = LoopbackTransport()
+        let recorder = Recorder(transport)
+        let provider = FakeClipboardProvider(items: [
+            ClipboardItem(id: "1", text: "hello world", copiedAt: Date(timeIntervalSince1970: 100)),
+            ClipboardItem(id: "2", text: "goodbye", copiedAt: Date(timeIntervalSince1970: 50)),
+        ])
+        let instance = try PluginInstance(
+            manifest: capManifest(clipboard: true),
+            transport: transport,
+            clock: TestClock(),
+            httpClient: CannedHTTPClient(),
+            clipboardProvider: provider
+        )
+        instance.evaluate("""
+            vee.clipboard.history('', 10)
+              .then(items => console.log('ids:' + items.map(i => i.id).join(',') + '|texts:' + items.map(i => i.text).join(',')))
+              .catch(e => console.error('err:' + e));
+        """)
+        instance.runUntilQuiescent()
+        XCTAssertEqual(recorder.logs().map(\.message), ["ids:1,2|texts:hello world,goodbye"])
+        XCTAssertEqual(provider.historyQueries, [""])
+    }
+
+    func testClipboardHistoryFiltersByQuery() throws {
+        let transport = LoopbackTransport()
+        let recorder = Recorder(transport)
+        let provider = FakeClipboardProvider(items: [
+            ClipboardItem(id: "1", text: "hello world", copiedAt: Date(timeIntervalSince1970: 100)),
+            ClipboardItem(id: "2", text: "goodbye", copiedAt: Date(timeIntervalSince1970: 50)),
+        ])
+        let instance = try PluginInstance(
+            manifest: capManifest(clipboard: true),
+            transport: transport,
+            clock: TestClock(),
+            httpClient: CannedHTTPClient(),
+            clipboardProvider: provider
+        )
+        instance.evaluate("""
+            vee.clipboard.history('good', 10)
+              .then(items => console.log('ids:' + items.map(i => i.id).join(',')))
+              .catch(e => console.error('err:' + e));
+        """)
+        instance.runUntilQuiescent()
+        XCTAssertEqual(recorder.logs().map(\.message), ["ids:2"])
+        XCTAssertEqual(provider.historyQueries, ["good"])
+    }
+
+    func testClipboardDeniedWhenCapabilityFalseWithoutCallingProvider() throws {
+        let transport = LoopbackTransport()
+        let recorder = Recorder(transport)
+        let provider = FakeClipboardProvider(items: [
+            ClipboardItem(id: "1", text: "secret", copiedAt: Date(timeIntervalSince1970: 1)),
+        ])
+        // clipboard:false → denied.
+        let instance = try PluginInstance(
+            manifest: capManifest(clipboard: false),
+            transport: transport,
+            clock: TestClock(),
+            httpClient: CannedHTTPClient(),
+            clipboardProvider: provider
+        )
+        instance.evaluate("""
+            vee.clipboard.history('', 10)
+              .then(items => console.log('resolved:' + items.length))
+              .catch(e => console.error('denied:' + e.code + ':' + e.message));
+        """)
+        instance.runUntilQuiescent()
+        XCTAssertTrue(provider.historyQueries.isEmpty, "provider must NEVER be called when clipboard is denied")
+        let logs = recorder.logs()
+        XCTAssertEqual(logs.count, 1)
+        XCTAssertEqual(logs.first?.level, .error)
+        XCTAssertTrue((logs.first?.message ?? "").contains("-32001"), "got: \(logs.first?.message ?? "")")
+    }
+
+    func testClipboardCopyDeniedWhenCapabilityFalse() throws {
+        let transport = LoopbackTransport()
+        let recorder = Recorder(transport)
+        let provider = FakeClipboardProvider()
+        let instance = try PluginInstance(
+            manifest: capManifest(clipboard: false),
+            transport: transport,
+            clock: TestClock(),
+            httpClient: CannedHTTPClient(),
+            clipboardProvider: provider
+        )
+        instance.evaluate("""
+            vee.clipboard.copy({ id: 'x', text: 'paste me', copiedAt: 0 })
+              .then(() => console.log('copied'))
+              .catch(e => console.error('denied:' + e.code));
+        """)
+        instance.runUntilQuiescent()
+        XCTAssertTrue(provider.copied.isEmpty, "provider must NEVER be called when clipboard is denied")
+        XCTAssertEqual(recorder.logs().map(\.message), ["denied:-32001"])
+    }
+
+    func testClipboardCopyReachesProviderWhenAllowed() throws {
+        let transport = LoopbackTransport()
+        let recorder = Recorder(transport)
+        let provider = FakeClipboardProvider()
+        let instance = try PluginInstance(
+            manifest: capManifest(clipboard: true),
+            transport: transport,
+            clock: TestClock(),
+            httpClient: CannedHTTPClient(),
+            clipboardProvider: provider
+        )
+        instance.evaluate("""
+            vee.clipboard.copy({ id: 'x', text: 'paste me', copiedAt: 0 })
+              .then(() => console.log('copied'))
+              .catch(e => console.error('err:' + e));
+        """)
+        instance.runUntilQuiescent()
+        XCTAssertEqual(recorder.logs().map(\.message), ["copied"])
+        XCTAssertEqual(provider.copied.map(\.text), ["paste me"])
+        XCTAssertEqual(provider.copied.map(\.id), ["x"])
+    }
+
+    // MARK: - Keychain bridge (capability-gated by Capabilities.keychainNamespaces)
+
+    func testKeychainSetThenGetRoundTrips() throws {
+        let transport = LoopbackTransport()
+        let recorder = Recorder(transport)
+        let store = FakeSecretStore()
+        let instance = try PluginInstance(
+            manifest: capManifest(id: "com.vee.kc", keychainNamespaces: ["tokens"]),
+            transport: transport,
+            clock: TestClock(),
+            httpClient: CannedHTTPClient(),
+            secretStore: store
+        )
+        instance.evaluate("""
+            vee.keychain.set('tokens', 'api', 's3cr3t')
+              .then(() => vee.keychain.get('tokens', 'api'))
+              .then(v => console.log('got:' + v))
+              .catch(e => console.error('err:' + e));
+        """)
+        instance.runUntilQuiescent()
+        XCTAssertEqual(recorder.logs().map(\.message), ["got:s3cr3t"])
+        // The value is namespaced under THIS plugin's id (per the SecretStore key).
+        XCTAssertEqual(try store.get(pluginId: "com.vee.kc", namespace: "tokens", account: "api"), "s3cr3t")
+    }
+
+    func testKeychainGetMissingResolvesNull() throws {
+        let transport = LoopbackTransport()
+        let recorder = Recorder(transport)
+        let store = FakeSecretStore()
+        let instance = try PluginInstance(
+            manifest: capManifest(id: "com.vee.kc", keychainNamespaces: ["tokens"]),
+            transport: transport,
+            clock: TestClock(),
+            httpClient: CannedHTTPClient(),
+            secretStore: store
+        )
+        instance.evaluate("""
+            vee.keychain.get('tokens', 'absent')
+              .then(v => console.log('got:' + (v === null ? 'null' : v)))
+              .catch(e => console.error('err:' + e));
+        """)
+        instance.runUntilQuiescent()
+        XCTAssertEqual(recorder.logs().map(\.message), ["got:null"])
+    }
+
+    func testKeychainDeniedForUndeclaredNamespaceWithoutTouchingStore() throws {
+        let transport = LoopbackTransport()
+        let recorder = Recorder(transport)
+        let store = FakeSecretStore()
+        // Pre-seed a value the plugin must NOT be able to read (wrong namespace).
+        try store.set(pluginId: "com.vee.kc", namespace: "secrets", account: "api", secret: "leak")
+        // Manifest declares only "tokens"; "secrets" is undeclared → denied.
+        let instance = try PluginInstance(
+            manifest: capManifest(id: "com.vee.kc", keychainNamespaces: ["tokens"]),
+            transport: transport,
+            clock: TestClock(),
+            httpClient: CannedHTTPClient(),
+            secretStore: store
+        )
+        instance.evaluate("""
+            vee.keychain.get('secrets', 'api')
+              .then(v => console.log('resolved:' + v))
+              .catch(e => console.error('denied:' + e.code + ':' + e.message));
+        """)
+        instance.runUntilQuiescent()
+        let logs = recorder.logs()
+        XCTAssertEqual(logs.count, 1)
+        XCTAssertEqual(logs.first?.level, .error)
+        XCTAssertTrue((logs.first?.message ?? "").contains("-32001"), "got: \(logs.first?.message ?? "")")
+        // The pre-seeded secret is still there (read was denied), and the store
+        // value was never exposed to JS.
+        XCTAssertEqual(try store.get(pluginId: "com.vee.kc", namespace: "secrets", account: "api"), "leak")
+    }
+
+    func testKeychainSetDeniedForUndeclaredNamespace() throws {
+        let transport = LoopbackTransport()
+        let recorder = Recorder(transport)
+        let store = FakeSecretStore()
+        let instance = try PluginInstance(
+            manifest: capManifest(id: "com.vee.kc", keychainNamespaces: ["tokens"]),
+            transport: transport,
+            clock: TestClock(),
+            httpClient: CannedHTTPClient(),
+            secretStore: store
+        )
+        instance.evaluate("""
+            vee.keychain.set('secrets', 'api', 'nope')
+              .then(() => console.log('set'))
+              .catch(e => console.error('denied:' + e.code));
+        """)
+        instance.runUntilQuiescent()
+        XCTAssertEqual(recorder.logs().map(\.message), ["denied:-32001"])
+        // The write never reached the store.
+        XCTAssertNil(try store.get(pluginId: "com.vee.kc", namespace: "secrets", account: "api"))
+    }
+
+    func testKeychainDeleteRemovesValue() throws {
+        let transport = LoopbackTransport()
+        let recorder = Recorder(transport)
+        let store = FakeSecretStore()
+        try store.set(pluginId: "com.vee.kc", namespace: "tokens", account: "api", secret: "v1")
+        let instance = try PluginInstance(
+            manifest: capManifest(id: "com.vee.kc", keychainNamespaces: ["tokens"]),
+            transport: transport,
+            clock: TestClock(),
+            httpClient: CannedHTTPClient(),
+            secretStore: store
+        )
+        instance.evaluate("""
+            vee.keychain.delete('tokens', 'api')
+              .then(() => vee.keychain.get('tokens', 'api'))
+              .then(v => console.log('after:' + (v === null ? 'null' : v)))
+              .catch(e => console.error('err:' + e));
+        """)
+        instance.runUntilQuiescent()
+        XCTAssertEqual(recorder.logs().map(\.message), ["after:null"])
+        XCTAssertNil(try store.get(pluginId: "com.vee.kc", namespace: "tokens", account: "api"))
+    }
 }

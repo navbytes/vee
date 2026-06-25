@@ -43,7 +43,15 @@ public final class AppCoordinator {
 
     // MARK: AppKit seams (optional; nil in headless tests unless injected)
 
-    public weak var window: LauncherWindowPresenting?
+    public weak var window: LauncherWindowPresenting? {
+        didSet {
+            // Hand the window its intent sink (self) and an initial projection so
+            // the GUI can forward gestures and render immediately. Pure wiring —
+            // no behavior change; spies receive a no-op `attach`.
+            window?.attach(intentHandler: self)
+            pushToWindow()
+        }
+    }
     public weak var menuBar: MenuBarPresenting?
 
     // MARK: Render mirror state
@@ -308,3 +316,11 @@ public final class AppCoordinator {
         return try JSONDecoder().decode(T.self, from: data)
     }
 }
+
+// MARK: - Intent sink for the launcher window
+
+/// The coordinator IS the launcher's intent handler: every method the window
+/// needs (`setQuery`/`select`/`moveSelection`/`invoke`) already exists above with
+/// the matching signature, so conformance is a no-op declaration. Keeps the view
+/// layer decoupled from the concrete coordinator type.
+extension AppCoordinator: LauncherIntentHandling {}

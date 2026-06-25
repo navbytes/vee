@@ -30,6 +30,8 @@ public final class PluginHost {
     private let fileWatcher: FileWatcher
     private let bundler: Bundler
     private let makeStorage: () -> StorageBackend
+    private let clipboardProvider: ClipboardProviding
+    private let secretStore: any SecretStore
 
     /// Live instances by plugin id.
     private var instances: [String: PluginInstance] = [:]
@@ -44,7 +46,9 @@ public final class PluginHost {
         httpClient: HTTPClient,
         fileWatcher: FileWatcher = NoopFileWatcher(),
         bundler: Bundler,
-        storageFactory: @escaping () -> StorageBackend = { InMemoryStorage() }
+        storageFactory: @escaping () -> StorageBackend = { InMemoryStorage() },
+        clipboardProvider: ClipboardProviding = DenyingClipboardProvider(),
+        secretStore: any SecretStore = InMemorySecretStore()
     ) {
         self.transport = transport
         self.clock = clock
@@ -52,6 +56,8 @@ public final class PluginHost {
         self.fileWatcher = fileWatcher
         self.bundler = bundler
         self.makeStorage = storageFactory
+        self.clipboardProvider = clipboardProvider
+        self.secretStore = secretStore
 
         // Route inbound peer frames (host→plugin notifications) to the matching
         // instance. The transport delivers on its serial queue.
@@ -97,7 +103,9 @@ public final class PluginHost {
             transport: transport,
             clock: clock,
             httpClient: httpClient,
-            storage: makeStorage())
+            storage: makeStorage(),
+            clipboardProvider: clipboardProvider,
+            secretStore: secretStore)
 
         // Evaluate the bundle; a malformed bundle throws pluginError.
         try instance.evaluateOrThrow(source)
