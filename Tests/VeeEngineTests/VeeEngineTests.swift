@@ -792,6 +792,40 @@ final class VeeEngineTests: XCTestCase {
         _ = recorder
     }
 
+    // MARK: - Transport re-entrancy (outbound frame from inside an inbound handler)
+
+    /// Regression: a host→plugin notification delivered via `sendFromPeer` (which
+    /// holds the serial queue) invokes a handler that, on the SAME stack, emits an
+    /// OUTBOUND frame via `send` (e.g. a plugin's `onInvokeAction` calling
+    /// `vee.showToast`). With a naive `queue.sync` on both paths this re-enters
+    /// the serial queue and traps (SIGTRAP). The `onQueue` (DispatchSpecificKey)
+    /// path must instead run inline — no crash — while preserving frame ordering.
+    func testTransportReentrantOutboundFromInboundHandlerNoCrash() {
+        let transport = LoopbackTransport()
+
+        // Peer side records every outbound frame's method, in delivery order.
+        var outbound: [String] = []
+        transport.peerInbound = { message in
+            if case .notification(let n) = message { outbound.append(n.method) }
+        }
+
+        // Host side: when the inbound action arrives, emit two outbound frames
+        // from WITHIN the inbound dispatch — the exact re-entrant scenario.
+        transport.onReceive = { message in
+            guard case .notification(let n) = message, n.method == RPCMethods.invokeAction else { return }
+            transport.send(.notification(JSONRPCNotification(method: RPCMethods.toast)))
+            transport.send(.notification(JSONRPCNotification(method: RPCMethods.log)))
+        }
+
+        // Fire the inbound notification. Pre-fix this trapped; it must not now.
+        transport.sendFromPeer(.notification(JSONRPCNotification(method: RPCMethods.invokeAction)))
+        // A subsequent (non-nested) outbound send must still work and stay ordered.
+        transport.send(.notification(JSONRPCNotification(method: RPCMethods.render)))
+
+        XCTAssertEqual(outbound, [RPCMethods.toast, RPCMethods.log, RPCMethods.render],
+                       "re-entrant outbound frames deliver inline, in order, without crashing")
+    }
+
     // MARK: - private helpers
 
     private func instanceQuiesce(_ instance: PluginInstance?) {
