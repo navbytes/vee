@@ -1,0 +1,10 @@
+{
+  "name": "@vee-sample/hello-list",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Sample Vee plugin: renders a static root → list → 3 list-items tree.",
+  "dependencies": {
+    "@vee/sdk": "*"
+  }
+}

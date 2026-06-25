@@ -1,0 +1,22 @@
+{
+  "id": "com.vee.hello-list",
+  "name": "Hello List",
+  "version": "0.1.0",
+  "entrypoint": "../../dist/com.vee.hello-list.js",
+  "commands": [
+    {
+      "name": "view",
+      "title": "Show Hello List",
+      "subtitle": "A static three-item list",
+      "mode": "view"
+    }
+  ],
+  "capabilities": {
+    "network": [],
+    "filesystem": [],
+    "clipboard": false,
+    "calendar": false,
+    "keychainNamespaces": [],
+    "hotkeyActions": []
+  }
+}

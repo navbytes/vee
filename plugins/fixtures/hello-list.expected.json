@@ -1,0 +1,45 @@
+{
+  "tag": "root",
+  "props": {},
+  "children": [
+    {
+      "tag": "list",
+      "props": {
+        "filtering": true
+      },
+      "children": [
+        {
+          "tag": "list-item",
+          "props": {
+            "id": "1",
+            "title": "First item",
+            "subtitle": "The first row"
+          },
+          "children": [],
+          "key": "1"
+        },
+        {
+          "tag": "list-item",
+          "props": {
+            "id": "2",
+            "title": "Second item",
+            "subtitle": "The second row"
+          },
+          "children": [],
+          "key": "2"
+        },
+        {
+          "tag": "list-item",
+          "props": {
+            "id": "3",
+            "title": "Third item",
+            "subtitle": "The third row"
+          },
+          "children": [],
+          "key": "3"
+        }
+      ],
+      "key": "main"
+    }
+  ]
+}

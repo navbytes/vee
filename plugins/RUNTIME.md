@@ -1,0 +1,285 @@
+# Vee plugin runtime contract (JS ↔ host)
+
+This document specifies the **exact** contract between a built plugin bundle and
+the Vee host (the JavaScriptCore embedder). **Wave 2a (VeeEngine) implements the
+host side from this document.** Every global, signature, and lifecycle step is
+normative.
+
+The companion TypeScript types live in `@vee/sdk` (`packages/sdk/src/`). The wire
+shapes mirror `Sources/VeeProtocol/*.swift` byte-for-byte. Where this doc and the
+Swift protocol disagree, the Swift protocol wins — file a fix here.
+
+---
+
+## 1. Execution model
+
+- Each plugin runs in its own `JSContext` (ideally its own `JSVirtualMachine`),
+  out of process from AppKit, exactly as `docs/ARCHITECTURE.md` §2–§3 prescribe.
+- JSC has **no module loader and no DOM**. The bundle is a single self-contained
+  **IIFE** (built by `bundle.mjs`: `format:"iife"`, `platform:"neutral"`,
+  `target:"es2021"`, `bundle:true`, zero externals). There are **no `require`/
+  `import` statements at runtime** — everything the plugin needs is either inside
+  the IIFE or provided as an injected global.
+- The host injects globals **before** evaluating the bundle, evaluates the IIFE,
+  then reads the registration the bundle published (§4) and drives it (§5).
+- **No React.** Plugins emit plain JSON component trees (`RenderNode`). React may
+  later be layered on as an authoring convenience over the same wire format; the
+  host contract does not change.
+
+---
+
+## 2. Globals the host MUST inject
+
+Inject these into the context's global object **before** evaluating the bundle.
+
+### 2.1 `console`
+
+A leveled logger. Each call is forwarded to the host as a `plugin.log`
+notification (`RPCMethods.log`, params `LogParams`) after stringifying args.
+
+```ts
+globalThis.console = {
+  debug(...args: unknown[]): void;  // → LogParams.level = "debug"
+  info(...args: unknown[]): void;   // → "info"
+  log(...args: unknown[]): void;    // → "info"   (log aliases info)
+  warn(...args: unknown[]): void;   // → "warn"
+  error(...args: unknown[]): void;  // → "error"
+};
+```
+
+The host SHOULD stringify each argument (objects via `JSON.stringify`, with a
+fallback to `String(x)`), join with a space, and set `LogParams.message`.
+
+### 2.2 `vee` — the host bridge
+
+A single object named `vee` implementing the `VeeHost` interface
+(`packages/sdk/src/runtime.ts`). **Every member below is required**, with these
+exact names and signatures. All `Promise`-returning members settle when the
+corresponding JSON-RPC response arrives (bridge calls) or immediately (fire-and-
+forget notifications).
+
+```ts
+interface VeeHost {
+  // Identity
+  readonly pluginId: string;            // reverse-DNS id from the manifest
+
+  // ── Rendering (plugin → host) ────────────────────────────────────────────
+  // Submit a complete render tree. The host diffs against the previously
+  // rendered tree and emits a `plugin.render` JSON-Patch notification
+  // (RPCMethods.render, params RenderParams). Accepts a RenderNode OR its
+  // already-projected JSONValue (the SDK normalizes RenderNode → JSONValue
+  // before calling this, so the host always receives the canonical wire shape).
+  render(node: RenderNode | JSONValue): void;
+
+  // Push the full candidate set for native fuzzy filtering
+  // (RPCMethods.setCandidates, params SetCandidatesParams).
+  setCandidates(candidates: Candidate[]): void;
+
+  // ── Inbound event registration (host → plugin) ───────────────────────────
+  // The host calls the registered handler when the corresponding host→plugin
+  // notification arrives. Each returns an unsubscribe function. Registrations
+  // are additive; if the plugin registers multiple handlers, the host invokes
+  // all of them. See §6 for the dispatch mapping.
+  onInvokeAction(handler: (p: InvokeActionParams) => void | Promise<void>): () => void;
+  onSearchTextChange(handler: (query: string, p: SearchTextChangeParams) => void | Promise<void>): () => void;
+  onSubmitForm(handler: (p: SubmitFormParams) => void | Promise<void>): () => void;
+
+  // ── Bridges (plugin → host; capability-gated, async) ─────────────────────
+  readonly http: {
+    // Capability-gated by Capabilities.network. The host performs the request
+    // natively (URLSession) → bridge.http.fetch (FetchParams → FetchResult).
+    // The SDK encodes the request body to base64 and decodes the response body
+    // from base64; the plugin-facing façade speaks UTF-8 text / JSON.
+    fetch(url: string, init?: {
+      method?: string;
+      headers?: Record<string, string>;
+      body?: string;           // UTF-8; SDK base64-encodes for FetchParams.bodyBase64
+    }): Promise<{
+      status: number;
+      headers: Record<string, string>;
+      text(): Promise<string>; // decodes FetchResult.bodyBase64 as UTF-8
+      json(): Promise<JSONValue>;
+    }>;
+  };
+
+  readonly storage: {
+    // SWR-backed key/value store. bridge.storage.get / bridge.storage.set
+    // (StorageGetParams / StorageSetParams).
+    get(key: string): Promise<JSONValue | undefined>;
+    set(key: string, value: JSONValue, ttlSeconds?: number): Promise<void>;
+  };
+
+  // ── UI affordances ─────────────────────────────────────────────────────────
+  // Show a transient toast (RPCMethods.toast = "plugin.showToast", ToastParams).
+  showToast(style: "success" | "failure" | "info", title: string, message?: string): void;
+}
+```
+
+> **Capability enforcement.** `http`, `storage`, and any future bridges are
+> gated by the plugin's `Capabilities` (`vee.json`). The host rejects a call to
+> a disallowed resource with `JSONRPCError.capabilityDenied` (code `-32001`);
+> the SDK surfaces that as a rejected Promise. A `fetch` to a host not in
+> `capabilities.network` MUST be denied (see `Capabilities.allowsNetworkHost`).
+
+> **Extensibility.** The SDK ships accessors for `http` and `storage` today. The
+> Swift `RPCMethods` enumerates further bridges (`fs.*`, `keychain.*`,
+> `clipboard.*`, `calendar.*`). When the host implements those, add matching
+> members to `vee` and accessors to `@vee/sdk`; the method-name constants are
+> already defined in `RPCMethods` (types.ts).
+
+---
+
+## 3. The render tree (`RenderNode`)
+
+A plugin describes its UI as a tree of `RenderNode`:
+
+```ts
+interface RenderNode {
+  tag: string;                  // component kind; free string (forward-compatible)
+  key?: string;                 // stable identity for keyed children (optional)
+  props: { [k: string]: JSONValue };
+  children: RenderNode[];
+}
+```
+
+**Wire projection (canonical form the host receives and diffs):** identical to
+Swift's `RenderNode.jsonValue` —
+
+```json
+{ "tag": "...", "props": { ... }, "children": [ ... ] }
+```
+
+plus `"key": "..."` **only when a key is present** (omitted when absent so a
+missing key never produces a spurious JSON-Patch diff). The SDK's
+`renderNodeToJSON()` produces exactly this, and `vee.render()` applies it before
+handing the tree to the host. The host MUST treat this projection as the source
+of truth for diffing.
+
+Core tags (mirror `RenderNode.Tag`): `root`, `list`, `list-item`, `detail`,
+`form`, `field`, `action`, `action-panel`, `text`, `empty-view`. Unknown tags
+render as an inert container (forward-compatible).
+
+The first render after activation is shipped by the host as a single JSON-Patch
+`replace` at path `""` (whole tree); subsequent renders are minimal diffs. The
+plugin always calls `vee.render(fullTree)` — diffing is the host's job.
+
+---
+
+## 4. How a bundle registers commands
+
+The bundle calls **`definePlugin`** (or one or more **`registerCommand`** calls)
+from `@vee/sdk` at top level. Both publish a registration object to a reserved
+global slot the host reads after evaluation:
+
+```ts
+globalThis.__veePlugin: RegisteredPlugin | undefined
+```
+
+where
+
+```ts
+interface RegisteredPlugin {
+  commandNames: string[];                                   // every registered command
+  activateCommand(name: string, ctx: CommandContext): void | Promise<void>;
+}
+```
+
+The constant name is exported as `PLUGIN_GLOBAL_KEY === "__veePlugin"`.
+
+Authoring shape:
+
+```ts
+import { definePlugin, root, list, listItem } from "@vee/sdk";
+
+definePlugin({
+  commands: {
+    view: (ctx) => {
+      ctx.render(root({}, [ list({}, [ listItem({ id: "1", title: "Hello" }) ]) ]));
+    },
+  },
+});
+```
+
+Command names MUST match the `commands[].name` entries in `vee.json`.
+
+---
+
+## 5. Activation lifecycle (host drives the bundle)
+
+1. **Load.** Host creates the context, injects `console` + `vee` (§2), and
+   evaluates the IIFE bundle. The bundle's top-level `definePlugin` call runs and
+   sets `globalThis.__veePlugin`.
+2. **Discover.** Host reads `globalThis.__veePlugin`. If absent, the bundle is
+   malformed (raise `JSONRPCError.pluginError`). `commandNames` lists the
+   commands available.
+3. **Activate** (`plugin.activate`, `ActivateParams`). The host builds a
+   `CommandContext` and calls `__veePlugin.activateCommand(commandName, ctx)`:
+
+   ```ts
+   interface CommandContext {
+     pluginId: string;
+     commandName: string;
+     arguments: Record<string, JSONValue>;   // from ActivateParams.arguments
+     render(node: RenderNode | JSONValue): void; // convenience === vee.render
+   }
+   ```
+
+   The handler runs and typically calls `ctx.render(tree)` (and/or
+   `vee.setCandidates(...)`, registers `vee.onInvokeAction(...)`, etc.). If it
+   returns a Promise, the host awaits it before responding to `plugin.activate`.
+   A throw/rejection becomes `JSONRPCError.pluginError` (the JS stack rides in
+   `data` when available).
+4. **Run.** The plugin reacts to host→plugin notifications (§6) by calling its
+   registered handlers, re-rendering via `vee.render(...)` as needed.
+5. **Deactivate** (`plugin.deactivate`, `DeactivateParams`). The host stops
+   delivering events for that command. (The current SDK has no explicit
+   deactivate hook; handlers simply stop being invoked. A future
+   `onDeactivate` may be added here.)
+6. **Reload** (`plugin.reload`, `ReloadParams`). On a rebuilt bundle the host
+   tears down the context, creates a fresh one, re-injects globals, re-evaluates
+   the new bundle, then re-activates. State is **not** carried as live values;
+   persist via `vee.storage` and rehydrate from `ReloadParams.state` if provided
+   (see `docs/ARCHITECTURE.md` §4).
+
+---
+
+## 6. Host → plugin event dispatch
+
+When the host receives one of these (it ORIGINATES them toward the plugin), it
+invokes the matching registered handlers:
+
+| JSON-RPC method (`RPCMethods`)              | Params                    | Invokes                         |
+| ------------------------------------------- | ------------------------- | ------------------------------- |
+| `host.invokeAction` (`invokeAction`)        | `InvokeActionParams`      | every `onInvokeAction` handler  |
+| `host.onSearchTextChange` (`onSearchTextChange`) | `SearchTextChangeParams` | every `onSearchTextChange` handler (passed `params.query`, then the full params) |
+| `host.submitForm` (`submitForm`)            | `SubmitFormParams`        | every `onSubmitForm` handler    |
+
+`InvokeActionParams.actionId` is the `actionId` prop the plugin set on an
+`<action>` node (or a `CandidateAction.id`); `targetId` is the id of the
+list-item/candidate it fired on, when applicable.
+
+These are JSON-RPC **notifications** (no response). The host does not wait for
+the handler's Promise to settle before continuing, but SHOULD surface a handler
+rejection as a `plugin.log` error and/or a toast.
+
+---
+
+## 7. Worked example — `com.vee.hello-list`
+
+`samples/hello-list/src/index.ts` registers one `view` command that renders a
+static `root → list → 3 list-items` tree. Built to a single IIFE at
+`dist/com.vee.hello-list.js` and committed (for the host's tests) at
+`fixtures/hello-list.bundle.js`. The exact wire projection the host receives on
+activation is captured in `fixtures/hello-list.expected.json`.
+
+Host-side evaluation, end to end (this is precisely what `VeeEngineTests` does
+and what `plugins/test/bundle.test.mjs` emulates with `node:vm`):
+
+```
+1. create context; inject console + vee (vee.render captures the tree)
+2. evaluate dist/com.vee.hello-list.js   (the IIFE; sets __veePlugin)
+3. read __veePlugin → commandNames === ["view"]
+4. __veePlugin.activateCommand("view", { pluginId, commandName:"view",
+                                         arguments:{}, render: vee.render })
+5. captured tree === fixtures/hello-list.expected.json
+```

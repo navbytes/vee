@@ -1,0 +1,10 @@
+# Build + dependency artifacts for the plugins/ TS SDK + esbuild pipeline.
+# (The repo-root .gitignore also covers these; this documents the subtree
+#  intent and keeps it correct if plugins/ is ever extracted.)
+node_modules/
+dist/
+*.tsbuildinfo
+
+# NOTE: fixtures/ is intentionally NOT ignored — it holds the committed sample
+# bundle (hello-list.bundle.js) and expected tree (hello-list.expected.json)
+# that the Swift VeeEngineTests consume.
