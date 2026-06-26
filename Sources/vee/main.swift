@@ -141,14 +141,12 @@ MainActor.assumeIsolated {
     let openProvider: OpenProviding = NSWorkspaceOpenProvider()
     let fileProvider: FileProviding = FileManagerFileProvider()
     let secretStore: any SecretStore = VeeKeychain.KeychainStore()
-    let storageFactory: () -> StorageBackend = {
-        // One disk-backed store rooted under Application Support/Vee/storage. The
-        // factory signature carries no plugin id, so all plugins share this
-        // namespace subfolder (acceptable for self-authored plugins; this is
-        // capability gating, not a hostile sandbox). A failure to create the
-        // directory degrades to in-memory storage rather than crashing the host.
-        // (`as StorageBackend?` so `??` unifies the two concrete impls cleanly.)
-        ((try? DiskStorageBackend(directory: storageRoot, pluginId: "plugins")) as StorageBackend?)
+    let storageFactory: (String) -> StorageBackend = { pluginId in
+        // Per-plugin disk store under Application Support/Vee/storage/<pluginId>
+        // (R2-HIGH-2: each plugin gets its OWN namespace subfolder, so one plugin's
+        // `vee.storage` can't read or overwrite another's keys). A failure to create
+        // the directory degrades to in-memory storage rather than crashing the host.
+        ((try? DiskStorageBackend(directory: storageRoot, pluginId: pluginId)) as StorageBackend?)
             ?? InMemoryStorage()
     }
 

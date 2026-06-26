@@ -69,6 +69,10 @@ final class JSBridge {
             virtualMachine.removeManagedReference(managed, withOwner: self)
         }
         allManaged.removeAll()
+        // R2-MED-2: cancel outstanding timers, not just drop their callbacks — a
+        // live `setInterval` on the real DispatchClock keeps firing (CPU wakeups)
+        // after unload/hot-reload otherwise.
+        for token in timerCallbacks.keys { instance?.clock.cancel(token) }
         timerCallbacks.removeAll()
         invokeActionHandlers.removeAll()
         searchTextChangeHandlers.removeAll()

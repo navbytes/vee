@@ -410,6 +410,13 @@ export interface PluginCommand {
 export interface Capabilities {
   /** Allowed network hosts for `vee.http.fetch`. Exact or leading-dot suffix. */
   network: string[];
+  /**
+   * Allowlist gating `vee.open(url)` / `vee.openApp(bundleId)`. A bare scheme
+   * ("https", "mailto") grants `open` for it; a "bundleId:<id>" entry grants
+   * `openApp`; "*" is a scheme catch-all. http(s) opens are additionally
+   * re-checked against `network`. Empty = no open access.
+   */
+  open: string[];
   /** Filesystem roots the plugin may read/write under. Empty = no fs access. */
   filesystem: string[];
   /** Whether `vee.clipboard.*` is permitted. */
@@ -438,6 +445,7 @@ export interface PluginManifest {
 export function emptyCapabilities(): Capabilities {
   return {
     network: [],
+    open: [],
     filesystem: [],
     clipboard: false,
     calendar: false,

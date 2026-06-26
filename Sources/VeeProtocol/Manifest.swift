@@ -151,15 +151,16 @@ public struct Capabilities: Codable, Hashable, Sendable {
     /// (no `:`), `host` its host (empty if none). An entry is allowed when:
     ///   • the bare scheme is listed (or `"*"`), AND
     ///   • for `http`/`https`, the host also passes ``allowsNetworkHost(_:)``
-    ///     (so `vee.open` cannot exfiltrate to a host outside `network`) — unless
-    ///     `"*"` is present, which opts out of the host re-check.
+    ///     (so `vee.open` cannot exfiltrate to a host outside `network`). This
+    ///     re-check is UNCONDITIONAL: even a `"*"` scheme grant cannot open a web
+    ///     URL to a non-allowlisted host (R2-MED-1).
     /// Returns false for an empty `open` list (default-deny).
     public func allowsOpen(scheme: String, host: String) -> Bool {
         let s = scheme.lowercased()
         guard !s.isEmpty else { return false }
         let schemeListed = openAllowsAnyScheme || open.contains { $0.lowercased() == s }
         guard schemeListed else { return false }
-        if (s == "http" || s == "https"), !openAllowsAnyScheme {
+        if s == "http" || s == "https" {
             return allowsNetworkHost(host)
         }
         return true

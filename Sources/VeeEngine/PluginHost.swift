@@ -29,7 +29,7 @@ public final class PluginHost {
     private let httpClient: HTTPClient
     private let fileWatcher: FileWatcher
     private let bundler: Bundler
-    private let makeStorage: () -> StorageBackend
+    private let makeStorage: (String) -> StorageBackend
     private let clipboardProvider: ClipboardProviding
     private let secretStore: any SecretStore
     private let openProvider: OpenProviding
@@ -49,7 +49,7 @@ public final class PluginHost {
         httpClient: HTTPClient,
         fileWatcher: FileWatcher = NoopFileWatcher(),
         bundler: Bundler,
-        storageFactory: @escaping () -> StorageBackend = { InMemoryStorage() },
+        storageFactory: @escaping (String) -> StorageBackend = { _ in InMemoryStorage() },
         clipboardProvider: ClipboardProviding = DenyingClipboardProvider(),
         secretStore: any SecretStore = InMemorySecretStore(),
         openProvider: OpenProviding = RecordingOpenProvider(),
@@ -112,7 +112,7 @@ public final class PluginHost {
             transport: transport,
             clock: clock,
             httpClient: httpClient,
-            storage: makeStorage(),
+            storage: makeStorage(manifest.id),
             clipboardProvider: clipboardProvider,
             secretStore: secretStore,
             openProvider: openProvider,
@@ -236,13 +236,25 @@ public final class PluginHost {
 /// on a private serial queue; the bridge hops back to the instance queue.
 public final class DispatchClock: Clock {
     private let queue = DispatchQueue(label: "vee.engine.clock")
+    private let queueKey = DispatchSpecificKey<UInt8>()
     private var timers: [Int: DispatchSourceTimer] = [:]
     private var nextToken = 1
 
-    public init() {}
+    public init() {
+        queue.setSpecific(key: queueKey, value: 1)
+    }
+
+    /// Run `work` on the serial queue, but inline if we're ALREADY on it. A
+    /// one-shot timer's event handler fires *on* `queue` and then calls `cancel`;
+    /// a plain `queue.sync` there re-enters the held queue and traps (R2-CRIT-1 /
+    /// the original MAC-4). Mirrors the `LoopbackTransport` re-entrancy guard.
+    private func onQueue<T>(_ work: () -> T) -> T {
+        if DispatchQueue.getSpecific(key: queueKey) != nil { return work() }
+        return queue.sync(execute: work)
+    }
 
     public func schedule(after delay: TimeInterval, repeats: Bool, _ fire: @escaping () -> Void) -> Int {
-        return queue.sync {
+        return onQueue {
             let token = nextToken; nextToken += 1
             let timer = DispatchSource.makeTimerSource(queue: queue)
             if repeats {
@@ -261,7 +273,7 @@ public final class DispatchClock: Clock {
     }
 
     public func cancel(_ token: Int) {
-        queue.sync {
+        onQueue {
             timers[token]?.cancel()
             timers[token] = nil
         }

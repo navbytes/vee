@@ -13,10 +13,10 @@ concurrency:
 jobs:
   swift:
     name: Build & test (SwiftPM)
-    # macOS (not ubuntu) because the app links AppKit/JavaScriptCore. macos-15
-    # ships Xcode 16+, i.e. the Swift 6 toolchain that Package.swift requires
-    # (swift-tools-version: 6.0).
-    runs-on: macos-15
+    # macOS (not ubuntu) because the app links AppKit/JavaScriptCore. The macOS 26
+    # SDK is required: Package.swift targets .macOS(.v26) for Liquid Glass
+    # (NSGlassEffectView, swift-tools 6.2), so macos-15 runners cannot build it.
+    runs-on: macos-26
     steps:
       - uses: actions/checkout@v6
       - uses: maxim-lobanov/setup-xcode@v1

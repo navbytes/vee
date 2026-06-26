@@ -1,6 +1,6 @@
 # Vee — Manual Verification Guide (desktop)
 
-Most of Vee is covered by automated tests (146 Swift + 12 node), but the
+Most of Vee is covered by automated tests (259 Swift + 34 node), but the
 OS-facing surfaces — the launcher window, menubar, global hotkey firing, real
 app launching, and clipboard capture — can only be confirmed by a human at a
 logged-in macOS desktop. This is that checklist.
@@ -102,6 +102,6 @@ The engine (JSC bridge, memory rules, microtask ordering, render mirror,
 capability-gated `fetch`/`clipboard`/`keychain`), the fuzzy matcher, the SWR
 cache, the keychain store, RFC-6902 JSON-Patch, the clipboard **privacy filter**,
 the coordinator's projection + selection-preservation + native-filter wiring, and
-the TS↔Swift `hello-list` fixture handshake. Run `swift test` (146 tests, 1
-live-keychain skipped) and `cd plugins && npm test` (12 tests). See
+the TS↔Swift `hello-list` fixture handshake. Run `swift test` (259 tests, 1
+live-keychain skipped) and `cd plugins && npm test` (34 tests). See
 [STATUS.md](STATUS.md) for the full spec-coverage matrix.

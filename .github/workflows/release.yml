@@ -24,7 +24,9 @@ permissions:
 
 jobs:
   release:
-    runs-on: macos-15
+    # macos-26: the release build targets .macOS(.v26) (Liquid Glass), which the
+    # macos-15 SDK cannot build.
+    runs-on: macos-26
     env:
       # Step-level `if:` gates read these; absent secrets resolve to "" → the
       # sign/notarize steps are skipped and an ad-hoc-signed app is published.

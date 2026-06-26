@@ -1453,7 +1453,9 @@ final class VeeEngineTests: XCTestCase {
         PluginManifest(
             id: id, name: "Test", version: "1.0.0", entrypoint: "bundle.js",
             commands: [PluginCommand(name: "view", title: "View", mode: .view)],
-            capabilities: Capabilities(open: ["*", "bundleId:*"])
+            // Grants every scheme + any app; also allowlists example.com so the
+            // https open tests pass the unconditional network re-check (R2-MED-1).
+            capabilities: Capabilities(network: ["example.com"], open: ["*", "bundleId:*"])
         )
     }
 

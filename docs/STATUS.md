@@ -4,7 +4,25 @@
 
 ---
 
-## Update — R3 + Audit remediation, 2026-06-26 (current state)
+## Update — Round-2 re-audit fixes, 2026-06-26 (current state)
+
+*Follows [AUDIT-2.md](AUDIT-2.md) (the post-remediation re-audit). `swift test`: **259 tests, 258 pass / 1 skipped, 0 failures**; 34 node tests pass.*
+
+Fixed this round:
+- **R2-CRIT-1 — `DispatchClock` one-shot deadlock.** The one-shot timer handler ran on the clock's serial queue and then called `cancel`, which did `queue.sync` on that same queue → trap. Added the same `DispatchSpecificKey` re-entrancy guard used elsewhere; `DispatchClockTests` fires a real one-shot. *(Any `setTimeout`-using plugin was broken.)*
+- **R2-HIGH-1 — CI/release runners.** `ci`/`lint`/`release` workflows moved `macos-15 → macos-26` (a macos-15 SDK can't build the `.v26` target). The 26-only target is intentional (latest-macOS-only).
+- **R2-MED-1 — `open:["*"]` exfil waiver closed.** The http(s) host re-check against the network allowlist is now unconditional; a wildcard scheme grant can't open a web URL to a non-allowlisted host. Tests updated to the new contract.
+- **R2-HIGH-2 — per-plugin storage namespace.** The storage factory now receives the real plugin id (`<root>/<pluginId>/`), so one plugin's `vee.storage` can't read/overwrite another's.
+- **R2-MED-2 — leaked timers.** `JSBridge.teardown` now cancels outstanding clock tokens (a live `setInterval` no longer survives unload/reload).
+- **R2-MED-6 — SDK `open` parity.** Added `open: string[]` to the TS `Capabilities` + `emptyCapabilities()`.
+
+**Honest status of the out-of-process host (reconciles the prior overclaim).** The OOP host (`StdioTransport` + `vee-plugin-host` + `ChildProcessHost`) is **built and tested as a library**, but the **shipping app still loads plugins in-process** over a loopback transport — so crash isolation is *not active at runtime*. [MANUAL-VERIFY.md](MANUAL-VERIFY.md) is correct on this; the earlier "a real out-of-process plugin platform" phrasing was an overclaim and is corrected below.
+
+**Known remaining (triaged, not yet done):** wire the OOP host into production + its hardening prereqs (max-frame bound, request timeout, `Bundle.main` child resolver, `SIGPIPE` ignore) — AUDIT-2 §5; plugin authenticity/signing (R2-HIGH-3); `⌘K` actions menu (R2-HIGH-4 — implement or remove); SSRF IP-literal classifier (R2-MED-5); mirror keyframe-on-desync (R2-MED-3); cold-open loading state (R2-MED-4); Settings roster from discovery (R2-MED-8).
+
+---
+
+## Update — R3 + Audit remediation, 2026-06-26
 
 *This section supersedes the older verdicts below (which are kept as historical record). The package builds clean and `swift test` reports **254 tests — 253 pass, 1 skipped (live keychain), 0 failures**.*
 
@@ -20,7 +38,7 @@
 
 **Deferred (non-blocking, documented):** UX-1 (context-aware Esc→root) needs window/coordinator coordination; PERF-3 debounce/diff-reload (see above); notarization (external credentials).
 
-**Verdict:** a polished, tested, signed Raycast-class launcher with a real out-of-process JS plugin platform and the audit's P0/P1 findings remediated. Visuals re-verified via the offscreen snapshot harness (list/empty/detail/plugin × light/dark). The only thing standing between this and Gatekeeper-distributable is Apple notarization credentials.
+**Verdict:** a polished, tested, signed Raycast-class launcher with the audit's P0 and most P1 findings remediated (the out-of-process host is built + tested as a library but not yet wired into the shipping app — see the Round-2 note above). Visuals re-verified via the offscreen snapshot harness (list/empty/detail/plugin × light/dark). The only thing standing between this and Gatekeeper-distributable is Apple notarization credentials.
 
 **Design language** — system-semantic colors, the macOS type ramp, Liquid Glass (`NSGlassEffectView`, macOS 26), an 8-pt geometry grid, and an accent-tinted floating selection pill — is documented in [DESIGN.md](DESIGN.md). The app now targets `.macOS(.v26)` only (Liquid Glass is 26-only); the offscreen snapshot harness falls back to `.sidebar` vibrancy since glass can't composite headless.
 
