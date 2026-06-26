@@ -1,6 +1,6 @@
 # Vee — Manual Verification Guide (desktop)
 
-Most of Vee is covered by automated tests (259 Swift + 34 node), but the
+Most of Vee is covered by automated tests (302 Swift + 34 node), but the
 OS-facing surfaces — the launcher window, menubar, global hotkey firing, real
 app launching, and clipboard capture — can only be confirmed by a human at a
 logged-in macOS desktop. This is that checklist.
@@ -72,16 +72,22 @@ proven against a fake in tests).
 ## Known limitations in this build (by design / follow-ups)
 
 - **Real app icons** now render (full-color, via `NSWorkspace.icon`); ✅ done.
-- The footer's **Actions ⌘K** is presentational — the actions panel isn't wired yet.
+- The footer's **Actions ⌘K** opens a keyboard-driven popover of the selected
+  item's actions (↑/↓ + ↩ to invoke, esc to dismiss). ✅ done.
 - **Clipboard history** is captured in memory and privacy-filtered
   (1Password/concealed/transient dropped) but has **no launcher surface yet** —
   it runs in the background; verify behavior via the unit tests, not the UI.
-- **Only host-native app search** is wired as the launcher surface. JS plugins
-  (the `hello-list` sample and the GitHub/Jira/meeting-bar plugins) are **not
-  auto-loaded**; the hot-reload infra (FSEvents watcher + esbuild bundler) is
-  wired but dormant until a plugin is loaded via `host.load`.
-- **Out-of-process execution is not yet real** (in-process loopback transport),
-  so a misbehaving plugin would not be crash-isolated.
+- Plugins are now **discovered, staged into the out-of-process child, and
+  surfaced** in the launcher root (each command appears as a `cmd:` candidate
+  above your apps; selecting it activates the plugin, which renders into the
+  launcher). App search is the pluginless root surface alongside them.
+- **Out-of-process execution is now real**: the app runs plugins in a
+  `vee-plugin-host` child (in-process fallback only if the child binary is
+  missing), so a crashing plugin is isolated from the launcher and the child is
+  auto-restarted. It is a *crash*-isolation boundary, not yet a privilege/sandbox
+  boundary (the child runs with real providers + ambient authority). Verify on the
+  desktop: kill the `vee-plugin-host` process and confirm the launcher survives and
+  plugins keep working after a reopen.
 - **No code signing / entitlements / Info.plist** → calendar (EventKit
   full-access TCC prompt) and App-Sandbox behaviors are untested.
 
@@ -102,6 +108,6 @@ The engine (JSC bridge, memory rules, microtask ordering, render mirror,
 capability-gated `fetch`/`clipboard`/`keychain`), the fuzzy matcher, the SWR
 cache, the keychain store, RFC-6902 JSON-Patch, the clipboard **privacy filter**,
 the coordinator's projection + selection-preservation + native-filter wiring, and
-the TS↔Swift `hello-list` fixture handshake. Run `swift test` (259 tests, 1
+the TS↔Swift `hello-list` fixture handshake. Run `swift test` (302 tests, 1
 live-keychain skipped) and `cd plugins && npm test` (34 tests). See
 [STATUS.md](STATUS.md) for the full spec-coverage matrix.

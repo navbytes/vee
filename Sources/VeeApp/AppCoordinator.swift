@@ -154,6 +154,35 @@ public final class AppCoordinator {
         return e
     }
 
+    public var loadingViewModel: LoadingViewModel? {
+        guard case .loading(let l) = root else { return nil }
+        return l
+    }
+
+    /// R2-HIGH-4: the actions for the currently selected list item — what the ⌘K
+    /// actions menu presents. Empty when there's no list surface, no selection, or
+    /// the selected item carries no actions, so the GUI can treat `⌘K` as a no-op
+    /// (never a misleading empty menu). In host-native mode the selected row's
+    /// synthesized primary "Open" action is included (an item always has ≥1 action
+    /// after projection), so ⌘K may legitimately show just "Open".
+    public var actionsForSelection: [ActionViewModel] {
+        guard case .list(let list) = root, let selectedID,
+              let item = list.items.first(where: { $0.id == selectedID }) else { return [] }
+        return item.actions
+    }
+
+    /// R2-HIGH-4: whether a ⌘K actions menu should open for the current selection.
+    /// False (so ⌘K is a no-op) when there's nothing actionable to show. The GUI
+    /// calls this on ⌘K and only presents the popover when it's true.
+    public var canShowActionsMenu: Bool { !actionsForSelection.isEmpty }
+
+    /// True while the cold-open loading surface is showing (R2-MED-4). Flips to
+    /// false as soon as the first candidates or a plugin render replace it.
+    public var isLoading: Bool {
+        if case .loading = root { return true }
+        return false
+    }
+
     // MARK: - Inbound routing (host → launcher)
 
     private func handleInbound(_ message: JSONRPCMessage) {
@@ -206,8 +235,16 @@ public final class AppCoordinator {
         // `replace ""`; subsequent renders are minimal diffs.
         let base = mirror ?? .null
         guard let next = try? JSONPatch.apply(params.patch, to: base) else {
-            // A patch that fails to apply (e.g. against an unexpected mirror) is
-            // dropped rather than corrupting state; production would also log it.
+            // R2-MED-3 recovery: a patch that fails to apply means our mirror has
+            // desynced from the host (e.g. a diff arrived against a tree we never
+            // saw). The host has ALREADY advanced its revision, so every later diff
+            // would mis-apply onto this stale base and the surface would freeze
+            // permanently. Instead of returning (and keeping the poisoned mirror),
+            // RESET: drop the mirror + revision sequence so we stop applying diffs
+            // onto a desynced base, and show a neutral "refreshing" surface. The
+            // host re-renders the whole tree as a `replace ""` keyframe (revision
+            // restarts above 0), which then re-syncs cleanly from `.null`.
+            resetMirrorForResync()
             return
         }
         mirror = next
@@ -218,6 +255,20 @@ public final class AppCoordinator {
         root = ViewModelProjector.project(node)
 
         reconcileSelection(previousSelection: previousSelection, previousIDs: previousIDs)
+        pushToWindow()
+    }
+
+    /// R2-MED-3 recovery: drop the render mirror to a clean slate after a failed
+    /// patch apply so the surface can't stay frozen on a desynced tree. Clears the
+    /// mirror and resets `lastRevision` to 0 — the host's next full render (a
+    /// `replace ""` keyframe at any revision ≥ 1) then passes the staleness guard
+    /// and rebuilds the tree from `.null`. Drops to a subtle "Refreshing…" empty
+    /// state in the meantime (rather than a blank pane) and clears selection.
+    private func resetMirrorForResync() {
+        mirror = nil
+        lastRevision = 0
+        selectedID = nil
+        root = .empty(EmptyViewModel(title: "Refreshing…", description: nil))
         pushToWindow()
     }
 
@@ -261,9 +312,20 @@ public final class AppCoordinator {
         refilter()
     }
 
+    /// Show the cold-open loading surface (R2-MED-4): a "Loading…" indicator while
+    /// app discovery + the ~5000-app enumeration are still running, so the panel
+    /// gives feedback instead of a blank list. main.swift calls this at startup;
+    /// the first `showHostCandidates`/`applyRender` clears it automatically.
+    public func showLoading(title: String? = "Loading…", description: String? = nil) {
+        selectedID = nil
+        root = .loading(LoadingViewModel(title: title, description: description))
+        pushToWindow()
+    }
+
     /// Display a host-native candidate set (e.g. installed apps) as the launcher
     /// list — the pluginless "root search" surface. `invoke` is called with the
     /// activated candidate (e.g. to launch the app). No plugin/transport involved.
+    /// Clears any cold-open loading surface (R2-MED-4) since real content arrived.
     public func showHostCandidates(_ candidates: [Candidate],
                                    sectionTitle: String? = nil,
                                    accessory: String? = nil,
@@ -447,7 +509,7 @@ public final class AppCoordinator {
         switch root {
         case .list:
             window.setRootViewModel(listViewModel.map(RootViewModel.list))
-        case .detail, .empty, .none:
+        case .detail, .empty, .loading, .none:
             window.setRootViewModel(root)
         }
     }

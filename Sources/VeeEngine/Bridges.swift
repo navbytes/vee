@@ -88,37 +88,155 @@ public final class TestClock: Clock {
     var hasPending: Bool { !timers.isEmpty }
 }
 
-// MARK: - SSRF host classifier (SEC-4 / SEC-3)
+// MARK: - SSRF host classifier (SEC-4 / SEC-3 / R2-MED-5)
 
-/// Best-effort literal-host SSRF guard shared by the fetch gate (SEC-4) and the
-/// redirect re-check (SEC-3). Returns true for hosts that must never be fetched:
-/// loopback, link-local, and RFC-1918 private ranges, matched on the literal
-/// host string (defence against the most common SSRF/metadata targets). This is
-/// intentionally a string match — full DNS-resolution pinning is out of scope —
-/// but it blocks the literal forms an attacker reaches for
-/// (`169.254.169.254`, `localhost`, `127.x`, `10.x`, `192.168.x`, `172.16-31.x`,
-/// `::1`). Comparison is case-insensitive and tolerates bracketed IPv6.
+#if canImport(Darwin)
+import Darwin
+#else
+import Glibc
+#endif
+
+/// Literal-host SSRF guard shared by the fetch gate (SEC-4) and the redirect
+/// re-check (SEC-3). Returns `true` for hosts that must never be fetched —
+/// loopback, link-local (incl. the cloud metadata IP `169.254.169.254`), RFC-1918
+/// private ranges, and IPv6 unique-local (`fc00::/7`).
+///
+/// This is **defense-in-depth on top of the per-plugin allowlist** (the allowlist
+/// is the primary gate); it cannot defeat DNS rebinding (no resolution pinning),
+/// but it closes the literal-IP bypasses an attacker reaches for.
+///
+/// ## R2-MED-5 fixes
+/// The previous implementation was a naive `hasPrefix` string match. It (a) missed
+/// the *obfuscated* IPv4 forms that `connect(2)`/`inet_aton` still resolve to a
+/// blocked address, and (b) over-blocked legitimate hostnames. This version parses
+/// the host as an actual IP literal and classifies the resolved bytes:
+///
+///   • **IPv6** via `inet_pton(AF_INET6)`: loopback `::1`, link-local `fe80::/10`,
+///     unique-local `fc00::/7`; an **IPv4-mapped** address (`::ffff:a.b.c.d`,
+///     e.g. `[::ffff:169.254.169.254]`) is unwrapped and its embedded IPv4
+///     re-classified.
+///   • **IPv4** via `inet_pton(AF_INET)` AND `inet_aton`. `inet_aton` is what
+///     resolves the obfuscation an attacker uses and `inet_pton` rejects —
+///     **decimal** (`2130706433` → `127.0.0.1`), **hex** (`0x7f.0.0.1`,
+///     `0x7f000001`), **octal** (`0177.0.0.1`), and short forms (`127.1`). We
+///     classify the union, the most-blocking (correct) stance for a blocklist.
+///
+///   • **Over-block fix:** the old `hasPrefix("fc")/("fd")` wrongly blocked real
+///     hostnames like `fc-data.com`/`fd-cdn.net`. `fc00::/7` is now matched ONLY
+///     when the host actually parses as an IPv6 literal — never for a hostname.
+///     A non-IP host (a real DNS name) is NOT blocked here; the allowlist governs
+///     it.
+///
+/// Comparison is case-insensitive and tolerates bracketed IPv6 (`[::1]`).
 public func isBlockedNetworkHost(_ host: String) -> Bool {
     var h = host.lowercased()
     if h.hasPrefix("["), h.hasSuffix("]") { h = String(h.dropFirst().dropLast()) }   // [::1] → ::1
     guard !h.isEmpty else { return false }
 
-    // Loopback (names + IPv4/IPv6 literals).
+    // Name-based loopback (a hostname, not an IP literal): `localhost`, and any
+    // `*.localhost` per RFC 6761. (IP literals are handled below by parsing.)
     if h == "localhost" || h.hasSuffix(".localhost") { return true }
-    if h == "::1" || h == "0.0.0.0" { return true }
-    if h.hasPrefix("127.") { return true }
 
-    // Link-local (IPv4 169.254/16, including the cloud metadata IP) + IPv6 fe80::.
-    if h.hasPrefix("169.254.") { return true }
-    if h.hasPrefix("fe80:") || h.hasPrefix("fc") || h.hasPrefix("fd") { return true }   // fc00::/7 unique-local
+    // IPv6 literal? Strip a zone id (`fe80::1%en0`) before parsing.
+    let v6Candidate = h.split(separator: "%", maxSplits: 1).first.map(String.init) ?? h
+    if let v6 = parseIPv6(v6Candidate) {
+        return isBlockedIPv6(v6)
+    }
 
-    // RFC-1918 private IPv4.
-    if h.hasPrefix("10.") { return true }
-    if h.hasPrefix("192.168.") { return true }
-    if h.hasPrefix("172.") {
-        // 172.16.0.0 – 172.31.255.255
-        let parts = h.split(separator: ".")
-        if parts.count >= 2, let second = Int(parts[1]), (16...31).contains(second) { return true }
+    // IPv4 literal, INCLUDING the obfuscated forms `connect()` would resolve
+    // (decimal/hex/octal/short). An empty set ⇒ not an IP literal ⇒ a real
+    // hostname, which this defense-in-depth layer does not block (the allowlist
+    // does). If ANY plausible interpretation is a blocked range, block — see
+    // `ipv4Interpretations` for why strict and permissive parses can disagree.
+    let v4s = ipv4Interpretations(h)
+    if !v4s.isEmpty {
+        return v4s.contains(where: isBlockedIPv4)
+    }
+    return false
+}
+
+/// Parse an IPv6 literal to its 16 bytes via `inet_pton`, or nil if it isn't one.
+private func parseIPv6(_ s: String) -> [UInt8]? {
+    var addr = in6_addr()
+    let ok = s.withCString { inet_pton(AF_INET6, $0, &addr) } == 1
+    guard ok else { return nil }
+    return withUnsafeBytes(of: &addr) { Array($0) }   // 16 bytes, network order
+}
+
+/// Every host-order `UInt32` an IPv4 literal could plausibly resolve to. We union
+/// the STRICT (`inet_pton`) and PERMISSIVE (`inet_aton`) parses because they
+/// **disagree** on some inputs, and the disagreement is exploitable: `inet_pton`
+/// reads `0177.0.0.1` as decimal `177.0.0.1` (public), while `inet_aton` — and the
+/// resolver/`connect(2)` path a real fetch actually takes — reads `0177` as OCTAL
+/// `127`, i.e. loopback. Blocking the union (block if *any* interpretation is a
+/// blocked range) is the conservative, correct stance for an SSRF blocklist: we
+/// never want a host that *could* reach a private address to slip through because
+/// one parser happened to read it as public.
+///
+/// `inet_aton` also covers the obfuscated forms `inet_pton` rejects outright —
+/// decimal (`2130706433`), hex (`0x7f000001`, `0x7f.0.0.1`), and <4-part short
+/// forms (`127.1`). An empty result means the host is not an IP literal at all (a
+/// real DNS name), which the caller leaves to the allowlist.
+private func ipv4Interpretations(_ s: String) -> [UInt32] {
+    var results: [UInt32] = []
+    var strict = in_addr()
+    if s.withCString({ inet_pton(AF_INET, $0, &strict) }) == 1 {
+        results.append(UInt32(bigEndian: strict.s_addr))
+    }
+    // Guard the permissive parse to genuinely numeric/dotted/hex input so we don't
+    // accidentally accept a hostname (inet_aton already rejects names, but require
+    // at least one digit and only IP-literal characters as a cheap belt).
+    let allowed = Set("0123456789abcdefx.")
+    if !s.isEmpty, s.allSatisfy({ allowed.contains($0) }), s.contains(where: { $0.isNumber }) {
+        var legacy = in_addr()
+        if s.withCString({ inet_aton($0, &legacy) }) != 0 {
+            results.append(UInt32(bigEndian: legacy.s_addr))
+        }
+    }
+    return results
+}
+
+/// Classify a host-order IPv4 address against the blocked ranges.
+private func isBlockedIPv4(_ a: UInt32) -> Bool {
+    let o1 = (a >> 24) & 0xff
+    let o2 = (a >> 16) & 0xff
+    // 0.0.0.0/8 — "this host"/unspecified (0.0.0.0 routes to localhost on many stacks).
+    if o1 == 0 { return true }
+    // 127.0.0.0/8 — loopback.
+    if o1 == 127 { return true }
+    // 10.0.0.0/8 — private.
+    if o1 == 10 { return true }
+    // 169.254.0.0/16 — link-local (incl. 169.254.169.254 cloud metadata).
+    if o1 == 169 && o2 == 254 { return true }
+    // 172.16.0.0/12 — private.
+    if o1 == 172 && (16...31).contains(o2) { return true }
+    // 192.168.0.0/16 — private.
+    if o1 == 192 && o2 == 168 { return true }
+    return false
+}
+
+/// Classify a 16-byte (network-order) IPv6 address against the blocked ranges,
+/// unwrapping an IPv4-mapped address and re-classifying its embedded IPv4.
+private func isBlockedIPv6(_ b: [UInt8]) -> Bool {
+    guard b.count == 16 else { return false }
+    // ::1 — loopback. (:: unspecified is also treated as blocked.)
+    let isAllZeroExceptLast = b[0..<15].allSatisfy { $0 == 0 }
+    if isAllZeroExceptLast && (b[15] == 1 || b[15] == 0) { return true }
+    // fe80::/10 — link-local: first 10 bits are 1111 1110 10.
+    if b[0] == 0xfe && (b[1] & 0xc0) == 0x80 { return true }
+    // fc00::/7 — unique-local (covers fc00::/8 and fd00::/8). First 7 bits 1111 110.
+    if (b[0] & 0xfe) == 0xfc { return true }
+    // IPv4-mapped ::ffff:a.b.c.d (::ffff:0:0/96) — unwrap + re-classify the v4.
+    let mappedPrefix = b[0..<10].allSatisfy { $0 == 0 } && b[10] == 0xff && b[11] == 0xff
+    if mappedPrefix {
+        let v4 = (UInt32(b[12]) << 24) | (UInt32(b[13]) << 16) | (UInt32(b[14]) << 8) | UInt32(b[15])
+        return isBlockedIPv4(v4)
+    }
+    // IPv4-compatible ::a.b.c.d (deprecated, but classify defensively).
+    let compatPrefix = b[0..<12].allSatisfy { $0 == 0 }
+    if compatPrefix {
+        let v4 = (UInt32(b[12]) << 24) | (UInt32(b[13]) << 16) | (UInt32(b[14]) << 8) | UInt32(b[15])
+        if v4 != 0 && v4 != 1 { return isBlockedIPv4(v4) }
     }
     return false
 }

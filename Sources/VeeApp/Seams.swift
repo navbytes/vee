@@ -16,6 +16,18 @@ public protocol LauncherIntentHandling: AnyObject {
     func moveSelection(by delta: Int)
     /// Invoke an action id on the current selection (Return / action shortcut).
     func invoke(action actionId: String)
+    /// R2-HIGH-4: the actions for the current selection, for the ⌘K actions menu.
+    /// Empty → the GUI treats ⌘K as a no-op (never an empty/misleading menu). The
+    /// coordinator owns this projection; the window only reads it to decide whether
+    /// to present the popover and what to list. Default `[]` keeps the view layer
+    /// from forcing every (non-coordinator) intent handler to implement it.
+    var actionsForSelection: [ActionViewModel] { get }
+}
+
+public extension LauncherIntentHandling {
+    /// Default: no actions, so ⌘K stays a no-op for intent handlers that don't
+    /// model an actions menu (only the coordinator does).
+    var actionsForSelection: [ActionViewModel] { [] }
 }
 
 /// Visual style for a transient toast banner. Mirrors `VeeProtocol.ToastParams.Style`

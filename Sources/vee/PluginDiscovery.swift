@@ -61,7 +61,25 @@ enum PluginDiscovery {
         if found.isEmpty {
             found = discoverFromDevTree(currentDirectory: currentDirectory, fileManager: fileManager)
         }
-        return found.sorted { $0.manifest.id < $1.manifest.id }
+        // R2-HIGH-3 (plugin authenticity): refuse duplicate ids. Plugins load only
+        // from the signed app bundle (or the dev tree) — there is no user-droppable
+        // external dir — so the trust root is the app's own signature. As a guard
+        // against a manifest claiming another plugin's id (which keys Keychain
+        // isolation), the first occurrence after a stable sort wins and any later
+        // duplicate id is dropped — a spoofed/duplicate id cannot shadow a real
+        // plugin to reach its Keychain namespace. (Full per-plugin code-signing is
+        // deferred until an external plugin-install path exists.)
+        var seen = Set<String>()
+        var deduped: [Discovered] = []
+        for d in found.sorted(by: { $0.manifest.id < $1.manifest.id }) {
+            guard seen.insert(d.manifest.id).inserted else {
+                FileHandle.standardError.write(Data(
+                    "vee: refused duplicate plugin id '\(d.manifest.id)'\n".utf8))
+                continue
+            }
+            deduped.append(d)
+        }
+        return deduped
     }
 
     // MARK: - Production: Resources/vee-plugins/<id>/{vee.json,bundle.js}
@@ -82,6 +100,15 @@ enum PluginDiscovery {
             let manifestPath = (dir as NSString).appendingPathComponent("vee.json")
             let bundlePath = (dir as NSString).appendingPathComponent("bundle.js")
             if let discovered = load(manifestPath: manifestPath, bundlePath: bundlePath) {
+                // R2-HIGH-3: bind identity to the trusted install layout. The
+                // packaging script names each folder by manifest id, so a manifest
+                // claiming an id other than its own folder is refused — it can't
+                // pose as another plugin (and reach that id's Keychain namespace).
+                guard discovered.manifest.id == entry else {
+                    FileHandle.standardError.write(Data(
+                        "vee: plugin id '\(discovered.manifest.id)' != folder '\(entry)' — refusing\n".utf8))
+                    continue
+                }
                 out.append(discovered)
             }
         }

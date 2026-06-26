@@ -27,6 +27,10 @@ public enum RootViewModel: Equatable, Sendable {
     case list(ListViewModel)
     case detail(DetailViewModel)
     case empty(EmptyViewModel)
+    /// Cold-open / in-flight surface shown before the first candidates or render
+    /// arrive (R2-MED-4): a "Loading…" title + subtle indicator over the empty
+    /// pane. Cleared the moment real content lands.
+    case loading(LoadingViewModel)
     /// A tree with no recognized primary surface (e.g. only unknown tags).
     case none
 }
@@ -104,6 +108,18 @@ public struct EmptyViewModel: Equatable, Sendable {
     public var title: String?
     public var description: String?
     public init(title: String?, description: String?) {
+        self.title = title; self.description = description
+    }
+}
+
+/// Cold-open loading surface (R2-MED-4). Mirrors the empty-state shape (a title +
+/// optional description) but the AppKit view also shows a subtle progress
+/// indicator, so the launcher gives feedback while app discovery + the ~5000-app
+/// enumeration are still in flight instead of presenting a blank list.
+public struct LoadingViewModel: Equatable, Sendable {
+    public var title: String?
+    public var description: String?
+    public init(title: String? = "Loading…", description: String? = nil) {
         self.title = title; self.description = description
     }
 }

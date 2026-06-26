@@ -166,10 +166,34 @@ MainActor.assumeIsolated {
         fileProvider: fileProvider,
         calendarProvider: calendarProvider)
 
+    // R2-CRIT-2: run plugins OUT OF PROCESS when the child binary is resolvable
+    // (the shipped .app bundles `vee-plugin-host` beside `vee`; `swift run` builds
+    // it alongside). A crashing plugin then takes down only the child — supervised
+    // + restarted below — not the launcher. Falls back to the in-process `host`
+    // only when the child binary can't be found / won't launch.
+    var childHost: ChildProcessHost?
+    if let childURL = ChildProcessHost.defaultChildBinaryURL() {
+        let candidate = ChildProcessHost(executableURL: childURL, requestTimeout: 10)
+        do { try candidate.start(); childHost = candidate }
+        catch {
+            FileHandle.standardError.write(Data(
+                "vee: out-of-process host unavailable (\(error)); running plugins in-process\n".utf8))
+        }
+    }
+
+    let coordinatorTransport: CoordinatorTransport
+    let activatingHost: PluginActivating
+    if let childHost {
+        coordinatorTransport = ChildCoordinatorTransport(childHost)
+        activatingHost = ChildActivatingHost(childHost)
+    } else {
+        coordinatorTransport = LoopbackCoordinatorTransport(loopback)
+        activatingHost = host
+    }
     let coordinator = AppCoordinator(
         pluginId: "com.vee.launcher",
-        transport: LoopbackCoordinatorTransport(loopback),
-        host: host)
+        transport: coordinatorTransport,
+        host: activatingHost)
 
     // ── AppKit seams (real NSPanel launcher + NSStatusItem menubar) ───────────
     let window = AppKitLauncherWindow()
@@ -177,6 +201,33 @@ MainActor.assumeIsolated {
     coordinator.window = window
     coordinator.menuBar = menuBar
     menuBar.setMenuBarTitle("Vee")
+    // R2-MED-4: show a loading surface immediately; discovery + app enumeration
+    // below replace it via `showHostCandidates`.
+    coordinator.showLoading()
+
+    // Supervise the out-of-process host: a plugin crash kills the child (not the
+    // launcher), so restart it + re-stage the plugins and return to root. A plugin
+    // that *hangs* in activate trips the request watchdog (logged). The shutdown
+    // guard stops a deliberate quit from spawning a replacement child.
+    var isShuttingDown = false
+    childHost?.onTermination = { info in
+        FileHandle.standardError.write(Data(
+            "vee: plugin host exited (status \(info.status), uncaughtSignal=\(info.byUncaughtSignal))\n".utf8))
+        DispatchQueue.main.async {
+            MainActor.assumeIsolated {
+                guard !isShuttingDown, let ch = childHost else { return }
+                try? ch.restart()
+                for plugin in PluginDiscovery.discoverAll() {
+                    _ = try? ch.load(manifest: plugin.manifest, source: plugin.source)
+                }
+                coordinator.showRoot()
+            }
+        }
+    }
+    childHost?.onRequestTimeout = { rt in
+        FileHandle.standardError.write(Data(
+            "vee: plugin host request '\(rt.method)' timed out after \(rt.timeout)s\n".utf8))
+    }
 
     // ── Settings window + menubar actions ─────────────────────────────────────
     // Tokens are stored in the real Keychain (namespace "tokens"); the Settings
@@ -184,15 +235,25 @@ MainActor.assumeIsolated {
     // per-plugin tokens. Construct it lazily-once and surface "Settings…" / "Quit
     // Vee" in the menubar.
     let tokenStore = KeychainTokenStore()
+    // R2-MED-8: the Settings "Plugins" token roster is derived from discovery — the
+    // installed plugins that declare a Keychain namespace (i.e. need a token) — not
+    // a hardcoded GitHub/Linear/OpenAI list.
+    let pluginRoster = PluginDiscovery.discoverAll()
+        .filter { !$0.manifest.capabilities.keychainNamespaces.isEmpty }
+        .map { SettingsWindowController.PluginTokenSpec(
+            pluginId: $0.manifest.id, displayName: $0.manifest.name) }
     let settingsController = SettingsWindowController(
         model: settings,
         tokenStore: tokenStore,
+        knownPlugins: pluginRoster,
         onIgnoreNextCopy: { [weak clipboard] in clipboard?.ignoreNextCopy() })
     menuBar.addActionItem(title: "Settings…", keyEquivalent: ",") {
         settingsController.show()
     }
     menuBar.addSeparator()
     menuBar.addActionItem(title: "Quit Vee", keyEquivalent: "q") {
+        isShuttingDown = true
+        childHost?.terminate()
         NSApp.terminate(nil)
     }
 
@@ -201,6 +262,13 @@ MainActor.assumeIsolated {
     // this in-memory set natively per keystroke (never re-scans on a keypress).
     let appEnumerator = NSWorkspaceAppEnumerator()
     let appSearch = AppSearchProvider(enumerator: appEnumerator, clock: SystemClock())
+
+    // Stage a discovered plugin into whichever host is active — the out-of-process
+    // child when available, else the in-process host (same `host.load` contract).
+    let stagePlugin: (PluginManifest, String) -> Bool = { manifest, source in
+        if let childHost { return (try? childHost.load(manifest: manifest, source: source)) != nil }
+        return (try? host.load(manifest: manifest, source: source)) != nil
+    }
 
     // ── Discover + load plugins from disk; surface each command in the root ───
     // Production: Resources/vee-plugins/<id>/{vee.json,bundle.js}. Dev fallback:
@@ -220,8 +288,7 @@ MainActor.assumeIsolated {
             MainActor.assumeIsolated {
                 var commandCandidates: [Candidate] = []
                 for plugin in discovered {
-                    guard (try? host.load(manifest: plugin.manifest, source: plugin.source)) != nil
-                    else { continue }
+                    guard stagePlugin(plugin.manifest, plugin.source) else { continue }
                     // One root candidate per declared command (most plugins ship a
                     // single "view" command, but honor multiples).
                     for command in plugin.manifest.commands {

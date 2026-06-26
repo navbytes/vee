@@ -6,19 +6,18 @@
 
 ## Update — Round-2 re-audit fixes, 2026-06-26 (current state)
 
-*Follows [AUDIT-2.md](AUDIT-2.md) (the post-remediation re-audit). `swift test`: **259 tests, 258 pass / 1 skipped, 0 failures**; 34 node tests pass.*
+*Follows [AUDIT-2.md](AUDIT-2.md) (the post-remediation re-audit). `swift test`: **302 tests, 301 pass / 1 skipped, 0 failures**; 34 node tests pass.*
 
-Fixed this round:
-- **R2-CRIT-1 — `DispatchClock` one-shot deadlock.** The one-shot timer handler ran on the clock's serial queue and then called `cancel`, which did `queue.sync` on that same queue → trap. Added the same `DispatchSpecificKey` re-entrancy guard used elsewhere; `DispatchClockTests` fires a real one-shot. *(Any `setTimeout`-using plugin was broken.)*
-- **R2-HIGH-1 — CI/release runners.** `ci`/`lint`/`release` workflows moved `macos-15 → macos-26` (a macos-15 SDK can't build the `.v26` target). The 26-only target is intentional (latest-macOS-only).
-- **R2-MED-1 — `open:["*"]` exfil waiver closed.** The http(s) host re-check against the network allowlist is now unconditional; a wildcard scheme grant can't open a web URL to a non-allowlisted host. Tests updated to the new contract.
-- **R2-HIGH-2 — per-plugin storage namespace.** The storage factory now receives the real plugin id (`<root>/<pluginId>/`), so one plugin's `vee.storage` can't read/overwrite another's.
-- **R2-MED-2 — leaked timers.** `JSBridge.teardown` now cancels outstanding clock tokens (a live `setInterval` no longer survives unload/reload).
-- **R2-MED-6 — SDK `open` parity.** Added `open: string[]` to the TS `Capabilities` + `emptyCapabilities()`.
+The full Round-2 backlog is remediated. Highlights:
+- **R2-CRIT-1 — `DispatchClock` one-shot deadlock.** The handler ran on the clock's serial queue then called `cancel` → `queue.sync` re-entry trap. Added the `DispatchSpecificKey` guard used elsewhere; `DispatchClockTests` fires a real one-shot. *(Any `setTimeout`-using plugin was broken.)*
+- **R2-CRIT-2 — out-of-process host NOW WIRED into the shipping app.** Plugins run in a `vee-plugin-host` child process (resolved beside the executable; in-process fallback only if the binary is absent), so a crashing plugin kills the child — supervised + auto-restarted + re-staged — not the launcher. Behind it, the AUDIT-2 §5 hardening landed (max-frame bound, request-timeout watchdog, `SIGPIPE` ignore, restart/terminationHandler generation guard, `Bundle.main` child resolver, real SIGKILL crash-isolation test). Validated by a bounded smoke run (child reports ready, no crash) **and** `ChildBridgeTests` (essentials renders through the real child → adapters → coordinator).
+- **R2-HIGH-1 — CI/release runners** `macos-15 → macos-26` (the macos-15 SDK can't build the intentional `.v26`/Liquid Glass target).
+- **R2-HIGH-2 — per-plugin storage namespace** (`<root>/<pluginId>/`; no cross-plugin clobber).
+- **R2-HIGH-3 — plugin authenticity** at the discovery layer: refuse duplicate ids, bind a bundled plugin's manifest id to its packaging-controlled folder (a spoofed/duplicate id can't shadow a real plugin to reach its Keychain tokens). `VeeCLITests`.
+- **R2-HIGH-4 / R2-MED-3 / R2-MED-4** — working `⌘K` actions popover, mirror keyframe-on-desync recovery, cold-open loading state (18 VeeApp tests).
+- **R2-MED-1** (`open:["*"]` exfil waiver closed — http(s) host re-check now unconditional), **R2-MED-2** (leaked timers cancelled on teardown), **R2-MED-5** (SSRF IP-literal classifier via `inet_pton` — decimal/hex/IPv6-mapped/ULA, fixes the `fc*`/`fd*` hostname over-block), **R2-MED-6** (SDK `Capabilities.open` parity), **R2-MED-8** (Settings token roster driven by discovery, not hardcoded).
 
-**Honest status of the out-of-process host (reconciles the prior overclaim).** The OOP host (`StdioTransport` + `vee-plugin-host` + `ChildProcessHost`) is **built and tested as a library**, but the **shipping app still loads plugins in-process** over a loopback transport — so crash isolation is *not active at runtime*. [MANUAL-VERIFY.md](MANUAL-VERIFY.md) is correct on this; the earlier "a real out-of-process plugin platform" phrasing was an overclaim and is corrected below.
-
-**Known remaining (triaged, not yet done):** wire the OOP host into production + its hardening prereqs (max-frame bound, request timeout, `Bundle.main` child resolver, `SIGPIPE` ignore) — AUDIT-2 §5; plugin authenticity/signing (R2-HIGH-3); `⌘K` actions menu (R2-HIGH-4 — implement or remove); SSRF IP-literal classifier (R2-MED-5); mirror keyframe-on-desync (R2-MED-3); cold-open loading state (R2-MED-4); Settings roster from discovery (R2-MED-8).
+**Honest residual (genuinely deferred, disclosed).** The out-of-process child is a *crash-isolation* boundary, **not yet a privilege boundary** (R2-HIGH-5): it runs with real providers and the user's ambient authority, and there is no per-plugin code-signing/App-Sandbox — so installed plugins are still trusted code. Plugins load only from inside the signed app bundle (no external install path), and discovery now refuses id-shadowing; full per-plugin signing + a sandboxed child are the next security step. Also open: ARCH-4 (`JSONValue` is `Double`-backed; integers > 2^53 lossy), ARCH-8 (keyless render items collapse to `""`), UX-1 (Esc→root), and assorted Low/Info items. Notarization still needs Apple credentials.
 
 ---
 

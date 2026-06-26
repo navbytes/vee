@@ -102,5 +102,10 @@ let package = Package(
             dependencies: ["VeeApp", "VeeProtocol"],
             swiftSettings: relaxedConcurrency
         ),
+        .testTarget(
+            name: "VeeCLITests",
+            dependencies: ["vee", "VeeApp", "VeeEngine", "VeeProtocol"],
+            swiftSettings: relaxedConcurrency
+        ),
     ]
 )

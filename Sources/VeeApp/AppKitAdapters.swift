@@ -231,6 +231,10 @@ public final class AppKitLauncherWindow: NSObject, @MainActor LauncherWindowPres
     private let emptyTitleLabel: NSTextField
     private let emptyDescriptionLabel: NSTextField
     private let emptyContainer: NSStackView
+    private let loadingSpinner: NSProgressIndicator
+    private let loadingTitleLabel: NSTextField
+    private let loadingDescriptionLabel: NSTextField
+    private let loadingContainer: NSStackView
     private let footer: LauncherFooterView
     private let headerSeparator: NSBox
     private let footerSeparator: NSBox
@@ -241,6 +245,10 @@ public final class AppKitLauncherWindow: NSObject, @MainActor LauncherWindowPres
     /// dismissal rather than dropping the second banner.
     private var currentToast: ToastBannerView?
     private var toastDismissal: DispatchWorkItem?
+
+    /// R2-HIGH-4: the ⌘K actions popover, while presented. Anchored at the footer's
+    /// "Actions ⌘K" cluster; nil when closed.
+    private var actionsPopover: NSPopover?
 
     private static let rowColumnID = NSUserInterfaceItemIdentifier("vee.row")
 
@@ -396,6 +404,35 @@ public final class AppKitLauncherWindow: NSObject, @MainActor LauncherWindowPres
         emptyContainer.spacing = 10
         emptyContainer.setCustomSpacing(4, after: emptyTitleLabel)
 
+        // Cold-open loading state (R2-MED-4): mirrors the empty-state layout
+        // (centered title + description) but leads with a small indeterminate
+        // spinner instead of a static SF Symbol, so the launcher reads as "working"
+        // rather than "empty" while discovery + app enumeration finish.
+        loadingSpinner = NSProgressIndicator()
+        loadingSpinner.translatesAutoresizingMaskIntoConstraints = false
+        loadingSpinner.style = .spinning
+        loadingSpinner.controlSize = .small
+        loadingSpinner.isIndeterminate = true
+        loadingSpinner.isDisplayedWhenStopped = false
+        // Decorative — the title/description carry the meaning for VoiceOver.
+        loadingSpinner.setAccessibilityElement(false)
+        loadingTitleLabel = NSTextField(labelWithString: "")
+        loadingTitleLabel.font = .systemFont(ofSize: 15, weight: .semibold)
+        loadingTitleLabel.alignment = .center
+        loadingTitleLabel.textColor = .secondaryLabelColor
+        loadingDescriptionLabel = NSTextField(labelWithString: "")
+        loadingDescriptionLabel.font = .systemFont(ofSize: 13)
+        loadingDescriptionLabel.alignment = .center
+        loadingDescriptionLabel.textColor = .tertiaryLabelColor
+        loadingDescriptionLabel.lineBreakMode = .byWordWrapping
+        loadingDescriptionLabel.maximumNumberOfLines = 0
+        loadingContainer = NSStackView(views: [loadingSpinner, loadingTitleLabel, loadingDescriptionLabel])
+        loadingContainer.translatesAutoresizingMaskIntoConstraints = false
+        loadingContainer.orientation = .vertical
+        loadingContainer.alignment = .centerX
+        loadingContainer.spacing = 10
+        loadingContainer.setCustomSpacing(4, after: loadingTitleLabel)
+
         footer = LauncherFooterView()
         footer.translatesAutoresizingMaskIntoConstraints = false
 
@@ -423,6 +460,7 @@ public final class AppKitLauncherWindow: NSObject, @MainActor LauncherWindowPres
         content.addSubview(listScroll)
         content.addSubview(detailContainer)
         content.addSubview(emptyContainer)
+        content.addSubview(loadingContainer)
         content.addSubview(footerSeparator)
         content.addSubview(footer)
 
@@ -528,6 +566,11 @@ public final class AppKitLauncherWindow: NSObject, @MainActor LauncherWindowPres
             emptyContainer.leadingAnchor.constraint(greaterThanOrEqualTo: content.leadingAnchor, constant: 32),
             emptyContainer.trailingAnchor.constraint(lessThanOrEqualTo: content.trailingAnchor, constant: -32),
 
+            loadingContainer.centerXAnchor.constraint(equalTo: content.centerXAnchor),
+            loadingContainer.centerYAnchor.constraint(equalTo: listScroll.centerYAnchor),
+            loadingContainer.leadingAnchor.constraint(greaterThanOrEqualTo: content.leadingAnchor, constant: 32),
+            loadingContainer.trailingAnchor.constraint(lessThanOrEqualTo: content.trailingAnchor, constant: -32),
+
             footerSeparator.leadingAnchor.constraint(equalTo: content.leadingAnchor),
             footerSeparator.trailingAnchor.constraint(equalTo: content.trailingAnchor),
             footer.leadingAnchor.constraint(equalTo: content.leadingAnchor),
@@ -624,6 +667,11 @@ public final class AppKitLauncherWindow: NSObject, @MainActor LauncherWindowPres
         case .empty(let empty):
             emptyTitleLabel.stringValue = empty.title ?? "No Results"
             emptyDescriptionLabel.stringValue = empty.description ?? ""
+            footer.update(icon: nil, primaryTitle: nil, hasItems: false)
+        case .loading(let loading):
+            loadingTitleLabel.stringValue = loading.title ?? "Loading…"
+            loadingDescriptionLabel.stringValue = loading.description ?? ""
+            loadingDescriptionLabel.isHidden = (loading.description?.isEmpty ?? true)
             footer.update(icon: nil, primaryTitle: nil, hasItems: false)
         case .some(.none), nil:
             footer.update(icon: nil, primaryTitle: nil, hasItems: false)
@@ -840,17 +888,23 @@ public final class AppKitLauncherWindow: NSObject, @MainActor LauncherWindowPres
     // MARK: - Pane visibility
 
     private func renderPanes(for root: RootViewModel?) {
-        let showList: Bool, showDetail: Bool, showEmpty: Bool
+        let showList: Bool, showDetail: Bool, showEmpty: Bool, showLoading: Bool
         switch root {
-        case .list:   showList = true;  showDetail = false; showEmpty = false
-        case .detail: showList = false; showDetail = true;  showEmpty = false
-        case .empty:  showList = false; showDetail = false; showEmpty = true
-        case .some(.none), nil: showList = false; showDetail = false; showEmpty = false
+        case .list:    showList = true;  showDetail = false; showEmpty = false; showLoading = false
+        case .detail:  showList = false; showDetail = true;  showEmpty = false; showLoading = false
+        case .empty:   showList = false; showDetail = false; showEmpty = true;  showLoading = false
+        case .loading: showList = false; showDetail = false; showEmpty = false; showLoading = true
+        case .some(.none), nil: showList = false; showDetail = false; showEmpty = false; showLoading = false
         }
         listScroll.isHidden = !showList
         sectionLabel.isHidden = !showList || sectionLabel.stringValue.isEmpty
         detailContainer.isHidden = !showDetail
         emptyContainer.isHidden = !showEmpty
+        loadingContainer.isHidden = !showLoading
+        // Only animate the spinner while it's visible (a stopped indeterminate
+        // spinner hides itself via `isDisplayedWhenStopped = false`).
+        if showLoading { loadingSpinner.startAnimation(nil) }
+        else { loadingSpinner.stopAnimation(nil) }
     }
 
     // MARK: - Selection mirroring
@@ -877,6 +931,56 @@ public final class AppKitLauncherWindow: NSObject, @MainActor LauncherWindowPres
     fileprivate func invokePrimaryAction() {
         guard let actionId = primaryActionForSelection else { return }
         intent?.invoke(action: actionId)
+    }
+
+    // MARK: - Actions menu (⌘K) — R2-HIGH-4
+
+    /// Present the ⌘K actions popover for the current selection, anchored at the
+    /// footer's "Actions" cluster. No-op (returns false) when the coordinator
+    /// reports no actions for the selection — so the advertised affordance is never
+    /// a misleading empty menu. If a menu is already open, ⌘K toggles it closed.
+    /// Keyboard-driven inside the popover (↑↓ move, ↩ invoke, ⎋ dismiss); clicking
+    /// a row also invokes. Returns true when the event was consumed.
+    @discardableResult
+    fileprivate func presentActionsMenu() -> Bool {
+        // Toggle: a second ⌘K closes an open menu.
+        if dismissActionsMenuIfPresented() { return true }
+
+        let actions = intent?.actionsForSelection ?? []
+        guard !actions.isEmpty else { return false }   // no actions → ⌘K is a no-op
+
+        let controller = ActionsMenuViewController(
+            actions: actions,
+            onInvoke: { [weak self] actionId in
+                guard let self else { return }
+                self.dismissActionsMenuIfPresented()
+                self.intent?.invoke(action: actionId)
+            },
+            onDismiss: { [weak self] in self?.dismissActionsMenuIfPresented() })
+
+        let popover = NSPopover()
+        popover.behavior = .transient
+        popover.animates = !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
+        popover.contentViewController = controller
+        popover.delegate = controller
+        actionsPopover = popover
+        popover.show(relativeTo: footer.actionsAnchorView.bounds,
+                     of: footer.actionsAnchorView, preferredEdge: .maxY)
+        // The popover's content view becomes first responder so arrow/return/esc
+        // route to the menu rather than the search field.
+        controller.focusList()
+        return true
+    }
+
+    /// Close the actions popover if it's open. Returns true if one was dismissed.
+    @discardableResult
+    fileprivate func dismissActionsMenuIfPresented() -> Bool {
+        guard let popover = actionsPopover else { return false }
+        popover.performClose(nil)
+        actionsPopover = nil
+        // Restore focus to the search field so typing continues seamlessly.
+        panel.makeFirstResponder(searchField)
+        return true
     }
 
     // MARK: - Offscreen snapshot (autonomous visual testing / regression)
@@ -984,13 +1088,34 @@ final class KeyForwardingPanel: NSPanel {
     override var canBecomeKey: Bool { true }
     override var canBecomeMain: Bool { true }
     override func cancelOperation(_ sender: Any?) { keyForwardingDelegate?.panelDidRequestCancel() }
+
+    /// R2-HIGH-4: intercept ⌘K before the field editor swallows it as text input,
+    /// so the actions menu opens regardless of focus. Plain ⌘K only (no extra
+    /// modifiers); anything else falls through to normal key-equivalent handling.
+    override func performKeyEquivalent(with event: NSEvent) -> Bool {
+        let mods = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+        if mods == .command, event.charactersIgnoringModifiers?.lowercased() == "k" {
+            if keyForwardingDelegate?.panelDidRequestActionsMenu() == true { return true }
+        }
+        return super.performKeyEquivalent(with: event)
+    }
 }
 
 @MainActor
-protocol KeyForwardingPanelDelegate: AnyObject { func panelDidRequestCancel() }
+protocol KeyForwardingPanelDelegate: AnyObject {
+    func panelDidRequestCancel()
+    /// R2-HIGH-4: ⌘K was pressed. Return true if the actions menu was presented
+    /// (the event is consumed); false to let the key fall through (no-op).
+    func panelDidRequestActionsMenu() -> Bool
+}
 
 extension AppKitLauncherWindow: KeyForwardingPanelDelegate {
-    func panelDidRequestCancel() { hideLauncher() }
+    func panelDidRequestCancel() {
+        // If the actions menu is open, ⎋ closes it first; otherwise hide the panel.
+        if dismissActionsMenuIfPresented() { return }
+        hideLauncher()
+    }
+    func panelDidRequestActionsMenu() -> Bool { presentActionsMenu() }
 }
 
 // MARK: - Selection row view (accent-tinted rounded pill)
@@ -1308,6 +1433,10 @@ final class LauncherFooterView: NSView {
     /// Wordmark shown when no primary action is selectable. Quiet, not a CTA.
     static let idleHint = "Vee"
 
+    /// R2-HIGH-4: the "Actions ⌘K" cluster, used as the anchor the actions popover
+    /// points at (so the menu visually springs from the affordance it advertises).
+    var actionsAnchorView: NSView { actionsCap }
+
     override init(frame frameRect: NSRect) { super.init(frame: frameRect); build() }
     required init?(coder: NSCoder) { super.init(coder: coder); build() }
 
@@ -1537,5 +1666,267 @@ final class ToastBannerView: NSView {
         case .info:    return ("info.circle.fill", .systemBlue)
         }
     }
+}
+
+// MARK: - Actions menu (⌘K popover) — R2-HIGH-4
+
+/// Geometry tokens for the ⌘K actions menu, kept local so the popover sizes
+/// itself from the action list without scattering magic numbers.
+private enum ActionsMenuUI {
+    static let rowHeight: CGFloat = 30
+    static let hPadding: CGFloat = 10      // popover content horizontal inset
+    static let vPadding: CGFloat = 6       // popover content vertical inset
+    static let rowInset: CGFloat = 6       // selection-pill inset within a row
+    static let rowCornerRadius: CGFloat = 6
+    static let minWidth: CGFloat = 220
+    static let maxWidth: CGFloat = 340
+    static let titleFont: CGFloat = 13
+}
+
+/// Hosts the keyboard-driven actions list inside the ⌘K popover and bridges
+/// `NSPopoverDelegate` (so a transient close clears the launcher's reference).
+@MainActor
+final class ActionsMenuViewController: NSViewController, NSPopoverDelegate {
+    private let menuView: ActionsMenuView
+
+    init(actions: [ActionViewModel],
+         onInvoke: @escaping (String) -> Void,
+         onDismiss: @escaping () -> Void) {
+        menuView = ActionsMenuView(actions: actions, onInvoke: onInvoke, onDismiss: onDismiss)
+        super.init(nibName: nil, bundle: nil)
+    }
+    required init?(coder: NSCoder) { fatalError("ActionsMenuViewController is code-only") }
+
+    override func loadView() { view = menuView }
+
+    /// Make the list first responder so ↑↓/↩/⎋ route to the menu, not the field.
+    func focusList() { view.window?.makeFirstResponder(menuView) }
+
+    // The owner clears its popover reference when the transient popover closes
+    // (click-outside / focus loss), so its state matches what's on screen.
+    func popoverDidClose(_ notification: Notification) { menuView.notifyClosedExternally() }
+}
+
+/// The ⌘K actions menu surface: a compact vertical list of the selected item's
+/// actions, each a title + optional key-cap chips, with the focused row drawn as
+/// the same accent-tinted pill the launcher list uses (design-language parity).
+/// Fully keyboard-driven — ↑↓ move, ↩ invoke, ⎋ dismiss — and click-to-invoke.
+@MainActor
+final class ActionsMenuView: NSView {
+    private let actions: [ActionViewModel]
+    private let onInvoke: (String) -> Void
+    private let onDismiss: () -> Void
+    private var rows: [ActionMenuRowView] = []
+    private var selectedIndex: Int = 0 {
+        didSet { if oldValue != selectedIndex { updateSelectionHighlight() } }
+    }
+    /// Guards against re-entrant dismissal when the popover closes itself.
+    private var didNotifyClosed = false
+
+    init(actions: [ActionViewModel],
+         onInvoke: @escaping (String) -> Void,
+         onDismiss: @escaping () -> Void) {
+        self.actions = actions
+        self.onInvoke = onInvoke
+        self.onDismiss = onDismiss
+        super.init(frame: .zero)
+        build()
+    }
+    required init?(coder: NSCoder) { fatalError("ActionsMenuView is code-only") }
+
+    private func build() {
+        let stack = NSStackView()
+        stack.translatesAutoresizingMaskIntoConstraints = false
+        stack.orientation = .vertical
+        stack.alignment = .leading
+        stack.distribution = .fillEqually
+        stack.spacing = 0
+
+        for (index, action) in actions.enumerated() {
+            let row = ActionMenuRowView(action: action) { [weak self] in
+                self?.invoke(at: index)
+            } onHover: { [weak self] in
+                self?.selectedIndex = index
+            }
+            rows.append(row)
+            stack.addArrangedSubview(row)
+            row.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+        }
+
+        addSubview(stack)
+        let width = ActionsMenuView.preferredWidth(for: actions)
+        NSLayoutConstraint.activate([
+            stack.leadingAnchor.constraint(equalTo: leadingAnchor, constant: ActionsMenuUI.hPadding),
+            stack.trailingAnchor.constraint(equalTo: trailingAnchor, constant: -ActionsMenuUI.hPadding),
+            stack.topAnchor.constraint(equalTo: topAnchor, constant: ActionsMenuUI.vPadding),
+            stack.bottomAnchor.constraint(equalTo: bottomAnchor, constant: -ActionsMenuUI.vPadding),
+            widthAnchor.constraint(equalToConstant: width),
+            stack.heightAnchor.constraint(equalToConstant: CGFloat(actions.count) * ActionsMenuUI.rowHeight),
+        ])
+        updateSelectionHighlight()
+
+        // VoiceOver: a group exposing each action row.
+        setAccessibilityRole(.group)
+        setAccessibilityLabel("Actions")
+    }
+
+    /// The popover content width: widest title + chips, clamped to a sane range so
+    /// a long action title can't blow the menu out nor a short one look cramped.
+    static func preferredWidth(for actions: [ActionViewModel]) -> CGFloat {
+        let titleFont = NSFont.systemFont(ofSize: ActionsMenuUI.titleFont, weight: .regular)
+        var widest: CGFloat = 0
+        for action in actions {
+            let titleW = (action.title as NSString)
+                .size(withAttributes: [.font: titleFont]).width
+            // Approximate chip cluster width: ~24pt per cap + gaps.
+            let caps = ShortcutGlyphs.caps(for: action.shortcut)
+            let chipsW = caps.isEmpty ? 0 : CGFloat(caps.count) * 26 + 12
+            widest = max(widest, titleW + chipsW)
+        }
+        // Title + chips + paddings + selection insets.
+        let total = widest + ActionsMenuUI.hPadding * 2 + ActionsMenuUI.rowInset * 2 + 24
+        return min(ActionsMenuUI.maxWidth, max(ActionsMenuUI.minWidth, total))
+    }
+
+    private func updateSelectionHighlight() {
+        for (index, row) in rows.enumerated() {
+            row.setSelected(index == selectedIndex)
+        }
+    }
+
+    private func invoke(at index: Int) {
+        guard index >= 0, index < actions.count else { return }
+        onInvoke(actions[index].actionId)
+    }
+
+    /// Called by the controller when the popover closed itself (transient
+    /// behavior); routes one dismissal callback so the owner clears its state.
+    func notifyClosedExternally() {
+        guard !didNotifyClosed else { return }
+        didNotifyClosed = true
+        onDismiss()
+    }
+
+    // MARK: First responder + key handling
+
+    override var acceptsFirstResponder: Bool { true }
+    override var canBecomeKeyView: Bool { true }
+
+    override func keyDown(with event: NSEvent) {
+        // Route arrows/return/escape; everything else falls through.
+        interpretKeyEvents([event])
+    }
+
+    override func moveUp(_ sender: Any?) {
+        selectedIndex = max(0, selectedIndex - 1)
+    }
+    override func moveDown(_ sender: Any?) {
+        selectedIndex = min(actions.count - 1, selectedIndex + 1)
+    }
+    override func insertNewline(_ sender: Any?) {
+        invoke(at: selectedIndex)
+    }
+    override func cancelOperation(_ sender: Any?) {
+        // Mark closed so the controller's popoverDidClose doesn't double-fire.
+        didNotifyClosed = true
+        onDismiss()
+    }
+}
+
+/// One row in the ⌘K actions menu: a left-aligned title and right-aligned key-cap
+/// chips, with an accent-tinted rounded pill behind the focused row (the same
+/// selection vocabulary as the launcher list). Hover selects; click invokes.
+@MainActor
+final class ActionMenuRowView: NSView {
+    private let titleLabel = NSTextField(labelWithString: "")
+    private let shortcutStack = NSStackView(views: [])
+    private let onClick: () -> Void
+    private let onHover: () -> Void
+    private var isSelected = false
+    private var trackingArea: NSTrackingArea?
+
+    init(action: ActionViewModel, onClick: @escaping () -> Void, onHover: @escaping () -> Void) {
+        self.onClick = onClick
+        self.onHover = onHover
+        super.init(frame: .zero)
+        wantsLayer = true
+        translatesAutoresizingMaskIntoConstraints = false
+        build(action: action)
+    }
+    required init?(coder: NSCoder) { fatalError("ActionMenuRowView is code-only") }
+
+    private func build(action: ActionViewModel) {
+        titleLabel.translatesAutoresizingMaskIntoConstraints = false
+        titleLabel.font = .systemFont(ofSize: ActionsMenuUI.titleFont, weight: .regular)
+        titleLabel.textColor = .labelColor
+        titleLabel.stringValue = action.title
+        titleLabel.lineBreakMode = .byTruncatingTail
+
+        shortcutStack.translatesAutoresizingMaskIntoConstraints = false
+        shortcutStack.orientation = .horizontal
+        shortcutStack.alignment = .centerY
+        shortcutStack.spacing = 4
+        shortcutStack.setContentHuggingPriority(.required, for: .horizontal)
+        shortcutStack.setContentCompressionResistancePriority(.required, for: .horizontal)
+        for cap in ShortcutGlyphs.caps(for: action.shortcut) {
+            shortcutStack.addArrangedSubview(KeyCapView(cap))
+        }
+        shortcutStack.isHidden = shortcutStack.arrangedSubviews.isEmpty
+
+        addSubview(titleLabel)
+        addSubview(shortcutStack)
+        NSLayoutConstraint.activate([
+            heightAnchor.constraint(equalToConstant: ActionsMenuUI.rowHeight),
+            titleLabel.leadingAnchor.constraint(equalTo: leadingAnchor,
+                                                constant: ActionsMenuUI.rowInset + 6),
+            titleLabel.centerYAnchor.constraint(equalTo: centerYAnchor),
+            shortcutStack.trailingAnchor.constraint(equalTo: trailingAnchor,
+                                                    constant: -(ActionsMenuUI.rowInset + 6)),
+            shortcutStack.centerYAnchor.constraint(equalTo: centerYAnchor),
+            shortcutStack.leadingAnchor.constraint(greaterThanOrEqualTo: titleLabel.trailingAnchor,
+                                                   constant: 12),
+        ])
+
+        // VoiceOver: a single actionable element naming the action (+ its shortcut).
+        setAccessibilityElement(true)
+        setAccessibilityRole(.button)
+        let spoken = ShortcutGlyphs.spokenPhrase(for: action.shortcut)
+        setAccessibilityLabel(spoken.isEmpty ? action.title : "\(action.title), \(spoken)")
+    }
+
+    func setSelected(_ selected: Bool) {
+        guard selected != isSelected else { return }
+        isSelected = selected
+        needsDisplay = true
+    }
+
+    override func draw(_ dirtyRect: NSRect) {
+        super.draw(dirtyRect)
+        guard isSelected else { return }
+        // Same floating accent pill as the launcher list rows (design parity).
+        let rect = bounds.insetBy(dx: ActionsMenuUI.rowInset, dy: 3)
+        let path = NSBezierPath(roundedRect: rect,
+                                xRadius: ActionsMenuUI.rowCornerRadius,
+                                yRadius: ActionsMenuUI.rowCornerRadius)
+        let isDark = effectiveAppearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+        NSColor.controlAccentColor.withAlphaComponent(isDark ? 0.11 : 0.13).setFill()
+        path.fill()
+        NSColor.controlAccentColor.withAlphaComponent(isDark ? 0.16 : 0.20).setStroke()
+        path.lineWidth = 1
+        path.stroke()
+    }
+
+    override func updateTrackingAreas() {
+        super.updateTrackingAreas()
+        if let trackingArea { removeTrackingArea(trackingArea) }
+        let area = NSTrackingArea(rect: bounds,
+                                  options: [.mouseEnteredAndExited, .activeInActiveApp],
+                                  owner: self, userInfo: nil)
+        addTrackingArea(area)
+        trackingArea = area
+    }
+
+    override func mouseEntered(with event: NSEvent) { onHover() }
+    override func mouseUp(with event: NSEvent) { onClick() }
 }
 #endif

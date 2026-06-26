@@ -46,6 +46,17 @@ public final class StdioTransport: RPCTransport {
     /// uses it to exit its run loop when the parent goes away.
     public var onClose: (() -> Void)?
 
+    /// Hard upper bound on a single frame's declared `Content-Length`, and on the
+    /// total bytes we will buffer before a complete frame arrives. A hostile or
+    /// garbled child can otherwise send `Content-Length: 9999999999` (or a header
+    /// that never completes) and force the parent to grow `inboundBuffer`
+    /// unboundedly — an OOM in the very process the out-of-process host exists to
+    /// protect. On violation we tear the transport down (fire `onClose`, cancel
+    /// the read source) instead of trusting the peer's length. Default: 64 MiB.
+    public static let defaultMaxFrameBytes = 64 * 1024 * 1024
+
+    private let maxFrameBytes: Int
+
     private let readHandle: FileHandle
     private let writeHandle: FileHandle
 
@@ -65,15 +76,32 @@ public final class StdioTransport: RPCTransport {
     ///   - readHandle:  fd to read framed inbound messages from (default stdin).
     ///   - writeHandle: fd to write framed outbound messages to (default stdout).
     ///   - label:       queue label prefix for diagnostics.
+    ///   - maxFrameBytes: reject any frame whose `Content-Length` (or whose
+    ///     not-yet-complete buffered header+body) exceeds this, tearing the
+    ///     transport down. Defaults to ``defaultMaxFrameBytes`` (64 MiB).
     public init(read readHandle: FileHandle = .standardInput,
                 write writeHandle: FileHandle = .standardOutput,
-                label: String = "vee.engine.stdio") {
+                label: String = "vee.engine.stdio",
+                maxFrameBytes: Int = StdioTransport.defaultMaxFrameBytes) {
         self.readHandle = readHandle
         self.writeHandle = writeHandle
+        self.maxFrameBytes = maxFrameBytes
         self.writeQueue = DispatchQueue(label: "\(label).write")
         self.deliveryQueue = DispatchQueue(label: "\(label).delivery")
         self.readQueue = DispatchQueue(label: "\(label).read")
         self.deliveryQueue.setSpecific(key: deliveryKey, value: 1)
+
+        // SIGPIPE defense (audit §5): a `write(2)` to a pipe whose read end has
+        // closed (the child crashed/exited) raises SIGPIPE, whose DEFAULT
+        // disposition is to terminate the process — here the PARENT launcher,
+        // i.e. exactly the crash-isolation failure the out-of-process host is
+        // meant to prevent. We want the EPIPE return value instead. Two layers:
+        //   1. Process-wide `SIG_IGN` so the signal never kills anyone (idempotent;
+        //      installed once, cheap to re-set).
+        //   2. Per-fd `F_SETNOSIGPIPE` on the write end so even code that resets
+        //      the global disposition still gets EPIPE on this fd.
+        signal(SIGPIPE, SIG_IGN)
+        _ = fcntl(writeHandle.fileDescriptor, F_SETNOSIGPIPE, 1)
     }
 
     /// Begin pumping the read side. Idempotent. Call once after `onReceive` is
@@ -187,7 +215,7 @@ public final class StdioTransport: RPCTransport {
     /// bytes (the bug that dropped every frame after the first). Offsets into a
     /// rebased byte array sidestep that entirely.
     private func drainFrames() {
-        var bytes = [UInt8](inboundBuffer)
+        let bytes = [UInt8](inboundBuffer)
         let separator: [UInt8] = [0x0D, 0x0A, 0x0D, 0x0A]   // \r\n\r\n
         var consumed = 0   // offset up to which `bytes` has been processed
 
@@ -201,6 +229,16 @@ public final class StdioTransport: RPCTransport {
                 // frame can't wedge the stream forever.
                 consumed = sepStart + separator.count
                 continue
+            }
+            // Max-frame bound (audit §5): a hostile/garbled `Content-Length`
+            // (negative, or absurdly large) must NOT cause us to wait for — and
+            // buffer toward — gigabytes of body. Tear the transport down rather
+            // than letting the peer dictate our memory footprint. Checked BEFORE
+            // the `bodyEnd <= bytes.count` arrival test so an oversized length is
+            // rejected immediately, not only once the bytes show up.
+            guard contentLength >= 0, contentLength <= maxFrameBytes else {
+                failTransport(reason: "frame Content-Length \(contentLength) exceeds cap \(maxFrameBytes)")
+                return
             }
             let bodyStart = sepStart + separator.count
             let bodyEnd = bodyStart + contentLength
@@ -222,6 +260,27 @@ public final class StdioTransport: RPCTransport {
         if consumed > 0 {
             inboundBuffer = Data(bytes[consumed...])
         }
+
+        // Backstop for the no-separator / never-completing-body case: even if no
+        // valid `Content-Length` has been parsed yet, an attacker can stream
+        // headerless garbage (or a header with no terminating `\r\n\r\n`) forever.
+        // If the unconsumed tail alone exceeds the cap, give up rather than grow
+        // without bound.
+        if inboundBuffer.count > maxFrameBytes {
+            failTransport(reason: "unframed inbound buffer \(inboundBuffer.count) exceeds cap \(maxFrameBytes)")
+        }
+    }
+
+    /// MUST run on `readQueue`. A protocol-level violation (oversized/garbled
+    /// framing) we cannot recover from: drop any buffered bytes, cancel the read
+    /// source, and surface EOF via `onClose` exactly once. The owner
+    /// (`ChildProcessHost`) treats this like any other peer disconnection — it
+    /// tears down / can restart — so a malicious child can't OOM the parent and
+    /// can't wedge the stream either.
+    private func failTransport(reason: String) {
+        FileHandle.standardError.write(Data("StdioTransport: tearing down — \(reason)\n".utf8))
+        inboundBuffer = Data()
+        handleEOF()
     }
 
     /// Index of the first occurrence of `needle` in `haystack` at or after `from`,
