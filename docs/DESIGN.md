@@ -20,8 +20,9 @@ plugin surface. It is tied to source — the numbers below come from the
    (`labelColor`, `secondaryLabelColor`, …, `controlAccentColor`,
    `separatorColor`), never a literal value. This is the single biggest "native"
    cue and what makes theme/accent/contrast adaptation automatic.
-2. **Real material, not a faked blur.** A borderless floating panel over an
-   `NSVisualEffectView` (`.sidebar`, behind-window) — genuine macOS vibrancy.
+2. **Liquid Glass, not a faked blur.** A borderless floating panel whose entire
+   surface is an `NSGlassEffectView` (macOS 26 Tahoe) — Apple's current
+   light-refracting glass material, not the older `NSVisualEffectView` vibrancy.
 3. **The system type ramp, three weights only** — regular / medium / semibold.
    No bold, no light, no custom font.
 4. **An 8-pt grid with one disciplined alignment line** — the 20-pt gutter that
@@ -129,9 +130,19 @@ System font throughout. Three weights only.
 A `KeyForwardingPanel` (`NSPanel`) configured as:
 `styleMask: [.borderless, .nonactivatingPanel, .fullSizeContentView]`,
 `level: .floating`, `backgroundColor: .clear`, `isOpaque: false`,
-`hasShadow: true`, `isMovableByWindowBackground: true`. The content sits on an
-`NSVisualEffectView` (`material: .sidebar`, `blendingMode: .behindWindow`, layer
-`cornerRadius: 14`); the table view is clear-backed so vibrancy shows through.
+`hasShadow: true`, `isMovableByWindowBackground: true`. The whole surface is an
+`NSGlassEffectView` (`style: .regular`, `cornerRadius: 14`) with the launcher
+content set as its `contentView` — the supported placement, so it rides inside
+the Liquid Glass. The table view is clear-backed so the glass shows through.
+
+> **Deployment / snapshots.** Liquid Glass is macOS 26-only, so the app targets
+> `.macOS(.v26)` (no back-compat floor). The offscreen snapshot harness can't
+> composite Liquid Glass — it samples the live window server, which is absent
+> headless — so under `VEE_SNAPSHOT_OUT` the launcher falls back to the prior
+> `.sidebar` vibrancy purely so the harness still captures faithful layout/content
+> snapshots. Real runs always use glass; the committed
+> [screenshots](screenshots/) therefore show the vibrancy stand-in, and the true
+> glass must be confirmed on a real macOS 26 desktop.
 
 ---
 

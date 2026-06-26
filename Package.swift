@@ -1,4 +1,4 @@
-// swift-tools-version: 6.0
+// swift-tools-version: 6.2
 import PackageDescription
 
 // Vee — native macOS launcher with a JavaScriptCore plugin platform.
@@ -28,7 +28,7 @@ let relaxedConcurrency: [SwiftSetting] = [.swiftLanguageMode(.v5)]
 
 let package = Package(
     name: "Vee",
-    platforms: [.macOS(.v14)],
+    platforms: [.macOS(.v26)],
     products: [
         .executable(name: "vee", targets: ["vee"]),
         .library(name: "VeeProtocol", targets: ["VeeProtocol"]),

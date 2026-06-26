@@ -22,7 +22,7 @@
 
 **Verdict:** a polished, tested, signed Raycast-class launcher with a real out-of-process JS plugin platform and the audit's P0/P1 findings remediated. Visuals re-verified via the offscreen snapshot harness (list/empty/detail/plugin × light/dark). The only thing standing between this and Gatekeeper-distributable is Apple notarization credentials.
 
-**Design language** — system-semantic colors, the macOS type ramp, real `.sidebar` vibrancy, an 8-pt geometry grid, and an accent-tinted floating selection pill — is documented in [DESIGN.md](DESIGN.md).
+**Design language** — system-semantic colors, the macOS type ramp, Liquid Glass (`NSGlassEffectView`, macOS 26), an 8-pt geometry grid, and an accent-tinted floating selection pill — is documented in [DESIGN.md](DESIGN.md). The app now targets `.macOS(.v26)` only (Liquid Glass is 26-only); the offscreen snapshot harness falls back to `.sidebar` vibrancy since glass can't composite headless.
 
 ---
 

@@ -414,18 +414,8 @@ public final class AppKitLauncherWindow: NSObject, @MainActor LauncherWindowPres
             .foregroundColor: NSColor.tertiaryLabelColor,
         ])
 
-        let backdrop = NSVisualEffectView()
-        backdrop.translatesAutoresizingMaskIntoConstraints = false
-        backdrop.material = .sidebar
-        backdrop.state = .active
-        backdrop.blendingMode = .behindWindow
-        backdrop.wantsLayer = true
-        backdrop.layer?.cornerRadius = UI.cornerRadius
-        backdrop.layer?.masksToBounds = true
-
         let content = NSView()
         content.wantsLayer = true
-        content.addSubview(backdrop)
         content.addSubview(magnifier)
         content.addSubview(searchField)
         content.addSubview(headerSeparator)
@@ -435,7 +425,45 @@ public final class AppKitLauncherWindow: NSObject, @MainActor LauncherWindowPres
         content.addSubview(emptyContainer)
         content.addSubview(footerSeparator)
         content.addSubview(footer)
-        panel.contentView = content
+
+        // Liquid Glass (macOS 26): the whole pane is one glass element with the
+        // launcher content riding inside as its `contentView` — the supported
+        // placement (arbitrary siblings aren't guaranteed to sit inside the glass).
+        // `.regular` is the standard style; `cornerRadius` shapes the floating pane.
+        //
+        // The offscreen snapshot harness can't composite Liquid Glass — it samples
+        // the live window server, which is absent headless, so the material renders
+        // as an opaque fallback that hides content. Under VEE_SNAPSHOT_OUT we skip
+        // the glass and use `content` directly; `writeSnapshot` paints an
+        // appearance-appropriate backing behind it, so the harness still captures
+        // faithful layout/content snapshots. Real runs always use glass.
+        if ProcessInfo.processInfo.environment["VEE_SNAPSHOT_OUT"] != nil {
+            // Snapshot stand-in: the prior `.sidebar` vibrancy as a sibling behind
+            // the controls (it renders an opaque frosted fill offscreen, unlike
+            // glass), so the harness reproduces the real layout/content faithfully.
+            let backdrop = NSVisualEffectView()
+            backdrop.translatesAutoresizingMaskIntoConstraints = false
+            backdrop.material = .sidebar
+            backdrop.state = .active
+            backdrop.blendingMode = .behindWindow
+            backdrop.wantsLayer = true
+            backdrop.layer?.cornerRadius = UI.cornerRadius
+            backdrop.layer?.masksToBounds = true
+            content.addSubview(backdrop, positioned: .below, relativeTo: nil)
+            NSLayoutConstraint.activate([
+                backdrop.leadingAnchor.constraint(equalTo: content.leadingAnchor),
+                backdrop.trailingAnchor.constraint(equalTo: content.trailingAnchor),
+                backdrop.topAnchor.constraint(equalTo: content.topAnchor),
+                backdrop.bottomAnchor.constraint(equalTo: content.bottomAnchor),
+            ])
+            panel.contentView = content
+        } else {
+            let glass = NSGlassEffectView()
+            glass.cornerRadius = UI.cornerRadius
+            glass.style = .regular
+            glass.contentView = content
+            panel.contentView = glass
+        }
 
         tableView.dataSource = self
         tableView.delegate = self
@@ -447,11 +475,6 @@ public final class AppKitLauncherWindow: NSObject, @MainActor LauncherWindowPres
         sectionHeightConstraint = sectionLabel.heightAnchor.constraint(equalToConstant: 0)
 
         NSLayoutConstraint.activate([
-            backdrop.leadingAnchor.constraint(equalTo: content.leadingAnchor),
-            backdrop.trailingAnchor.constraint(equalTo: content.trailingAnchor),
-            backdrop.topAnchor.constraint(equalTo: content.topAnchor),
-            backdrop.bottomAnchor.constraint(equalTo: content.bottomAnchor),
-
             magnifier.leadingAnchor.constraint(equalTo: content.leadingAnchor, constant: UI.gutter),
             magnifier.centerYAnchor.constraint(equalTo: searchField.centerYAnchor),
             magnifier.widthAnchor.constraint(equalToConstant: 19),
