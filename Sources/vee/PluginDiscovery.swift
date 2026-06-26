@@ -189,6 +189,10 @@ enum PluginDiscovery {
         var entrypoint: String?
         var commands: [LenientCommand]?
         var capabilities: LenientCapabilities?
+        /// Extension-level declared preferences. `PluginPreference` decodes
+        /// leniently on its own (only name/type/title are required), so the real
+        /// type is decoded directly here.
+        var preferences: [PluginPreference]?
 
         func toManifest() -> PluginManifest {
             PluginManifest(
@@ -197,7 +201,8 @@ enum PluginDiscovery {
                 version: version ?? "0.0.0",
                 entrypoint: entrypoint ?? "",
                 commands: (commands ?? []).map { $0.toCommand() },
-                capabilities: capabilities?.toCapabilities() ?? Capabilities())
+                capabilities: capabilities?.toCapabilities() ?? Capabilities(),
+                preferences: preferences ?? [])
         }
     }
 
@@ -208,6 +213,7 @@ enum PluginDiscovery {
         var mode: String?
         var refreshIntervalSeconds: Double?
         var hotkeyActions: [String]?
+        var preferences: [PluginPreference]?
 
         func toCommand() -> PluginCommand {
             PluginCommand(
@@ -216,7 +222,8 @@ enum PluginDiscovery {
                 subtitle: subtitle,
                 mode: PluginCommand.Mode(rawValue: mode ?? "view") ?? .view,
                 refreshIntervalSeconds: refreshIntervalSeconds,
-                hotkeyActions: hotkeyActions ?? [])
+                hotkeyActions: hotkeyActions ?? [],
+                preferences: preferences ?? [])
         }
     }
 

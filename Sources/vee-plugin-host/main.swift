@@ -58,10 +58,15 @@ let transport = StdioTransport(read: .standardInput, write: .standardOutput, lab
 let clipboardProvider: ClipboardProviding = NSPasteboardClipboardProvider()
 let openProvider: OpenProviding = NSWorkspaceOpenProvider()
 let fileProvider: FileProviding = FileManagerFileProvider()
+// `vee.notify` from a menu-bar plugin posts a real system notification. Best-effort
+// from the child: `UserNotificationProvider` self-guards on the bundle identifier
+// and degrades to a no-op when notifications aren't deliverable in this context.
+let notificationProvider: NotificationProviding = UserNotificationProvider()
 #else
 let clipboardProvider: ClipboardProviding = DenyingClipboardProvider()
 let openProvider: OpenProviding = RecordingOpenProvider()
 let fileProvider: FileProviding = DenyingFileProvider()
+let notificationProvider: NotificationProviding = NoopNotificationProvider()
 #endif
 
 let host = PluginHost(
@@ -73,7 +78,8 @@ let host = PluginHost(
     clipboardProvider: clipboardProvider,
     openProvider: openProvider,
     fileProvider: fileProvider,
-    calendarProvider: EmptyCalendarProvider())   // calendar caveat — see header.
+    calendarProvider: EmptyCalendarProvider(),   // calendar caveat — see header.
+    notificationProvider: notificationProvider)
 
 // Keep the loaded manifests so a `plugin.activate` can map a plugin id → command.
 // (Not strictly needed; PluginHost owns instances. Retained for clarity/logging.)

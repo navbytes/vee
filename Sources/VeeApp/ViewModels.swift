@@ -128,9 +128,79 @@ public struct LoadingViewModel: Equatable, Sendable {
 public struct MenuBarItemViewModel: Equatable, Identifiable, Sendable {
     public var actionId: String
     public var title: String
-    public var id: String { actionId }
-    public init(actionId: String, title: String) {
+    public var subtitle: String?
+    /// A non-interactive divider row (renders as `NSMenuItem.separator()`).
+    public var isSeparator: Bool
+    public var id: String { isSeparator ? "—sep—" : actionId }
+    public init(actionId: String, title: String, subtitle: String? = nil, isSeparator: Bool = false) {
         self.actionId = actionId; self.title = title
+        self.subtitle = subtitle; self.isSeparator = isSeparator
+    }
+    /// A divider menu row.
+    public static func separator() -> MenuBarItemViewModel {
+        MenuBarItemViewModel(actionId: "", title: "", isSeparator: true)
+    }
+}
+
+/// A menu-bar command's projected surface: the status-item title/icon plus the
+/// dropdown rows. Produced by `ViewModelProjector.menuBar(from:)`.
+public struct MenuBarProjection: Equatable, Sendable {
+    /// Status-bar text (from the root node's `title` prop), or nil for icon-only.
+    public var title: String?
+    /// SF-Symbol name for the status button (from the root node's `icon` prop).
+    public var icon: String?
+    /// The dropdown rows, in render order.
+    public var items: [MenuBarItemViewModel]
+    public init(title: String?, icon: String?, items: [MenuBarItemViewModel]) {
+        self.title = title; self.icon = icon; self.items = items
+    }
+}
+
+public extension ViewModelProjector {
+    /// Project a menu-bar command's render tree into a status-item title/icon +
+    /// dropdown items. The ROOT node's `title`/`icon` props set the status item;
+    /// `list-item`/`action` descendants become rows (actionId + title + optional
+    /// subtitle), and a `separator` node becomes a divider — collected depth-first
+    /// so render order is preserved. The menu-bar analogue of `project`.
+    static func menuBar(from node: RenderNode) -> MenuBarProjection {
+        var items: [MenuBarItemViewModel] = []
+        collectMenuBarItems(node, into: &items)
+        return MenuBarProjection(title: node.props["title"]?.stringValue,
+                                 icon: node.props["icon"]?.stringValue,
+                                 items: items)
+    }
+
+    private static func collectMenuBarItems(_ node: RenderNode,
+                                            into items: inout [MenuBarItemViewModel]) {
+        for child in node.children {
+            switch child.tag {
+            case "separator":
+                items.append(.separator())
+            case RenderNode.Tag.listItem, RenderNode.Tag.action:
+                let actionId = child.props["actionId"]?.stringValue
+                    ?? child.props["id"]?.stringValue
+                    ?? firstActionId(in: child)
+                    ?? ""
+                items.append(MenuBarItemViewModel(
+                    actionId: actionId,
+                    title: child.props["title"]?.stringValue ?? "",
+                    subtitle: child.props["subtitle"]?.stringValue))
+            default:
+                // root / list / unknown wrapper → descend.
+                collectMenuBarItems(child, into: &items)
+            }
+        }
+    }
+
+    /// The actionId of the first `action` node anywhere under `node` (a list-item
+    /// often carries its primary action inside an `action-panel`), else nil.
+    private static func firstActionId(in node: RenderNode) -> String? {
+        for child in node.children {
+            if child.tag == RenderNode.Tag.action,
+               let id = child.props["actionId"]?.stringValue { return id }
+            if let nested = firstActionId(in: child) { return nested }
+        }
+        return nil
     }
 }
 

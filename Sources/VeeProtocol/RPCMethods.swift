@@ -62,6 +62,10 @@ public enum RPCMethods {
     public static let fsRead  = "bridge.fs.read"
     public static let fsWrite = "bridge.fs.write"
 
+    /// `vee.fs.list(dir)`. Params: `FSListParams`. Result: `[FSDirEntry]` —
+    /// the entries directly under `path` (basenames, not recursive).
+    public static let fsList  = "bridge.fs.list"
+
     /// `vee.keychain.get/set/delete`. Params: `KeychainGetParams` etc.
     public static let keychainGet    = "bridge.keychain.get"
     public static let keychainSet    = "bridge.keychain.set"
@@ -85,6 +89,12 @@ public enum RPCMethods {
     /// single source of truth for every bridge method string.
     public static let open    = "bridge.open"
     public static let openApp = "bridge.openApp"
+
+    /// `vee.notify(title, body?, subtitle?)` — post a system notification.
+    /// Params: `NotifyParams`. Ungated (user-facing, like `plugin.showToast`);
+    /// delivered to the injected host `NotificationProviding`, NOT routed through
+    /// the launcher window.
+    public static let notify = "bridge.notify"
 }
 
 // MARK: - Payload structs (typed, Codable, Sendable)
@@ -94,8 +104,38 @@ public struct ActivateParams: Codable, Hashable, Sendable {
     public var commandName: String
     /// Arguments passed from the launcher (e.g. a query argument). Optional.
     public var arguments: [String: JSONValue]
-    public init(pluginId: String, commandName: String, arguments: [String: JSONValue] = [:]) {
-        self.pluginId = pluginId; self.commandName = commandName; self.arguments = arguments
+    /// Resolved preference values for this command — the host merges the plugin's
+    /// declared ``PluginPreference`` specs (extension + command) with the user's
+    /// stored values and declared defaults, and delivers the result here. The
+    /// plugin reads it synchronously via `getPreferenceValues()`. Keyed by
+    /// preference `name`. Additive: omitted on the wire when empty (older hosts /
+    /// preference-less plugins decode to `[:]`).
+    public var preferences: [String: JSONValue]
+    public init(pluginId: String, commandName: String,
+                arguments: [String: JSONValue] = [:],
+                preferences: [String: JSONValue] = [:]) {
+        self.pluginId = pluginId; self.commandName = commandName
+        self.arguments = arguments; self.preferences = preferences
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case pluginId, commandName, arguments, preferences
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.pluginId = try c.decode(String.self, forKey: .pluginId)
+        self.commandName = try c.decode(String.self, forKey: .commandName)
+        self.arguments = try c.decodeIfPresent([String: JSONValue].self, forKey: .arguments) ?? [:]
+        self.preferences = try c.decodeIfPresent([String: JSONValue].self, forKey: .preferences) ?? [:]
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(pluginId, forKey: .pluginId)
+        try c.encode(commandName, forKey: .commandName)
+        if !arguments.isEmpty { try c.encode(arguments, forKey: .arguments) }
+        if !preferences.isEmpty { try c.encode(preferences, forKey: .preferences) }
     }
 }
 
@@ -184,6 +224,15 @@ public struct ToastParams: Codable, Hashable, Sendable {
     }
 }
 
+public struct NotifyParams: Codable, Hashable, Sendable {
+    public var title: String
+    public var body: String?
+    public var subtitle: String?
+    public init(title: String, body: String? = nil, subtitle: String? = nil) {
+        self.title = title; self.body = body; self.subtitle = subtitle
+    }
+}
+
 // MARK: Bridge payloads
 
 public struct FetchParams: Codable, Hashable, Sendable {
@@ -217,6 +266,20 @@ public struct FSWriteParams: Codable, Hashable, Sendable {
     public var contentsBase64: String
     public init(path: String, contentsBase64: String) {
         self.path = path; self.contentsBase64 = contentsBase64
+    }
+}
+public struct FSListParams: Codable, Hashable, Sendable {
+    /// Directory to list. Subject to the same root-confinement gate as fs read/write.
+    public var path: String
+    public init(path: String) { self.path = path }
+}
+/// One entry directly under a listed directory. `name` is the basename (not a
+/// full path); `isDirectory` distinguishes subdirectories from files.
+public struct FSDirEntry: Codable, Hashable, Sendable {
+    public var name: String
+    public var isDirectory: Bool
+    public init(name: String, isDirectory: Bool) {
+        self.name = name; self.isDirectory = isDirectory
     }
 }
 

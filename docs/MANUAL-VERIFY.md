@@ -1,6 +1,6 @@
 # Vee — Manual Verification Guide (desktop)
 
-Most of Vee is covered by automated tests (302 Swift + 34 node), but the
+Most of Vee is covered by automated tests (336 Swift + 38 node), but the
 OS-facing surfaces — the launcher window, menubar, global hotkey firing, real
 app launching, and clipboard capture — can only be confirmed by a human at a
 logged-in macOS desktop. This is that checklist.
@@ -69,6 +69,49 @@ target), and wiring the live `vee.clipboard` provider into the app host (today t
 Clipboard plugin renders live only if a `ClipboardProviding` is injected — it's
 proven against a fake in tests).
 
+## Plugin preferences (the Raycast configuration model)
+
+Configuration is **owned by the plugin author, not the app**. The launcher itself
+never asks you to configure GitHub or any API key — open **⌥Space** and you see
+apps + plugin commands, nothing else.
+
+1. **Generic Extensions pane** — menubar **Settings… → Extensions**. A sidebar
+   lists the *installed* extensions; selecting one renders a form built entirely
+   from that plugin's declared preferences (text fields, secure fields,
+   checkboxes, dropdowns). There is **no hardcoded GitHub/Linear/OpenAI roster** —
+   an extension that declares nothing shows "no settings to configure."
+2. **GitHub** declares a required `password` preference "Personal Access Token";
+   **Jira** declares Site / Email / API Token. These appear *because the plugins
+   declared them* — nothing app-side enumerates them.
+3. **Secrets** (password type) are stored in the Keychain; other values in a
+   preferences store. A saved secret shows "•••••••• (saved)" and is never echoed.
+4. **Setup required** — run *GitHub Pull Requests* from the launcher with no token
+   set: instead of running, Vee opens Settings focused on the GitHub extension
+   (its form shows a "needs setup" banner). Save a token, run it again → it loads.
+5. A plugin reads its own values at runtime via `getPreferenceValues()` (see
+   `plugins/RUNTIME.md` §2.3); the host injects them on each activate.
+
+## Menu-bar commands (Raycast-style menu-bar extras)
+
+A plugin command with `mode: "menu-bar"` runs in the background and owns its own
+menu-bar item (separate from the "Vee" item). Verify on the desktop:
+
+1. **Folder Monitor** (`plugins/samples/folder-monitor`) ships as a menu-bar
+   command, so a second menu-bar item appears on launch (titled "Folder" until
+   configured). Open **Settings → Extensions → Folder Monitor**, set "Folder to
+   Watch" to a real path → its menu-bar item updates to that folder's file count
+   and the dropdown lists the files. Choosing a file opens it; "Refresh" re-reads.
+   When the count changes between the 30-second refreshes, a system notification
+   fires (`vee.notify`).
+2. The item is driven by the plugin's render tree (root `title`/`icon` →
+   status button; `list-item`s → dropdown rows) — the same declarative
+   `RenderNode` model as a launcher view, projected onto an `NSStatusItem`.
+
+The OS-facing bits (the live status item, real folder reads, notification
+banners) are desktop-manual; the projection, the per-plugin render mirror, the
+coordinator demux, the `fs.list` capability gate, and `notify` delivery are all
+covered by the automated suite (`MenuBarTests`, `Wave2cBridgeTests`).
+
 ## Known limitations in this build (by design / follow-ups)
 
 - **Real app icons** now render (full-color, via `NSWorkspace.icon`); ✅ done.
@@ -108,6 +151,6 @@ The engine (JSC bridge, memory rules, microtask ordering, render mirror,
 capability-gated `fetch`/`clipboard`/`keychain`), the fuzzy matcher, the SWR
 cache, the keychain store, RFC-6902 JSON-Patch, the clipboard **privacy filter**,
 the coordinator's projection + selection-preservation + native-filter wiring, and
-the TS↔Swift `hello-list` fixture handshake. Run `swift test` (302 tests, 1
-live-keychain skipped) and `cd plugins && npm test` (34 tests). See
+the TS↔Swift `hello-list` fixture handshake. Run `swift test` (336 tests, 1
+live-keychain skipped) and `cd plugins && npm test` (38 tests). See
 [STATUS.md](STATUS.md) for the full spec-coverage matrix.

@@ -749,6 +749,82 @@ public final class RecordingOpenProvider: OpenProviding {
     }
 }
 
+// MARK: - NotificationProviding (vee.notify — UNGATED)
+
+/// Injectable host-native notification service backing `vee.notify(title, body?,
+/// subtitle?)`. Production wires this to `UNUserNotificationCenter`
+/// (`UserNotificationProvider`), supplied by the app; tests use a recording fake.
+///
+/// NOT capability-gated: posting a system notification is a user-facing affordance
+/// (like `vee.showToast` / `console.log`), not a data/exfil risk, and the frozen
+/// `Capabilities` has no flag to gate it against. The bridge therefore forwards
+/// straight to this provider — see the note on `JSBridge.handleNotify`. Unlike a
+/// toast (routed through the launcher window), this is delivered to the injected
+/// provider directly. Fire-and-forget: the bridge call returns void.
+///
+/// `AnyObject`/class-bound to match the other engine providers — the bridge holds
+/// it via the instance and never copies it.
+public protocol NotificationProviding: AnyObject {
+    /// Post a system notification with `title` and an optional `body`/`subtitle`.
+    func notify(title: String, body: String?, subtitle: String?)
+}
+
+/// Default no-op notification provider: does nothing. This is the safe default
+/// injected when a host wires no real provider, so a plugin calling `vee.notify`
+/// against a host that hasn't implemented the service silently no-ops rather than
+/// crashing. (Posting a notification is non-destructive and not capability-gated.)
+public final class NoopNotificationProvider: NotificationProviding {
+    public init() {}
+    public func notify(title: String, body: String?, subtitle: String?) {}
+}
+
+/// Recording fake `NotificationProviding` for tests. Records every posted
+/// notification (so a bridge call can be proven to have reached the provider with
+/// the right arguments), mirroring `RecordingOpenProvider`.
+public final class RecordingNotificationProvider: NotificationProviding {
+    public private(set) var posted: [(title: String, body: String?, subtitle: String?)] = []
+    public init() {}
+    public func notify(title: String, body: String?, subtitle: String?) {
+        posted.append((title, body, subtitle))
+    }
+}
+
+#if canImport(UserNotifications)
+import UserNotifications
+
+/// `UNUserNotificationCenter`-backed `NotificationProviding` for the real host.
+///
+/// Requests authorization best-effort on first use, then adds a
+/// `UNNotificationRequest` carrying a `UNMutableNotificationContent`. The whole
+/// thing is guarded so it degrades to a no-op (rather than crashing) when
+/// notifications aren't available — most importantly when the process isn't
+/// running from an app bundle, where `UNUserNotificationCenter.current()` raises.
+/// Logic-light and not unit-tested (it touches the real notification center); the
+/// bridge that consumes a `NotificationProviding` is covered via
+/// `RecordingNotificationProvider`.
+public final class UserNotificationProvider: NotificationProviding {
+    public init() {}
+
+    public func notify(title: String, body: String?, subtitle: String?) {
+        // `UNUserNotificationCenter.current()` throws an NSException when the
+        // process has no bundle identifier (e.g. a bare `swift run` / CLI). Guard
+        // on the bundle id so we degrade to a no-op instead of crashing.
+        guard Bundle.main.bundleIdentifier != nil else { return }
+        let center = UNUserNotificationCenter.current()
+        // Best-effort authorization; we post regardless of the outcome (a denied
+        // authorization simply suppresses the banner — it is not an error here).
+        center.requestAuthorization(options: [.alert, .sound]) { _, _ in }
+        let content = UNMutableNotificationContent()
+        content.title = title
+        if let subtitle { content.subtitle = subtitle }
+        if let body { content.body = body }
+        let request = UNNotificationRequest(
+            identifier: UUID().uuidString, content: content, trigger: nil)
+        center.add(request, withCompletionHandler: nil)
+    }
+}
+#endif
+
 #if canImport(AppKit)
 import AppKit
 
@@ -829,6 +905,9 @@ public protocol FileProviding: AnyObject {
     func read(path: String, completion: @escaping (Result<String, Error>) -> Void)
     /// Write `contents` (UTF-8) to absolute `path`, creating/overwriting it.
     func write(path: String, contents: String, completion: @escaping (Result<Void, Error>) -> Void)
+    /// List the entries directly under directory `path` (basenames, not recursive),
+    /// flagging which are themselves directories.
+    func list(path: String, completion: @escaping (Result<[FSDirEntry], Error>) -> Void)
 }
 
 /// Default-deny file provider: every call fails with `capabilityDenied`. Injected
@@ -844,6 +923,9 @@ public final class DenyingFileProvider: FileProviding {
     public func write(path: String, contents: String, completion: @escaping (Result<Void, Error>) -> Void) {
         completion(.failure(JSONRPCError.capabilityDenied("file provider not available")))
     }
+    public func list(path: String, completion: @escaping (Result<[FSDirEntry], Error>) -> Void) {
+        completion(.failure(JSONRPCError.capabilityDenied("file provider not available")))
+    }
 }
 
 /// Sandboxed in-memory file provider for tests. Backed by a real temp directory
@@ -857,6 +939,7 @@ public final class TempDirFileProvider: FileProviding {
     public let root: String
     public private(set) var reads: [String] = []
     public private(set) var writes: [(path: String, contents: String)] = []
+    public private(set) var lists: [String] = []
 
     private let fileManager = FileManager.default
 
@@ -912,6 +995,25 @@ public final class TempDirFileProvider: FileProviding {
             completion(.failure(JSONRPCError.internalError("fs.write failed: \(error)")))
         }
     }
+
+    public func list(path: String, completion: @escaping (Result<[FSDirEntry], Error>) -> Void) {
+        lists.append(path)
+        guard isConfined(path) else {
+            completion(.failure(JSONRPCError.capabilityDenied("path escapes provider root"))); return
+        }
+        do {
+            let names = try fileManager.contentsOfDirectory(atPath: path)
+            let entries = names.map { name -> FSDirEntry in
+                var isDir: ObjCBool = false
+                let full = (path as NSString).appendingPathComponent(name)
+                fileManager.fileExists(atPath: full, isDirectory: &isDir)
+                return FSDirEntry(name: name, isDirectory: isDir.boolValue)
+            }
+            completion(.success(entries))
+        } catch {
+            completion(.failure(JSONRPCError.internalError("fs.list failed: \(error)")))
+        }
+    }
 }
 
 /// Thin `FileManager`-backed `FileProviding` for the real host. Logic-light and
@@ -929,6 +1031,19 @@ public final class FileManagerFileProvider: FileProviding {
             try contents.write(toFile: path, atomically: true, encoding: .utf8)
             completion(.success(()))
         } catch { completion(.failure(JSONRPCError.internalError("fs.write failed: \(error)"))) }
+    }
+    public func list(path: String, completion: @escaping (Result<[FSDirEntry], Error>) -> Void) {
+        let fm = FileManager.default
+        do {
+            let names = try fm.contentsOfDirectory(atPath: path)
+            let entries = names.map { name -> FSDirEntry in
+                var isDir: ObjCBool = false
+                let full = (path as NSString).appendingPathComponent(name)
+                fm.fileExists(atPath: full, isDirectory: &isDir)
+                return FSDirEntry(name: name, isDirectory: isDir.boolValue)
+            }
+            completion(.success(entries))
+        } catch { completion(.failure(JSONRPCError.internalError("fs.list failed: \(error)"))) }
     }
 }
 

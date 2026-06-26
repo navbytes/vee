@@ -1,21 +1,26 @@
 #if canImport(AppKit)
 import AppKit
 import VeeServices
+import VeeProtocol
 
 /// The Settings window — a thin, tabbed `NSWindowController` over an `NSPanel`.
 ///
 /// It is deliberately LOGIC-FREE: every gesture is forwarded straight to the
-/// injected `SettingsModel` (hotkey / history size / blocklist) or `TokenStoring`
-/// (plugin tokens), both of which own the behavior and are unit-tested. This
-/// controller just builds AppKit views and wires their targets — it is verified
-/// manually, not by the test suite.
+/// injected `SettingsModel` (hotkey / history size / blocklist) or
+/// `PluginPreferencesStore` (per-extension preferences), both of which own the
+/// behavior and are unit-tested. This controller just builds AppKit views and
+/// wires their targets — it is verified manually, not by the test suite.
 ///
 /// Three sections, selected via an `NSTabView`:
 ///   • **General** — the `HotkeyRecorderView` for the launcher chord.
 ///   • **Clipboard** — a history-size stepper, an add/remove blocklist table, and
 ///     an "Ignore Next Copy" button (forwarded to the injected closure).
-///   • **Plugins** — one row per known plugin id with a secure token field that
-///     writes through `TokenStoring`.
+///   • **Extensions** — a GENERIC, plugin-driven preferences pane (the Raycast
+///     model). It lists the installed extensions and renders a form from whatever
+///     `PluginPreference`s each one DECLARED — text fields, secure fields,
+///     checkboxes, dropdowns. The app hardcodes no service or API key; what is
+///     configurable is entirely what the plugins declared. Secrets land in the
+///     Keychain, the rest in a preferences store (both behind the store).
 ///
 /// Spacing/fonts follow the launcher's conventions (a compact, sectioned panel
 /// in the spirit of `AppKitAdapters`).
@@ -38,25 +43,13 @@ public final class SettingsWindowController: NSWindowController {
     // MARK: Collaborators (injected; the controller holds no behavior)
 
     private let model: SettingsModel
-    private let tokenStore: TokenStoring
-    /// Known plugin ids that get a token row on the Plugins tab. `account` is the
-    /// label used for each plugin's stored token (the keychain account axis).
-    private let knownPlugins: [PluginTokenSpec]
+    /// The generic, plugin-driven preferences store backing the Extensions tab.
+    /// It knows nothing about any specific service — it operates purely on what
+    /// each installed plugin declared.
+    private let preferences: PluginPreferencesStore
     /// Forwarded when the user taps "Ignore Next Copy" (the app calls
     /// `ClipboardMonitor.ignoreNextCopy()`). Optional so previews can omit it.
     private let onIgnoreNextCopy: (() -> Void)?
-
-    /// Describes one plugin's token slot on the Plugins tab.
-    public struct PluginTokenSpec: Sendable {
-        public let pluginId: String
-        public let displayName: String
-        public let account: String
-        public init(pluginId: String, displayName: String, account: String = "default") {
-            self.pluginId = pluginId
-            self.displayName = displayName
-            self.account = account
-        }
-    }
 
     // MARK: Retained controls (for binding)
 
@@ -65,20 +58,31 @@ public final class SettingsWindowController: NSWindowController {
     private var historyField: NSTextField?
     private var blocklistTable: NSTableView?
     private var blocklistInput: NSTextField?
+    private var tabView: NSTabView?
     /// Live, mutable copy of the blocklist as a sorted array (table data source).
     private var blocklistRows: [String] = []
-    /// Secure token fields keyed by plugin id (so we can read them on commit).
-    private var tokenFields: [String: NSSecureTextField] = [:]
+
+    // MARK: Extensions tab state
+    /// Sidebar data: installed extensions, sorted by name.
+    private var extensionRows: [PluginManifest] = []
+    /// The extensions sidebar list.
+    private var extensionsTable: NSTableView?
+    /// The right-hand form area, rebuilt when the selected extension changes.
+    private var detailContainer: NSView?
+    /// The extension whose form is currently shown.
+    private var currentExtensionId: String?
+    /// Editable controls for the current extension, keyed by preference name.
+    private var prefControls: [String: NSView] = [:]
+    /// A pluginId to select once the window is shown (the "Setup required" jump).
+    private var pendingFocusPluginId: String?
 
     // MARK: Init
 
     public init(model: SettingsModel,
-                tokenStore: TokenStoring,
-                knownPlugins: [PluginTokenSpec] = SettingsWindowController.defaultKnownPlugins,
+                preferences: PluginPreferencesStore,
                 onIgnoreNextCopy: (() -> Void)? = nil) {
         self.model = model
-        self.tokenStore = tokenStore
-        self.knownPlugins = knownPlugins
+        self.preferences = preferences
         self.onIgnoreNextCopy = onIgnoreNextCopy
 
         let panel = NSPanel(
@@ -92,31 +96,38 @@ public final class SettingsWindowController: NSWindowController {
 
         super.init(window: panel)
         self.blocklistRows = model.blocklist.sorted()
+        self.extensionRows = preferences.extensions
         buildTabs()
     }
 
     @available(*, unavailable)
     public required init?(coder: NSCoder) { fatalError("init(coder:) is not supported") }
 
-    /// A reasonable default plugin roster for the token tab. The app overrides
-    /// this with the actually-installed plugins when it constructs the controller.
-    /// `nonisolated` so it can serve as a default-argument expression.
-    public nonisolated static let defaultKnownPlugins: [PluginTokenSpec] = [
-        PluginTokenSpec(pluginId: "com.vee.github", displayName: "GitHub"),
-        PluginTokenSpec(pluginId: "com.vee.linear", displayName: "Linear"),
-        PluginTokenSpec(pluginId: "com.vee.openai", displayName: "OpenAI"),
-    ]
-
     // MARK: Public entry point (the menubar "Settings…" item calls this later)
 
     /// Show (and focus) the Settings window, re-syncing controls to the model so
     /// it always opens reflecting the current persisted state.
-    public func show() {
+    public func show() { show(focusExtension: nil) }
+
+    /// Show Settings; when `focusExtension` is set, jump to the Extensions tab and
+    /// select that extension. Used by the launcher's "Setup required" gate so a
+    /// command whose required preferences are unset opens straight to its form.
+    public func show(focusExtension pluginId: String?) {
+        pendingFocusPluginId = pluginId
         syncFromModel()
         showWindow(nil)
         window?.center()
         window?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
+        if let pluginId { focusExtension(pluginId) }
+    }
+
+    /// Switch to the Extensions tab and select the row for `pluginId`.
+    private func focusExtension(_ pluginId: String) {
+        guard let index = extensionRows.firstIndex(where: { $0.id == pluginId }) else { return }
+        tabView?.selectTabViewItem(withIdentifier: "extensions")
+        extensionsTable?.selectRowIndexes(IndexSet(integer: index), byExtendingSelection: false)
+        showExtensionForm(pluginId: pluginId)
     }
 
     // MARK: - Tab assembly
@@ -125,6 +136,7 @@ public final class SettingsWindowController: NSWindowController {
         guard let content = window?.contentView else { return }
         let tabView = NSTabView()
         tabView.translatesAutoresizingMaskIntoConstraints = false
+        self.tabView = tabView
 
         let general = NSTabViewItem(identifier: "general")
         general.label = "General"
@@ -134,13 +146,13 @@ public final class SettingsWindowController: NSWindowController {
         clipboard.label = "Clipboard"
         clipboard.view = makeClipboardTab()
 
-        let plugins = NSTabViewItem(identifier: "plugins")
-        plugins.label = "Plugins"
-        plugins.view = makePluginsTab()
+        let extensions = NSTabViewItem(identifier: "extensions")
+        extensions.label = "Extensions"
+        extensions.view = makeExtensionsTab()
 
         tabView.addTabViewItem(general)
         tabView.addTabViewItem(clipboard)
-        tabView.addTabViewItem(plugins)
+        tabView.addTabViewItem(extensions)
 
         content.addSubview(tabView)
         NSLayoutConstraint.activate([
@@ -330,17 +342,100 @@ public final class SettingsWindowController: NSWindowController {
         blocklistTable?.reloadData()
     }
 
-    // MARK: Plugins tab (secure token per plugin)
+    // MARK: Extensions tab (generic, plugin-declared preferences)
 
-    private func makePluginsTab() -> NSView {
+    /// A sidebar list of installed extensions + a detail form rendered from the
+    /// selected extension's DECLARED preferences. There is nothing service-
+    /// specific here — the form is a pure function of each plugin's manifest.
+    private func makeExtensionsTab() -> NSView {
         let container = paddedContainer()
 
-        let caption = makeSectionLabel("Plugin Tokens")
-        let help = makeCaption("Tokens are stored securely and used to authenticate plugin requests.")
+        guard !extensionRows.isEmpty else {
+            let empty = makeCaption("No extensions installed.")
+            container.addSubview(empty)
+            pinTopLeading(empty, in: container, trailing: true)
+            return container
+        }
 
-        var rows: [NSView] = [caption, help]
-        for plugin in knownPlugins {
-            rows.append(makeTokenRow(for: plugin))
+        // Sidebar list.
+        let table = NSTableView()
+        table.translatesAutoresizingMaskIntoConstraints = false
+        table.headerView = nil
+        table.rowHeight = 24
+        table.allowsEmptySelection = false
+        let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("extension"))
+        column.resizingMask = .autoresizingMask
+        table.addTableColumn(column)
+        table.dataSource = self
+        table.delegate = self
+        self.extensionsTable = table
+
+        let sidebar = NSScrollView()
+        sidebar.translatesAutoresizingMaskIntoConstraints = false
+        sidebar.hasVerticalScroller = true
+        sidebar.borderType = .bezelBorder
+        sidebar.documentView = table
+        sidebar.widthAnchor.constraint(equalToConstant: 168).isActive = true
+
+        // Detail form (rebuilt on selection).
+        let detail = NSView()
+        detail.translatesAutoresizingMaskIntoConstraints = false
+        detail.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        self.detailContainer = detail
+
+        let row = NSStackView(views: [sidebar, detail])
+        row.translatesAutoresizingMaskIntoConstraints = false
+        row.orientation = .horizontal
+        row.alignment = .top
+        row.spacing = 16
+
+        container.addSubview(row)
+        NSLayoutConstraint.activate([
+            row.topAnchor.constraint(equalTo: container.topAnchor, constant: UI.margin),
+            row.leadingAnchor.constraint(equalTo: container.leadingAnchor, constant: UI.margin),
+            row.trailingAnchor.constraint(equalTo: container.trailingAnchor, constant: -UI.margin),
+            row.bottomAnchor.constraint(equalTo: container.bottomAnchor, constant: -UI.margin),
+            sidebar.topAnchor.constraint(equalTo: row.topAnchor),
+            sidebar.bottomAnchor.constraint(equalTo: row.bottomAnchor),
+        ])
+
+        table.selectRowIndexes(IndexSet(integer: 0), byExtendingSelection: false)
+        showExtensionForm(pluginId: extensionRows[0].id)
+        return container
+    }
+
+    /// Rebuild the detail form for the selected extension from its declared
+    /// preferences. This is the generic renderer — it never names a service.
+    private func showExtensionForm(pluginId: String) {
+        currentExtensionId = pluginId
+        prefControls.removeAll()
+        guard let detail = detailContainer else { return }
+        detail.subviews.forEach { $0.removeFromSuperview() }
+        guard let manifest = preferences.manifest(forPlugin: pluginId) else { return }
+
+        let prefs = preferences.declaredPreferences(forPlugin: pluginId)
+        var rows: [NSView] = [makeSectionLabel(manifest.name)]
+
+        if prefs.isEmpty {
+            rows.append(makeCaption("This extension has no settings to configure."))
+        } else {
+            // "Setup required" banner when a required preference is still unset.
+            let missingRequired = prefs.contains {
+                $0.required && $0.default == nil
+                    && !preferences.hasStoredValue(pluginId: pluginId, preference: $0)
+            }
+            if missingRequired {
+                let banner = makeCaption("⚠︎ This extension needs setup before its commands can run.")
+                banner.textColor = .systemOrange
+                rows.append(banner)
+            }
+            for pref in prefs { rows.append(makePreferenceRow(pluginId: pluginId, pref: pref)) }
+
+            let save = NSButton(title: "Save", target: self, action: #selector(saveExtensionPrefs))
+            save.translatesAutoresizingMaskIntoConstraints = false
+            save.bezelStyle = .rounded
+            save.keyEquivalent = "\r"
+            rows.append(save)
         }
 
         let stack = NSStackView(views: rows)
@@ -348,69 +443,109 @@ public final class SettingsWindowController: NSWindowController {
         stack.orientation = .vertical
         stack.alignment = .leading
         stack.spacing = UI.rowGap
-        stack.setCustomSpacing(4, after: caption)
+        stack.setCustomSpacing(8, after: rows[0])
 
-        container.addSubview(stack)
-        pinTopLeading(stack, in: container, trailing: true)
-        for case let row as NSStackView in stack.arrangedSubviews where row !== caption {
-            row.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
+        detail.addSubview(stack)
+        NSLayoutConstraint.activate([
+            stack.topAnchor.constraint(equalTo: detail.topAnchor),
+            stack.leadingAnchor.constraint(equalTo: detail.leadingAnchor),
+            stack.trailingAnchor.constraint(equalTo: detail.trailingAnchor),
+        ])
+        for case let r as NSStackView in stack.arrangedSubviews {
+            r.widthAnchor.constraint(equalTo: stack.widthAnchor).isActive = true
         }
-        return container
     }
 
-    private func makeTokenRow(for plugin: PluginTokenSpec) -> NSView {
-        let label = makeBodyLabel(plugin.displayName)
-        label.widthAnchor.constraint(equalToConstant: UI.labelWidth).isActive = true
-
-        let field = NSSecureTextField()
-        field.translatesAutoresizingMaskIntoConstraints = false
-        field.placeholderString = "Token"
-        // Reflect whether a token is already stored (without revealing it).
-        if tokenStore.hasToken(plugin: plugin.pluginId, account: plugin.account) {
-            field.placeholderString = "•••••••• (saved)"
+    /// Build one control row for a declared preference, by its declared type.
+    private func makePreferenceRow(pluginId: String, pref: PluginPreference) -> NSView {
+        let control: NSView
+        switch pref.type {
+        case .checkbox:
+            let box = NSButton(checkboxWithTitle: pref.label ?? pref.title, target: nil, action: nil)
+            box.translatesAutoresizingMaskIntoConstraints = false
+            let current = preferences.storedValue(pluginId: pluginId, preference: pref)?.boolValue
+                ?? pref.default?.boolValue ?? false
+            box.state = current ? .on : .off
+            control = box
+        case .dropdown:
+            let popup = NSPopUpButton(frame: .zero, pullsDown: false)
+            popup.translatesAutoresizingMaskIntoConstraints = false
+            for option in pref.data { popup.addItem(withTitle: option.title) }
+            let currentValue = preferences.storedValue(pluginId: pluginId, preference: pref)?.stringValue
+                ?? pref.default?.stringValue
+            if let currentValue, let idx = pref.data.firstIndex(where: { $0.value == currentValue }) {
+                popup.selectItem(at: idx)
+            }
+            control = popup
+        case .password:
+            let field = NSSecureTextField()
+            field.translatesAutoresizingMaskIntoConstraints = false
+            field.placeholderString =
+                preferences.hasStoredValue(pluginId: pluginId, preference: pref)
+                ? "•••••••• (saved)" : (pref.placeholder ?? "Required")
+            control = field
+        default:  // textfield (+ file/directory/app-picker parity placeholders)
+            let field = NSTextField()
+            field.translatesAutoresizingMaskIntoConstraints = false
+            field.placeholderString = pref.placeholder ?? ""
+            field.stringValue = preferences.storedValue(pluginId: pluginId, preference: pref)?.stringValue
+                ?? pref.default?.stringValue ?? ""
+            control = field
         }
-        field.identifier = NSUserInterfaceItemIdentifier(plugin.pluginId)
-        field.target = self
-        field.action = #selector(tokenFieldCommitted(_:))
-        tokenFields[plugin.pluginId] = field
+        prefControls[pref.name] = control
+        if let tf = control as? NSTextField {
+            tf.widthAnchor.constraint(greaterThanOrEqualToConstant: 240).isActive = true
+            tf.setContentHuggingPriority(.defaultLow, for: .horizontal)
+        }
 
-        let saveButton = NSButton(title: "Save", target: self, action: #selector(saveTokenButton(_:)))
-        saveButton.translatesAutoresizingMaskIntoConstraints = false
-        saveButton.bezelStyle = .rounded
-        saveButton.identifier = NSUserInterfaceItemIdentifier(plugin.pluginId)
+        var columnViews: [NSView] = []
+        if pref.type != .checkbox {
+            columnViews.append(makeBodyLabel(pref.required ? "\(pref.title) (required)" : pref.title))
+        }
+        columnViews.append(control)
+        if let desc = pref.description, !desc.isEmpty {
+            columnViews.append(makeCaption(desc))
+        }
 
-        let row = NSStackView(views: [label, field, saveButton])
-        row.translatesAutoresizingMaskIntoConstraints = false
-        row.orientation = .horizontal
-        row.spacing = 8
-        field.setContentHuggingPriority(.defaultLow, for: .horizontal)
-        return row
+        let column = NSStackView(views: columnViews)
+        column.translatesAutoresizingMaskIntoConstraints = false
+        column.orientation = .vertical
+        column.alignment = .leading
+        column.spacing = 4
+        return column
     }
 
-    @objc private func tokenFieldCommitted(_ sender: NSSecureTextField) {
-        guard let pluginId = sender.identifier?.rawValue else { return }
-        commitToken(pluginId: pluginId, value: sender.stringValue)
-    }
-
-    @objc private func saveTokenButton(_ sender: NSButton) {
-        guard let pluginId = sender.identifier?.rawValue,
-              let field = tokenFields[pluginId] else { return }
-        commitToken(pluginId: pluginId, value: field.stringValue)
-    }
-
-    private func commitToken(pluginId: String, value: String) {
-        guard let plugin = knownPlugins.first(where: { $0.pluginId == pluginId }) else { return }
-        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed.isEmpty {
-            tokenStore.deleteToken(plugin: plugin.pluginId, account: plugin.account)
-        } else {
-            tokenStore.setToken(trimmed, plugin: plugin.pluginId, account: plugin.account)
+    /// Read every control for the current extension and write through the store,
+    /// which routes secrets to the Keychain and the rest to the prefs store.
+    @objc private func saveExtensionPrefs() {
+        guard let pluginId = currentExtensionId else { return }
+        for pref in preferences.declaredPreferences(forPlugin: pluginId) {
+            guard let control = prefControls[pref.name] else { continue }
+            switch pref.type {
+            case .checkbox:
+                let on = (control as? NSButton)?.state == .on
+                preferences.setValue(.bool(on), pluginId: pluginId, preference: pref)
+            case .dropdown:
+                if let popup = control as? NSPopUpButton, popup.indexOfSelectedItem >= 0,
+                   popup.indexOfSelectedItem < pref.data.count {
+                    preferences.setValue(.string(pref.data[popup.indexOfSelectedItem].value),
+                                         pluginId: pluginId, preference: pref)
+                }
+            case .password:
+                guard let field = control as? NSTextField else { continue }
+                let trimmed = field.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+                // An empty submit leaves an existing secret intact (the field shows
+                // "saved" but is blank) — only a non-empty entry overwrites it.
+                if !trimmed.isEmpty {
+                    preferences.setValue(.string(trimmed), pluginId: pluginId, preference: pref)
+                }
+            default:
+                guard let field = control as? NSTextField else { continue }
+                preferences.setValue(.string(field.stringValue), pluginId: pluginId, preference: pref)
+            }
         }
-        // Clear the visible field and update the placeholder to reflect state.
-        if let field = tokenFields[pluginId] {
-            field.stringValue = ""
-            field.placeholderString = trimmed.isEmpty ? "Token" : "•••••••• (saved)"
-        }
+        // Rebuild so "saved" placeholders + the setup banner refresh.
+        showExtensionForm(pluginId: pluginId)
     }
 
     // MARK: - Re-sync controls from the model (on show)
@@ -420,13 +555,10 @@ public final class SettingsWindowController: NSWindowController {
         historyField?.integerValue = model.historySize
         historyStepper?.integerValue = model.historySize
         reloadBlocklist()
-        for plugin in knownPlugins {
-            if let field = tokenFields[plugin.pluginId] {
-                field.stringValue = ""
-                field.placeholderString =
-                    tokenStore.hasToken(plugin: plugin.pluginId, account: plugin.account)
-                    ? "•••••••• (saved)" : "Token"
-            }
+        // Re-render the current extension form so "saved" states + the setup
+        // banner reflect the latest stored values each time Settings reopens.
+        if let id = currentExtensionId ?? extensionRows.first?.id {
+            showExtensionForm(pluginId: id)
         }
     }
 
@@ -486,11 +618,27 @@ public final class SettingsWindowController: NSWindowController {
 // MARK: - Blocklist table data source / delegate
 
 extension SettingsWindowController: NSTableViewDataSource, NSTableViewDelegate {
-    public func numberOfRows(in tableView: NSTableView) -> Int { blocklistRows.count }
+    public func numberOfRows(in tableView: NSTableView) -> Int {
+        tableView === extensionsTable ? extensionRows.count : blocklistRows.count
+    }
 
     public func tableView(_ tableView: NSTableView,
                           viewFor tableColumn: NSTableColumn?,
                           row: Int) -> NSView? {
+        if tableView === extensionsTable {
+            guard row >= 0, row < extensionRows.count else { return nil }
+            let id = NSUserInterfaceItemIdentifier("extension.cell")
+            let cell = (tableView.makeView(withIdentifier: id, owner: self) as? NSTextField)
+                ?? {
+                    let field = NSTextField(labelWithString: "")
+                    field.identifier = id
+                    field.font = .systemFont(ofSize: 13)
+                    field.lineBreakMode = .byTruncatingTail
+                    return field
+                }()
+            cell.stringValue = extensionRows[row].name
+            return cell
+        }
         guard row >= 0, row < blocklistRows.count else { return nil }
         let id = NSUserInterfaceItemIdentifier("blocklist.cell")
         let cell = (tableView.makeView(withIdentifier: id, owner: self) as? NSTextField)
@@ -503,6 +651,13 @@ extension SettingsWindowController: NSTableViewDataSource, NSTableViewDelegate {
             }()
         cell.stringValue = blocklistRows[row]
         return cell
+    }
+
+    public func tableViewSelectionDidChange(_ notification: Notification) {
+        guard let table = notification.object as? NSTableView, table === extensionsTable else { return }
+        let row = table.selectedRow
+        guard row >= 0, row < extensionRows.count else { return }
+        showExtensionForm(pluginId: extensionRows[row].id)
     }
 }
 

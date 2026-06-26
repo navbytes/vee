@@ -164,7 +164,8 @@ MainActor.assumeIsolated {
         secretStore: secretStore,
         openProvider: openProvider,
         fileProvider: fileProvider,
-        calendarProvider: calendarProvider)
+        calendarProvider: calendarProvider,
+        notificationProvider: UserNotificationProvider())
 
     // R2-CRIT-2: run plugins OUT OF PROCESS when the child binary is resolvable
     // (the shipped .app bundles `vee-plugin-host` beside `vee`; `swift run` builds
@@ -181,6 +182,25 @@ MainActor.assumeIsolated {
         }
     }
 
+    // ── Installed plugins → generic preferences store (the Raycast model) ─────
+    // Discover once, up front: the manifests drive BOTH the per-extension
+    // preferences store — which knows nothing about any specific service; it
+    // operates purely on what each plugin DECLARED — and the root command list.
+    // App enumeration (the heavy startup I/O) still runs on a background hop below.
+    let discoveredPlugins = PluginDiscovery.discoverAll()
+    let tokenStore = KeychainTokenStore()
+    let preferencesStore = PluginPreferencesStore(
+        manifests: discoveredPlugins.map(\.manifest),
+        secrets: tokenStore)
+    // The Settings window edits the hotkey chord + clipboard prefs and renders a
+    // GENERIC per-extension preferences form from each plugin's declared specs —
+    // no hardcoded GitHub/API-key roster. Built before the coordinator so the
+    // "Setup required" gate can open it.
+    let settingsController = SettingsWindowController(
+        model: settings,
+        preferences: preferencesStore,
+        onIgnoreNextCopy: { [weak clipboard] in clipboard?.ignoreNextCopy() })
+
     let coordinatorTransport: CoordinatorTransport
     let activatingHost: PluginActivating
     if let childHost {
@@ -193,7 +213,13 @@ MainActor.assumeIsolated {
     let coordinator = AppCoordinator(
         pluginId: "com.vee.launcher",
         transport: coordinatorTransport,
-        host: activatingHost)
+        host: activatingHost,
+        preferences: preferencesStore,
+        onNeedsConfiguration: { pluginId, _ in
+            // Raycast "Setup required": a command whose required preferences are
+            // unset opens straight to that extension's settings instead of running.
+            settingsController.show(focusExtension: pluginId)
+        })
 
     // ── AppKit seams (real NSPanel launcher + NSStatusItem menubar) ───────────
     let window = AppKitLauncherWindow()
@@ -201,6 +227,15 @@ MainActor.assumeIsolated {
     coordinator.window = window
     coordinator.menuBar = menuBar
     menuBar.setMenuBarTitle("Vee")
+
+    // ── Plugin-owned menu-bar commands (Raycast-style menu-bar extras) ────────
+    // A `mode: "menu-bar"` command gets its OWN NSStatusItem + dropdown, driven by
+    // a MenuBarController that mirrors the command's render tree. The coordinator
+    // demuxes those plugins' frames to the controller (off the launcher surface).
+    let pluginMenuBar = AppKitPluginMenuBar()
+    let menuBarController = MenuBarController(presenter: pluginMenuBar, transport: coordinatorTransport)
+    coordinator.menuBarRouter = menuBarController
+    var menuBarRefreshTimers: [Timer] = []
     // R2-MED-4: show a loading surface immediately; discovery + app enumeration
     // below replace it via `showHostCandidates`.
     coordinator.showLoading()
@@ -217,8 +252,18 @@ MainActor.assumeIsolated {
             MainActor.assumeIsolated {
                 guard !isShuttingDown, let ch = childHost else { return }
                 try? ch.restart()
-                for plugin in PluginDiscovery.discoverAll() {
+                for plugin in discoveredPlugins {
                     _ = try? ch.load(manifest: plugin.manifest, source: plugin.source)
+                }
+                // Re-activate background menu-bar commands so their status items
+                // recover after a child crash (the launcher surface resets below).
+                for plugin in discoveredPlugins {
+                    for command in plugin.manifest.commands where command.mode == .menuBar {
+                        try? activatingHost.activate(ActivateParams(
+                            pluginId: plugin.manifest.id, commandName: command.name,
+                            preferences: preferencesStore.resolvedValues(
+                                pluginId: plugin.manifest.id, command: command.name)))
+                    }
                 }
                 coordinator.showRoot()
             }
@@ -229,24 +274,9 @@ MainActor.assumeIsolated {
             "vee: plugin host request '\(rt.method)' timed out after \(rt.timeout)s\n".utf8))
     }
 
-    // ── Settings window + menubar actions ─────────────────────────────────────
-    // Tokens are stored in the real Keychain (namespace "tokens"); the Settings
-    // window edits the hotkey chord, clipboard history size + blocklist, and the
-    // per-plugin tokens. Construct it lazily-once and surface "Settings…" / "Quit
-    // Vee" in the menubar.
-    let tokenStore = KeychainTokenStore()
-    // R2-MED-8: the Settings "Plugins" token roster is derived from discovery — the
-    // installed plugins that declare a Keychain namespace (i.e. need a token) — not
-    // a hardcoded GitHub/Linear/OpenAI list.
-    let pluginRoster = PluginDiscovery.discoverAll()
-        .filter { !$0.manifest.capabilities.keychainNamespaces.isEmpty }
-        .map { SettingsWindowController.PluginTokenSpec(
-            pluginId: $0.manifest.id, displayName: $0.manifest.name) }
-    let settingsController = SettingsWindowController(
-        model: settings,
-        tokenStore: tokenStore,
-        knownPlugins: pluginRoster,
-        onIgnoreNextCopy: { [weak clipboard] in clipboard?.ignoreNextCopy() })
+    // ── Menubar actions ───────────────────────────────────────────────────────
+    // `settingsController` is built above (it backs the generic preferences
+    // store). Surface "Settings…" / "Quit Vee" in the menubar.
     menuBar.addActionItem(title: "Settings…", keyEquivalent: ",") {
         settingsController.show()
     }
@@ -281,23 +311,43 @@ MainActor.assumeIsolated {
     // to mutate the host (instances dictionary) and publish candidates. App
     // enumeration runs on the same background hop.
     DispatchQueue.global(qos: .userInitiated).async {
-        let discovered = PluginDiscovery.discoverAll()
         let installedApps = appSearch.search(query: "", limit: 5000)
 
         DispatchQueue.main.async {
             MainActor.assumeIsolated {
                 var commandCandidates: [Candidate] = []
-                for plugin in discovered {
+                for plugin in discoveredPlugins {
                     guard stagePlugin(plugin.manifest, plugin.source) else { continue }
-                    // One root candidate per declared command (most plugins ship a
-                    // single "view" command, but honor multiples).
                     for command in plugin.manifest.commands {
-                        commandCandidates.append(Candidate(
-                            id: "cmd:\(plugin.manifest.id):\(command.name)",
-                            title: command.title,
-                            subtitle: command.subtitle,
-                            icon: plugin.icon,
-                            actions: [CandidateAction(id: "run", title: "Open Command")]))
+                        if command.mode == .menuBar {
+                            // Background menu-bar command: it renders into its OWN
+                            // status item, not the launcher list. Register it for
+                            // demux, activate it now, and refresh on its interval.
+                            let id = plugin.manifest.id
+                            coordinator.registerMenuBarPlugin(id)
+                            menuBarController.register(pluginId: id)
+                            let activateMenuBar = {
+                                try? activatingHost.activate(ActivateParams(
+                                    pluginId: id, commandName: command.name,
+                                    preferences: preferencesStore.resolvedValues(
+                                        pluginId: id, command: command.name)))
+                            }
+                            activateMenuBar()
+                            if let interval = command.refreshIntervalSeconds, interval > 0 {
+                                let timer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { _ in
+                                    MainActor.assumeIsolated { activateMenuBar() }
+                                }
+                                menuBarRefreshTimers.append(timer)
+                            }
+                        } else {
+                            // View / no-view command: one launcher root candidate.
+                            commandCandidates.append(Candidate(
+                                id: "cmd:\(plugin.manifest.id):\(command.name)",
+                                title: command.title,
+                                subtitle: command.subtitle,
+                                icon: plugin.icon,
+                                actions: [CandidateAction(id: "run", title: "Open Command")]))
+                        }
                     }
                 }
 

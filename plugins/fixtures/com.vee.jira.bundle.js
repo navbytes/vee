@@ -82,14 +82,14 @@
     }
     return v;
   }
+  function getPreferenceValues() {
+    return host().preferences ?? {};
+  }
   function showToast(style, title, message) {
     host().showToast(style, title, message);
   }
   function http() {
     return host().http;
-  }
-  function keychain() {
-    return host().keychain;
   }
   function open(url) {
     return host().open(url);
@@ -167,7 +167,7 @@
         empty({
           key: "empty",
           title: "Add your Jira credentials",
-          description: "Store site, email and token under keychain jira/* to see your issues.",
+          description: "Add your site, email and API token in Settings \u2192 Extensions \u2192 Jira to see your issues.",
           icon: "key"
         })
       ])
@@ -196,11 +196,7 @@
       }
     });
     try {
-      const [site, email, token] = await Promise.all([
-        keychain().get("jira", "site"),
-        keychain().get("jira", "email"),
-        keychain().get("jira", "token")
-      ]);
+      const { site, email, token } = getPreferenceValues();
       if (!site || !email || !token) {
         ctx.render(noCredsTree());
         return;

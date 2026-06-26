@@ -11,13 +11,23 @@
       "mode": "view"
     }
   ],
+  "preferences": [
+    {
+      "name": "token",
+      "type": "password",
+      "title": "Personal Access Token",
+      "description": "A GitHub personal access token with the `repo` scope so Vee can read your open pull requests.",
+      "required": true,
+      "placeholder": "ghp_…"
+    }
+  ],
   "capabilities": {
     "network": ["api.github.com", "github.com"],
     "open": ["https"],
     "filesystem": [],
     "clipboard": false,
     "calendar": false,
-    "keychainNamespaces": ["github"],
+    "keychainNamespaces": [],
     "hotkeyActions": []
   }
 }

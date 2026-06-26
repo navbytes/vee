@@ -1,17 +1,24 @@
 /**
  * Sample Vee plugin: "Jira Issues".
  *
- * On activation of the `view` command it reads three secrets from the keychain
- * (`vee.keychain.get("jira", …)`): the site host (`site`), the account `email`,
- * and an API `token`. With all three present it POSTs the Jira Cloud JQL search
- * endpoint (`https://<site>/rest/api/3/search/jql`, capability-gated to
- * `.atlassian.net`) using HTTP Basic auth (`email:token`) and the JQL
- * `assignee = currentUser() AND statusCategory != Done ORDER BY updated DESC`,
- * then renders a `root → list` of issues (key + summary). Each row's primary
- * `action` opens the issue in the browser via `vee.open`.
+ * The three settings — the site host (`site`), the account `email`, and an API
+ * `token` — are plugin-DECLARED preferences (see the `preferences` array in
+ * `vee.json`). The user configures them once under Settings → Extensions → Jira;
+ * the host stores the `password` token in the Keychain on the plugin's behalf
+ * and resolves all three for the plugin. At runtime the plugin reads them
+ * synchronously via `getPreferenceValues<{ site; email; token }>()` — it no
+ * longer talks to the keychain bridge itself.
  *
- * When any credential is missing it renders an empty state prompting the user to
- * add them — it never touches the network without credentials. Any
+ * On activation of the `view` command, with all three present it POSTs the Jira
+ * Cloud JQL search endpoint (`https://<site>/rest/api/3/search/jql`,
+ * capability-gated to `.atlassian.net`) using HTTP Basic auth (`email:token`)
+ * and the JQL `assignee = currentUser() AND statusCategory != Done ORDER BY
+ * updated DESC`, then renders a `root → list` of issues (key + summary). Each
+ * row's primary `action` opens the issue in the browser via `vee.open`.
+ *
+ * When any value is blank it renders an empty state pointing at the settings
+ * form (a defensive fallback; the host normally gates a command whose `required`
+ * preferences are unmet) — it never touches the network without credentials. Any
  * network/parse error renders an empty state AND toasts; it never crashes.
  */
 
@@ -20,8 +27,8 @@ import {
   actionPanel,
   definePlugin,
   empty,
+  getPreferenceValues,
   http,
-  keychain,
   list,
   listItem,
   onInvokeAction,
@@ -128,7 +135,7 @@ export function noCredsTree(): RenderNode {
         key: "empty",
         title: "Add your Jira credentials",
         description:
-          "Store site, email and token under keychain jira/* to see your issues.",
+          "Add your site, email and API token in Settings → Extensions → Jira to see your issues.",
         icon: "key",
       }),
     ]),
@@ -162,11 +169,11 @@ async function loadIssues(ctx: { render: (n: RenderNode) => void }): Promise<voi
   });
 
   try {
-    const [site, email, token] = await Promise.all([
-      keychain().get("jira", "site"),
-      keychain().get("jira", "email"),
-      keychain().get("jira", "token"),
-    ]);
+    const { site, email, token } = getPreferenceValues<{
+      site: string;
+      email: string;
+      token: string;
+    }>();
     if (!site || !email || !token) {
       ctx.render(noCredsTree());
       return;

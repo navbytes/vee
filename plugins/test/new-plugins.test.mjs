@@ -42,16 +42,19 @@ async function runBundleOnce() {
  * Evaluate a bundle exactly as the host would, with a fully-faked `vee` global.
  *
  * opts:
- *   canned   : { url: bodyString } served by vee.http.fetch (records requests).
- *   keychain : { "namespace/account": value } seeding vee.keychain.get.
- *   events   : CalendarEvent[] returned by vee.calendar.upcoming().
- *   storage  : initial { key: value } map for vee.storage (mutated on set).
- *   arguments: activation arguments passed to the command.
+ *   canned     : { url: bodyString } served by vee.http.fetch (records requests).
+ *   keychain   : { "namespace/account": value } seeding vee.keychain.get.
+ *   preferences: plain { name: value } map the host resolves from the plugin's
+ *                declared `preferences` (read via getPreferenceValues()).
+ *   events     : CalendarEvent[] returned by vee.calendar.upcoming().
+ *   storage    : initial { key: value } map for vee.storage (mutated on set).
+ *   arguments  : activation arguments passed to the command.
  */
 async function evaluateAndRender(id, opts = {}) {
   const code = await readFile(distPath(id), "utf8");
   const canned = opts.canned ?? {};
   const kc = { ...(opts.keychain ?? {}) };
+  const prefs = { ...(opts.preferences ?? {}) };
   const kvStore = { ...(opts.storage ?? {}) };
   const observed = {
     requested: [],
@@ -71,6 +74,9 @@ async function evaluateAndRender(id, opts = {}) {
     console: { debug() {}, info() {}, log() {}, warn() {}, error() {} },
     vee: {
       pluginId: id,
+      // Resolved preference values the host injects from the plugin's declared
+      // `preferences` (the Raycast model). getPreferenceValues() reads this.
+      preferences: prefs,
       render(node) {
         sandbox.__rendered = node;
       },
@@ -191,14 +197,28 @@ test("bundle --once builds the five new sample plugins as self-contained IIFEs",
   }
 });
 
-// ── com.vee.github — vee.keychain + vee.http + vee.open ──────────────────────
+// ── com.vee.github — getPreferenceValues (token) + vee.http + vee.open ───────
 
-test("github renders an add-token empty state when no token is stored", async () => {
-  const { rendered, observed } = await evaluateAndRender("com.vee.github", { keychain: {} });
+test("github renders an add-token empty state when the token preference is blank", async () => {
+  // A required preference is normally host-gated, but the plugin still keeps a
+  // defensive empty state for a blank value.
+  const { rendered, observed } = await evaluateAndRender("com.vee.github", {
+    preferences: { token: "" },
+  });
   const listNode = listOf(rendered);
   assert.equal(listNode.children[0].tag, "empty-view");
   assert.match(listNode.children[0].props.title, /Add a GitHub token/);
+  // The empty state points users at the settings form, not the keychain.
+  assert.match(listNode.children[0].props.description, /Settings → Extensions → GitHub/);
   // Never hits the network without a token.
+  assert.deepEqual(observed.requested, []);
+});
+
+test("github also empty-states when no token preference is present at all", async () => {
+  const { rendered, observed } = await evaluateAndRender("com.vee.github", { preferences: {} });
+  const listNode = listOf(rendered);
+  assert.equal(listNode.children[0].tag, "empty-view");
+  assert.match(listNode.children[0].props.title, /Add a GitHub token/);
   assert.deepEqual(observed.requested, []);
 });
 
@@ -226,7 +246,7 @@ test("github fetches open PRs with a Bearer token and Open invokes vee.open", as
     }),
   };
   const { rendered, observed } = await evaluateAndRender("com.vee.github", {
-    keychain: { "github/token": "ghp_secret" },
+    preferences: { token: "ghp_secret" },
     canned,
   });
   const listNode = listOf(rendered);
@@ -251,7 +271,7 @@ test("github fetches open PRs with a Bearer token and Open invokes vee.open", as
 
 test("github empty-states (and toasts) on a fetch failure", async () => {
   const { rendered, observed } = await evaluateAndRender("com.vee.github", {
-    keychain: { "github/token": "ghp_secret" },
+    preferences: { token: "ghp_secret" },
     canned: {}, // fetch throws
   });
   const listNode = listOf(rendered);
@@ -259,15 +279,17 @@ test("github empty-states (and toasts) on a fetch failure", async () => {
   assert.equal(observed.toasts.at(-1).style, "failure");
 });
 
-// ── com.vee.jira — vee.keychain (3 secrets) + vee.http (POST) + vee.open ─────
+// ── com.vee.jira — getPreferenceValues (3 prefs) + vee.http (POST) + vee.open ─
 
-test("jira empty-states when credentials are missing", async () => {
+test("jira empty-states when a required preference is blank", async () => {
   const { rendered, observed } = await evaluateAndRender("com.vee.jira", {
-    keychain: { "jira/email": "me@x.com" }, // missing site + token
+    preferences: { email: "me@x.com" }, // missing site + token
   });
   const listNode = listOf(rendered);
   assert.equal(listNode.children[0].tag, "empty-view");
   assert.match(listNode.children[0].props.title, /Add your Jira credentials/);
+  // The empty state points users at the settings form, not the keychain.
+  assert.match(listNode.children[0].props.description, /Settings → Extensions → Jira/);
   assert.deepEqual(observed.requested, []);
 });
 
@@ -282,7 +304,7 @@ test("jira POSTs the JQL search with Basic auth and renders issues; Open works",
     }),
   };
   const { rendered, observed } = await evaluateAndRender("com.vee.jira", {
-    keychain: { "jira/site": "acme.atlassian.net", "jira/email": "me@x.com", "jira/token": "tok" },
+    preferences: { site: "acme.atlassian.net", email: "me@x.com", token: "tok" },
     canned,
   });
   const listNode = listOf(rendered);

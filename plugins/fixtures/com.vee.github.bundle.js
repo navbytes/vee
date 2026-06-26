@@ -82,14 +82,14 @@
     }
     return v;
   }
+  function getPreferenceValues() {
+    return host().preferences ?? {};
+  }
   function showToast(style, title, message) {
     host().showToast(style, title, message);
   }
   function http() {
     return host().http;
-  }
-  function keychain() {
-    return host().keychain;
   }
   function open(url) {
     return host().open(url);
@@ -148,7 +148,7 @@
         empty({
           key: "empty",
           title: "Add a GitHub token",
-          description: "Store a personal access token under keychain github/token to see your pull requests.",
+          description: "Add a personal access token in Settings \u2192 Extensions \u2192 GitHub to see your pull requests.",
           icon: "key"
         })
       ])
@@ -176,7 +176,7 @@
       }
     });
     try {
-      const token = await keychain().get("github", "token");
+      const { token } = getPreferenceValues();
       if (!token) {
         ctx.render(noTokenTree());
         return;

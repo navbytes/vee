@@ -41,6 +41,14 @@ public final class AppCoordinator {
     private let rootPluginId: String
     private let transport: CoordinatorTransport
     private let host: PluginActivating
+    /// Resolves declared preference values + answers "is this command configured?"
+    /// (the Raycast model). Optional so headless tests can omit it. When nil,
+    /// activation is never gated and no preferences are delivered.
+    private let preferences: PluginPreferenceProviding?
+    /// Invoked INSTEAD of activating when a command's required preferences are
+    /// unset — the app opens that extension's settings ("Setup required").
+    /// Args: (pluginId, command).
+    private let onNeedsConfiguration: ((String, String) -> Void)?
     private let fuzzy: FuzzyMatching
     /// When true this command filters server-side: a keystroke ALSO forwards a
     /// `host.onSearchTextChange` frame (in addition to the native pre-filter).
@@ -59,6 +67,13 @@ public final class AppCoordinator {
         }
     }
     public weak var menuBar: MenuBarPresenting?
+    /// Router for background menu-bar-command frames. The coordinator is the single
+    /// inbound transport subscriber; frames whose `pluginId` is a registered
+    /// menu-bar command are demuxed off the launcher surface and forwarded here
+    /// (so a menu-bar plugin renders into its own status item, not the window).
+    public weak var menuBarRouter: MenuBarRouting?
+    /// Plugin ids that run as background menu-bar commands (see `menuBarRouter`).
+    private var menuBarPluginIds: Set<String> = []
 
     // MARK: Render mirror state
 
@@ -117,11 +132,15 @@ public final class AppCoordinator {
                 transport: CoordinatorTransport,
                 host: PluginActivating,
                 fuzzy: FuzzyMatching = LiveFuzzyMatcher(),
-                serverSideFiltering: Bool = false) {
+                serverSideFiltering: Bool = false,
+                preferences: PluginPreferenceProviding? = nil,
+                onNeedsConfiguration: ((String, String) -> Void)? = nil) {
         self.pluginId = pluginId
         self.rootPluginId = pluginId
         self.transport = transport
         self.host = host
+        self.preferences = preferences
+        self.onNeedsConfiguration = onNeedsConfiguration
         self.fuzzy = fuzzy
         self.serverSideFiltering = serverSideFiltering
 
@@ -187,6 +206,12 @@ public final class AppCoordinator {
 
     private func handleInbound(_ message: JSONRPCMessage) {
         guard case .notification(let note) = message, let params = note.params else { return }
+        // Demux: a frame for a registered background menu-bar command never drives
+        // the launcher surface — forward it to the menu-bar router and stop.
+        if let pid = params["pluginId"]?.stringValue, menuBarPluginIds.contains(pid) {
+            menuBarRouter?.handleFrame(message)
+            return
+        }
         // Only handle frames addressed to our plugin (or unaddressed).
         if let pid = params["pluginId"]?.stringValue, pid != pluginId { return }
 
@@ -350,6 +375,13 @@ public final class AppCoordinator {
         refilter()
     }
 
+    /// Register `pluginId` as a background menu-bar command: its inbound `plugin.*`
+    /// frames are demuxed off the launcher surface and forwarded to `menuBarRouter`
+    /// (the plugin renders into its own status item, never the launcher window).
+    public func registerMenuBarPlugin(_ pluginId: String) {
+        menuBarPluginIds.insert(pluginId)
+    }
+
     /// Activate a plugin command and RETARGET this coordinator to that plugin's id
     /// so its `plugin.render`/`setCandidates` frames are accepted (ARCH-1), with a
     /// fresh render-revision sequence (ARCH-3, mirror reset so the plugin's first
@@ -357,11 +389,20 @@ public final class AppCoordinator {
     /// `showRoot()` returns to it.
     public func activatePlugin(_ pluginId: String, command: String,
                                arguments: [String: JSONValue] = [:]) {
+        // Raycast-style "Setup required": when the plugin declared required
+        // preferences the user hasn't set, surface configuration instead of
+        // running — and DON'T retarget, so the launcher stays on its root.
+        if let preferences, !preferences.isConfigured(pluginId: pluginId, command: command) {
+            onNeedsConfiguration?(pluginId, command)
+            return
+        }
         self.pluginId = pluginId
         hostCandidateMode = false
         lastRevision = 0
         mirror = nil
-        try? host.activate(ActivateParams(pluginId: pluginId, commandName: command, arguments: arguments))
+        let resolved = preferences?.resolvedValues(pluginId: pluginId, command: command) ?? [:]
+        try? host.activate(ActivateParams(pluginId: pluginId, commandName: command,
+                                          arguments: arguments, preferences: resolved))
     }
 
     // MARK: - Query / native filter (filter natively per keystroke)
@@ -494,7 +535,9 @@ public final class AppCoordinator {
     }
 
     public func activateThrowing(command: String, arguments: [String: JSONValue] = [:]) throws {
-        try host.activate(ActivateParams(pluginId: pluginId, commandName: command, arguments: arguments))
+        let resolved = preferences?.resolvedValues(pluginId: pluginId, command: command) ?? [:]
+        try host.activate(ActivateParams(pluginId: pluginId, commandName: command,
+                                         arguments: arguments, preferences: resolved))
     }
 
     public func deactivate(command: String) {

@@ -1,4 +1,5 @@
 import Foundation
+import VeeProtocol
 
 /// The user-intent surface a launcher window forwards keystrokes/clicks into.
 ///
@@ -79,4 +80,29 @@ public extension LauncherWindowPresenting {
 public protocol MenuBarPresenting: AnyObject {
     func setMenuBarTitle(_ title: String?)
     func setMenuBarItems(_ items: [MenuBarItemViewModel])
+}
+
+/// Sink for inbound host frames addressed to a **menu-bar** plugin. The launcher
+/// `AppCoordinator` is the single inbound subscriber; it demuxes frames whose
+/// `pluginId` is a registered menu-bar command off the launcher surface and
+/// forwards them here. `MenuBarController` conforms.
+public protocol MenuBarRouting: AnyObject {
+    func handleFrame(_ message: JSONRPCMessage)
+}
+
+/// Presents PLUGIN-OWNED menu-bar items — one `NSStatusItem` per menu-bar command,
+/// distinct from the app's own "Vee" item (`MenuBarPresenting`). The
+/// `MenuBarController` projects each plugin's render tree into a title/icon +
+/// dropdown and pushes it here; the thin AppKit adapter (`AppKitPluginMenuBar`)
+/// owns no logic. This is the native surface a Raycast-style menu-bar command
+/// renders into. Non-isolated (like the other seams); the AppKit adapter provides
+/// a `@MainActor`-isolated conformance.
+public protocol PluginMenuBarPresenting: AnyObject {
+    /// Create or update the status item for `pluginId`: a status-bar `title`
+    /// and/or SF-Symbol `iconSymbol`, plus the dropdown `items`. `onSelect` fires
+    /// with an item's `actionId` when the user picks it.
+    func upsert(pluginId: String, title: String?, iconSymbol: String?,
+                items: [MenuBarItemViewModel], onSelect: @escaping (String) -> Void)
+    /// Remove the status item for `pluginId` (the command unloaded).
+    func remove(pluginId: String)
 }

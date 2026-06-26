@@ -35,11 +35,12 @@ public final class PluginHost {
     private let openProvider: OpenProviding
     private let fileProvider: FileProviding
     private let calendarProvider: CalendarProviding
+    private let notificationProvider: NotificationProviding
 
     /// Live instances by plugin id.
     private var instances: [String: PluginInstance] = [:]
     /// The currently-activated command per plugin (for re-activation on reload).
-    private var activeCommand: [String: (name: String, arguments: [String: JSONValue])] = [:]
+    private var activeCommand: [String: (name: String, arguments: [String: JSONValue], preferences: [String: JSONValue])] = [:]
     /// Manifests by plugin id (for rebuild/re-create on reload).
     private var manifests: [String: PluginManifest] = [:]
 
@@ -54,7 +55,8 @@ public final class PluginHost {
         secretStore: any SecretStore = InMemorySecretStore(),
         openProvider: OpenProviding = RecordingOpenProvider(),
         fileProvider: FileProviding = DenyingFileProvider(),
-        calendarProvider: CalendarProviding = EmptyCalendarProvider()
+        calendarProvider: CalendarProviding = EmptyCalendarProvider(),
+        notificationProvider: NotificationProviding = NoopNotificationProvider()
     ) {
         self.transport = transport
         self.clock = clock
@@ -67,6 +69,7 @@ public final class PluginHost {
         self.openProvider = openProvider
         self.fileProvider = fileProvider
         self.calendarProvider = calendarProvider
+        self.notificationProvider = notificationProvider
 
         // Route inbound peer frames (host→plugin notifications) to the matching
         // instance. The transport delivers on its serial queue.
@@ -118,6 +121,7 @@ public final class PluginHost {
             openProvider: openProvider,
             fileProvider: fileProvider,
             calendarProvider: calendarProvider,
+            notificationProvider: notificationProvider,
             // The host owns the transport's `onReceive` multiplexer (installed in
             // init, routing to every instance by id). Instances must NOT seize it
             // or only the last-loaded plugin would get events (ARCH-2).
@@ -147,8 +151,9 @@ public final class PluginHost {
         guard let instance = instances[params.pluginId] else {
             throw JSONRPCError.pluginError("no loaded plugin: \(params.pluginId)")
         }
-        try instance.activateCommand(params.commandName, arguments: params.arguments)
-        activeCommand[params.pluginId] = (params.commandName, params.arguments)
+        try instance.activateCommand(params.commandName, arguments: params.arguments,
+                                     preferences: params.preferences)
+        activeCommand[params.pluginId] = (params.commandName, params.arguments, params.preferences)
     }
 
     // MARK: - Deactivate (RUNTIME.md §5 step 5)
@@ -190,7 +195,8 @@ public final class PluginHost {
 
         // 5. Re-activate the previously-active command.
         if let active = previouslyActive {
-            try instance.activateCommand(active.name, arguments: active.arguments)
+            try instance.activateCommand(active.name, arguments: active.arguments,
+                                         preferences: active.preferences)
             activeCommand[params.pluginId] = active
         }
     }

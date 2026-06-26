@@ -1,10 +1,18 @@
 /**
  * Sample Vee plugin: "GitHub Pull Requests".
  *
- * On activation of the `view` command it reads a personal access token from the
- * keychain (`vee.keychain.get("github", "token")`):
- *   • token ABSENT  → render an empty-state list telling the user to add one
- *     (it never touches the network without credentials);
+ * The personal access token is a plugin-DECLARED preference (see the
+ * `preferences` array in `vee.json`). The user configures it once under
+ * Settings → Extensions → GitHub; the host stores the `password` value in the
+ * Keychain on the plugin's behalf and resolves it for the plugin. At runtime the
+ * plugin reads it synchronously via `getPreferenceValues<{ token: string }>()` —
+ * it no longer talks to the keychain bridge itself.
+ *
+ * On activation of the `view` command:
+ *   • token BLANK   → render an empty-state list pointing at the settings form
+ *     (defensive fallback; the host normally gates a command whose `required`
+ *     preference is unmet, so this is rarely hit — and it never touches the
+ *     network without a token);
  *   • token PRESENT → GET the GitHub search API for the viewer's open PRs
  *     (`vee.http.fetch`, capability-gated to `api.github.com`) with a Bearer
  *     `Authorization` header, and render a `root → list` of rows (title +
@@ -20,8 +28,8 @@ import {
   actionPanel,
   definePlugin,
   empty,
+  getPreferenceValues,
   http,
-  keychain,
   list,
   listItem,
   onInvokeAction,
@@ -108,7 +116,7 @@ export function noTokenTree(): RenderNode {
         key: "empty",
         title: "Add a GitHub token",
         description:
-          "Store a personal access token under keychain github/token to see your pull requests.",
+          "Add a personal access token in Settings → Extensions → GitHub to see your pull requests.",
         icon: "key",
       }),
     ]),
@@ -147,7 +155,7 @@ async function loadPullRequests(ctx: { render: (n: RenderNode) => void }): Promi
   });
 
   try {
-    const token = await keychain().get("github", "token");
+    const { token } = getPreferenceValues<{ token: string }>();
     if (!token) {
       ctx.render(noTokenTree());
       return;

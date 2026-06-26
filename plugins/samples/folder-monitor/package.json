@@ -1,0 +1,10 @@
+{
+  "name": "@vee-sample/folder-monitor",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Sample Vee plugin: a menu-bar command that watches a folder via vee.fs.list and notifies on change via vee.notify.",
+  "dependencies": {
+    "@vee/sdk": "*"
+  }
+}

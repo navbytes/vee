@@ -63,6 +63,12 @@ interface VeeHost {
   // Identity
   readonly pluginId: string;            // reverse-DNS id from the manifest
 
+  // Resolved preference values for the active command (the Raycast model), keyed
+  // by the `name` you declared in `vee.json`. The host fills this from the user's
+  // saved settings + each preference's `default` before invoking the command.
+  // Read it via the typed `getPreferenceValues()` accessor (see §2.3).
+  readonly preferences: Record<string, JSONValue>;
+
   // ── Rendering (plugin → host) ────────────────────────────────────────────
   // Submit a complete render tree. The host diffs against the previously
   // rendered tree and emits a `plugin.render` JSON-Patch notification
@@ -121,6 +127,9 @@ interface VeeHost {
     // the wire uses base64.
     read(path: string): Promise<string>;
     write(path: string, contents: string): Promise<void>;
+    // List the entries directly under `dir` (basenames, not recursive). Same
+    // capability gate as read/write. bridge.fs.list (FSListParams → [FSDirEntry]).
+    list(dir: string): Promise<{ name: string; isDirectory: boolean }[]>;
   };
 
   readonly calendar: {
@@ -160,6 +169,11 @@ interface VeeHost {
   // ── UI affordances ─────────────────────────────────────────────────────────
   // Show a transient toast (RPCMethods.toast = "plugin.showToast", ToastParams).
   showToast(style: "success" | "failure" | "info", title: string, message?: string): void;
+
+  // Post a SYSTEM notification (RPCMethods.notify = "bridge.notify", NotifyParams).
+  // Ungated, like showToast. Delivered to the host's NotificationProviding (a real
+  // UNUserNotification on the desktop), NOT routed through the launcher window.
+  notify(title: string, body?: string, subtitle?: string): void;
 }
 ```
 
@@ -184,10 +198,77 @@ interface VeeHost {
 > default-deny and declare the schemes/bundle ids you need in the manifest.
 
 > **Surface parity.** `@vee/sdk` ships an accessor for every member above
-> (`http()`, `storage()`, `fs()`, `calendar()`, `keychain()`, `clipboard()`,
-> `open()`, `openApp()`, `showToast()`), each typed against the `VeeHost`
-> interface in `packages/sdk/src/runtime.ts`. The matching JSON-RPC method-name
-> constants live in `RPCMethods` (`types.ts`).
+> (`http()`, `storage()`, `fs()` incl. `list`, `calendar()`, `keychain()`,
+> `clipboard()`, `open()`, `openApp()`, `showToast()`, `notify()`,
+> `getPreferenceValues()`), each typed against the `VeeHost` interface in
+> `packages/sdk/src/runtime.ts`. The matching JSON-RPC method-name constants live
+> in `RPCMethods` (`types.ts`).
+
+### 2.4 Menu-bar commands (`mode: "menu-bar"`)
+
+A command declared with `"mode": "menu-bar"` runs in the BACKGROUND and renders
+into its OWN `NSStatusItem` — a Raycast-style menu-bar extra — not the launcher
+window. The host activates it at startup and re-activates it every
+`refreshIntervalSeconds` (a timer); the command re-renders on each tick. To update
+between ticks, just call `render(...)` again.
+
+The render tree is projected onto the status item like so:
+>   • the ROOT node's `title` prop → the status-bar text; its `icon` prop (an
+>     SF-Symbol name) → the status-button image;
+>   • each `list-item` descendant → a dropdown row (`title`, optional `subtitle`,
+>     `actionId`); a node with tag `"separator"` → a divider;
+>   • choosing a row sends one `host.invokeAction` carrying that `actionId` —
+>     handle it with `onInvokeAction`, exactly as in a launcher view.
+
+Menu-bar commands do NOT appear in the launcher's command list (they live in the
+menu bar). They may declare `preferences` and use any capability-gated bridge —
+commonly `fs.list` (watch a folder), `http` (poll an API), `open` (act on a row),
+and `notify` (surface a change). See `plugins/samples/folder-monitor` for a worked
+example.
+
+### 2.3 Preferences — plugin-declared configuration (the Raycast model)
+
+A plugin OWNS its configuration. The host has no built-in notion of any API key
+or service: a credential exists only because a plugin DECLARED a preference for
+it. Declare preferences in `vee.json`, at the extension level and/or per command:
+
+```json
+{
+  "id": "com.vee.github",
+  "preferences": [
+    { "name": "token", "type": "password", "title": "Personal Access Token",
+      "description": "A GitHub PAT with the repo scope.", "required": true,
+      "placeholder": "ghp_…" }
+  ],
+  "commands": [
+    { "name": "view", "title": "Pull Requests", "mode": "view",
+      "preferences": [ { "name": "limit", "type": "textfield", "title": "Max rows", "default": "25" } ] }
+  ]
+}
+```
+
+Each preference has a `name` (the key you read at runtime), a `type`
+(`textfield` | `password` | `checkbox` | `dropdown`; `app-picker`/`file`/
+`directory` are accepted and render as a textfield for now), a `title`, plus the
+optional `description`, `required`, `default`, `placeholder`, `label` (checkbox),
+and `data` (dropdown options `{title, value}`). Command preferences merge over
+extension preferences of the same `name`.
+
+The host renders a GENERIC form from these in **Settings → Extensions** — there
+is no hardcoded, app-side credential roster. `password` values are stored in the
+Keychain; everything else in a preferences store. The plugin reads the resolved
+values synchronously:
+
+```ts
+import { getPreferenceValues } from "@vee/sdk";
+const { token } = getPreferenceValues<{ token: string }>();
+```
+
+Values are merged with declared `default`s and delivered in
+`ActivateParams.preferences` on every activate (also exposed as `ctx.preferences`).
+If a command declares a `required` preference the user hasn't set, the host shows
+a "Setup required" form (opening that extension's settings) INSTEAD of activating
+— so inside a command body a `required` preference is always present.
 
 ---
 

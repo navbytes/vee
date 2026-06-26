@@ -35,6 +35,7 @@ public final class PluginInstance {
     let openProvider: OpenProviding
     let fileProvider: FileProviding
     let calendarProvider: CalendarProviding
+    let notificationProvider: NotificationProviding
 
     /// Serial queue for all JS execution & frame handling, so frames stay
     /// ordered and JSC's single-threaded-per-VM rule is never violated. The
@@ -62,6 +63,7 @@ public final class PluginInstance {
         openProvider: OpenProviding = RecordingOpenProvider(),
         fileProvider: FileProviding = DenyingFileProvider(),
         calendarProvider: CalendarProviding = EmptyCalendarProvider(),
+        notificationProvider: NotificationProviding = NoopNotificationProvider(),
         ownsTransportInbound: Bool = true
     ) throws {
         self.manifest = manifest
@@ -74,6 +76,7 @@ public final class PluginInstance {
         self.openProvider = openProvider
         self.fileProvider = fileProvider
         self.calendarProvider = calendarProvider
+        self.notificationProvider = notificationProvider
         self.queue = DispatchQueue(label: "vee.engine.instance.\(manifest.id)")
         self.mirror = RenderMirror(pluginId: manifest.id)
 
@@ -235,7 +238,8 @@ public final class PluginInstance {
     /// Call `__veePlugin.activateCommand(name, ctx)`. Builds the `CommandContext`
     /// (RUNTIME.md §5 step 3) with a `render` convenience bound to `vee.render`.
     /// A throw/rejection surfaces as `JSONRPCError.pluginError` with the JS stack.
-    public func activateCommand(_ name: String, arguments: [String: JSONValue]) throws {
+    public func activateCommand(_ name: String, arguments: [String: JSONValue],
+                                preferences: [String: JSONValue] = [:]) throws {
         var thrown: JSONRPCError?
         runOnQueue {
             self.pendingException = nil
@@ -244,12 +248,20 @@ public final class PluginInstance {
                 thrown = .pluginError("bundle did not register __veePlugin")
                 return
             }
-            // Build CommandContext: { pluginId, commandName, arguments, render }.
+            // Resolved preference values reach the plugin two ways: as `ctx.preferences`
+            // and as `vee.preferences` (what `getPreferenceValues()` reads). Set the
+            // global BEFORE invoking so a synchronous handler body sees current values.
+            let prefsValue = JSONBridge.toJSValue(.object(preferences), in: self.context)
+            self.context.objectForKeyedSubscript("vee")?
+                .setObject(prefsValue, forKeyedSubscript: "preferences" as NSString)
+
+            // Build CommandContext: { pluginId, commandName, arguments, preferences, render }.
             let ctxObj = JSValue(newObjectIn: self.context)!
             ctxObj.setObject(self.pluginId, forKeyedSubscript: "pluginId" as NSString)
             ctxObj.setObject(name, forKeyedSubscript: "commandName" as NSString)
             let argsValue = JSONBridge.toJSValue(.object(arguments), in: self.context)
             ctxObj.setObject(argsValue, forKeyedSubscript: "arguments" as NSString)
+            ctxObj.setObject(prefsValue, forKeyedSubscript: "preferences" as NSString)
             // render convenience === vee.render
             if let vee = self.context.objectForKeyedSubscript("vee"),
                let render = vee.objectForKeyedSubscript("render") {
@@ -379,6 +391,12 @@ public final class PluginInstance {
         openProvider.openApp(bundleId: bundleId, completion: completion)
     }
 
+    // MARK: - Notification bridge service call (NOT capability-gated)
+
+    func performNotify(title: String, body: String?, subtitle: String?) {
+        notificationProvider.notify(title: title, body: body, subtitle: subtitle)
+    }
+
     // MARK: - Filesystem bridge service calls (capability-gated by Capabilities.filesystem)
     //
     // The bridge resolves a JS path to a confined ABSOLUTE path with
@@ -419,6 +437,11 @@ public final class PluginInstance {
     func performFileWrite(path: String, contents: String,
                           completion: @escaping (Result<Void, Error>) -> Void) {
         fileProvider.write(path: path, contents: contents, completion: completion)
+    }
+
+    func performFileList(path: String,
+                         completion: @escaping (Result<[FSDirEntry], Error>) -> Void) {
+        fileProvider.list(path: path, completion: completion)
     }
 
     // MARK: - Calendar bridge service calls (capability-gated by Capabilities.calendar)

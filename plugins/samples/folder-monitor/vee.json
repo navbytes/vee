@@ -1,0 +1,15 @@
+{
+  "id": "com.vee.folder-monitor",
+  "name": "Folder Monitor",
+  "version": "0.1.0",
+  "entrypoint": "../../dist/com.vee.folder-monitor.js",
+  "commands": [
+    { "name": "monitor", "title": "Folder Monitor", "mode": "menu-bar", "refreshIntervalSeconds": 30 }
+  ],
+  "preferences": [
+    { "name": "folder", "type": "textfield", "title": "Folder to Watch",
+      "description": "Absolute path to the folder whose files appear in the menu bar.",
+      "required": true, "placeholder": "/Users/you/Downloads" }
+  ],
+  "capabilities": { "filesystem": ["~"], "open": ["file"] }
+}

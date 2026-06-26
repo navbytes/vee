@@ -6,7 +6,54 @@
 
 ## Update — Round-2 re-audit fixes, 2026-06-26 (current state)
 
-*Follows [AUDIT-2.md](AUDIT-2.md) (the post-remediation re-audit). `swift test`: **302 tests, 301 pass / 1 skipped, 0 failures**; 34 node tests pass.*
+*Follows [AUDIT-2.md](AUDIT-2.md) (the post-remediation re-audit). `swift test`: **336 tests, 335 pass / 1 skipped, 0 failures**; 38 node tests pass.*
+
+## Latest — menu-bar commands + `fs.list` + `notify`
+
+Vee now hosts Raycast-style **menu-bar commands** (a plugin can be a menu-bar app,
+not just a launcher view), plus the two bridges that class of plugin needs:
+
+- **Menu-bar command mode** (`mode: "menu-bar"`): the command renders into its OWN
+  `NSStatusItem` + dropdown — activated in the background, refreshed on
+  `refreshIntervalSeconds`. The render tree projects to a status title/icon + rows
+  (`ViewModelProjector.menuBar`); a `MenuBarController` keeps a per-plugin render
+  mirror and the `AppCoordinator` demuxes each menu-bar plugin's frames off the
+  launcher surface to it; a row click sends `host.invokeAction`. New seams:
+  `PluginMenuBarPresenting` / `AppKitPluginMenuBar` (one status item per command)
+  and `MenuBarRouting`. Covered by `MenuBarTests` (projection + controller +
+  coordinator demux).
+- **`vee.fs.list(dir)`**: capability-gated directory listing (same `filesystem`
+  root gate as read/write) → `[{name, isDirectory}]`.
+- **`vee.notify(title, body?, subtitle?)`**: a system notification (ungated, like
+  `showToast`), delivered to a host `NotificationProviding` (a real
+  `UNUserNotification` on the desktop; best-effort from the OOP child).
+- Sample: `plugins/samples/folder-monitor` — a menu-bar command using preferences
+  + `fs.list` + `open` + `notify`.
+
+## Plugin-declared preferences (the Raycast configuration model)
+
+The app no longer hardcodes any credential. Earlier builds shipped an app-side
+"Plugin Tokens" roster (GitHub/Linear/OpenAI) in Settings; that was the wrong
+model. **Configuration is now owned by the plugin author**, exactly like Raycast:
+
+- A plugin DECLARES typed `preferences` in its manifest (`textfield` / `password`
+  / `checkbox` / `dropdown`, with `title`/`description`/`required`/`default`), at
+  the extension and/or command level (`PluginManifest.preferences`,
+  `PluginCommand.preferences`, `mergedPreferences(forCommand:)`).
+- The app renders a **generic** per-extension form in **Settings → Extensions**
+  from whatever each plugin declared — no built-in service list. `password`
+  values go to the Keychain; the rest to a preferences store
+  (`PluginPreferencesStore`, the native heart — it names no service).
+- The plugin reads its own values at runtime via `getPreferenceValues()`; the host
+  injects the resolved values (merged with defaults) in `ActivateParams.preferences`
+  on each activate (also `ctx.preferences`).
+- A command with an unmet `required` preference shows a **"Setup required"** form
+  (the `AppCoordinator` gate) instead of running. `PluginTokenSpec` /
+  `defaultKnownPlugins` are deleted; **github** + **jira** now declare + consume
+  their own preferences.
+- New tests: `PreferencesContractTests` (VeeProtocol), `PluginPreferencesTests`
+  (store + coordinator gate, VeeApp), `PreferencesRuntimeTests` (real-JSC
+  injection, VeeEngine), plus updated node tests.
 
 The full Round-2 backlog is remediated. Highlights:
 - **R2-CRIT-1 — `DispatchClock` one-shot deadlock.** The handler ran on the clock's serial queue then called `cancel` → `queue.sync` re-entry trap. Added the `DispatchSpecificKey` guard used elsewhere; `DispatchClockTests` fires a real one-shot. *(Any `setTimeout`-using plugin was broken.)*
@@ -15,7 +62,7 @@ The full Round-2 backlog is remediated. Highlights:
 - **R2-HIGH-2 — per-plugin storage namespace** (`<root>/<pluginId>/`; no cross-plugin clobber).
 - **R2-HIGH-3 — plugin authenticity** at the discovery layer: refuse duplicate ids, bind a bundled plugin's manifest id to its packaging-controlled folder (a spoofed/duplicate id can't shadow a real plugin to reach its Keychain tokens). `VeeCLITests`.
 - **R2-HIGH-4 / R2-MED-3 / R2-MED-4** — working `⌘K` actions popover, mirror keyframe-on-desync recovery, cold-open loading state (18 VeeApp tests).
-- **R2-MED-1** (`open:["*"]` exfil waiver closed — http(s) host re-check now unconditional), **R2-MED-2** (leaked timers cancelled on teardown), **R2-MED-5** (SSRF IP-literal classifier via `inet_pton` — decimal/hex/IPv6-mapped/ULA, fixes the `fc*`/`fd*` hostname over-block), **R2-MED-6** (SDK `Capabilities.open` parity), **R2-MED-8** (Settings token roster driven by discovery, not hardcoded).
+- **R2-MED-1** (`open:["*"]` exfil waiver closed — http(s) host re-check now unconditional), **R2-MED-2** (leaked timers cancelled on teardown), **R2-MED-5** (SSRF IP-literal classifier via `inet_pton` — decimal/hex/IPv6-mapped/ULA, fixes the `fc*`/`fd*` hostname over-block), **R2-MED-6** (SDK `Capabilities.open` parity), **R2-MED-8** (Settings token roster driven by discovery — since **superseded**: the entire app-side credential roster was replaced by plugin-declared preferences; see "Latest" above).
 
 **Honest residual (genuinely deferred, disclosed).** The out-of-process child is a *crash-isolation* boundary, **not yet a privilege boundary** (R2-HIGH-5): it runs with real providers and the user's ambient authority, and there is no per-plugin code-signing/App-Sandbox — so installed plugins are still trusted code. Plugins load only from inside the signed app bundle (no external install path), and discovery now refuses id-shadowing; full per-plugin signing + a sandboxed child are the next security step. Also open: ARCH-4 (`JSONValue` is `Double`-backed; integers > 2^53 lossy), ARCH-8 (keyless render items collapse to `""`), UX-1 (Esc→root), and assorted Low/Info items. Notarization still needs Apple credentials.
 

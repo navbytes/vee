@@ -195,7 +195,7 @@ final class Wave2bTests: XCTestCase {
         XCTAssertEqual(readerRecorder.logs().map(\.message), [#"read:{"hello":"world"}"#])
     }
 
-    // MARK: - Job 2: github fixture (keychain + http)
+    // MARK: - Job 2: github fixture (preferences + http)
 
     /// Canned GitHub search/issues response: two PRs.
     private func cannedGitHub() -> CannedHTTPClient {
@@ -216,14 +216,12 @@ final class Wave2bTests: XCTestCase {
         PluginManifest(
             id: "com.vee.github", name: "GitHub", version: "1.0.0",
             entrypoint: "com.vee.github.bundle.js", commands: viewCommand(),
-            capabilities: Capabilities(network: ["api.github.com"], keychainNamespaces: ["github"]))
+            capabilities: Capabilities(network: ["api.github.com"]))
     }
 
     func testGitHubFixtureRendersPullRequestsWithToken() throws {
         let http = cannedGitHub()
         let store = FakeSecretStore()
-        // Seed the token under THIS plugin's id + the github namespace.
-        try store.set(pluginId: "com.vee.github", namespace: "github", account: "token", secret: "ghp_x")
 
         let instance = try PluginInstance(
             manifest: githubManifest(),
@@ -235,7 +233,10 @@ final class Wave2bTests: XCTestCase {
 
         try instance.evaluateOrThrow(fixtureBundle("com.vee.github"))
         XCTAssertEqual(try instance.commandNames(), ["view"])
-        try instance.activateCommand("view", arguments: [:])
+        // The token now arrives as a resolved PREFERENCE (the Raycast model) — the
+        // host injects it and the plugin reads `getPreferenceValues()`; it is no
+        // longer fetched from the keychain by the plugin.
+        try instance.activateCommand("view", arguments: [:], preferences: ["token": .string("ghp_x")])
         instance.runUntilQuiescent()
 
         let tree = try XCTUnwrap(capturedTree, "vee.render was never called")
@@ -270,7 +271,7 @@ final class Wave2bTests: XCTestCase {
         XCTAssertTrue(http.requested.isEmpty, "the no-token path must never reach the network")
     }
 
-    // MARK: - jira fixture (keychain + http)
+    // MARK: - jira fixture (preferences + http)
 
     /// Canned Jira /search/jql response: two issues.
     private func cannedJira() -> CannedHTTPClient {
@@ -291,15 +292,12 @@ final class Wave2bTests: XCTestCase {
         PluginManifest(
             id: "com.vee.jira", name: "Jira", version: "1.0.0",
             entrypoint: "com.vee.jira.bundle.js", commands: viewCommand(),
-            capabilities: Capabilities(network: ["acme.atlassian.net"], keychainNamespaces: ["jira"]))
+            capabilities: Capabilities(network: ["acme.atlassian.net"]))
     }
 
     func testJiraFixtureRendersIssuesWithCredentials() throws {
         let http = cannedJira()
         let store = FakeSecretStore()
-        try store.set(pluginId: "com.vee.jira", namespace: "jira", account: "site", secret: "acme.atlassian.net")
-        try store.set(pluginId: "com.vee.jira", namespace: "jira", account: "email", secret: "me@acme.com")
-        try store.set(pluginId: "com.vee.jira", namespace: "jira", account: "token", secret: "jira_tok")
 
         let instance = try PluginInstance(
             manifest: jiraManifest(),
@@ -311,7 +309,13 @@ final class Wave2bTests: XCTestCase {
 
         try instance.evaluateOrThrow(fixtureBundle("com.vee.jira"))
         XCTAssertEqual(try instance.commandNames(), ["view"])
-        try instance.activateCommand("view", arguments: [:])
+        // Site/email/token now arrive as resolved PREFERENCES (the Raycast model),
+        // injected by the host rather than read from the keychain by the plugin.
+        try instance.activateCommand("view", arguments: [:], preferences: [
+            "site": .string("acme.atlassian.net"),
+            "email": .string("me@acme.com"),
+            "token": .string("jira_tok"),
+        ])
         instance.runUntilQuiescent()
 
         let tree = try XCTUnwrap(capturedTree, "vee.render was never called")

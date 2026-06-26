@@ -15,15 +15,73 @@ public struct PluginManifest: Codable, Hashable, Sendable {
     public var entrypoint: String
     public var commands: [PluginCommand]
     public var capabilities: Capabilities
+    /// Extension-level user preferences this plugin DECLARES (the Raycast model):
+    /// the host renders a generic form from these and the plugin reads the resolved
+    /// values at runtime via `getPreferenceValues()`. The application core hardcodes
+    /// NO credential of its own — an API key/token exists only because some plugin
+    /// declared a `.password` preference for it. A command may add its own
+    /// ``PluginCommand/preferences``, merged over these (see ``mergedPreferences(forCommand:)``).
+    public var preferences: [PluginPreference]
 
     public init(id: String,
                 name: String,
                 version: String,
                 entrypoint: String,
                 commands: [PluginCommand],
-                capabilities: Capabilities = Capabilities()) {
+                capabilities: Capabilities = Capabilities(),
+                preferences: [PluginPreference] = []) {
         self.id = id; self.name = name; self.version = version
         self.entrypoint = entrypoint; self.commands = commands; self.capabilities = capabilities
+        self.preferences = preferences
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, name, version, entrypoint, commands, capabilities, preferences
+    }
+
+    /// ADDITIVE / backward-compatible decode: a manifest written before
+    /// `preferences` existed (no `preferences` key) decodes to `[]`, so old
+    /// `vee.json` files and wire frames keep loading. The other fields keep their
+    /// prior (required) strictness so nothing else changes.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = try c.decode(String.self, forKey: .id)
+        self.name = try c.decode(String.self, forKey: .name)
+        self.version = try c.decode(String.self, forKey: .version)
+        self.entrypoint = try c.decode(String.self, forKey: .entrypoint)
+        self.commands = try c.decode([PluginCommand].self, forKey: .commands)
+        self.capabilities = try c.decode(Capabilities.self, forKey: .capabilities)
+        self.preferences = try c.decodeIfPresent([PluginPreference].self, forKey: .preferences) ?? []
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(id, forKey: .id)
+        try c.encode(name, forKey: .name)
+        try c.encode(version, forKey: .version)
+        try c.encode(entrypoint, forKey: .entrypoint)
+        try c.encode(commands, forKey: .commands)
+        try c.encode(capabilities, forKey: .capabilities)
+        // Omit when empty so a preference-less manifest's encoded form is byte-identical to before.
+        if !preferences.isEmpty { try c.encode(preferences, forKey: .preferences) }
+    }
+}
+
+public extension PluginManifest {
+    /// The extension-level preferences merged with the named command's own
+    /// (command preferences win on a name collision), preserving declaration
+    /// order. This is the single source of truth for "what is configurable for
+    /// this command" — the host gating, the resolver, and the Settings form all
+    /// use it so they never disagree.
+    func mergedPreferences(forCommand command: String) -> [PluginPreference] {
+        let commandPrefs = commands.first { $0.name == command }?.preferences ?? []
+        var byName: [String: PluginPreference] = [:]
+        var order: [String] = []
+        for pref in preferences + commandPrefs {
+            if byName[pref.name] == nil { order.append(pref.name) }
+            byName[pref.name] = pref
+        }
+        return order.compactMap { byName[$0] }
     }
 }
 
@@ -45,16 +103,48 @@ public struct PluginCommand: Codable, Hashable, Sendable {
     public var refreshIntervalSeconds: Double?
     /// Hotkey action names this command exposes (bound by the host recorder).
     public var hotkeyActions: [String]
+    /// Command-scoped preferences, merged over the extension-level
+    /// ``PluginManifest/preferences`` for this command (Raycast allows both).
+    public var preferences: [PluginPreference]
 
     public init(name: String,
                 title: String,
                 subtitle: String? = nil,
                 mode: Mode,
                 refreshIntervalSeconds: Double? = nil,
-                hotkeyActions: [String] = []) {
+                hotkeyActions: [String] = [],
+                preferences: [PluginPreference] = []) {
         self.name = name; self.title = title; self.subtitle = subtitle
         self.mode = mode; self.refreshIntervalSeconds = refreshIntervalSeconds
-        self.hotkeyActions = hotkeyActions
+        self.hotkeyActions = hotkeyActions; self.preferences = preferences
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case name, title, subtitle, mode, refreshIntervalSeconds, hotkeyActions, preferences
+    }
+
+    /// ADDITIVE decode: `preferences` defaults to `[]` when absent; the other
+    /// keys keep their prior strictness (required ones stay required).
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.name = try c.decode(String.self, forKey: .name)
+        self.title = try c.decode(String.self, forKey: .title)
+        self.subtitle = try c.decodeIfPresent(String.self, forKey: .subtitle)
+        self.mode = try c.decode(Mode.self, forKey: .mode)
+        self.refreshIntervalSeconds = try c.decodeIfPresent(Double.self, forKey: .refreshIntervalSeconds)
+        self.hotkeyActions = try c.decode([String].self, forKey: .hotkeyActions)
+        self.preferences = try c.decodeIfPresent([PluginPreference].self, forKey: .preferences) ?? []
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(name, forKey: .name)
+        try c.encode(title, forKey: .title)
+        try c.encodeIfPresent(subtitle, forKey: .subtitle)
+        try c.encode(mode, forKey: .mode)
+        try c.encodeIfPresent(refreshIntervalSeconds, forKey: .refreshIntervalSeconds)
+        try c.encode(hotkeyActions, forKey: .hotkeyActions)
+        if !preferences.isEmpty { try c.encode(preferences, forKey: .preferences) }
     }
 }
 
@@ -179,4 +269,115 @@ public struct Capabilities: Codable, Hashable, Sendable {
         }
         return false
     }
+}
+
+// MARK: - Plugin-declared preferences (the Raycast configuration model)
+
+/// One user-configurable setting an extension (or one of its commands) DECLARES
+/// in its manifest. This is the heart of Vee's "the plugin author owns
+/// configuration" model: the host renders a GENERIC form from these specs and the
+/// plugin reads the resolved values at runtime via `getPreferenceValues()`. The
+/// application has no built-in notion of GitHub tokens, API keys, sites, etc. —
+/// a credential exists only because some plugin declared a `.password` preference
+/// for it. So Vee can support unbounded, author-defined configuration without the
+/// app ever enumerating "which API keys" up front.
+public struct PluginPreference: Codable, Hashable, Sendable {
+    /// The control the host renders for this preference.
+    public enum Kind: String, Codable, Sendable {
+        /// Single-line text (URLs, usernames, ids…).
+        case textfield
+        /// A secret. Stored in the Keychain and never echoed back into the form.
+        case password
+        /// A boolean, rendered as a switch/checkbox.
+        case checkbox
+        /// One of a fixed set of options (see ``PluginPreference/data``).
+        case dropdown
+        /// Parity placeholders with Raycast; rendered as a textfield for now, so
+        /// adding richer pickers later is forward-compatible (no wire change).
+        case appPicker = "app-picker"
+        case file
+        case directory
+    }
+
+    /// Stable key the plugin reads at runtime (`getPreferenceValues().<name>`).
+    public var name: String
+    /// Which control to render / how to store the value.
+    public var type: Kind
+    /// Human-readable label shown beside the control.
+    public var title: String
+    /// Longer help text shown under the control.
+    public var description: String?
+    /// Whether a command refuses to run until this preference is set — the host
+    /// shows a "Setup required" form instead of activating the command.
+    public var required: Bool
+    /// Value used when the user has not set one (also offered as the form default).
+    public var `default`: JSONValue?
+    /// Placeholder shown in an empty text/password field.
+    public var placeholder: String?
+    /// For `.checkbox`: the inline label beside the box.
+    public var label: String?
+    /// For `.dropdown`: the selectable options, in display order.
+    public var data: [PreferenceOption]
+
+    public init(name: String,
+                type: Kind,
+                title: String,
+                description: String? = nil,
+                required: Bool = false,
+                default: JSONValue? = nil,
+                placeholder: String? = nil,
+                label: String? = nil,
+                data: [PreferenceOption] = []) {
+        self.name = name; self.type = type; self.title = title
+        self.description = description; self.required = required
+        self.default = `default`; self.placeholder = placeholder
+        self.label = label; self.data = data
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case name, type, title, description, required, `default`, placeholder, label, data
+    }
+
+    /// Lenient decode: only `name`/`type`/`title` are required — a checkbox needs
+    /// no `data`, a textfield no `default`, etc.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.name = try c.decode(String.self, forKey: .name)
+        self.type = try c.decode(Kind.self, forKey: .type)
+        self.title = try c.decode(String.self, forKey: .title)
+        self.description = try c.decodeIfPresent(String.self, forKey: .description)
+        self.required = try c.decodeIfPresent(Bool.self, forKey: .required) ?? false
+        self.default = try c.decodeIfPresent(JSONValue.self, forKey: .default)
+        self.placeholder = try c.decodeIfPresent(String.self, forKey: .placeholder)
+        self.label = try c.decodeIfPresent(String.self, forKey: .label)
+        self.data = try c.decodeIfPresent([PreferenceOption].self, forKey: .data) ?? []
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(name, forKey: .name)
+        try c.encode(type, forKey: .type)
+        try c.encode(title, forKey: .title)
+        try c.encodeIfPresent(description, forKey: .description)
+        if required { try c.encode(required, forKey: .required) }
+        try c.encodeIfPresent(`default`, forKey: .default)
+        try c.encodeIfPresent(placeholder, forKey: .placeholder)
+        try c.encodeIfPresent(label, forKey: .label)
+        if !data.isEmpty { try c.encode(data, forKey: .data) }
+    }
+}
+
+public extension PluginPreference {
+    /// Whether the value should be stored as a secret (Keychain) rather than in
+    /// the plain preferences store. Only `.password` is secret today.
+    var isSecret: Bool { type == .password }
+}
+
+/// One selectable option for a `.dropdown` preference.
+public struct PreferenceOption: Codable, Hashable, Sendable {
+    /// Shown to the user in the dropdown.
+    public var title: String
+    /// Returned to the plugin when this option is selected.
+    public var value: String
+    public init(title: String, value: String) { self.title = title; self.value = value }
 }

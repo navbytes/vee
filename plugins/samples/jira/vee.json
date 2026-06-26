@@ -11,13 +11,36 @@
       "mode": "view"
     }
   ],
+  "preferences": [
+    {
+      "name": "site",
+      "type": "textfield",
+      "title": "Jira Site",
+      "description": "Your Atlassian site, e.g. yourteam.atlassian.net",
+      "required": true,
+      "placeholder": "yourteam.atlassian.net"
+    },
+    {
+      "name": "email",
+      "type": "textfield",
+      "title": "Account Email",
+      "required": true
+    },
+    {
+      "name": "token",
+      "type": "password",
+      "title": "API Token",
+      "description": "An Atlassian API token.",
+      "required": true
+    }
+  ],
   "capabilities": {
     "network": [".atlassian.net"],
     "open": ["https"],
     "filesystem": [],
     "clipboard": false,
     "calendar": false,
-    "keychainNamespaces": ["jira"],
+    "keychainNamespaces": [],
     "hotkeyActions": []
   }
 }

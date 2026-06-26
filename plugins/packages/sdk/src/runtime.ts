@@ -92,6 +92,11 @@ export interface VeeFs {
   read(path: string): Promise<string>;
   /** Write a UTF-8 text file. Rejects if the path is outside the allowed roots. */
   write(path: string, contents: string): Promise<void>;
+  /**
+   * List the entries directly under `dir` (basenames, not recursive). Rejects if
+   * the directory is outside the allowed roots.
+   */
+  list(dir: string): Promise<{ name: string; isDirectory: boolean }[]>;
 }
 
 /**
@@ -148,6 +153,15 @@ export interface VeeHost {
   /** Reverse-DNS id of the running plugin (from the manifest). */
   readonly pluginId: string;
 
+  /**
+   * Resolved preference values for the active command, keyed by the `name` you
+   * declared in `vee.json` (`preferences[].name`). The host fills this from the
+   * user's saved settings + each preference's `default` before invoking the
+   * command. Prefer the typed `getPreferenceValues()` accessor over reading this
+   * directly.
+   */
+  readonly preferences: Record<string, JSONValue>;
+
   // ── Rendering (plugin → host) ──────────────────────────────────────────────
   /**
    * Submit a complete render tree. The host diffs it against the previous tree
@@ -194,6 +208,12 @@ export interface VeeHost {
   // ── UI affordances ─────────────────────────────────────────────────────────
   /** Show a transient toast (`plugin.showToast`). */
   showToast(style: ToastStyle, title: string, message?: string): void;
+
+  /**
+   * Post a system notification (`bridge.notify`). Fire-and-forget; unlike a toast
+   * it surfaces through the OS notification center rather than the launcher window.
+   */
+  notify(title: string, body?: string, subtitle?: string): void;
 }
 
 // ───────────────────────────────────────────────────────────────────────────
@@ -207,6 +227,8 @@ export interface CommandContext {
   commandName: string;
   /** Launcher-supplied arguments (e.g. a query argument). */
   arguments: Record<string, JSONValue>;
+  /** Resolved preference values for this command (same as `getPreferenceValues()`). */
+  preferences: Record<string, JSONValue>;
   /** Convenience: same as `vee.render`. */
   render(node: RenderNode | JSONValue): void;
 }
@@ -304,6 +326,21 @@ export function host(): VeeHost {
   return v;
 }
 
+/**
+ * The resolved preference values the user configured for this command, keyed by
+ * the `name` you declared in `vee.json` (`preferences[].name`). Values come from
+ * the user's saved settings, falling back to each preference's `default`. This is
+ * Vee's analogue of Raycast's `getPreferenceValues()` — the way a plugin reads
+ * its OWN API keys / configuration. The application never hardcodes these; you
+ * declare them, the host renders a form, and the values arrive here.
+ *
+ * Type it with your own interface for ergonomic access:
+ *   const { token } = getPreferenceValues<{ token: string }>();
+ */
+export function getPreferenceValues<T = Record<string, JSONValue>>(): T {
+  return (host().preferences ?? {}) as T;
+}
+
 /** Submit a render tree to the host (accepts a RenderNode or its JSON form). */
 export function render(node: RenderNode | JSONValue): void {
   // Normalize a RenderNode to its wire projection so the host always receives
@@ -321,6 +358,11 @@ export function setCandidates(candidates: Candidate[]): void {
 /** Show a transient toast. */
 export function showToast(style: ToastStyle, title: string, message?: string): void {
   host().showToast(style, title, message);
+}
+
+/** Post a system notification. */
+export function notify(title: string, body?: string, subtitle?: string): void {
+  host().notify(title, body, subtitle);
 }
 
 /** The HTTP bridge. */

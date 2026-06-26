@@ -201,6 +201,11 @@ final class JSBridge {
         // pluginId (readonly identity)
         vee.setObject(pluginId, forKeyedSubscript: "pluginId" as NSString)
 
+        // preferences — resolved (name → value) for the active command, replaced by
+        // `activateCommand` on each activate. Seed an empty object so the SDK's
+        // `getPreferenceValues()` is safe to call even before the first activate.
+        vee.setObject(JSValue(newObjectIn: context), forKeyedSubscript: "preferences" as NSString)
+
         // render(node) — capture [weak self]; resolve the tree from the arg.
         let render: @convention(block) (JSValue) -> Void = { [weak self] node in
             self?.handleRender(node)
@@ -218,6 +223,14 @@ final class JSBridge {
             self?.handleToast(style: style, title: title, message: message)
         }
         vee.setObject(unsafeBitCast(showToast, to: AnyObject.self), forKeyedSubscript: "showToast" as NSString)
+
+        // notify(title, body?, subtitle?) — post a system notification. UNGATED
+        // (user-facing, like showToast); delivered to the injected provider.
+        // Fire-and-forget: returns void, no Promise.
+        let notify: @convention(block) (JSValue, JSValue, JSValue) -> Void = { [weak self] title, body, subtitle in
+            self?.handleNotify(title: title, body: body, subtitle: subtitle)
+        }
+        vee.setObject(unsafeBitCast(notify, to: AnyObject.self), forKeyedSubscript: "notify" as NSString)
 
         // onInvokeAction / onSearchTextChange / onSubmitForm → return an
         // unsubscribe function. Handlers stored as managed values (RULE b).
@@ -290,6 +303,7 @@ final class JSBridge {
         vee.setObject(unsafeBitCast(openApp, to: AnyObject.self), forKeyedSubscript: "openApp" as NSString)
 
         // fs.read(path) → Promise<string> / fs.write(path, contents) → Promise<void>.
+        // fs.list(dir) → Promise<{name, isDirectory}[]>.
         // Capability-gated by Capabilities.filesystem (the path must canonicalize
         // under a declared root; traversal → capabilityDenied). Backed by FileProviding.
         let fs = JSValue(newObjectIn: context)!
@@ -299,8 +313,12 @@ final class JSBridge {
         let fsWrite: @convention(block) (JSValue, JSValue) -> JSValue? = { [weak self] path, contents in
             self?.handleFileWrite(path: path, contents: contents)
         }
+        let fsList: @convention(block) (JSValue) -> JSValue? = { [weak self] path in
+            self?.handleFileList(path: path)
+        }
         fs.setObject(unsafeBitCast(fsRead, to: AnyObject.self), forKeyedSubscript: "read" as NSString)
         fs.setObject(unsafeBitCast(fsWrite, to: AnyObject.self), forKeyedSubscript: "write" as NSString)
+        fs.setObject(unsafeBitCast(fsList, to: AnyObject.self), forKeyedSubscript: "list" as NSString)
         vee.setObject(fs, forKeyedSubscript: "fs" as NSString)
 
         // calendar.upcoming() → Promise<CalendarEvent[]>. Capability-gated by
@@ -366,6 +384,13 @@ final class JSBridge {
         let toastStyle = ToastParams.Style(rawValue: styleStr) ?? .info
         let msg = (message.isUndefined || message.isNull) ? nil : message.toString()
         instance?.emitToast(style: toastStyle, title: title.toString() ?? "", message: msg)
+    }
+
+    private func handleNotify(title: JSValue, body: JSValue, subtitle: JSValue) {
+        let bodyStr = (body.isUndefined || body.isNull) ? nil : body.toString()
+        let subtitleStr = (subtitle.isUndefined || subtitle.isNull) ? nil : subtitle.toString()
+        let params = NotifyParams(title: title.toString() ?? "", body: bodyStr, subtitle: subtitleStr)
+        instance?.performNotify(title: params.title, body: params.body, subtitle: params.subtitle)
     }
 
     // MARK: - fetch (capability-gated)
@@ -775,6 +800,37 @@ final class JSBridge {
                     switch result {
                     case .success:
                         resolve(JSValue(undefinedIn: ctx))
+                    case .failure(let error):
+                        let code = (error as? JSONRPCError)?.code ?? -32000
+                        reject(JSBridge.errorValue(in: ctx, code: code, message: "\(error)"))
+                    }
+                    instance.drainMicrotasks()
+                }
+            }
+        }
+    }
+
+    private func handleFileList(path: JSValue) -> JSValue? {
+        guard let ctx = JSContext.current(), let instance else { return nil }
+        let rawPath = path.toString() ?? ""
+        return PromiseFactory.make(in: ctx) { resolve, reject in
+            // Same capability gate as read/write: a dir outside the roots (or
+            // `filesystem: []`) is rejected WITHOUT touching the provider.
+            guard let confined = instance.resolveConfinedPath(rawPath) else {
+                instance.runOnQueue {
+                    let err = JSONRPCError.capabilityDenied("filesystem path not allowed: \(rawPath)")
+                    reject(JSBridge.errorValue(in: ctx, code: err.code, message: err.message))
+                    instance.drainMicrotasks()
+                }
+                return
+            }
+            instance.performFileList(path: confined) { result in
+                instance.runOnQueue {
+                    switch result {
+                    case .success(let entries):
+                        // Project to JS objects `{name, isDirectory}`.
+                        let value = (try? JSONValueCoder.encode(entries)) ?? .array([])
+                        resolve(JSONBridge.toJSValue(value, in: ctx))
                     case .failure(let error):
                         let code = (error as? JSONRPCError)?.code ?? -32000
                         reject(JSBridge.errorValue(in: ctx, code: code, message: "\(error)"))

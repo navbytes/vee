@@ -1581,6 +1581,83 @@ private final class MenuItemActionTarget: NSObject {
     @objc func fire() { action() }
 }
 
+// MARK: - Plugin-owned menubar items (one NSStatusItem per menu-bar command)
+
+/// The native surface a Raycast-style **menu-bar command** renders into: one
+/// `NSStatusItem` per plugin command, distinct from the app's own "Vee" item
+/// (`AppKitMenuBar`). `MenuBarController` drives this seam with a projected
+/// title/icon + dropdown rows; this adapter owns no logic beyond building the
+/// NSMenu and forwarding a click to the controller's `onSelect`.
+@MainActor
+public final class AppKitPluginMenuBar: @MainActor PluginMenuBarPresenting {
+    private struct Entry {
+        let statusItem: NSStatusItem
+        let menu: NSMenu
+        // Retained: NSMenuItem.target is unowned, so the per-item closure targets
+        // must outlive this call — rebuilt on every `upsert`.
+        var targets: [PluginMenuItemTarget]
+    }
+    private var entries: [String: Entry] = [:]
+
+    public init() {}
+
+    public func upsert(pluginId: String, title: String?, iconSymbol: String?,
+                       items: [MenuBarItemViewModel], onSelect: @escaping (String) -> Void) {
+        let entry = entries[pluginId] ?? makeEntry()
+
+        // Status button: a leading-spaced title and/or a template SF-Symbol.
+        if let button = entry.statusItem.button {
+            if let title, !title.isEmpty { button.title = " \(title)" } else { button.title = "" }
+            if let iconSymbol, !iconSymbol.isEmpty,
+               let image = NSImage(systemSymbolName: iconSymbol, accessibilityDescription: title) {
+                image.isTemplate = true
+                button.image = image
+            } else {
+                button.image = nil
+            }
+        }
+
+        // Rebuild the dropdown from the projected rows.
+        entry.menu.removeAllItems()
+        var targets: [PluginMenuItemTarget] = []
+        for item in items {
+            if item.isSeparator { entry.menu.addItem(.separator()); continue }
+            let target = PluginMenuItemTarget { onSelect(item.actionId) }
+            targets.append(target)
+            let menuItem = NSMenuItem(title: item.title,
+                                      action: #selector(PluginMenuItemTarget.fire),
+                                      keyEquivalent: "")
+            menuItem.target = target
+            if let subtitle = item.subtitle, !subtitle.isEmpty { menuItem.toolTip = subtitle }
+            entry.menu.addItem(menuItem)
+        }
+        entries[pluginId] = Entry(statusItem: entry.statusItem, menu: entry.menu, targets: targets)
+    }
+
+    public func remove(pluginId: String) {
+        if let entry = entries[pluginId] {
+            NSStatusBar.system.removeStatusItem(entry.statusItem)
+        }
+        entries[pluginId] = nil
+    }
+
+    private func makeEntry() -> Entry {
+        let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        let menu = NSMenu()
+        statusItem.menu = menu
+        return Entry(statusItem: statusItem, menu: menu, targets: [])
+    }
+}
+
+/// Closure→selector wrapper for a plugin menu item (NSMenuItem.target is unowned,
+/// so `AppKitPluginMenuBar` retains these for the item's lifetime).
+@MainActor
+private final class PluginMenuItemTarget: NSObject {
+    private let action: () -> Void
+    init(action: @escaping () -> Void) { self.action = action }
+    @objc func fire() { action() }
+}
+
 // MARK: - Toast banner (UX-5)
 
 /// A small transient banner shown over the launcher to surface a plugin's toast.

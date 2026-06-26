@@ -203,6 +203,7 @@ export const RPCMethods = {
   httpFetch: "bridge.http.fetch",
   fsRead: "bridge.fs.read",
   fsWrite: "bridge.fs.write",
+  fsList: "bridge.fs.list",
   keychainGet: "bridge.keychain.get",
   keychainSet: "bridge.keychain.set",
   keychainDelete: "bridge.keychain.delete",
@@ -211,6 +212,7 @@ export const RPCMethods = {
   calendarUpcoming: "bridge.calendar.upcoming",
   storageGet: "bridge.storage.get",
   storageSet: "bridge.storage.set",
+  notify: "bridge.notify",
 } as const;
 
 export type RPCMethod = (typeof RPCMethods)[keyof typeof RPCMethods];
@@ -222,6 +224,13 @@ export interface ActivateParams {
   commandName: string;
   /** Arguments passed from the launcher (e.g. a query argument). */
   arguments: Record<string, JSONValue>;
+  /**
+   * Resolved preference values for this command (name → value), merged by the
+   * host from the plugin's declared `preferences` + the user's stored values +
+   * declared defaults. The plugin reads it via `getPreferenceValues()`. Omitted
+   * on the wire when empty.
+   */
+  preferences?: Record<string, JSONValue>;
 }
 
 export interface DeactivateParams {
@@ -287,6 +296,12 @@ export interface ToastParams {
   message?: string;
 }
 
+export interface NotifyParams {
+  title: string;
+  body?: string;
+  subtitle?: string;
+}
+
 // ── Bridge payloads ──────────────────────────────────────────────────────────
 
 export interface FetchParams {
@@ -309,6 +324,14 @@ export interface FSReadParams {
 export interface FSWriteParams {
   path: string;
   contentsBase64: string;
+}
+export interface FSListParams {
+  path: string;
+}
+/** One entry directly under a listed directory; `name` is a basename. */
+export interface FSDirEntry {
+  name: string;
+  isDirectory: boolean;
 }
 
 export interface KeychainGetParams {
@@ -401,6 +424,52 @@ export interface PluginCommand {
   refreshIntervalSeconds?: number;
   /** Hotkey action names this command exposes. */
   hotkeyActions?: string[];
+  /** Command-scoped preferences, merged over the extension-level `preferences`. */
+  preferences?: Preference[];
+}
+
+/** The control kind for a declared preference. Mirrors `PluginPreference.Kind`. */
+export type PreferenceType =
+  | "textfield"
+  | "password"
+  | "checkbox"
+  | "dropdown"
+  | "app-picker"
+  | "file"
+  | "directory";
+
+/** One selectable option for a `dropdown` preference. Mirrors `PreferenceOption`. */
+export interface PreferenceOption {
+  /** Shown to the user. */
+  title: string;
+  /** Returned to the plugin when selected. */
+  value: string;
+}
+
+/**
+ * A user-configurable setting an extension/command DECLARES in its manifest.
+ * Mirrors `PluginPreference`. The host renders a generic form from these; the
+ * plugin reads resolved values via `getPreferenceValues()`. The app hardcodes no
+ * credentials — what's configurable is entirely what plugins declare here.
+ */
+export interface Preference {
+  /** Stable key read at runtime (`getPreferenceValues().<name>`). */
+  name: string;
+  type: PreferenceType;
+  /** Label shown beside the control. */
+  title: string;
+  /** Longer help text under the control. */
+  description?: string;
+  /** Command refuses to run until set (host shows a "Setup required" form). */
+  required?: boolean;
+  /** Value used when unset (also the form default). */
+  default?: JSONValue;
+  /** Placeholder for an empty text/password field. */
+  placeholder?: string;
+  /** For `checkbox`: the inline label beside the box. */
+  label?: string;
+  /** For `dropdown`: the selectable options. */
+  data?: PreferenceOption[];
 }
 
 /**
@@ -439,6 +508,12 @@ export interface PluginManifest {
   entrypoint: string;
   commands: PluginCommand[];
   capabilities: Capabilities;
+  /**
+   * Extension-level user preferences the plugin declares (the Raycast model).
+   * The host renders a generic form from these; the plugin reads resolved values
+   * via `getPreferenceValues()`. A command may add its own `preferences`.
+   */
+  preferences?: Preference[];
 }
 
 /** A default-deny Capabilities value (matches Swift `Capabilities()`). */
