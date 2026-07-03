@@ -3,6 +3,8 @@ import Foundation
 import VeeCore
 import VeePluginFormat
 import VeeRuntime
+import VeePreferences
+import VeeUI
 
 /// Drives one plugin end-to-end: parses its header, renders it into a status
 /// item, runs it on a schedule, and refreshes on demand.
@@ -13,6 +15,7 @@ final class PluginCoordinator {
     private let runtime: PluginRuntime
     private let header: HeaderMetadata
     private let runInBash: Bool
+    private let preferences: PluginPreferences
 
     private var controller: StatusItemController!
     private var timer: RefreshTimer?
@@ -29,12 +32,22 @@ final class PluginCoordinator {
         // Honor an explicit runInBash; otherwise run executables directly (so a
         // Python/Ruby plugin uses its shebang) and bash-wrap non-executables.
         self.runInBash = header.runInBash ?? !plugin.isExecutable
+        self.preferences = PluginPreferences(pluginPath: plugin.path, pluginID: plugin.id, declarations: header.vars)
 
         self.controller = StatusItemController(
             pluginName: plugin.filename.name,
             handler: AppActionDispatcher(runner: SystemProcessRunner()) { [weak self] in self?.refresh() },
-            onRefresh: { [weak self] in self?.refresh() }
+            hasSettings: !header.vars.isEmpty,
+            onRefresh: { [weak self] in self?.refresh() },
+            onSettings: { [weak self] in self?.openSettings() }
         )
+    }
+
+    private func openSettings() {
+        let model = PluginSettingsModel(pluginName: plugin.filename.name, prefs: preferences) { [weak self] in
+            self?.refresh()
+        }
+        SettingsWindowManager.shared.show(pluginID: plugin.id.rawValue, model: model)
     }
 
     func start() {
@@ -55,7 +68,7 @@ final class PluginCoordinator {
     }
 
     private func startStreaming() {
-        let context = PluginsDirectory.context(pluginPath: plugin.path, pluginsDirectory: pluginsDirectory)
+        let context = PluginsDirectory.context(pluginPath: plugin.path, pluginsDirectory: pluginsDirectory, declaredVariables: preferences.environmentValues())
         let environment = EnvironmentBuilder.merged(base: ProcessInfo.processInfo.environment, context: context)
         let invocation = ProcessInvocation(
             launchPath: runInBash ? "/bin/bash" : plugin.path,
@@ -98,7 +111,7 @@ final class PluginCoordinator {
         guard !isRefreshing else { return }
         isRefreshing = true
 
-        let context = PluginsDirectory.context(pluginPath: plugin.path, pluginsDirectory: pluginsDirectory)
+        let context = PluginsDirectory.context(pluginPath: plugin.path, pluginsDirectory: pluginsDirectory, declaredVariables: preferences.environmentValues())
         let runtime = self.runtime
         let path = plugin.path
         let header = self.header

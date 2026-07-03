@@ -7,8 +7,13 @@ import VeeMenu
 @MainActor
 private final class ControlsTarget: NSObject {
     let onRefresh: () -> Void
-    init(onRefresh: @escaping () -> Void) { self.onRefresh = onRefresh }
+    let onSettings: () -> Void
+    init(onRefresh: @escaping () -> Void, onSettings: @escaping () -> Void) {
+        self.onRefresh = onRefresh
+        self.onSettings = onSettings
+    }
     @objc func refresh() { onRefresh() }
+    @objc func settings() { onSettings() }
     @objc func quit() { NSApp.terminate(nil) }
 }
 
@@ -24,12 +29,14 @@ public final class StatusItemController {
     private var frames: [NSAttributedString] = []
     private var frameIndex = 0
     private var cycleTimer: Timer?
+    private let hasSettings: Bool
 
-    public init(pluginName: String, handler: MenuActionHandling, onRefresh: @escaping () -> Void) {
+    public init(pluginName: String, handler: MenuActionHandling, hasSettings: Bool = false, onRefresh: @escaping () -> Void, onSettings: @escaping () -> Void = {}) {
         self.pluginName = pluginName
+        self.hasSettings = hasSettings
         self.statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         self.actionTarget = MenuActionTarget(handler: handler)
-        self.controls = ControlsTarget(onRefresh: onRefresh)
+        self.controls = ControlsTarget(onRefresh: onRefresh, onSettings: onSettings)
     }
 
     /// Renders a successful refresh.
@@ -114,6 +121,12 @@ public final class StatusItemController {
         let refresh = NSMenuItem(title: "Refresh", action: #selector(ControlsTarget.refresh), keyEquivalent: "r")
         refresh.target = controls
         menu.addItem(refresh)
+
+        if hasSettings {
+            let settings = NSMenuItem(title: "Settings…", action: #selector(ControlsTarget.settings), keyEquivalent: ",")
+            settings.target = controls
+            menu.addItem(settings)
+        }
 
         let quit = NSMenuItem(title: "Quit Vee", action: #selector(ControlsTarget.quit), keyEquivalent: "q")
         quit.target = controls
