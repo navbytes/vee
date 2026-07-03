@@ -1,0 +1,35 @@
+# Starter SwiftLint config for Vee.
+#
+# Intentionally lenient so it passes on the current tree and acts as an advisory
+# gate (the lint.yml workflow runs without `--strict`, so warnings annotate PRs
+# but don't fail the build). Tighten over time: remove entries from
+# `disabled_rules`, promote the force_* rules back to error, and/or add
+# `--strict` in .github/workflows/lint.yml to make lint blocking like nt's.
+
+included:
+  - Sources
+  - Tests
+
+excluded:
+  - .build
+  - plugins
+  - packaging
+
+# High-noise / size-and-naming rules — opt back in deliberately as the code is
+# brought into line.
+disabled_rules:
+  - line_length
+  - file_length
+  - type_body_length
+  - function_body_length
+  - function_parameter_count
+  - cyclomatic_complexity
+  - identifier_name
+  - type_name
+  - nesting
+  - large_tuple
+  - todo
+
+# Keep the sharp correctness rules on, but as warnings for now.
+force_cast: warning
+force_try: warning

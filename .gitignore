@@ -1,0 +1,21 @@
+# Swift / SwiftPM
+.build/
+.swiftpm/
+Package.resolved
+*.xcodeproj/xcuserdata/
+*.xcworkspace/xcuserdata/
+DerivedData/
+*.xcuserstate
+
+# Node / esbuild
+node_modules/
+dist/
+*.tsbuildinfo
+
+# macOS
+.DS_Store
+*.swp
+
+# Vee local state (never commit user data)
+*.veestate
+/tmp-fixtures/

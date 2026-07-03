@@ -1,0 +1,19 @@
+version: 2
+updates:
+  # GitHub Actions used by the workflows above.
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
+  # The plugin SDK + esbuild pipeline. (No SwiftPM entry: Vee has no external
+  # SwiftPM dependencies, so there is nothing for Dependabot to bump there.)
+  - package-ecosystem: npm
+    directory: "/plugins"
+    schedule:
+      interval: weekly
+    groups:
+      npm:
+        patterns: ["*"]

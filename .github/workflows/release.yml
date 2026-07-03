@@ -1,0 +1,143 @@
+name: Release
+
+# Push a semver tag (v*) to cut a release: build Vee.app from a SwiftPM release
+# build, (optionally) Developer-ID sign + notarize when signing secrets are
+# configured, zip the .app, and publish it to a GitHub Release.
+#
+# Without signing secrets the release still works — the app is ad-hoc signed
+# (package-app.sh), so a downloaded copy needs a one-time right-click → Open.
+# Add the APPLE_* secrets (below) to get a hardened-runtime, notarized build.
+on:
+  push:
+    tags: ["v*"]
+  # Manual valve (same pattern as nt): when a tag can't be pushed directly, run
+  # this with the version and the job creates+pushes the annotated tag from CI.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to create (e.g. v0.1.0)"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    # macos-26: the release build targets .macOS(.v26) (Liquid Glass), which the
+    # macos-15 SDK cannot build.
+    runs-on: macos-26
+    env:
+      # Step-level `if:` gates read these; absent secrets resolve to "" → the
+      # sign/notarize steps are skipped and an ad-hoc-signed app is published.
+      APPLE_DEVELOPER_ID: ${{ secrets.APPLE_DEVELOPER_ID }}
+      APPLE_CERT_P12: ${{ secrets.APPLE_CERT_P12 }}
+      APPLE_CERT_PASSWORD: ${{ secrets.APPLE_CERT_PASSWORD }}
+      APPLE_ID: ${{ secrets.APPLE_ID }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      APPLE_NOTARY_PASSWORD: ${{ secrets.APPLE_NOTARY_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0 # full history so --generate-notes has a changelog
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
+
+      - name: Create and push tag (manual dispatch)
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "${{ inputs.tag }}" -m "Vee ${{ inputs.tag }}"
+          git push origin "${{ inputs.tag }}"
+
+      - uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: plugins/package-lock.json
+
+      - name: Compute version
+        run: |
+          REF="${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}"
+          echo "VER=${REF#v}" >> "$GITHUB_ENV"
+          echo "RELEASE_TAG=${REF}" >> "$GITHUB_ENV"
+
+      - name: Build plugin bundles
+        # package-app.sh copies plugins/dist into the .app; build it first so the
+        # release carries freshly-built plugins (committed fixtures are bundled
+        # regardless).
+        run: |
+          npm --prefix plugins ci
+          npm --prefix plugins run build:once
+
+      - name: Build & assemble Vee.app (release)
+        run: scripts/package-app.sh release
+
+      - name: Locate app bundle
+        run: echo "APP=$HOME/Applications/Vee.app" >> "$GITHUB_ENV"
+
+      # --- macOS: Developer-ID sign + notarize (only when secrets are set) ------
+      - name: Import signing certificate
+        if: env.APPLE_CERT_P12 != ''
+        run: |
+          KEYCHAIN="$RUNNER_TEMP/app.keychain-db"
+          KPASS="$(openssl rand -base64 16)"
+          security create-keychain -p "$KPASS" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "$KPASS" "$KEYCHAIN"
+          echo "$APPLE_CERT_P12" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security import "$RUNNER_TEMP/cert.p12" -k "$KEYCHAIN" -P "$APPLE_CERT_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KPASS" "$KEYCHAIN"
+          security list-keychains -d user -s "$KEYCHAIN" $(security list-keychains -d user | tr -d '"')
+          rm -f "$RUNNER_TEMP/cert.p12"
+
+      - name: Codesign (hardened runtime)
+        if: env.APPLE_CERT_P12 != ''
+        # Hardened runtime + the JSC entitlements (packaging/Vee.entitlements):
+        # JavaScriptCore needs allow-jit / allow-unsigned-executable-memory or the
+        # plugin engine breaks once notarized.
+        run: |
+          codesign --force --options runtime --timestamp \
+            --entitlements packaging/Vee.entitlements \
+            --sign "$APPLE_DEVELOPER_ID" "$APP"
+          codesign --verify --strict --verbose=2 "$APP"
+
+      - name: Notarize and staple
+        if: env.APPLE_NOTARY_PASSWORD != ''
+        # Wait up to 30m for a verdict, then classify on the final status: a real
+        # rejection (Invalid) fails the release; "Apple never answered" (timeout)
+        # does not block it — publish the codesigned (un-stapled) app anyway.
+        timeout-minutes: 35
+        run: |
+          ditto -c -k --keepParent "$APP" "$RUNNER_TEMP/notarize.zip"
+          out="$(xcrun notarytool submit "$RUNNER_TEMP/notarize.zip" \
+                   --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" \
+                   --password "$APPLE_NOTARY_PASSWORD" --wait --timeout 30m 2>&1)" || true
+          echo "$out"
+          if echo "$out" | grep -q "status: Accepted"; then
+            xcrun stapler staple "$APP"
+            echo "notarized and stapled"
+          elif echo "$out" | grep -q "status: Invalid"; then
+            echo "::error::notarization rejected (Invalid) — see notarytool output above" >&2
+            exit 1
+          else
+            echo "::warning::notarization did not return a verdict within 30m (Apple notary unresponsive); publishing codesigned-but-unnotarized app"
+          fi
+
+      # --- Package + publish ----------------------------------------------------
+      - name: Package
+        run: ditto -c -k --keepParent "$APP" "Vee_${VER}_macos.zip"
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        # Create the Release on first run; on re-run (release already exists) fall
+        # back to uploading the asset with --clobber.
+        run: |
+          gh release create "$RELEASE_TAG" "Vee_${VER}_macos.zip" \
+            --title "Vee $RELEASE_TAG" --generate-notes --verify-tag \
+          || gh release upload "$RELEASE_TAG" "Vee_${VER}_macos.zip" --clobber
