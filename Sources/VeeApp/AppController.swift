@@ -29,6 +29,13 @@ public final class AppController: NSObject, NSApplicationDelegate {
         watcher?.start()
     }
 
+    public func applicationWillTerminate(_ notification: Notification) {
+        // Stop coordinators so long-lived (streaming) child processes are
+        // terminated rather than orphaned.
+        coordinators.forEach { $0.stop() }
+        watcher?.stop()
+    }
+
     private func reload() {
         let plugins = PluginDiscovery.enabled(directory: directory)
         let paths = Set(plugins.map(\.path))

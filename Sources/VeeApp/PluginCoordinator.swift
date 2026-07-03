@@ -16,6 +16,7 @@ final class PluginCoordinator {
 
     private var controller: StatusItemController!
     private var timer: RefreshTimer?
+    private var streaming: StreamingSession?
     private var isRefreshing = false
 
     init(plugin: DiscoveredPlugin, pluginsDirectory: String, runtime: PluginRuntime) {
@@ -37,14 +38,40 @@ final class PluginCoordinator {
     }
 
     func start() {
-        refresh()
-        scheduleTimer()
+        if header.streamable {
+            startStreaming()
+        } else {
+            refresh()
+            scheduleTimer()
+        }
     }
 
     func stop() {
         timer?.stop()
         timer = nil
+        streaming?.stop()
+        streaming = nil
         controller.remove()
+    }
+
+    private func startStreaming() {
+        let context = PluginsDirectory.context(pluginPath: plugin.path, pluginsDirectory: pluginsDirectory)
+        let environment = EnvironmentBuilder.merged(base: ProcessInfo.processInfo.environment, context: context)
+        let invocation = ProcessInvocation(
+            launchPath: runInBash ? "/bin/bash" : plugin.path,
+            arguments: runInBash ? [plugin.path] : [],
+            environment: environment,
+            workingDirectory: (plugin.path as NSString).deletingLastPathComponent,
+            timeout: nil // streaming plugins run indefinitely
+        )
+        let session = StreamingSession(
+            runner: SystemStreamingRunner(),
+            makeInvocation: { invocation },
+            onUpdate: { [weak self] output in self?.controller.render(output) },
+            onStopped: { [weak self] message in self?.controller.renderError(message) }
+        )
+        streaming = session
+        session.start()
     }
 
     private func scheduleTimer() {
