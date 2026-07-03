@@ -2,6 +2,7 @@ import AppKit
 import VeeCore
 import VeePluginFormat
 import VeeMenu
+import VeeTrust
 
 /// A small `@objc` target for the per-plugin menu footer (Refresh / Quit).
 @MainActor
@@ -30,10 +31,12 @@ public final class StatusItemController {
     private var frameIndex = 0
     private var cycleTimer: Timer?
     private let hasSettings: Bool
+    private let trustSummary: TrustSummary?
 
-    public init(pluginName: String, handler: MenuActionHandling, hasSettings: Bool = false, onRefresh: @escaping () -> Void, onSettings: @escaping () -> Void = {}) {
+    public init(pluginName: String, handler: MenuActionHandling, hasSettings: Bool = false, trustSummary: TrustSummary? = nil, onRefresh: @escaping () -> Void, onSettings: @escaping () -> Void = {}) {
         self.pluginName = pluginName
         self.hasSettings = hasSettings
+        self.trustSummary = trustSummary
         self.statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         self.actionTarget = MenuActionTarget(handler: handler)
         self.controls = ControlsTarget(onRefresh: onRefresh, onSettings: onSettings)
@@ -108,8 +111,69 @@ public final class StatusItemController {
 
     private func buildMenu(body: [MenuNode]) -> NSMenu {
         let menu = MenuBuilder.build(body, target: actionTarget)
+        if let trust = buildTrustItem() {
+            menu.insertItem(.separator(), at: 0)
+            menu.insertItem(trust, at: 0)
+        }
         appendFooter(to: menu)
         return menu
+    }
+
+    /// A top-of-menu row summarizing what the plugin declares it accesses. Its
+    /// submenu lists each capability and any warnings. Advisory only.
+    private func buildTrustItem() -> NSMenuItem? {
+        // Only surface a row when the plugin declares something; legacy plugins
+        // (undeclared) stay uncluttered.
+        guard let summary = trustSummary, summary.level != .undeclared else { return nil }
+
+        let item = NSMenuItem()
+        let symbol: String
+        switch summary.level {
+        case .declared: symbol = "checkmark.shield"
+        case .partial: symbol = "exclamationmark.shield"
+        case .undeclared: symbol = "questionmark.circle"
+        }
+        item.image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)
+        item.image?.isTemplate = true
+        item.title = title(for: summary.level)
+
+        let submenu = NSMenu()
+        submenu.autoenablesItems = false
+        if summary.badges.isEmpty {
+            let note = NSMenuItem(title: "This plugin has not declared what it accesses.", action: nil, keyEquivalent: "")
+            note.isEnabled = false
+            submenu.addItem(note)
+        } else {
+            for badge in summary.badges {
+                let row = NSMenuItem(title: "\(badge.capability.rawValue): \(badge.detail)", action: nil, keyEquivalent: "")
+                row.isEnabled = false
+                row.attributedTitle = NSAttributedString(string: row.title, attributes: [.foregroundColor: color(for: badge.severity)])
+                submenu.addItem(row)
+            }
+        }
+        for warning in summary.warnings {
+            let row = NSMenuItem(title: "⚠︎ \(warning)", action: nil, keyEquivalent: "")
+            row.isEnabled = false
+            submenu.addItem(row)
+        }
+        item.submenu = submenu
+        return item
+    }
+
+    private func title(for level: TrustLevel) -> String {
+        switch level {
+        case .declared: return "Capabilities declared"
+        case .partial: return "Capabilities incomplete"
+        case .undeclared: return "Capabilities undeclared"
+        }
+    }
+
+    private func color(for severity: Severity) -> NSColor {
+        switch severity {
+        case .high: return .systemRed
+        case .medium: return .systemOrange
+        case .low: return .secondaryLabelColor
+        }
     }
 
     private func appendFooter(to menu: NSMenu) {

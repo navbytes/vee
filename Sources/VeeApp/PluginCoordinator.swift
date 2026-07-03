@@ -4,6 +4,7 @@ import VeeCore
 import VeePluginFormat
 import VeeRuntime
 import VeePreferences
+import VeeTrust
 import VeeUI
 
 /// Drives one plugin end-to-end: parses its header, renders it into a status
@@ -34,10 +35,13 @@ final class PluginCoordinator {
         self.runInBash = header.runInBash ?? !plugin.isExecutable
         self.preferences = PluginPreferences(pluginPath: plugin.path, pluginID: plugin.id, declarations: header.vars)
 
+        let trustSummary = TrustAnalyzer.analyze(TrustParser.parse(source: source))
+
         self.controller = StatusItemController(
             pluginName: plugin.filename.name,
             handler: AppActionDispatcher(runner: SystemProcessRunner()) { [weak self] in self?.refresh() },
             hasSettings: !header.vars.isEmpty,
+            trustSummary: trustSummary,
             onRefresh: { [weak self] in self?.refresh() },
             onSettings: { [weak self] in self?.openSettings() }
         )
