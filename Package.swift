@@ -13,13 +13,16 @@ let package = Package(
     platforms: [.macOS("26.0")],
     products: [
         .library(name: "VeeCore", targets: ["VeeCore"]),
+        .library(name: "VeePluginFormat", targets: ["VeePluginFormat"]),
         .library(name: "VeeApp", targets: ["VeeApp"]),
         .executable(name: "vee", targets: ["vee"]),
     ],
     targets: [
         .target(name: "VeeCore"),
+        .target(name: "VeePluginFormat", dependencies: ["VeeCore"]),
         .target(name: "VeeApp", dependencies: ["VeeCore"]),
         .executableTarget(name: "vee", dependencies: ["VeeApp"]),
         .testTarget(name: "VeeCoreTests", dependencies: ["VeeCore"]),
+        .testTarget(name: "VeePluginFormatTests", dependencies: ["VeePluginFormat"]),
     ]
 )
