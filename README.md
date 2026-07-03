@@ -62,14 +62,30 @@ xcodegen generate
 xcodebuild -project Vee.xcodeproj -scheme Vee build
 ```
 
-## Staged build plan
+## Repository layout (code)
 
-0. **Scaffold + static status item** — SPM package, `Vee.app`, one menu-bar item. ← current
-1. **Plugin-format parser** — the xbar/SwiftBar output + header format.
-2. **Runtime** — discovery, execution, scheduling (leak-free).
-3. **Menu rendering + actions** — real community plugins render end-to-end.
-4. **Streaming plugins** — `~~~` live updates with restart/backoff.
-5. **Declared preferences** — `<xbar.var>` forms; secrets in Keychain.
-6. **Trust layer** — `<vee.*>` capability declarations + trust summaries.
-7. **Plugin manager, login item, notarized distribution.**
-8. **Structured protocol + typed TypeScript SDK.**
+```
+Sources/
+├─ VeeCore/         # primitives: RefreshInterval, PluginFilename, clock, errors
+├─ VeePluginFormat/ # the xbar/SwiftBar output + header parser (pure)
+├─ VeeRuntime/      # discovery, execution (leak-free), scheduling, streaming
+├─ VeeMenu/         # ParsedOutput → NSMenu (colors, ANSI, SF Symbols, actions)
+├─ VeePreferences/  # <xbar.var> sidecar + Keychain stores
+├─ VeeTrust/        # <vee.*> capability declarations → trust summaries
+├─ VeeUI/           # SwiftUI settings + plugin-manager windows
+├─ VeeApp/          # AppKit shell: status items, coordinators, app delegate
+└─ vee/             # executable entry point
+plugins/            # TypeScript plugin SDK + examples + golden fixtures
+```
+
+## Build plan — all stages complete
+
+0. **Scaffold + static status item** — SPM package, `Vee.app`, menu-bar item. ✅
+1. **Plugin-format parser** — the xbar/SwiftBar output + header format. ✅
+2. **Runtime** — discovery, execution, scheduling (leak-free). ✅
+3. **Menu rendering + actions** — real community plugins render end-to-end. ✅
+4. **Streaming plugins** — `~~~` live updates with restart/backoff. ✅
+5. **Declared preferences** — `<xbar.var>` forms; secrets in Keychain. ✅
+6. **Trust layer** — `<vee.*>` capability declarations + trust summaries. ✅
+7. **Plugin manager, login item, notarized distribution.** ✅
+8. **Typed TypeScript SDK + golden-fixture drift guard.** ✅

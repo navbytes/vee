@@ -48,3 +48,19 @@ jobs:
           xcodebuild -project Vee.xcodeproj -scheme Vee -configuration Debug
           -derivedDataPath .build/xcode
           CODE_SIGNING_ALLOWED=NO build
+
+  plugins:
+    name: Plugin SDK (TypeScript)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: plugins
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+      # No dependencies to install — the SDK is zero-dep and Node runs the
+      # TypeScript directly. `npm test` runs the fixture drift guard.
+      - name: Test (fixture drift guard)
+        run: npm test
