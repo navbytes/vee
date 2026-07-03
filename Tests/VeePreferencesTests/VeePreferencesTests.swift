@@ -39,6 +39,19 @@ final class InMemorySecretStoreTests: XCTestCase {
     }
 }
 
+final class AppPreferencesTests: XCTestCase {
+    func testDisableEnableRoundTrip() {
+        let defaults = UserDefaults(suiteName: "vee-test-" + UUID().uuidString)!
+        let prefs = AppPreferences(defaults: defaults)
+        XCTAssertFalse(prefs.isDisabled("p1"))
+        prefs.setDisabled(true, id: "p1")
+        XCTAssertTrue(prefs.isDisabled("p1"))
+        XCTAssertEqual(prefs.disabledIDs(), ["p1"])
+        prefs.setDisabled(false, id: "p1")
+        XCTAssertFalse(prefs.isDisabled("p1"))
+    }
+}
+
 final class PluginPreferencesTests: XCTestCase {
     private func decls() -> [VarDeclaration] {
         [

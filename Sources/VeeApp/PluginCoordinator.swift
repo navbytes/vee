@@ -47,6 +47,12 @@ final class PluginCoordinator {
         )
     }
 
+    var pluginID: String { plugin.id.rawValue }
+
+    func forceRefresh() { refresh() }
+
+    func showSettings() { openSettings() }
+
     private func openSettings() {
         let model = PluginSettingsModel(pluginName: plugin.filename.name, prefs: preferences) { [weak self] in
             self?.refresh()

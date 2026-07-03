@@ -3,9 +3,9 @@ name: Release
 # Push a semver tag (v*) to cut a release: build Vee.app (Release) and publish a
 # zip to a GitHub Release.
 #
-# NOTE: Developer-ID signing + notarization + stapling land in Stage 7. Until
-# then the published app is ad-hoc signed, so a downloaded copy needs a one-time
-# right-click → Open to pass Gatekeeper.
+# If the APPLE_* signing secrets are configured, the app is Developer-ID signed,
+# notarized, and stapled. Without them the app is ad-hoc signed and a downloaded
+# copy needs a one-time right-click → Open to pass Gatekeeper.
 on:
   push:
     tags: ["v*"]
@@ -23,6 +23,16 @@ jobs:
   release:
     # macos-26: the release build targets .macOS("26.0") (Liquid Glass).
     runs-on: macos-26
+    env:
+      # Absent secrets resolve to "" → the sign/notarize steps are skipped and an
+      # ad-hoc-signed app is published.
+      APPLE_DEVELOPER_ID: ${{ secrets.APPLE_DEVELOPER_ID }}
+      APPLE_CERT_P12: ${{ secrets.APPLE_CERT_P12 }}
+      APPLE_CERT_PASSWORD: ${{ secrets.APPLE_CERT_PASSWORD }}
+      APPLE_ID: ${{ secrets.APPLE_ID }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      APPLE_NOTARY_PASSWORD: ${{ secrets.APPLE_NOTARY_PASSWORD }}
+      APP_PATH: .build/xcode/Build/Products/Release/Vee.app
     steps:
       - uses: actions/checkout@v6
 
@@ -42,16 +52,43 @@ jobs:
       - name: Generate project
         run: xcodegen generate
 
+      - name: Import signing certificate
+        if: env.APPLE_CERT_P12 != ''
+        run: |
+          echo "$APPLE_CERT_P12" | base64 --decode > cert.p12
+          security create-keychain -p actions build.keychain
+          security default-keychain -s build.keychain
+          security unlock-keychain -p actions build.keychain
+          security import cert.p12 -k build.keychain -P "$APPLE_CERT_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k actions build.keychain
+          rm cert.p12
+
       - name: Build Vee.app (Release)
-        run: >
-          xcodebuild -project Vee.xcodeproj -scheme Vee -configuration Release
-          -derivedDataPath .build/xcode
-          CODE_SIGNING_ALLOWED=NO build
+        run: |
+          if [ -n "$APPLE_DEVELOPER_ID" ]; then
+            xcodebuild -project Vee.xcodeproj -scheme Vee -configuration Release \
+              -derivedDataPath .build/xcode \
+              CODE_SIGN_STYLE=Manual \
+              CODE_SIGN_IDENTITY="$APPLE_DEVELOPER_ID" \
+              DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
+              OTHER_CODE_SIGN_FLAGS="--timestamp --options=runtime" \
+              build
+          else
+            xcodebuild -project Vee.xcodeproj -scheme Vee -configuration Release \
+              -derivedDataPath .build/xcode \
+              CODE_SIGNING_ALLOWED=NO build
+          fi
+
+      - name: Notarize + staple
+        if: env.APPLE_NOTARY_PASSWORD != ''
+        run: |
+          ditto -c -k --keepParent "$APP_PATH" Vee-notarize.zip
+          xcrun notarytool submit Vee-notarize.zip \
+            --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_NOTARY_PASSWORD" --wait
+          xcrun stapler staple "$APP_PATH"
 
       - name: Package
-        run: |
-          APP=.build/xcode/Build/Products/Release/Vee.app
-          ditto -c -k --keepParent "$APP" Vee.zip
+        run: ditto -c -k --keepParent "$APP_PATH" Vee.zip
 
       - name: Publish to GitHub Release
         uses: softprops/action-gh-release@v2
