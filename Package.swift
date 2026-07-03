@@ -15,6 +15,7 @@ let package = Package(
         .library(name: "VeeCore", targets: ["VeeCore"]),
         .library(name: "VeePluginFormat", targets: ["VeePluginFormat"]),
         .library(name: "VeeRuntime", targets: ["VeeRuntime"]),
+        .library(name: "VeeMenu", targets: ["VeeMenu"]),
         .library(name: "VeeApp", targets: ["VeeApp"]),
         .executable(name: "vee", targets: ["vee"]),
     ],
@@ -22,10 +23,12 @@ let package = Package(
         .target(name: "VeeCore"),
         .target(name: "VeePluginFormat", dependencies: ["VeeCore"]),
         .target(name: "VeeRuntime", dependencies: ["VeeCore", "VeePluginFormat"]),
-        .target(name: "VeeApp", dependencies: ["VeeCore"]),
+        .target(name: "VeeMenu", dependencies: ["VeeCore", "VeePluginFormat"]),
+        .target(name: "VeeApp", dependencies: ["VeeCore", "VeePluginFormat", "VeeRuntime", "VeeMenu"]),
         .executableTarget(name: "vee", dependencies: ["VeeApp"]),
         .testTarget(name: "VeeCoreTests", dependencies: ["VeeCore"]),
         .testTarget(name: "VeePluginFormatTests", dependencies: ["VeePluginFormat"]),
         .testTarget(name: "VeeRuntimeTests", dependencies: ["VeeRuntime"]),
+        .testTarget(name: "VeeMenuTests", dependencies: ["VeeMenu"]),
     ]
 )

@@ -23,17 +23,20 @@ public struct PluginRuntime: Sendable {
         self.executor = executor
     }
 
+    /// - Parameter runInBash: overrides the run mode; when `nil`, falls back to
+    ///   the header's `<swiftbar.runInBash>`, then to `true`.
     public func refresh(
         pluginPath: String,
         context: RuntimeEnvironmentContext,
         header: HeaderMetadata? = nil,
+        runInBash: Bool? = nil,
         timeout: TimeInterval? = 30
     ) async throws -> PluginRunResult {
-        let runInBash = header?.runInBash ?? true
+        let effectiveRunInBash = runInBash ?? header?.runInBash ?? true
         let outcome = try await executor.run(
             pluginPath: pluginPath,
             context: context,
-            runInBash: runInBash,
+            runInBash: effectiveRunInBash,
             timeout: timeout
         )
         let parsed = OutputParser.parse(outcome.standardOutput)
