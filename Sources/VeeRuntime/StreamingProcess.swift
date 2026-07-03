@@ -48,20 +48,27 @@ private final class StreamingProc: @unchecked Sendable {
         process.standardOutput = outPipe
         process.standardError = FileHandle.nullDevice
 
-        outPipe.fileHandleForReading.readabilityHandler = { [weak self] handle in
-            let data = handle.availableData
-            if data.isEmpty { return }
-            self?.ingest(data)
-        }
-        process.terminationHandler = { [weak self] _ in self?.finish(error: nil) }
-
         do {
             try process.run()
         } catch {
             finish(error: VeeError.launchFailed(pluginID: PluginID(path: invocation.launchPath), reason: error.localizedDescription))
             return
         }
+        // Close the parent's write end so the read loop sees EOF at child exit.
         try? outPipe.fileHandleForWriting.close()
+
+        // Single dedicated reader: `availableData` blocks until data arrives or
+        // EOF (empty). This delivers every line — including the tail — without
+        // racing a termination handler, which was the source of a CI flake.
+        let handle = outPipe.fileHandleForReading
+        DispatchQueue.global().async { [self] in
+            while true {
+                let data = handle.availableData
+                if data.isEmpty { break } // EOF
+                ingest(data)
+            }
+            finish(error: nil)
+        }
     }
 
     private func ingest(_ data: Data) {
@@ -85,8 +92,7 @@ private final class StreamingProc: @unchecked Sendable {
         }
         guard !alreadyFinished else { return }
 
-        outPipe.fileHandleForReading.readabilityHandler = nil
-        // Emit any trailing partial line.
+        // Emit any trailing partial line (output with no final newline).
         let tail: String? = lock.withLock {
             guard !partial.isEmpty else { return nil }
             let s = String(decoding: partial, as: UTF8.self)

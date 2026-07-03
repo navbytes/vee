@@ -54,9 +54,11 @@ final class CrashLoopDetectorTests: XCTestCase {
 final class StreamingRunnerIntegrationTests: XCTestCase {
     func testStreamsLinesThenFinishes() async throws {
         let runner = SystemStreamingRunner()
+        // Delays force the output to arrive in multiple reads — the condition
+        // that exposed a termination/read race (only the first chunk survived).
         let invocation = ProcessInvocation(
             launchPath: "/bin/sh",
-            arguments: ["-c", "printf 'a\\nb\\n~~~\\nc\\n'"]
+            arguments: ["-c", "printf 'a\\n'; sleep 0.1; printf 'b\\n~~~\\n'; sleep 0.1; printf 'c\\n'"]
         )
         var lines: [String] = []
         for try await line in runner.lines(invocation) {
