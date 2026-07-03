@@ -13,9 +13,8 @@ concurrency:
 jobs:
   swift:
     name: Build & test (SwiftPM)
-    # macOS (not ubuntu) because the app links AppKit/JavaScriptCore. The macOS 26
-    # SDK is required: Package.swift targets .macOS(.v26) for Liquid Glass
-    # (NSGlassEffectView, swift-tools 6.2), so macos-15 runners cannot build it.
+    # macos-26: the package targets .macOS("26.0") (Liquid Glass), which older
+    # SDKs cannot build. All logic lives in library targets and is covered here.
     runs-on: macos-26
     steps:
       - uses: actions/checkout@v6
@@ -29,24 +28,23 @@ jobs:
       - name: Test
         run: swift test
 
-  plugins:
-    name: Plugins (TypeScript / esbuild)
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: plugins
+  app:
+    name: Build Vee.app (xcodebuild)
+    runs-on: macos-26
     steps:
       - uses: actions/checkout@v6
-      - uses: actions/setup-node@v6
+      - uses: maxim-lobanov/setup-xcode@v1
         with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: plugins/package-lock.json
-      - run: npm ci
-      # Rebuild the bundles, then run the node suite — which asserts the committed
-      # fixtures in plugins/fixtures match a fresh esbuild build (drift guard).
-      # This mirrors nt's "verify committed dist/ is up to date" check.
-      - name: Build bundles
-        run: npm run build:once
-      - name: Test (node --test) + fixture-drift check
-        run: npm test
+          xcode-version: latest-stable
+      # The .xcodeproj is generated from project.yml, not committed.
+      - name: Install XcodeGen
+        run: brew install xcodegen
+      - name: Generate project
+        run: xcodegen generate
+      # Signing is exercised in the release workflow; here we only verify the
+      # app target compiles, links, and bundles.
+      - name: Build app (unsigned)
+        run: >
+          xcodebuild -project Vee.xcodeproj -scheme Vee -configuration Debug
+          -derivedDataPath .build/xcode
+          CODE_SIGNING_ALLOWED=NO build
