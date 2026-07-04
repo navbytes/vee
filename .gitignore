@@ -2,15 +2,11 @@
 .build/
 .swiftpm/
 Package.resolved
-*.xcodeproj/xcuserdata/
-*.xcworkspace/xcuserdata/
 DerivedData/
 *.xcuserstate
 
-# Node / esbuild
-node_modules/
-dist/
-*.tsbuildinfo
+# Generated Xcode project (regenerated from project.yml via `xcodegen generate`)
+Vee.xcodeproj/
 
 # macOS
 .DS_Store
@@ -18,4 +14,3 @@ dist/
 
 # Vee local state (never commit user data)
 *.veestate
-/tmp-fixtures/

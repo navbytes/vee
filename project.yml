@@ -1,0 +1,51 @@
+# XcodeGen spec for the Vee.app bundle. Regenerate the .xcodeproj with:
+#   xcodegen generate
+# The generated Vee.xcodeproj is git-ignored; CI regenerates it before building.
+#
+# The app target is a thin shell: it reuses the `vee` executable's entry point
+# (Sources/vee) and links the VeeApp library product from the local SwiftPM
+# package, so app code and library code have a single source of truth.
+name: Vee
+options:
+  bundleIdPrefix: com.vee
+  createIntermediateGroups: true
+  deploymentTarget:
+    macOS: "26.0"
+
+packages:
+  Vee:
+    path: .
+
+targets:
+  Vee:
+    type: application
+    platform: macOS
+    sources:
+      - Sources/vee
+    dependencies:
+      - package: Vee
+        product: VeeApp
+    info:
+      path: App/Info.plist
+      properties:
+        # Menu-bar-only: no Dock icon, no app-switcher entry.
+        LSUIElement: true
+        CFBundleName: Vee
+        CFBundleDisplayName: Vee
+        CFBundleShortVersionString: "0.1.0"
+        CFBundleVersion: "1"
+        LSMinimumSystemVersion: "26.0"
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.vee.app
+        PRODUCT_NAME: Vee
+        MARKETING_VERSION: "0.1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        SWIFT_VERSION: "6.0"
+        # Un-sandboxed by design (arbitrary plugin execution); hardened runtime
+        # for notarized Developer-ID distribution outside the Mac App Store.
+        ENABLE_HARDENED_RUNTIME: YES
+        CODE_SIGN_ENTITLEMENTS: App/Vee.entitlements
+        CODE_SIGN_STYLE: Manual
+        CODE_SIGN_IDENTITY: "-"
+        DEVELOPMENT_TEAM: ""
