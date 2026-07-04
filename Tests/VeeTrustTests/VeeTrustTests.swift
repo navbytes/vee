@@ -66,3 +66,25 @@ final class TrustAnalyzerTests: XCTestCase {
         XCTAssertTrue(s.warnings.contains { $0.contains("broad") })
     }
 }
+
+final class SourceScanTests: XCTestCase {
+    func testDetectsNetworkAndSecrets() {
+        let source = "#!/bin/bash\nTOKEN=$API_TOKEN\ncurl https://api.github.com\n"
+        let caps = TrustAnalyzer.detectedCapabilities(inSource: source)
+        XCTAssertTrue(caps.contains(.network))
+        XCTAssertTrue(caps.contains(.secrets))
+    }
+
+    func testWarnsOnUndeclaredNetwork() {
+        let source = "curl https://api.example.com\n"
+        let warnings = TrustAnalyzer.installWarnings(declaration: TrustDeclaration(), source: source)
+        XCTAssertTrue(warnings.contains { $0.contains("network") })
+    }
+
+    func testNoWarningWhenDeclared() {
+        let source = "curl https://api.example.com\n"
+        let declared = TrustDeclaration(capabilities: [.network], networkDomains: ["api.example.com"])
+        let warnings = TrustAnalyzer.installWarnings(declaration: declared, source: source)
+        XCTAssertTrue(warnings.isEmpty)
+    }
+}

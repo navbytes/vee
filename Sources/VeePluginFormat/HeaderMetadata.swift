@@ -43,6 +43,7 @@ public struct HeaderMetadata: Equatable, Sendable {
     public var streamable: Bool = false
     public var environment: [String: String] = [:]
     public var persistentWebView: Bool?
+    public var hideAbout: Bool = false
 
     public var vars: [VarDeclaration] = []
 
