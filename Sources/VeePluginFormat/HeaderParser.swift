@@ -39,6 +39,7 @@ public enum HeaderParser {
             case "type": meta.streamable = value.lowercased() == "streamable"
             case "environment": meta.environment = parseEnvironment(value)
             case "persistentwebview": meta.persistentWebView = boolValue(value)
+            case "hideabout": meta.hideAbout = boolValue(value)
             case "var":
                 if let decl = parseVar(value) { meta.vars.append(decl) }
             default:

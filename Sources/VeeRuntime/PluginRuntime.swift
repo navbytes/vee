@@ -39,7 +39,7 @@ public struct PluginRuntime: Sendable {
             runInBash: effectiveRunInBash,
             timeout: timeout
         )
-        let parsed = OutputParser.parse(outcome.standardOutput)
+        let parsed = OutputParser.parseAuto(outcome.standardOutput)
         return PluginRunResult(output: parsed, outcome: outcome)
     }
 }

@@ -20,6 +20,7 @@ final class PluginCoordinator {
 
     private var controller: StatusItemController!
     private var timer: RefreshTimer?
+    private var background: BackgroundRefreshScheduler?
     private var cron: CronScheduler?
     private var streaming: StreamingSession?
     private var isRefreshing = false
@@ -38,15 +39,32 @@ final class PluginCoordinator {
 
         let trustSummary = TrustAnalyzer.analyze(TrustParser.parse(source: source))
 
+        let (aboutText, aboutURL) = Self.about(from: header)
+
         self.controller = StatusItemController(
             pluginName: plugin.filename.name,
             handler: AppActionDispatcher(runner: SystemProcessRunner()) { [weak self] in self?.refresh() },
             hasSettings: !header.vars.isEmpty,
             trustSummary: trustSummary,
             refreshOnOpen: header.refreshOnOpen ?? false,
+            aboutText: aboutText,
+            aboutURL: aboutURL,
             onRefresh: { [weak self] in self?.refresh() },
             onSettings: { [weak self] in self?.openSettings() }
         )
+    }
+
+    /// Builds the About-panel text from header metadata, unless the plugin sets
+    /// `<swiftbar.hideAbout>`.
+    private static func about(from header: HeaderMetadata) -> (text: String?, url: URL?) {
+        guard !header.hideAbout else { return (nil, nil) }
+        var lines: [String] = []
+        if let version = header.version { lines.append("Version \(version)") }
+        if let author = header.author { lines.append("By \(author)") }
+        if let summary = header.summary { lines.append(summary) }
+        let text = lines.isEmpty ? nil : lines.joined(separator: "\n")
+        // Only show an About item when there's something to show.
+        return (header.aboutURL == nil && text == nil) ? (nil, nil) : (text, header.aboutURL)
     }
 
     var pluginID: String { plugin.id.rawValue }
@@ -77,6 +95,8 @@ final class PluginCoordinator {
     func stop() {
         timer?.stop()
         timer = nil
+        background?.stop()
+        background = nil
         cron?.stop()
         cron = nil
         streaming?.stop()
@@ -120,22 +140,23 @@ final class PluginCoordinator {
 
     private func scheduleTimer() {
         guard let interval = plugin.filename.interval.timeInterval else { return }
-        let leeway: TimeInterval
         switch RefreshScheduler.strategy(for: plugin.filename.interval) {
-        case .highResolutionTimer(let l):
-            leeway = l
+        case .highResolutionTimer(let leeway):
+            let timer = RefreshTimer()
+            timer.start(interval: interval, leeway: leeway) { [weak self] in
+                Task { @MainActor in self?.refresh() }
+            }
+            self.timer = timer
         case .backgroundActivity:
-            // Long intervals: a leeway-heavy timer suffices for Stage 3;
-            // NSBackgroundActivityScheduler wiring can replace this later.
-            leeway = interval * 0.2
+            // Long intervals: let the OS batch wake-ups for energy efficiency.
+            let scheduler = BackgroundRefreshScheduler(identifier: "com.vee.refresh.\(plugin.id.rawValue)", interval: interval) { [weak self] in
+                Task { @MainActor in self?.refresh() }
+            }
+            scheduler.start()
+            self.background = scheduler
         case .none:
             return
         }
-        let timer = RefreshTimer()
-        timer.start(interval: interval, leeway: leeway) { [weak self] in
-            Task { @MainActor in self?.refresh() }
-        }
-        self.timer = timer
     }
 
     private func refresh() {
