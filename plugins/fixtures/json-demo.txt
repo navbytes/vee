@@ -1,0 +1,1 @@
+{"vee":1,"title":[{"text":"JSON ✓","color":"green","sfimage":"curlybraces"}],"items":[{"text":"Structured item","href":"https://example.com"},{"separator":true},{"text":"Submenu","submenu":[{"text":"Child","color":"blue"}]}]}

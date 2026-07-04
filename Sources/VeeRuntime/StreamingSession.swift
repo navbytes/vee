@@ -79,11 +79,11 @@ public final class StreamingSession {
             do {
                 for try await line in runner.lines(makeInvocation()) {
                     if let block = accumulator.consume(line) {
-                        onUpdate(OutputParser.parse(block))
+                        onUpdate(OutputParser.parseAuto(block))
                     }
                 }
                 if let block = accumulator.flush() {
-                    onUpdate(OutputParser.parse(block))
+                    onUpdate(OutputParser.parseAuto(block))
                 }
             } catch {
                 // Launch failure: fall through to restart handling.
