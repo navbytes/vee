@@ -35,4 +35,23 @@ final class FixtureRoundTripTests: XCTestCase {
         XCTAssertEqual(items[2].params.refresh, true)
         XCTAssertTrue(output.body.contains { if case .separator = $0 { return true } else { return false } })
     }
+
+    func testJSONFixtureParses() throws {
+        let url = fixturesDirectory().appendingPathComponent("json-demo.txt")
+        let source = try String(contentsOf: url, encoding: .utf8)
+        let output = try XCTUnwrap(JSONOutputParser.parse(source))
+        XCTAssertEqual(output.titleLines.first?.text, "JSON ✓")
+        XCTAssertEqual(output.body.count, 3) // item · separator · submenu
+    }
+
+    func testRichFixtureParams() throws {
+        let url = fixturesDirectory().appendingPathComponent("rich.txt")
+        let source = try String(contentsOf: url, encoding: .utf8)
+        let items = OutputParser.parse(source).body.compactMap { node -> MenuItem? in
+            if case .item(let i) = node { return i } else { return nil }
+        }
+        XCTAssertEqual(items[0].params.swiftbar.markdown, true)
+        XCTAssertEqual(items[1].params.swiftbar.badge, "12")
+        XCTAssertEqual(items[2].params.swiftbar.symbolize, true)
+    }
 }
