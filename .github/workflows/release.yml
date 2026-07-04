@@ -34,7 +34,7 @@ jobs:
       APPLE_NOTARY_PASSWORD: ${{ secrets.APPLE_NOTARY_PASSWORD }}
       APP_PATH: .build/xcode/Build/Products/Release/Vee.app
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Create + push tag (manual dispatch only)
         if: github.event_name == 'workflow_dispatch'
@@ -91,7 +91,7 @@ jobs:
         run: ditto -c -k --keepParent "$APP_PATH" Vee.zip
 
       - name: Publish to GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
           files: Vee.zip
