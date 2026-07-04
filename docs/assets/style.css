@@ -594,6 +594,72 @@ h2.section-title { font-size: clamp(1.7rem, 3.6vw, 2.6rem); margin-bottom: 0.35e
 .check-list svg { flex: none; width: 20px; height: 20px; color: var(--sev-low); margin-top: 2px; }
 .check-list b { color: var(--ink); font-weight: 620; }
 
+/* ---- Screenshots gallery -------------------------------------------------- */
+/* The real captures are LIGHT-mode windows. Each sits on a neutral tinted
+   stage so a light window reads as intentional on the dark theme too. */
+.shots {
+  display: grid;
+  gap: clamp(18px, 2.6vw, 26px);
+  grid-template-columns: repeat(2, 1fr);
+  margin-top: clamp(30px, 4vw, 44px);
+}
+@media (max-width: 720px) { .shots { grid-template-columns: 1fr; } }
+
+.shot {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: clamp(16px, 2.4vw, 26px);
+  border-radius: var(--r-lg);
+  background: var(--glass);
+  -webkit-backdrop-filter: var(--glass-blur);
+  backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-brd);
+  box-shadow: var(--shadow-md);
+  transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+}
+.shot:hover { transform: translateY(-4px); box-shadow: var(--shadow-lg); border-color: rgba(47, 107, 251, 0.35); }
+
+/* Neutral stage behind the light-mode window so it never looks "broken" on dark */
+.shot__stage {
+  display: grid;
+  place-items: center;
+  padding: clamp(14px, 2.2vw, 24px);
+  border-radius: var(--r-md);
+  background:
+    radial-gradient(120% 120% at 50% 0%, rgba(91, 91, 230, 0.10), transparent 62%),
+    #f2f4fa;
+  border: 1px solid rgba(18, 20, 28, 0.06);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
+}
+@media (prefers-color-scheme: dark) {
+  .shot__stage {
+    background:
+      radial-gradient(120% 120% at 50% 0%, rgba(91, 91, 230, 0.22), transparent 60%),
+      #161a28;
+    border-color: rgba(255, 255, 255, 0.08);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  }
+}
+.shot__stage img {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-width: 100%;
+  border-radius: 12px;
+  box-shadow: 0 8px 26px rgba(18, 20, 28, 0.22), 0 2px 8px rgba(18, 20, 28, 0.14);
+}
+/* Windows that are naturally narrower shouldn't blow up to full width */
+.shot--narrow .shot__stage img { max-width: 340px; }
+
+.shot__cap {
+  display: flex;
+  align-items: baseline;
+  gap: 9px;
+}
+.shot__cap b { color: var(--ink); font-weight: 640; font-size: 1rem; }
+.shot__cap span { color: var(--ink-mute); font-size: 0.9rem; }
+
 /* ---- Code blocks ---------------------------------------------------------- */
 pre {
   margin: 1.1rem 0;
