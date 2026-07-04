@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Trust model — Vee docs</title>
+  <meta name="description" content="How Vee makes plugins transparent: authors declare what they touch with <vee.*> tags, and Vee shows a plain-language trust summary before install. Advisory, not a sandbox.">
+  <link rel="canonical" href="https://navbytes.github.io/vee/guide/trust-model.html">
+  <link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
+  <link rel="stylesheet" href="../assets/style.css">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Vee">
+  <meta property="og:title" content="Trust model — Vee docs">
+  <meta property="og:description" content="How Vee makes plugins transparent: authors declare what they touch with <vee.*> tags, and Vee shows a plain-language trust summary before install. Advisory, not a sandbox.">
+  <meta property="og:url" content="https://navbytes.github.io/vee/guide/trust-model.html">
+  <meta property="og:image" content="https://navbytes.github.io/vee/assets/og-image.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Trust model — Vee docs">
+  <meta name="twitter:description" content="How Vee makes plugins transparent: authors declare what they touch with <vee.*> tags, and Vee shows a plain-language trust summary before install. Advisory, not a sandbox.">
+  <meta name="twitter:image" content="https://navbytes.github.io/vee/assets/og-image.png">
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="../index.html" aria-label="Vee home">
+      <img class="mark" src="../assets/favicon.svg" alt="" width="28" height="28">
+      <span><b>Vee</b></span>
+    </a>
+    <button class="nav-toggle" aria-label="Toggle navigation" aria-expanded="false" aria-controls="nav-links">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+    </button>
+    <ul class="nav-links" id="nav-links">
+      <li><a href="../index.html#features">Features</a></li>
+      <li><a href="../index.html#trust">Trust</a></li>
+      <li><a href="../compare/index.html">Compare</a></li>
+      <li><a href="./index.html" aria-current="page">Docs</a></li>
+      <li><a class="nav-cta" href="https://github.com/navbytes/vee" rel="noopener">GitHub</a></li>
+    </ul>
+  </div>
+</header>
+<div class="docs-layout">
+  <aside class="docs-side" aria-label="Documentation navigation">
+    <p class="docs-nav-title">Documentation</p>
+<ul class="docs-nav">
+<li><a href="./index.html">Overview</a></li>
+<li><a href="./getting-started.html">Getting started</a></li>
+<li><a href="./migrating-from-swiftbar.html">Migrating from SwiftBar / xbar</a></li>
+<li><a href="./plugin-authoring.html">Plugin authoring</a></li>
+<li><a href="./trust-model.html" aria-current="page">Trust model</a></li>
+<li><a href="./preferences.html">Preferences</a></li>
+<li><a href="./sdk.html">TypeScript SDK</a></li>
+<li><a href="./cli-and-urls.html">CLI &amp; URL actions</a></li>
+<li><a href="./faq.html">FAQ</a></li>
+<li><a href="./troubleshooting.html">Troubleshooting</a></li>
+</ul>
+  </aside>
+  <main class="docs-main" id="main">
+    <article class="docs-content">
+      <p class="doc-hero-note">Vee documentation</p>
+<h1>Trust model</h1>
+<p>Vee runs plugins as ordinary executables with your full user privileges. There is no sandbox — a plugin can do anything you can do. Rather than pretend to isolate plugins, Vee makes their intentions <strong>transparent</strong>: plugins declare what they touch, and Vee surfaces that to you in plain language before you install and while you manage them.</p>
+<p><strong>This is advisory, never enforced.</strong> The declarations do not restrict what a plugin can actually do. They are a way for authors to be honest and for you to make an informed choice.</p>
+<h2 id="why-transparency-not-a-sandbox">Why transparency, not a sandbox</h2>
+<p>The whole point of a menu-bar script runner is to run arbitrary scripts — hit an API, read a file, shell out to a CLI tool. A real sandbox tight enough to contain that would break the plugins people want to run, which is exactly why apps in this category are distributed outside the Mac App Store (the App Store sandbox is incompatible with arbitrary plugin execution).</p>
+<p>So Vee is honest about the trade-off:</p>
+<ul>
+<li>Plugins run <strong>un-sandboxed by design</strong>, with your privileges.</li>
+<li>Vee cannot and does not verify that a plugin only does what it declares.</li>
+<li>What Vee <em>can</em> do is read the declarations, summarize them in human terms, and show a warning when something looks broad or unusual.</li>
+</ul>
+<p>Treat plugins like any other script you download and run. Read the source of anything you do not trust.</p>
+<h2 id="declaring-capabilities">Declaring capabilities</h2>
+<p>Authors add <code>&lt;vee.*&gt;</code> tags to the plugin source (anywhere; they are scanned regardless of comment syntax). The available declarations:</p>
+<div class="table-scroll"><table><thead><tr><th>Tag</th><th>Meaning</th></tr></thead><tbody><tr><td><code>&lt;vee.capabilities&gt;</code></td><td>Comma-separated capability names: <code>network</code>, <code>filesystem</code>, <code>secrets</code>, <code>exec</code>, <code>clipboard</code>, <code>notifications</code>.</td></tr><tr><td><code>&lt;vee.network&gt;</code></td><td>Comma-separated network domains the plugin connects to (e.g. <code>api.github.com</code>). Wildcards like <code>*.example.com</code> are allowed but flagged.</td></tr><tr><td><code>&lt;vee.filesystem.read&gt;</code></td><td>Paths the plugin reads.</td></tr><tr><td><code>&lt;vee.filesystem.write&gt;</code></td><td>Paths the plugin writes.</td></tr><tr><td><code>&lt;vee.secrets&gt;</code></td><td>Names of secrets/tokens the plugin uses (usually matching an <code>&lt;xbar.var&gt;</code> secret).</td></tr><tr><td><code>&lt;vee.exec&gt;</code></td><td>External binaries the plugin runs (e.g. <code>git</code>, <code>curl</code>).</td></tr></tbody></table></div>
+<p>Declaring a detail tag implies its capability — for example, listing <code>&lt;vee.network&gt;</code> domains implies the <code>network</code> capability, so you rarely need <code>&lt;vee.capabilities&gt;</code> on its own.</p>
+<h3 id="example-declaration">Example declaration</h3>
+<div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">python</span></div><pre><code>#!/usr/bin/env python3
+# &lt;xbar.title&gt;GitHub Notifications&lt;/xbar.title&gt;
+#
+# &lt;vee.network&gt;api.github.com&lt;/vee.network&gt;
+# &lt;vee.secrets&gt;GITHUB_TOKEN&lt;/vee.secrets&gt;
+# &lt;vee.exec&gt;git&lt;/vee.exec&gt;
+# &lt;vee.filesystem.read&gt;~/.config/gh&lt;/vee.filesystem.read&gt;</code></pre></div>
+<p>Vee reads this as: connects to <code>api.github.com</code>, uses the <code>GITHUB_TOKEN</code> secret, runs <code>git</code>, and reads <code>~/.config/gh</code>.</p>
+<h2 id="the-install-trust-summary">The install trust summary</h2>
+<p>When you install a plugin from <a href="getting-started.html">Discover</a> (the built-in catalog browser), Vee shows a plain-language <strong>trust summary</strong> before installing, translating the declarations into readable statements such as:</p>
+<ul>
+<li>"Connects to the internet → api.github.com"</li>
+<li>"Uses a secret → GITHUB_TOKEN"</li>
+<li>"Runs external tools → git"</li>
+<li>"Reads files → ~/.config/gh"</li>
+</ul>
+<p>Installation goes through this trust gate, so you always see the footprint before a catalog plugin lands in your folder.</p>
+<h2 id="trust-levels-badges-and-warnings">Trust levels, badges, and warnings</h2>
+<p>Vee classifies each plugin's declaration into a <strong>trust level</strong>:</p>
+<ul>
+<li><strong>Declared</strong> — the plugin fully declares its footprint.</li>
+<li><strong>Partial</strong> — it declares a capability but leaves out detail (for example, it says it uses the network but lists no domains).</li>
+<li><strong>Undeclared</strong> — it declares nothing, so its footprint is unknown.</li>
+</ul>
+<p>For each declared capability, Vee shows a <strong>trust badge</strong> with a severity heuristic:</p>
+<ul>
+<li><strong>Network</strong> — low if specific domains are listed; <strong>medium</strong> if a wildcard domain is used; <strong>high</strong> if network is declared with no domains.</li>
+<li><strong>Filesystem</strong> — low for read-only or no writes; medium for scoped writes; <strong>high</strong> for broad writes (writing to <code>~</code>, <code>~/</code>, <code>/</code>, or <code>*</code>).</li>
+<li><strong>Secrets</strong> and <strong>exec</strong> — medium (they involve credentials or running other programs).</li>
+<li><strong>Clipboard</strong> and <strong>notifications</strong> — low.</li>
+</ul>
+<p>Vee also raises <strong>warnings</strong> for the risky cases — a wildcard network domain, a broad filesystem write, or network declared without any domains. These badges and warnings appear in the <strong>Plugin Manager</strong> so you can review a plugin's footprint at any time, not just at install.</p>
+<h2 id="what-this-does-and-does-not-guarantee">What this does and does not guarantee</h2>
+<ul>
+<li>It <strong>does</strong> give you a clear, honest picture of what an author says their plugin does.</li>
+<li>It <strong>does</strong> flag broad or vague declarations so nothing hides in "trust me."</li>
+<li>It <strong>does not</strong> stop a plugin from doing something it did not declare. Nothing here is enforced.</li>
+</ul>
+<p>If a plugin is undeclared or you are unsure, open its source (Reveal in Finder from the Plugin Manager) and read it before enabling it.</p>
+<h2 id="see-also">See also</h2>
+<ul>
+<li><a href="preferences.html">Preferences</a> — how secrets referenced in <code>&lt;vee.secrets&gt;</code> are entered and stored in the Keychain.</li>
+<li><a href="plugin-authoring.html">Plugin authoring reference</a> — where to put <code>&lt;vee.*&gt;</code> tags.</li>
+<li><a href="faq.html">FAQ</a> — "Is it safe if it's un-sandboxed?"</li>
+</ul>
+    </article>
+    <nav class="doc-nextprev" aria-label="Guide pagination"><a class="prev" href="./plugin-authoring.html"><span class="dir">&larr; Previous</span><span class="lbl">Plugin authoring</span></a><a class="next" href="./preferences.html"><span class="dir">Next &rarr;</span><span class="lbl">Preferences</span></a></nav>
+  </main>
+</div>
+<script src="../assets/app.js" defer></script>
+</body>
+</html>

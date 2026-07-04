@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Vee — Open Graph card</title>
+  <style>
+    :root {
+      --accent-1: #5b5be6;
+      --accent-2: #2f6bfb;
+      --font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
+      --mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Monaco, monospace;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { background: #0a0c14; }
+    /* Fixed 1200x630 canvas — screenshot this element to make og-image.png */
+    .og {
+      position: relative;
+      width: 1200px;
+      height: 630px;
+      overflow: hidden;
+      font-family: var(--font);
+      color: #f4f6fc;
+      background: #0a0c14;
+      display: grid;
+      grid-template-columns: 1.05fr 0.95fr;
+      align-items: center;
+      gap: 40px;
+      padding: 74px 80px;
+    }
+    .og::before {
+      content: "";
+      position: absolute; inset: -160px;
+      background:
+        radial-gradient(520px 520px at 8% 0%, rgba(91,91,230,0.55), transparent 60%),
+        radial-gradient(560px 560px at 96% 4%, rgba(47,107,251,0.45), transparent 62%),
+        radial-gradient(560px 560px at 82% 104%, rgba(120,70,230,0.4), transparent 62%);
+      filter: blur(4px);
+    }
+    .og > * { position: relative; z-index: 1; }
+
+    .brand { display: flex; align-items: center; gap: 16px; margin-bottom: 34px; }
+    .brand img { width: 60px; height: 60px; border-radius: 16px; box-shadow: 0 8px 24px rgba(0,0,0,0.4); }
+    .brand span {
+      font-size: 40px; font-weight: 730; letter-spacing: -0.02em;
+      background: linear-gradient(135deg, #8f8ff5, #6ea0ff);
+      -webkit-background-clip: text; background-clip: text; color: transparent;
+    }
+    h1 {
+      font-size: 62px; line-height: 1.05; letter-spacing: -0.035em; font-weight: 760;
+    }
+    h1 .g {
+      background: linear-gradient(135deg, #8f8ff5, #6ea0ff);
+      -webkit-background-clip: text; background-clip: text; color: transparent;
+    }
+    .sub { margin-top: 22px; font-size: 25px; color: #c3c9dc; max-width: 22ch; line-height: 1.4; }
+
+    /* menu-bar visual */
+    .visual { display: grid; gap: 14px; }
+    .menubar {
+      display: flex; align-items: center; gap: 8px;
+      padding: 10px 16px; border-radius: 16px;
+      background: rgba(40, 44, 60, 0.55);
+      border: 1px solid rgba(255,255,255,0.12);
+      box-shadow: 0 8px 30px rgba(0,0,0,0.4);
+      font-size: 20px;
+    }
+    .mb { display: inline-flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 10px; color: #c3c9dc; white-space: nowrap; font-variant-numeric: tabular-nums; }
+    .mb.on { background: linear-gradient(135deg, var(--accent-1), var(--accent-2)); color: #fff; box-shadow: 0 4px 14px rgba(47,107,251,0.5); }
+    .mb.sys { color: #8b92a8; margin-left: auto; }
+
+    .menu {
+      width: 380px; padding: 10px;
+      border-radius: 20px;
+      background: rgba(28, 32, 48, 0.72);
+      border: 1px solid rgba(255,255,255,0.14);
+      box-shadow: 0 20px 60px rgba(0,0,0,0.55);
+      backdrop-filter: blur(24px);
+      font-size: 20px;
+    }
+    .mhead { display: flex; align-items: center; gap: 14px; padding: 12px 14px; }
+    .mhead b { font-weight: 660; }
+    .mhead .live { margin-left: auto; color: #35c46f; font-weight: 640; font-size: 17px; }
+    .sep { height: 1px; margin: 6px 12px; background: rgba(255,255,255,0.1); }
+    .row { display: flex; align-items: center; gap: 12px; padding: 11px 14px; border-radius: 11px; color: #c3c9dc; }
+    .row .v { margin-left: auto; color: #8b92a8; font-variant-numeric: tabular-nums; }
+    .row.on { background: linear-gradient(135deg, var(--accent-1), var(--accent-2)); color: #fff; }
+    .row.on .v { color: rgba(255,255,255,0.9); }
+    .dot { width: 22px; height: 22px; border-radius: 7px; background: rgba(47,107,251,0.25); display: inline-block; }
+
+    .foot {
+      position: absolute; left: 80px; bottom: 46px; z-index: 1;
+      font-family: var(--mono); font-size: 20px; color: #8b92a8; letter-spacing: 0.01em;
+    }
+    .foot b { color: #c3c9dc; font-weight: 600; }
+  </style>
+</head>
+<body>
+  <div class="og">
+    <div class="left">
+      <div class="brand">
+        <img src="./favicon.svg" alt="Vee">
+        <span>Vee</span>
+      </div>
+      <h1>Every xbar plugin.<br><span class="g">None of the memory leaks.</span></h1>
+      <p class="sub">A native macOS menu-bar script runner, with trust at install.</p>
+    </div>
+
+    <div class="visual">
+      <div class="menubar">
+        <span class="mb on">⚡ CPU 12%</span>
+        <span class="mb">🐙 GH 3</span>
+        <span class="mb">₿ $67,204</span>
+        <span class="mb sys">9:41</span>
+      </div>
+      <div class="menu">
+        <div class="mhead"><span>⚡</span> <b>CPU 12%</b> <span class="live">● live</span></div>
+        <div class="sep"></div>
+        <div class="row"><span class="dot"></span> Top processes <span class="v">›</span></div>
+        <div class="row"><span class="dot"></span> Load average <span class="v">1.20</span></div>
+        <div class="row"><span class="dot"></span> Cores <span class="v">8</span></div>
+        <div class="sep"></div>
+        <div class="row on"><span class="dot"></span> Refresh <span class="v">⌘R</span></div>
+      </div>
+    </div>
+
+    <div class="foot"><b>open source</b> · <b>notarized</b> · <b>macOS 26</b></div>
+  </div>
+</body>
+</html>

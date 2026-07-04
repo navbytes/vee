@@ -35,7 +35,7 @@ targets:
         CFBundleName: Vee
         CFBundleDisplayName: Vee
         CFBundleIconFile: Vee
-        CFBundleShortVersionString: "0.1.0"
+        CFBundleShortVersionString: "0.1.2"
         CFBundleVersion: "1"
         LSMinimumSystemVersion: "26.0"
         # vee:// (native) + swiftbar:// (compat) URL actions.
@@ -46,7 +46,7 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.vee.app
         PRODUCT_NAME: Vee
-        MARKETING_VERSION: "0.1.0"
+        MARKETING_VERSION: "0.1.2"
         CURRENT_PROJECT_VERSION: "1"
         SWIFT_VERSION: "6.0"
         # Un-sandboxed by design (arbitrary plugin execution); hardened runtime
