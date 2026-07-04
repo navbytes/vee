@@ -18,6 +18,7 @@ let package = Package(
         .library(name: "VeeMenu", targets: ["VeeMenu"]),
         .library(name: "VeePreferences", targets: ["VeePreferences"]),
         .library(name: "VeeTrust", targets: ["VeeTrust"]),
+        .library(name: "VeeCatalog", targets: ["VeeCatalog"]),
         .library(name: "VeeUI", targets: ["VeeUI"]),
         .library(name: "VeeApp", targets: ["VeeApp"]),
         .executable(name: "vee", targets: ["vee"]),
@@ -29,8 +30,9 @@ let package = Package(
         .target(name: "VeeMenu", dependencies: ["VeeCore", "VeePluginFormat"]),
         .target(name: "VeePreferences", dependencies: ["VeeCore", "VeePluginFormat"]),
         .target(name: "VeeTrust", dependencies: ["VeeCore"]),
-        .target(name: "VeeUI", dependencies: ["VeeCore", "VeePluginFormat", "VeePreferences"]),
-        .target(name: "VeeApp", dependencies: ["VeeCore", "VeePluginFormat", "VeeRuntime", "VeeMenu", "VeePreferences", "VeeTrust", "VeeUI"]),
+        .target(name: "VeeCatalog"),
+        .target(name: "VeeUI", dependencies: ["VeeCore", "VeePluginFormat", "VeePreferences", "VeeTrust", "VeeCatalog"]),
+        .target(name: "VeeApp", dependencies: ["VeeCore", "VeePluginFormat", "VeeRuntime", "VeeMenu", "VeePreferences", "VeeTrust", "VeeCatalog", "VeeUI"]),
         .executableTarget(name: "vee", dependencies: ["VeeApp"]),
         .testTarget(name: "VeeCoreTests", dependencies: ["VeeCore"]),
         .testTarget(name: "VeePluginFormatTests", dependencies: ["VeePluginFormat"]),
@@ -38,6 +40,7 @@ let package = Package(
         .testTarget(name: "VeeMenuTests", dependencies: ["VeeMenu"]),
         .testTarget(name: "VeePreferencesTests", dependencies: ["VeePreferences"]),
         .testTarget(name: "VeeTrustTests", dependencies: ["VeeTrust"]),
+        .testTarget(name: "VeeCatalogTests", dependencies: ["VeeCatalog"]),
         .testTarget(name: "VeeAppTests", dependencies: ["VeeApp"]),
     ]
 )

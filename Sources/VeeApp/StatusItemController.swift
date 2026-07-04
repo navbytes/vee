@@ -9,14 +9,17 @@ import VeeTrust
 private final class ControlsTarget: NSObject, NSMenuDelegate {
     let onRefresh: () -> Void
     let onSettings: () -> Void
+    let onAbout: () -> Void
     let refreshOnOpen: Bool
-    init(onRefresh: @escaping () -> Void, onSettings: @escaping () -> Void, refreshOnOpen: Bool) {
+    init(onRefresh: @escaping () -> Void, onSettings: @escaping () -> Void, onAbout: @escaping () -> Void, refreshOnOpen: Bool) {
         self.onRefresh = onRefresh
         self.onSettings = onSettings
+        self.onAbout = onAbout
         self.refreshOnOpen = refreshOnOpen
     }
     @objc func refresh() { onRefresh() }
     @objc func settings() { onSettings() }
+    @objc func about() { onAbout() }
     @objc func quit() { NSApp.terminate(nil) }
 
     // <swiftbar.refreshOnOpen>: re-run the plugin when its menu is opened.
@@ -39,14 +42,37 @@ public final class StatusItemController {
     private var cycleTimer: Timer?
     private let hasSettings: Bool
     private let trustSummary: TrustSummary?
+    private let aboutText: String?
+    private let aboutURL: URL?
 
-    public init(pluginName: String, handler: MenuActionHandling, hasSettings: Bool = false, trustSummary: TrustSummary? = nil, refreshOnOpen: Bool = false, onRefresh: @escaping () -> Void, onSettings: @escaping () -> Void = {}) {
+    public init(pluginName: String, handler: MenuActionHandling, hasSettings: Bool = false, trustSummary: TrustSummary? = nil, refreshOnOpen: Bool = false, aboutText: String? = nil, aboutURL: URL? = nil, onRefresh: @escaping () -> Void, onSettings: @escaping () -> Void = {}) {
         self.pluginName = pluginName
         self.hasSettings = hasSettings
         self.trustSummary = trustSummary
+        self.aboutText = aboutText
+        self.aboutURL = aboutURL
         self.statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         self.actionTarget = MenuActionTarget(handler: handler)
-        self.controls = ControlsTarget(onRefresh: onRefresh, onSettings: onSettings, refreshOnOpen: refreshOnOpen)
+        let name = pluginName
+        self.controls = ControlsTarget(
+            onRefresh: onRefresh,
+            onSettings: onSettings,
+            onAbout: { Self.showAbout(name: name, text: aboutText, url: aboutURL) },
+            refreshOnOpen: refreshOnOpen
+        )
+    }
+
+    private static func showAbout(name: String, text: String?, url: URL?) {
+        let alert = NSAlert()
+        alert.messageText = name
+        alert.informativeText = text ?? ""
+        alert.addButton(withTitle: "OK")
+        if url != nil {
+            alert.addButton(withTitle: "Open Website")
+        }
+        if alert.runModal() == .alertSecondButtonReturn, let url {
+            NSWorkspace.shared.open(url)
+        }
     }
 
     /// Renders a successful refresh.
@@ -198,6 +224,12 @@ public final class StatusItemController {
             let settings = NSMenuItem(title: "Settings…", action: #selector(ControlsTarget.settings), keyEquivalent: ",")
             settings.target = controls
             menu.addItem(settings)
+        }
+
+        if aboutText != nil || aboutURL != nil {
+            let about = NSMenuItem(title: "About \(pluginName)…", action: #selector(ControlsTarget.about), keyEquivalent: "")
+            about.target = controls
+            menu.addItem(about)
         }
 
         let quit = NSMenuItem(title: "Quit Vee", action: #selector(ControlsTarget.quit), keyEquivalent: "q")
