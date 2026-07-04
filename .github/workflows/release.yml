@@ -71,6 +71,7 @@ jobs:
               CODE_SIGN_STYLE=Manual \
               CODE_SIGN_IDENTITY="$APPLE_DEVELOPER_ID" \
               DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
+              CODE_SIGN_INJECT_BASE_ENTITLEMENTS=NO \
               OTHER_CODE_SIGN_FLAGS="--timestamp --options=runtime" \
               build
           else
@@ -83,9 +84,18 @@ jobs:
         if: env.APPLE_NOTARY_PASSWORD != ''
         run: |
           ditto -c -k --keepParent "$APP_PATH" Vee-notarize.zip
-          xcrun notarytool submit Vee-notarize.zip \
-            --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_NOTARY_PASSWORD" --wait
-          xcrun stapler staple "$APP_PATH"
+          out=$(xcrun notarytool submit Vee-notarize.zip \
+            --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_NOTARY_PASSWORD" --wait 2>&1)
+          echo "$out"
+          if echo "$out" | grep -q "status: Accepted"; then
+            xcrun stapler staple "$APP_PATH"
+          else
+            id=$(echo "$out" | awk '/id:/{print $2; exit}')
+            echo "::error::Notarization not accepted — fetching detailed log for submission $id"
+            xcrun notarytool log "$id" \
+              --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_NOTARY_PASSWORD" || true
+            exit 1
+          fi
 
       - name: Package
         run: ditto -c -k --keepParent "$APP_PATH" Vee.zip
