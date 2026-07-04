@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>FAQ — Vee docs</title>
+  <meta name="description" content="Answers about Vee: is it safe un-sandboxed, will my SwiftBar/xbar plugins work, macOS 26 and Apple Silicon requirements, where secrets are stored, and more.">
+  <link rel="canonical" href="https://navbytes.github.io/vee/guide/faq.html">
+  <link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
+  <link rel="stylesheet" href="../assets/style.css">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Vee">
+  <meta property="og:title" content="FAQ — Vee docs">
+  <meta property="og:description" content="Answers about Vee: is it safe un-sandboxed, will my SwiftBar/xbar plugins work, macOS 26 and Apple Silicon requirements, where secrets are stored, and more.">
+  <meta property="og:url" content="https://navbytes.github.io/vee/guide/faq.html">
+  <meta property="og:image" content="https://navbytes.github.io/vee/assets/og-image.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="FAQ — Vee docs">
+  <meta name="twitter:description" content="Answers about Vee: is it safe un-sandboxed, will my SwiftBar/xbar plugins work, macOS 26 and Apple Silicon requirements, where secrets are stored, and more.">
+  <meta name="twitter:image" content="https://navbytes.github.io/vee/assets/og-image.png">
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="../index.html" aria-label="Vee home">
+      <img class="mark" src="../assets/favicon.svg" alt="" width="28" height="28">
+      <span><b>Vee</b></span>
+    </a>
+    <button class="nav-toggle" aria-label="Toggle navigation" aria-expanded="false" aria-controls="nav-links">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+    </button>
+    <ul class="nav-links" id="nav-links">
+      <li><a href="../index.html#features">Features</a></li>
+      <li><a href="../index.html#trust">Trust</a></li>
+      <li><a href="../compare/index.html">Compare</a></li>
+      <li><a href="./index.html" aria-current="page">Docs</a></li>
+      <li><a class="nav-cta" href="https://github.com/navbytes/vee" rel="noopener">GitHub</a></li>
+    </ul>
+  </div>
+</header>
+<div class="docs-layout">
+  <aside class="docs-side" aria-label="Documentation navigation">
+    <p class="docs-nav-title">Documentation</p>
+<ul class="docs-nav">
+<li><a href="./index.html">Overview</a></li>
+<li><a href="./getting-started.html">Getting started</a></li>
+<li><a href="./migrating-from-swiftbar.html">Migrating from SwiftBar / xbar</a></li>
+<li><a href="./plugin-authoring.html">Plugin authoring</a></li>
+<li><a href="./trust-model.html">Trust model</a></li>
+<li><a href="./preferences.html">Preferences</a></li>
+<li><a href="./sdk.html">TypeScript SDK</a></li>
+<li><a href="./cli-and-urls.html">CLI &amp; URL actions</a></li>
+<li><a href="./faq.html" aria-current="page">FAQ</a></li>
+<li><a href="./troubleshooting.html">Troubleshooting</a></li>
+</ul>
+  </aside>
+  <main class="docs-main" id="main">
+    <article class="docs-content">
+      <p class="doc-hero-note">Vee documentation</p>
+<h1>FAQ</h1>
+<h3 id="is-vee-safe-if-plugins-run-un-sandboxed">Is Vee safe if plugins run un-sandboxed?</h3>
+<p>Plugins run as ordinary programs with your full user privileges — Vee does not sandbox them, and that is by design (a menu-bar script runner exists to run arbitrary scripts). The safety model is <strong>transparency, not isolation</strong>: plugins declare what they access with <code>&lt;vee.*&gt;</code> tags, and Vee shows a plain-language trust summary before you install and trust badges in the Manager. Treat a plugin like any other script you download: read the source of anything you do not trust. See the <a href="trust-model.html">trust model</a> for the full picture.</p>
+<h3 id="will-my-existing-swiftbar-or-xbar-plugins-work">Will my existing SwiftBar or xbar plugins work?</h3>
+<p>Yes. Vee implements the xbar/SwiftBar plugin protocol — filenames, menus, params, metadata headers, streaming, cron, and the injected environment variables. Point Vee at your existing plugins folder (Plugin Manager → Choose Folder) and they run unchanged. See <a href="migrating-from-swiftbar.html">Migrating from SwiftBar/xbar</a>.</p>
+<h3 id="what-macos-version-do-i-need">What macOS version do I need?</h3>
+<p>macOS 26 or later. Vee uses the newest AppKit/SwiftUI APIs and the Liquid Glass UI, so earlier versions are not supported.</p>
+<h3 id="does-it-run-on-intel-macs">Does it run on Intel Macs?</h3>
+<p>No. Vee is Apple Silicon (arm64) only. There is no Intel build.</p>
+<h3 id="why-isn-t-vee-on-the-mac-app-store">Why isn't Vee on the Mac App Store?</h3>
+<p>The App Store requires apps to be sandboxed, and that sandbox is incompatible with running arbitrary user plugins. Vee is instead distributed Developer-ID-signed and <strong>notarized</strong> outside the App Store, downloaded from GitHub Releases. This is the same reason xbar and SwiftBar are distributed outside the store.</p>
+<h3 id="how-is-vee-different-from-swiftbar">How is Vee different from SwiftBar?</h3>
+<p>Vee runs the same plugins, so it is a superset in practice, plus:</p>
+<ul>
+<li><strong>Native and leak-free</strong> — pure Swift/AppKit with no embedded WebView in the menu, rigorous subprocess draining and timeouts, so long-running use does not leak memory.</li>
+<li><strong>A trust/transparency layer</strong> — plugins declare their footprint and Vee surfaces it.</li>
+<li><strong>Discover</strong> — a built-in catalog browser with one-click install through a trust gate.</li>
+<li><strong>Auto-generated preference forms</strong> with Keychain-backed secrets.</li>
+<li><strong>An optional typed TypeScript SDK.</strong></li>
+</ul>
+<p>See <a href="migrating-from-swiftbar.html">Migrating from SwiftBar/xbar</a>.</p>
+<h3 id="does-vee-cost-money">Does Vee cost money?</h3>
+<p>No. Vee is free and open source — <a href="https://github.com/navbytes/vee" rel="noopener">github.com/navbytes/vee</a>.</p>
+<h3 id="how-do-i-install-it">How do I install it?</h3>
+<p>Download the notarized <code>Vee.app</code> from <a href="https://github.com/navbytes/vee/releases" rel="noopener">GitHub Releases</a>, drag it to <code>/Applications</code>, and launch. There is no Homebrew cask yet. See <a href="getting-started.html">Getting started</a>.</p>
+<h3 id="how-do-i-update-vee">How do I update Vee?</h3>
+<p>Download the newer <code>Vee.app</code> from Releases and replace the copy in <code>/Applications</code>. Your plugins folder and settings are separate from the app, so they carry over.</p>
+<h3 id="where-are-my-plugins-stored">Where are my plugins stored?</h3>
+<p>By default in <code>~/Library/Application Support/Vee/plugins</code>. You can choose a different folder in the Plugin Manager (for example, an existing SwiftBar folder).</p>
+<h3 id="where-are-secrets-stored">Where are secrets stored?</h3>
+<p>In the macOS <strong>Keychain</strong>, namespaced per plugin so one plugin cannot read another's. A preference is treated as a secret when its name contains <code>token</code>, <code>secret</code>, <code>password</code>, <code>passwd</code>, <code>apikey</code>, or <code>api_key</code>; it is masked in the settings form and injected as an environment variable at run time. See <a href="preferences.html">Preferences</a>.</p>
+<h3 id="how-does-vee-decide-how-often-to-run-a-plugin">How does Vee decide how often to run a plugin?</h3>
+<p>From the plugin's filename: <code>cpu.5s.sh</code> runs every 5 seconds, <code>mail.10m.py</code> every 10 minutes, and so on (units: <code>ms</code>, <code>s</code>, <code>m</code>, <code>h</code>, <code>d</code>). A plugin with no interval token runs on demand. You can also schedule with a <code>&lt;swiftbar.schedule&gt;</code> cron header. See <a href="plugin-authoring.html#filenames-and-refresh-intervals">Plugin authoring</a>.</p>
+<h3 id="do-i-need-to-compile-plugins-what-languages-can-i-use">Do I need to compile plugins? What languages can I use?</h3>
+<p>Any language. A plugin is just an executable that prints to stdout — bash, Python, Ruby, Node, a compiled binary, anything. For TypeScript there is a zero-dependency SDK that runs <code>.ts</code> files directly on Node with no build step. See the <a href="sdk.html">SDK docs</a>.</p>
+<h3 id="can-plugins-talk-back-to-vee-refresh-notify">Can plugins talk back to Vee (refresh, notify)?</h3>
+<p>Yes — via the <code>vee://</code> and <code>swiftbar://</code> URL actions (refresh a plugin, refresh all, enable/disable/toggle, notify), or the simpler <code>refresh=true</code> line parameter for "re-run me." See <a href="cli-and-urls.html">CLI and URL actions</a>.</p>
+<h3 id="a-plugin-isn-t-showing-up-or-is-erroring-what-do-i-do">A plugin isn't showing up or is erroring — what do I do?</h3>
+<p>Check that it is executable (<code>chmod +x</code>), in the right folder, and that any interpreter or tool it needs is installed. See <a href="troubleshooting.html">Troubleshooting</a>.</p>
+    </article>
+    <nav class="doc-nextprev" aria-label="Guide pagination"><a class="prev" href="./cli-and-urls.html"><span class="dir">&larr; Previous</span><span class="lbl">CLI &amp; URL actions</span></a><a class="next" href="./troubleshooting.html"><span class="dir">Next &rarr;</span><span class="lbl">Troubleshooting</span></a></nav>
+  </main>
+</div>
+<script src="../assets/app.js" defer></script>
+</body>
+</html>

@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Questions & Discussions
+    url: https://github.com/navbytes/vee/discussions
+    about: Ask a question, share a plugin, or discuss an idea before filing an issue.
+  - name: Documentation
+    url: https://github.com/navbytes/vee#readme
+    about: Read the README and docs — plugin format, trust model, build & test.
+  - name: Report a security vulnerability
+    url: https://github.com/navbytes/vee/security/advisories/new
+    about: Please report security issues privately, not as a public issue. See SECURITY.md.

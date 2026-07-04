@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Vee vs SwiftBar: the trust layer &amp; a built-in catalog — Menu-Bar Script Runner</title>
+  <meta name="description" content="Vee vs SwiftBar: both are native and light. Vee is a superset that runs the same plugins and adds a trust layer, a built-in Discover catalog, refresh reliability, and a typed SDK. SwiftBar remains the mature, wider-macOS choice.">
+  <link rel="canonical" href="https://navbytes.github.io/vee/compare/vee-vs-swiftbar.html">
+  <link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
+  <link rel="stylesheet" href="../assets/style.css">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Vee">
+  <meta property="og:title" content="Vee vs SwiftBar: the trust layer &amp; a built-in catalog">
+  <meta property="og:description" content="Both are native and light. Vee runs the same plugins and adds a trust layer, a built-in catalog, refresh reliability, and a typed SDK. SwiftBar is the mature, wider-macOS choice.">
+  <meta property="og:url" content="https://navbytes.github.io/vee/compare/vee-vs-swiftbar.html">
+  <meta property="og:image" content="https://navbytes.github.io/vee/assets/og-image.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Vee vs SwiftBar: the trust layer &amp; a built-in catalog">
+  <meta name="twitter:description" content="Both are native and light. Vee adds a trust layer, a built-in catalog, refresh reliability, and a typed SDK.">
+  <meta name="twitter:image" content="https://navbytes.github.io/vee/assets/og-image.png">
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="../index.html" aria-label="Vee home">
+      <img class="mark" src="../assets/favicon.svg" alt="" width="28" height="28">
+      <span><b>Vee</b></span>
+    </a>
+    <button class="nav-toggle" aria-label="Toggle navigation" aria-expanded="false" aria-controls="nav-links">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+    </button>
+    <ul class="nav-links" id="nav-links">
+      <li><a href="../index.html#features">Features</a></li>
+      <li><a href="../index.html#trust">Trust</a></li>
+      <li><a href="./index.html" aria-current="page">Compare</a></li>
+      <li><a href="../guide/index.html">Docs</a></li>
+      <li><a class="nav-cta" href="https://github.com/navbytes/vee" rel="noopener">GitHub</a></li>
+    </ul>
+  </div>
+</header>
+
+<div class="docs-layout">
+  <aside class="docs-side" aria-label="Comparison navigation">
+    <p class="docs-nav-title">Compare</p>
+    <ul class="docs-nav">
+      <li><a href="./index.html">Overview</a></li>
+      <li><a href="./vee-vs-swiftbar.html" aria-current="page">Vee vs SwiftBar</a></li>
+      <li><a href="./vee-vs-xbar.html">Vee vs xbar</a></li>
+    </ul>
+    <p class="docs-nav-title">Related</p>
+    <ul class="docs-nav">
+      <li><a href="../guide/migrating-from-swiftbar.html">Migrating guide</a></li>
+      <li><a href="../guide/trust-model.html">Trust model</a></li>
+    </ul>
+  </aside>
+
+  <main class="docs-main" id="main">
+    <article class="docs-content">
+      <p class="doc-hero-note">Comparison</p>
+      <h1>Vee vs SwiftBar</h1>
+      <p class="lede" style="max-width:var(--measure);">SwiftBar is the category leader for good reason — native Swift, light, mature, MIT-licensed, and a Homebrew cask install away. Vee runs the same plugins, so think of it as a <strong>superset in practice</strong>: same native lightness, with a few things added on top. This page is honest about where each one wins.</p>
+
+      <div class="callout">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 3l7 3v5c0 4.5-3 8.2-7 9-4-.8-7-4.5-7-9V6l7-3Z" stroke-linejoin="round"/></svg>
+        <div>Vee does <strong>not</strong> claim to be faster or lighter than SwiftBar — SwiftBar is also native and efficient. The differences below are about <em>capabilities and finish</em>, not raw performance.</div>
+      </div>
+
+      <h2 id="at-a-glance">At a glance</h2>
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr><th>&nbsp;</th><th>Vee</th><th>SwiftBar</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><strong>Engine</strong></td><td>Native Swift 6.2 / SwiftUI + AppKit</td><td>Native Swift / AppKit</td></tr>
+            <tr><td><strong>Runs xbar/SwiftBar plugins</strong></td><td class="v-yes">Yes, unchanged</td><td class="v-yes">Yes (its own format + xbar)</td></tr>
+            <tr><td><strong>Weight / footprint</strong></td><td>Native, light</td><td>Native, light</td></tr>
+            <tr><td><strong>Trust-at-install layer</strong></td><td class="v-yes">Yes — plain-language summary + badges</td><td class="v-no">No</td></tr>
+            <tr><td><strong>Built-in catalog browser</strong></td><td class="v-yes">Yes — Discover, trust-gated install</td><td class="v-no">No (install plugins manually)</td></tr>
+            <tr><td><strong>Typed preference forms</strong></td><td class="v-yes">Yes — Keychain-backed secrets</td><td class="v-yes">Yes — <code>&lt;swiftbar.var&gt;</code> forms</td></tr>
+            <tr><td><strong>Typed SDK</strong></td><td class="v-yes">Yes — TypeScript, no build step</td><td class="v-no">No official typed SDK</td></tr>
+            <tr><td><strong>URL scheme</strong></td><td><code>vee://</code> &amp; <code>swiftbar://</code></td><td><code>swiftbar://</code></td></tr>
+            <tr><td><strong>License</strong></td><td>MIT, open source</td><td>MIT, open source</td></tr>
+            <tr><td><strong>macOS support</strong></td><td class="v-mid">26+ only</td><td class="v-yes">10.15+ (much wider)</td></tr>
+            <tr><td><strong>Architecture</strong></td><td class="v-mid">Apple Silicon only</td><td class="v-yes">Intel + Apple Silicon</td></tr>
+            <tr><td><strong>Install</strong></td><td class="v-mid">GitHub Releases (notarized)</td><td class="v-yes">Homebrew cask + Releases</td></tr>
+            <tr><td><strong>Maturity</strong></td><td class="v-mid">v0.1.x — early</td><td class="v-yes">Mature, widely deployed</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h2 id="where-vee-differs">Where Vee is different</h2>
+
+      <h3 id="trust-layer">A trust layer at install</h3>
+      <p>This is the main reason Vee exists. Every menu-bar script runner executes plugins <strong>un-sandboxed</strong> — SwiftBar auto-<code>chmod +x</code>es and runs whatever lands in the folder, which is exactly the model the category needs to be useful. Vee keeps that model but makes it transparent: authors declare what a plugin touches (network domains, files, secrets, external binaries) with <code>&lt;vee.*&gt;</code> tags, and Vee shows a plain-language summary <em>before</em> you install, plus trust badges in the Plugin Manager. It&rsquo;s advisory, not enforced — but at least you&rsquo;re not running things blind. See the <a href="../guide/trust-model.html">trust model</a>.</p>
+
+      <h3 id="discover">A built-in Discover catalog</h3>
+      <p>Vee ships a browser over the shared <code>matryer/xbar-plugins</code> catalog, with trust chips on each entry and one-click install through the trust gate. With SwiftBar you typically find plugins on the web and drop them into the folder yourself.</p>
+
+      <h3 id="refresh-reliability">Refresh reliability after sleep</h3>
+      <p>SwiftBar has open reports of refreshes not resuming reliably after the machine sleeps or wakes (<a href="https://github.com/swiftbar/SwiftBar/issues/179" rel="noopener">#179</a>, <a href="https://github.com/swiftbar/SwiftBar/issues/390" rel="noopener">#390</a>). Vee&rsquo;s scheduler is built to keep intervals honest across sleep/wake cycles.</p>
+
+      <h3 id="typed-sdk">A typed SDK for authors</h3>
+      <p>Vee has an optional zero-dependency TypeScript SDK with <code>Menu</code>/<code>Section</code> builders that Node runs directly — no build step — kept in lockstep with the Swift parser by a golden-fixture drift guard. See the <a href="../guide/sdk.html">SDK docs</a>. SwiftBar plugins are hand-formatted text (which Vee also fully supports).</p>
+
+      <h2 id="where-swiftbar-wins">Where SwiftBar wins today</h2>
+      <ul>
+        <li><strong>Wider macOS support.</strong> SwiftBar runs on macOS 10.15+; Vee requires macOS 26 or later.</li>
+        <li><strong>Intel Macs.</strong> SwiftBar has an Intel build; Vee is Apple Silicon only.</li>
+        <li><strong>Homebrew install.</strong> SwiftBar installs via a Homebrew cask; Vee has no cask yet (download from GitHub Releases).</li>
+        <li><strong>Maturity.</strong> SwiftBar is battle-tested across a huge install base; Vee is v0.1.x and early.</li>
+      </ul>
+
+      <h2 id="bottom-line">Bottom line — when to choose which</h2>
+      <div class="bottom-line">
+        <div class="card bl-card">
+          <h3 class="bl-yes">Choose Vee if&hellip;</h3>
+          <ul style="margin:0;">
+            <li>You want to <strong>see what a plugin touches</strong> before you install it.</li>
+            <li>You&rsquo;d use a <strong>built-in catalog</strong> with trust chips.</li>
+            <li>You&rsquo;ve hit <strong>refresh-after-sleep</strong> annoyances.</li>
+            <li>You want a <strong>typed SDK</strong> for authoring.</li>
+            <li>You&rsquo;re on <strong>macOS 26 + Apple Silicon</strong>.</li>
+          </ul>
+        </div>
+        <div class="card bl-card">
+          <h3>Choose SwiftBar if&hellip;</h3>
+          <ul style="margin:0;">
+            <li>You need <strong>older macOS</strong> (10.15+) or an <strong>Intel Mac</strong>.</li>
+            <li>You want a <strong>Homebrew cask</strong> install today.</li>
+            <li>You value a <strong>long, proven track record</strong> over the newest features.</li>
+          </ul>
+        </div>
+      </div>
+      <p>The good news: because Vee runs the same plugins, trying it costs nothing to switch back from. Point it at your existing folder and everything runs. See <a href="../guide/migrating-from-swiftbar.html">Migrating from SwiftBar/xbar</a>.</p>
+
+      <div class="hero-cta" style="margin-top:2rem;">
+        <a class="btn btn-primary" href="https://github.com/navbytes/vee/releases" rel="noopener">Download Vee for macOS</a>
+        <a class="btn btn-ghost" href="./vee-vs-xbar.html">Compare Vee vs xbar</a>
+      </div>
+    </article>
+  </main>
+</div>
+<script src="../assets/app.js" defer></script>
+</body>
+</html>

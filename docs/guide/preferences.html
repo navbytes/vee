@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Preferences — Vee docs</title>
+  <meta name="description" content="Plugins declare typed settings with <xbar.var>; Vee auto-generates a form and stores secrets in the macOS Keychain. Configuration belongs to the plugin.">
+  <link rel="canonical" href="https://navbytes.github.io/vee/guide/preferences.html">
+  <link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
+  <link rel="stylesheet" href="../assets/style.css">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Vee">
+  <meta property="og:title" content="Preferences — Vee docs">
+  <meta property="og:description" content="Plugins declare typed settings with <xbar.var>; Vee auto-generates a form and stores secrets in the macOS Keychain. Configuration belongs to the plugin.">
+  <meta property="og:url" content="https://navbytes.github.io/vee/guide/preferences.html">
+  <meta property="og:image" content="https://navbytes.github.io/vee/assets/og-image.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Preferences — Vee docs">
+  <meta name="twitter:description" content="Plugins declare typed settings with <xbar.var>; Vee auto-generates a form and stores secrets in the macOS Keychain. Configuration belongs to the plugin.">
+  <meta name="twitter:image" content="https://navbytes.github.io/vee/assets/og-image.png">
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="../index.html" aria-label="Vee home">
+      <img class="mark" src="../assets/favicon.svg" alt="" width="28" height="28">
+      <span><b>Vee</b></span>
+    </a>
+    <button class="nav-toggle" aria-label="Toggle navigation" aria-expanded="false" aria-controls="nav-links">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+    </button>
+    <ul class="nav-links" id="nav-links">
+      <li><a href="../index.html#features">Features</a></li>
+      <li><a href="../index.html#trust">Trust</a></li>
+      <li><a href="../compare/index.html">Compare</a></li>
+      <li><a href="./index.html" aria-current="page">Docs</a></li>
+      <li><a class="nav-cta" href="https://github.com/navbytes/vee" rel="noopener">GitHub</a></li>
+    </ul>
+  </div>
+</header>
+<div class="docs-layout">
+  <aside class="docs-side" aria-label="Documentation navigation">
+    <p class="docs-nav-title">Documentation</p>
+<ul class="docs-nav">
+<li><a href="./index.html">Overview</a></li>
+<li><a href="./getting-started.html">Getting started</a></li>
+<li><a href="./migrating-from-swiftbar.html">Migrating from SwiftBar / xbar</a></li>
+<li><a href="./plugin-authoring.html">Plugin authoring</a></li>
+<li><a href="./trust-model.html">Trust model</a></li>
+<li><a href="./preferences.html" aria-current="page">Preferences</a></li>
+<li><a href="./sdk.html">TypeScript SDK</a></li>
+<li><a href="./cli-and-urls.html">CLI &amp; URL actions</a></li>
+<li><a href="./faq.html">FAQ</a></li>
+<li><a href="./troubleshooting.html">Troubleshooting</a></li>
+</ul>
+  </aside>
+  <main class="docs-main" id="main">
+    <article class="docs-content">
+      <p class="doc-hero-note">Vee documentation</p>
+<h1>Preferences</h1>
+<p>Configuration in Vee belongs to the plugin, not the app. A plugin declares its own typed settings with <code>&lt;xbar.var&gt;</code> tags; Vee reads them, generates a settings form automatically, and injects the values back into the plugin as environment variables. The app never hardcodes service names, API keys, or credentials — it only renders whatever a plugin declares.</p>
+<h2 id="declaring-a-preference">Declaring a preference</h2>
+<p>Add one <code>&lt;xbar.var&gt;</code> tag per setting, anywhere in the plugin source. The syntax is:</p>
+<div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">text</span></div><pre><code>&lt;xbar.var&gt;TYPE(NAME=DEFAULT): Description [option1, option2, …]&lt;/xbar.var&gt;</code></pre></div>
+<ul>
+<li><code>TYPE</code> is one of <code>string</code>, <code>number</code>, <code>boolean</code>, or <code>select</code>.</li>
+<li><code>NAME</code> is the environment variable the value is exposed as.</li>
+<li><code>DEFAULT</code> is the initial value (may be empty).</li>
+<li>The text after <code>:</code> is a human-readable description shown as the field label/help.</li>
+<li>The optional <code>[…]</code> list supplies the choices for a <code>select</code>.</li>
+</ul>
+<h3 id="examples">Examples</h3>
+<div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">python</span></div><pre><code># &lt;xbar.var&gt;string(CITY=London): Which city's weather to show.&lt;/xbar.var&gt;
+# &lt;xbar.var&gt;number(REFRESH_COUNT=5): How many items to display.&lt;/xbar.var&gt;
+# &lt;xbar.var&gt;boolean(SHOW_ICON=true): Show an icon in the menu bar.&lt;/xbar.var&gt;
+# &lt;xbar.var&gt;select(UNITS=metric): Measurement units. [metric, imperial]&lt;/xbar.var&gt;
+# &lt;xbar.var&gt;string(API_TOKEN=): Your service API token.&lt;/xbar.var&gt;</code></pre></div>
+<p><code>&lt;swiftbar.var&gt;</code> is accepted as well, with the same syntax.</p>
+<h2 id="the-auto-generated-settings-form">The auto-generated settings form</h2>
+<p>From those declarations Vee builds a form in the plugin's settings pane (open it from the <strong>Plugin Manager</strong>). Each type maps to a control:</p>
+<div class="table-scroll"><table><thead><tr><th>Declared type</th><th>Rendered control</th></tr></thead><tbody><tr><td><code>string</code></td><td>A text field.</td></tr><tr><td><code>number</code></td><td>A numeric field.</td></tr><tr><td><code>boolean</code></td><td>A toggle.</td></tr><tr><td><code>select</code></td><td>A dropdown of the declared options.</td></tr></tbody></table></div>
+<p>For the declarations above, the form would look like:</p>
+<div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">text</span></div><pre><code>City            [ London              ]   Which city's weather to show.
+Refresh count   [ 5                   ]   How many items to display.
+Show icon       ( ●) on                    Show an icon in the menu bar.
+Units           [ metric ▾ ]              Measurement units.
+API token       [ ••••••••••••         ]   Your service API token.</code></pre></div>
+<p>When you save, Vee stores the values and injects each one as an environment variable of the same <code>NAME</code> on every plugin run. In the plugin you just read the environment:</p>
+<div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">python</span></div><pre><code>import os
+city = os.environ.get("CITY", "London")
+token = os.environ.get("API_TOKEN", "")</code></pre></div>
+<p>Declared variables take precedence over Vee's other injected variables (see <a href="plugin-authoring.html#environment-variables-vee-injects">Injected environment variables</a>).</p>
+<h2 id="secret-fields-and-the-keychain">Secret fields and the Keychain</h2>
+<p>Vee treats a preference as a <strong>secret</strong> when its name looks like a credential — it contains <code>token</code>, <code>secret</code>, <code>password</code>, <code>passwd</code>, <code>apikey</code>, or <code>api_key</code> (case-insensitive). So <code>API_TOKEN</code>, <code>GITHUB_TOKEN</code>, <code>DB_PASSWORD</code>, and <code>SERVICE_APIKEY</code> are all detected as secrets automatically.</p>
+<p>For secret fields:</p>
+<ul>
+<li>The value is <strong>masked</strong> in the settings form.</li>
+<li>The value is stored in the <strong>macOS Keychain</strong>, namespaced per plugin (one plugin cannot read another plugin's secrets), rather than in a plaintext settings file.</li>
+<li>The value is still injected as an environment variable at run time, so your plugin reads it exactly like any other preference.</li>
+</ul>
+<p>You do not declare "this is a secret" explicitly — naming the variable appropriately (e.g. <code>API_TOKEN</code>) is enough. If you also want the secret to appear in the plugin's <a href="trust-model.html">trust summary</a>, reference it in a <code>&lt;vee.secrets&gt;</code> tag:</p>
+<div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">python</span></div><pre><code># &lt;xbar.var&gt;string(API_TOKEN=): Your service API token.&lt;/xbar.var&gt;
+# &lt;vee.secrets&gt;API_TOKEN&lt;/vee.secrets&gt;</code></pre></div>
+<h2 id="see-also">See also</h2>
+<ul>
+<li><a href="plugin-authoring.html">Plugin authoring reference</a> — the full plugin format.</li>
+<li><a href="trust-model.html">Trust model</a> — declaring which secrets a plugin uses.</li>
+</ul>
+    </article>
+    <nav class="doc-nextprev" aria-label="Guide pagination"><a class="prev" href="./trust-model.html"><span class="dir">&larr; Previous</span><span class="lbl">Trust model</span></a><a class="next" href="./sdk.html"><span class="dir">Next &rarr;</span><span class="lbl">TypeScript SDK</span></a></nav>
+  </main>
+</div>
+<script src="../assets/app.js" defer></script>
+</body>
+</html>

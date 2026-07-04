@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Getting started with Vee — Vee docs</title>
+  <meta name="description" content="Install Vee, write your first plugin, and learn where plugins live. A native macOS menu-bar script runner, xbar and SwiftBar compatible.">
+  <link rel="canonical" href="https://navbytes.github.io/vee/guide/getting-started.html">
+  <link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
+  <link rel="stylesheet" href="../assets/style.css">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Vee">
+  <meta property="og:title" content="Getting started with Vee — Vee docs">
+  <meta property="og:description" content="Install Vee, write your first plugin, and learn where plugins live. A native macOS menu-bar script runner, xbar and SwiftBar compatible.">
+  <meta property="og:url" content="https://navbytes.github.io/vee/guide/getting-started.html">
+  <meta property="og:image" content="https://navbytes.github.io/vee/assets/og-image.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Getting started with Vee — Vee docs">
+  <meta name="twitter:description" content="Install Vee, write your first plugin, and learn where plugins live. A native macOS menu-bar script runner, xbar and SwiftBar compatible.">
+  <meta name="twitter:image" content="https://navbytes.github.io/vee/assets/og-image.png">
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="../index.html" aria-label="Vee home">
+      <img class="mark" src="../assets/favicon.svg" alt="" width="28" height="28">
+      <span><b>Vee</b></span>
+    </a>
+    <button class="nav-toggle" aria-label="Toggle navigation" aria-expanded="false" aria-controls="nav-links">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+    </button>
+    <ul class="nav-links" id="nav-links">
+      <li><a href="../index.html#features">Features</a></li>
+      <li><a href="../index.html#trust">Trust</a></li>
+      <li><a href="../compare/index.html">Compare</a></li>
+      <li><a href="./index.html" aria-current="page">Docs</a></li>
+      <li><a class="nav-cta" href="https://github.com/navbytes/vee" rel="noopener">GitHub</a></li>
+    </ul>
+  </div>
+</header>
+<div class="docs-layout">
+  <aside class="docs-side" aria-label="Documentation navigation">
+    <p class="docs-nav-title">Documentation</p>
+<ul class="docs-nav">
+<li><a href="./index.html">Overview</a></li>
+<li><a href="./getting-started.html" aria-current="page">Getting started</a></li>
+<li><a href="./migrating-from-swiftbar.html">Migrating from SwiftBar / xbar</a></li>
+<li><a href="./plugin-authoring.html">Plugin authoring</a></li>
+<li><a href="./trust-model.html">Trust model</a></li>
+<li><a href="./preferences.html">Preferences</a></li>
+<li><a href="./sdk.html">TypeScript SDK</a></li>
+<li><a href="./cli-and-urls.html">CLI &amp; URL actions</a></li>
+<li><a href="./faq.html">FAQ</a></li>
+<li><a href="./troubleshooting.html">Troubleshooting</a></li>
+</ul>
+  </aside>
+  <main class="docs-main" id="main">
+    <article class="docs-content">
+      <p class="doc-hero-note">Vee documentation</p>
+<h1>Getting started with Vee</h1>
+<p>Vee is a native macOS menu-bar script runner. It runs plugins — any executable, in any language — on a schedule and renders their standard output as menu-bar titles and dropdown menus. It is a fast, leak-free successor to <a href="https://github.com/matryer/xbar" rel="noopener">xbar</a> and <a href="https://github.com/swiftbar/SwiftBar" rel="noopener">SwiftBar</a>, and it runs their plugins unchanged.</p>
+<h2 id="requirements">Requirements</h2>
+<ul>
+<li>macOS 26 or later (Vee uses the newest AppKit/SwiftUI APIs and the Liquid Glass UI).</li>
+<li>Apple Silicon (arm64). Intel Macs are not supported.</li>
+</ul>
+<h2 id="install">Install</h2>
+<p>Vee is distributed as a Developer-ID-signed and notarized app <strong>outside</strong> the Mac App Store.</p>
+<ol>
+<li>Download the latest <code>Vee.app</code> (inside a <code>.zip</code> or <code>.dmg</code>) from the <a href="https://github.com/navbytes/vee/releases" rel="noopener">GitHub Releases</a> page.</li>
+<li>Drag <code>Vee.app</code> into <code>/Applications</code>.</li>
+<li>Launch it.</li>
+</ol>
+<h3 id="first-launch">First launch</h3>
+<p>Because Vee ships outside the App Store, the first launch goes through Gatekeeper. Vee is notarized, so a normal double-click should just work. If macOS shows an "unidentified developer" prompt, right-click (or Control-click) <code>Vee.app</code> and choose <strong>Open</strong>, then confirm. See <a href="troubleshooting.html">Troubleshooting</a> if it is blocked.</p>
+<p>There is no Homebrew cask yet.</p>
+<h3 id="the-menu-bar-icon">The menu-bar icon</h3>
+<p>Once running, Vee lives in the menu bar. With no plugins installed you will see the Vee icon; open it to reach <strong>Discover</strong>, the <strong>Plugin Manager</strong>, <strong>Settings</strong>, and <strong>Refresh all</strong>. As you add plugins, each one renders its own menu-bar item.</p>
+<h2 id="where-plugins-live">Where plugins live</h2>
+<p>Vee looks for plugins in a folder on disk. The default location is:</p>
+<div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">text</span></div><pre><code>~/Library/Application Support/Vee/plugins</code></pre></div>
+<p>To use a different folder (for example, an existing SwiftBar plugins directory), open the <strong>Plugin Manager</strong> and choose <strong>Choose Folder</strong>. See <a href="migrating-from-swiftbar.html">Migrating from SwiftBar/xbar</a> if you already have a plugins folder.</p>
+<h2 id="write-your-first-plugin">Write your first plugin</h2>
+<p>A plugin is just an executable file whose name encodes how often Vee re-runs it. The pattern is <code>name.INTERVAL.ext</code>, where the interval is a number plus a unit: <code>s</code> (seconds), <code>m</code> (minutes), <code>h</code> (hours), <code>d</code> (days), or <code>ms</code> (milliseconds).</p>
+<p>Create <code>hello.5s.sh</code> in your plugins folder:</p>
+<div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">sh</span></div><pre><code>#!/bin/bash
+echo "Hello 👋"
+echo "---"
+echo "It works!"
+echo "Refresh | refresh=true"</code></pre></div>
+<ul>
+<li>The first line before <code>---</code> is the <strong>menu-bar title</strong>.</li>
+<li>Everything after <code>---</code> is the <strong>dropdown</strong>.</li>
+<li><code>refresh=true</code> makes that item re-run the plugin when clicked.</li>
+</ul>
+<p>Make it executable:</p>
+<div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">sh</span></div><pre><code>chmod +x ~/Library/Application\ Support/Vee/plugins/hello.5s.sh</code></pre></div>
+<p>The <code>.5s</code> in the filename tells Vee to re-run it every 5 seconds. Vee detects the new file automatically; if it does not appear, use <strong>Refresh all</strong> from the menu.</p>
+<h2 id="refresh-enable-and-disable">Refresh, enable, and disable</h2>
+<ul>
+<li><strong>Refresh</strong> a single plugin from the top of its dropdown, or <strong>Refresh all</strong> from the Vee menu.</li>
+<li><strong>Enable / disable</strong> any plugin in the <strong>Plugin Manager</strong> — a disabled plugin stays on disk but is not run or shown.</li>
+<li>Plugins can also trigger a refresh themselves via URL actions — see <a href="cli-and-urls.html">CLI and URL actions</a>.</li>
+</ul>
+<h2 id="next-steps">Next steps</h2>
+<ul>
+<li><a href="plugin-authoring.html">Plugin authoring reference</a> — the full output format, params, metadata, SF Symbols, ANSI, Markdown, streaming, and cron.</li>
+<li><a href="preferences.html">Preferences</a> — let a plugin declare typed settings that Vee turns into a form.</li>
+<li><a href="trust-model.html">Trust model</a> — how plugins declare what they access.</li>
+<li><a href="sdk.html">TypeScript SDK</a> — build plugins with typed builders instead of hand-formatting text.</li>
+</ul>
+    </article>
+    <nav class="doc-nextprev" aria-label="Guide pagination"><a class="next" href="./migrating-from-swiftbar.html"><span class="dir">Next &rarr;</span><span class="lbl">Migrating from SwiftBar / xbar</span></a></nav>
+  </main>
+</div>
+<script src="../assets/app.js" defer></script>
+</body>
+</html>
