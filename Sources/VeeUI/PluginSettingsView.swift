@@ -57,29 +57,40 @@ public struct PluginSettingsView: View {
     }
 
     public var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("\(model.pluginName) Settings").font(.headline)
-
-            if model.declarations.isEmpty {
-                Text("This plugin has no configurable preferences.")
-                    .foregroundStyle(.secondary)
-            } else {
-                Form {
-                    ForEach(model.declarations, id: \.name) { declaration in
-                        row(for: declaration)
+        NavigationStack {
+            Group {
+                if model.declarations.isEmpty {
+                    ContentUnavailableView(
+                        "No preferences",
+                        systemImage: "slider.horizontal.3",
+                        description: Text("This plugin has no configurable settings.")
+                    )
+                } else {
+                    Form {
+                        Section {
+                            ForEach(model.declarations, id: \.name) { declaration in
+                                row(for: declaration)
+                            }
+                        } footer: {
+                            Text("Saved for \(model.pluginName). Secret values are masked.")
+                        }
                     }
+                    .formStyle(.grouped)
                 }
             }
-
-            HStack {
-                Spacer()
-                Button("Cancel", role: .cancel) { onClose() }
-                Button("Save") { model.save(); onClose() }
-                    .keyboardShortcut(.defaultAction)
+            .navigationTitle("\(model.pluginName) Settings")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel", role: .cancel) { onClose() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") { model.save(); onClose() }
+                        .keyboardShortcut(.defaultAction)
+                        .disabled(model.declarations.isEmpty)
+                }
             }
         }
-        .padding(20)
-        .frame(width: 440)
+        .frame(width: 460, height: 420)
     }
 
     @ViewBuilder
@@ -94,7 +105,10 @@ public struct PluginSettingsView: View {
             }
         case .string, .number:
             if declaration.isSecret {
-                SecureField(label, text: model.stringBinding(declaration))
+                LabeledContent(label) {
+                    RevealableSecureField("Required", text: model.stringBinding(declaration))
+                        .frame(maxWidth: 200)
+                }
             } else {
                 TextField(label, text: model.stringBinding(declaration))
             }

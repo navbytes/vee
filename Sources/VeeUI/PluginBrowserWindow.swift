@@ -18,7 +18,7 @@ public final class PluginBrowserWindow {
         }
         let window = NSWindow(contentViewController: NSHostingController(rootView: PluginBrowserView(model: model)))
         window.title = "Vee — Discover Plugins"
-        window.styleMask = [.titled, .closable]
+        window.styleMask = [.titled, .closable, .miniaturizable, .resizable]
         window.isReleasedWhenClosed = false
         window.center()
         self.window = window

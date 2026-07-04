@@ -81,61 +81,127 @@ public struct PluginManagerView: View {
     }
 
     public var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text("Plugins").font(.headline)
-                Spacer()
-                Button("Refresh All") { model.onRefreshAll() }
-                Button("Open Folder…") { model.onOpenFolder() }
-            }
-
-            if model.rows.isEmpty {
-                VStack(spacing: 8) {
-                    Text("No plugins found").font(.title3)
-                    Text("Add executable plugins to your plugins folder.")
-                        .foregroundStyle(.secondary)
-                }
-                .frame(maxWidth: .infinity, minHeight: 120)
-            } else {
-                List {
-                    ForEach(model.rows) { row in
-                        HStack(spacing: 12) {
-                            Toggle("", isOn: model.enabledBinding(row.id)).labelsHidden()
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(row.name).fontWeight(.medium)
-                                Text("\(row.interval)\(row.trust.isEmpty ? "" : " · \(row.trust)")")
-                                    .font(.caption).foregroundStyle(.secondary)
-                            }
-                            Spacer()
-                            if row.hasSettings {
-                                Button("Settings…") { model.onSettings(row.id) }
-                            }
-                            Button("Reveal") { model.onReveal(row.id) }
+        NavigationStack {
+            Form {
+                if model.rows.isEmpty {
+                    Section {
+                        ContentUnavailableView {
+                            Label("No plugins yet", systemImage: "puzzlepiece.extension")
+                        } description: {
+                            Text("Add scripts to your plugins folder, or install one from Discover.")
                         }
-                        .padding(.vertical, 2)
+                    }
+                } else {
+                    Section("Plugins") {
+                        ForEach(model.rows) { row in
+                            ManagerRow(model: model, row: row)
+                        }
                     }
                 }
-                .frame(minHeight: 220)
-            }
 
-            Divider()
-
-            HStack(spacing: 8) {
-                VStack(alignment: .leading, spacing: 1) {
-                    Text("Plugins folder").font(.caption).foregroundStyle(.secondary)
-                    Text((model.currentDirectory as NSString).abbreviatingWithTildeInPath)
-                        .font(.caption).lineLimit(1).truncationMode(.middle)
+                Section("General") {
+                    LabeledContent("Plugins folder") {
+                        HStack(spacing: 8) {
+                            Text((model.currentDirectory as NSString).abbreviatingWithTildeInPath)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1).truncationMode(.middle)
+                            Button("Choose…") { model.onChooseFolder() }
+                        }
+                    }
+                    Toggle("Launch Vee at login", isOn: Binding(
+                        get: { model.launchAtLogin },
+                        set: { model.launchAtLogin = $0; model.onLaunchAtLogin($0) }
+                    ))
                 }
-                Spacer()
-                Button("Choose…") { model.onChooseFolder() }
+            }
+            .formStyle(.grouped)
+            .navigationTitle("Plugins")
+            .toolbar {
+                ToolbarItem(placement: .primaryAction) {
+                    Button {
+                        model.onRefreshAll()
+                    } label: {
+                        Label("Refresh All", systemImage: "arrow.clockwise")
+                    }
+                    .help("Refresh all plugins")
+                }
+                ToolbarItem(placement: .primaryAction) {
+                    Button {
+                        model.onOpenFolder()
+                    } label: {
+                        Label("Open Folder", systemImage: "folder")
+                    }
+                    .help("Open the plugins folder in Finder")
+                }
+            }
+        }
+        .frame(minWidth: 500, minHeight: 460)
+    }
+}
+
+/// A single plugin row: icon, name, schedule + trust, an overflow menu that
+/// appears on hover, and a trailing enable toggle.
+private struct ManagerRow: View {
+    @ObservedObject var model: PluginManagerModel
+    let row: PluginManagerRow
+    @State private var hovering = false
+
+    var body: some View {
+        HStack(spacing: 11) {
+            PluginTile(symbol: "puzzlepiece.extension.fill", tint: row.isEnabled ? .accentColor : .secondary, size: 30)
+                .opacity(row.isEnabled ? 1 : 0.6)
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(row.name).fontWeight(.medium)
+                HStack(spacing: 6) {
+                    if !row.interval.isEmpty {
+                        Label(row.interval, systemImage: "clock").labelStyle(.titleAndIcon)
+                    }
+                    if !row.trust.isEmpty {
+                        TrustChip(symbol: trustSymbol, label: row.trust, tint: trustTint)
+                    }
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
             }
 
-            Toggle("Launch Vee at login", isOn: Binding(
-                get: { model.launchAtLogin },
-                set: { model.launchAtLogin = $0; model.onLaunchAtLogin($0) }
-            ))
+            Spacer(minLength: 6)
+
+            Menu {
+                if row.hasSettings {
+                    Button { model.onSettings(row.id) } label: { Label("Settings…", systemImage: "slider.horizontal.3") }
+                }
+                Button { model.onReveal(row.id) } label: { Label("Reveal in Finder", systemImage: "folder") }
+            } label: {
+                Image(systemName: "ellipsis")
+                    .foregroundStyle(.secondary)
+                    .frame(width: 22, height: 22)
+                    .contentShape(Rectangle())
+            }
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .fixedSize()
+            .opacity(hovering ? 1 : 0.35)
+
+            Toggle("", isOn: model.enabledBinding(row.id))
+                .labelsHidden()
+                .toggleStyle(.switch)
+                .controlSize(.small)
         }
-        .padding(20)
-        .frame(width: 520, height: 420)
+        .padding(.vertical, 3)
+        .onHover { hovering = $0 }
+    }
+
+    private var trustTint: Color {
+        let t = row.trust.lowercased()
+        if t.contains("declared") && !t.contains("un") { return .green }
+        if t.contains("incomplete") || t.contains("partial") { return .orange }
+        return .secondary
+    }
+    private var trustSymbol: String {
+        let t = row.trust.lowercased()
+        if t.contains("declared") && !t.contains("un") { return "checkmark.shield.fill" }
+        if t.contains("incomplete") || t.contains("partial") { return "exclamationmark.shield.fill" }
+        return "shield"
     }
 }
