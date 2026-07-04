@@ -35,6 +35,10 @@ targets:
         CFBundleShortVersionString: "0.1.0"
         CFBundleVersion: "1"
         LSMinimumSystemVersion: "26.0"
+        # vee:// (native) + swiftbar:// (compat) URL actions.
+        CFBundleURLTypes:
+          - CFBundleURLName: com.vee.app
+            CFBundleURLSchemes: [vee, swiftbar]
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.vee.app

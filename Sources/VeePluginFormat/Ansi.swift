@@ -6,14 +6,15 @@ import Foundation
 enum Ansi {
     private struct State: Equatable {
         var fg: VeeColor?
+        var bg: VeeColor?
         var bold = false
         var italic = false
         var underline = false
 
-        var isStyled: Bool { fg != nil || bold || italic || underline }
+        var isStyled: Bool { fg != nil || bg != nil || bold || italic || underline }
 
         func run(_ range: Range<Int>) -> AnsiRun {
-            AnsiRun(range: range, foreground: fg, bold: bold, italic: italic, underline: underline)
+            AnsiRun(range: range, foreground: fg, background: bg, bold: bold, italic: italic, underline: underline)
         }
     }
 
@@ -81,21 +82,52 @@ enum Ansi {
             case 30...37: state.fg = baseColors[c].map { .named($0) }
             case 90...97: state.fg = baseColors[c - 60].map { .named($0) }
             case 39: state.fg = nil
-            case 38:
-                // Extended color: 38;2;r;g;b (truecolor) or 38;5;n (256; skipped).
-                if k + 1 < parts.count, parts[k + 1] == 2, k + 4 < parts.count {
-                    let r = UInt8(clamping: parts[k + 2])
-                    let g = UInt8(clamping: parts[k + 3])
-                    let b = UInt8(clamping: parts[k + 4])
-                    state.fg = .rgb(r: r, g: g, b: b, a: 255)
-                    k += 4
-                } else if k + 1 < parts.count, parts[k + 1] == 5, k + 2 < parts.count {
-                    k += 2 // 256-color index not mapped
-                }
+            case 40...47: state.bg = baseColors[c - 10].map { .named($0) }
+            case 100...107: state.bg = baseColors[c - 70].map { .named($0) }
+            case 49: state.bg = nil
+            case 38: k += consumeExtended(parts, at: k) { state.fg = $0 }
+            case 48: k += consumeExtended(parts, at: k) { state.bg = $0 }
             default:
                 break
             }
             k += 1
         }
+    }
+
+    /// Handles `{38|48};2;r;g;b` (truecolor) and `{38|48};5;n` (256-color),
+    /// returning how many extra parts were consumed.
+    private static func consumeExtended(_ parts: [Int], at k: Int, set: (VeeColor?) -> Void) -> Int {
+        guard k + 1 < parts.count else { return 0 }
+        if parts[k + 1] == 2, k + 4 < parts.count {
+            set(.rgb(r: UInt8(clamping: parts[k + 2]), g: UInt8(clamping: parts[k + 3]), b: UInt8(clamping: parts[k + 4]), a: 255))
+            return 4
+        }
+        if parts[k + 1] == 5, k + 2 < parts.count {
+            set(xterm256(parts[k + 2]))
+            return 2
+        }
+        return 0
+    }
+
+    /// Maps an xterm 256-color index to RGB (16 base + 6×6×6 cube + grayscale).
+    private static func xterm256(_ n: Int) -> VeeColor? {
+        guard (0...255).contains(n) else { return nil }
+        if n < 16 {
+            let base: [(UInt8, UInt8, UInt8)] = [
+                (0, 0, 0), (128, 0, 0), (0, 128, 0), (128, 128, 0),
+                (0, 0, 128), (128, 0, 128), (0, 128, 128), (192, 192, 192),
+                (128, 128, 128), (255, 0, 0), (0, 255, 0), (255, 255, 0),
+                (0, 0, 255), (255, 0, 255), (0, 255, 255), (255, 255, 255),
+            ]
+            let (r, g, b) = base[n]
+            return .rgb(r: r, g: g, b: b, a: 255)
+        }
+        if n < 232 {
+            let c = n - 16
+            func level(_ v: Int) -> UInt8 { v == 0 ? 0 : UInt8(55 + v * 40) }
+            return .rgb(r: level((c / 36) % 6), g: level((c / 6) % 6), b: level(c % 6), a: 255)
+        }
+        let gray = UInt8(8 + (n - 232) * 10)
+        return .rgb(r: gray, g: gray, b: gray, a: 255)
     }
 }

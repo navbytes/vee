@@ -5,13 +5,15 @@ import Foundation
 public struct AnsiRun: Equatable, Sendable {
     public var range: Range<Int>
     public var foreground: VeeColor?
+    public var background: VeeColor?
     public var bold: Bool
     public var italic: Bool
     public var underline: Bool
 
-    public init(range: Range<Int>, foreground: VeeColor? = nil, bold: Bool = false, italic: Bool = false, underline: Bool = false) {
+    public init(range: Range<Int>, foreground: VeeColor? = nil, background: VeeColor? = nil, bold: Bool = false, italic: Bool = false, underline: Bool = false) {
         self.range = range
         self.foreground = foreground
+        self.background = background
         self.bold = bold
         self.italic = italic
         self.underline = underline
