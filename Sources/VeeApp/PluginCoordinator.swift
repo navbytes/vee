@@ -50,8 +50,18 @@ final class PluginCoordinator {
             aboutText: aboutText,
             aboutURL: aboutURL,
             onRefresh: { [weak self] in self?.refresh() },
-            onSettings: { [weak self] in self?.openSettings() }
+            onSettings: { [weak self] in self?.openSettings() },
+            onReveal: { [weak self] in self?.revealInFinder() },
+            onEdit: { [weak self] in self?.openInEditor() }
         )
+    }
+
+    private func revealInFinder() {
+        NSWorkspace.shared.selectFile(plugin.path, inFileViewerRootedAtPath: pluginsDirectory)
+    }
+
+    private func openInEditor() {
+        NSWorkspace.shared.open(URL(fileURLWithPath: plugin.path))
     }
 
     /// Builds the About-panel text from header metadata, unless the plugin sets
@@ -104,6 +114,30 @@ final class PluginCoordinator {
         controller.remove()
     }
 
+    /// A human-friendly one-line error for a failed run — detects a missing
+    /// command (the most common cause) rather than dumping raw stderr.
+    static func friendlyError(_ outcome: ProcessOutcome) -> String {
+        if let missing = missingCommand(inStderr: outcome.standardError) {
+            return "Failed — “\(missing)” not found. Is it installed?"
+        }
+        let firstLine = outcome.standardError.split(separator: "\n").first.map(String.init) ?? ""
+        return firstLine.isEmpty ? "Exited with code \(outcome.exitCode)" : "Exited \(outcome.exitCode): \(firstLine)"
+    }
+
+    /// Extracts the missing command/binary from common shell error lines.
+    static func missingCommand(inStderr stderr: String) -> String? {
+        for raw in stderr.split(separator: "\n") {
+            let line = String(raw)
+            if line.contains("command not found"), let name = line.split(separator: ":").first {
+                return String(name).trimmingCharacters(in: .whitespaces)
+            }
+            if line.contains("No such file or directory"), let path = line.split(separator: ":").first {
+                return (String(path) as NSString).lastPathComponent
+            }
+        }
+        return nil
+    }
+
     /// Declared preferences merged over `<swiftbar.environment>` values (a
     /// declared `<xbar.var>` wins over a static environment value of the same name).
     private func mergedDeclaredVariables() -> [String: String] {
@@ -121,9 +155,10 @@ final class PluginCoordinator {
     private func startStreaming() {
         let context = PluginsDirectory.context(pluginPath: plugin.path, pluginsDirectory: pluginsDirectory, declaredVariables: mergedDeclaredVariables())
         let environment = EnvironmentBuilder.merged(base: ProcessInfo.processInfo.environment, context: context)
+        let (launchPath, arguments) = PluginExecutor.launchCommand(pluginPath: plugin.path, runInBash: runInBash)
         let invocation = ProcessInvocation(
-            launchPath: runInBash ? "/bin/bash" : plugin.path,
-            arguments: runInBash ? [plugin.path] : [],
+            launchPath: launchPath,
+            arguments: arguments,
             environment: environment,
             workingDirectory: (plugin.path as NSString).deletingLastPathComponent,
             timeout: nil // streaming plugins run indefinitely
@@ -174,9 +209,12 @@ final class PluginCoordinator {
             do {
                 let result = try await runtime.refresh(pluginPath: path, context: context, header: header, runInBash: runInBash, timeout: 30)
                 if result.outcome.timedOut {
-                    self?.controller.renderError("Plugin timed out")
+                    self?.controller.renderError("Plugin timed out", detail: nil)
                 } else if result.outcome.exitCode != 0 && result.output.titleLines.isEmpty {
-                    self?.controller.renderError("Exited \(result.outcome.exitCode): \(result.outcome.standardError.prefix(200))")
+                    self?.controller.renderError(
+                        Self.friendlyError(result.outcome),
+                        detail: result.outcome.standardError.isEmpty ? nil : String(result.outcome.standardError.prefix(500))
+                    )
                 } else {
                     self?.controller.render(result.output)
                 }
