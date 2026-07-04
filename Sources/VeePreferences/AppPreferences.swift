@@ -8,9 +8,17 @@ public final class AppPreferences: @unchecked Sendable {
 
     private let defaults: UserDefaults
     private let disabledKey = "vee.disabledPluginIDs"
+    private let directoryKey = "vee.pluginsDirectory"
 
     public init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
+    }
+
+    /// A user-chosen plugins directory (e.g. an existing SwiftBar folder), or
+    /// `nil` to use the default.
+    public var pluginsDirectory: String? {
+        get { defaults.string(forKey: directoryKey) }
+        set { defaults.set(newValue, forKey: directoryKey) }
     }
 
     public func disabledIDs() -> Set<String> {
