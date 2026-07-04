@@ -10,16 +10,22 @@ private final class ControlsTarget: NSObject, NSMenuDelegate {
     let onRefresh: () -> Void
     let onSettings: () -> Void
     let onAbout: () -> Void
+    let onReveal: () -> Void
+    let onEdit: () -> Void
     let refreshOnOpen: Bool
-    init(onRefresh: @escaping () -> Void, onSettings: @escaping () -> Void, onAbout: @escaping () -> Void, refreshOnOpen: Bool) {
+    init(onRefresh: @escaping () -> Void, onSettings: @escaping () -> Void, onAbout: @escaping () -> Void, onReveal: @escaping () -> Void, onEdit: @escaping () -> Void, refreshOnOpen: Bool) {
         self.onRefresh = onRefresh
         self.onSettings = onSettings
         self.onAbout = onAbout
+        self.onReveal = onReveal
+        self.onEdit = onEdit
         self.refreshOnOpen = refreshOnOpen
     }
     @objc func refresh() { onRefresh() }
     @objc func settings() { onSettings() }
     @objc func about() { onAbout() }
+    @objc func reveal() { onReveal() }
+    @objc func edit() { onEdit() }
     @objc func quit() { NSApp.terminate(nil) }
 
     // <swiftbar.refreshOnOpen>: re-run the plugin when its menu is opened.
@@ -45,7 +51,7 @@ public final class StatusItemController {
     private let aboutText: String?
     private let aboutURL: URL?
 
-    public init(pluginName: String, handler: MenuActionHandling, hasSettings: Bool = false, trustSummary: TrustSummary? = nil, refreshOnOpen: Bool = false, aboutText: String? = nil, aboutURL: URL? = nil, onRefresh: @escaping () -> Void, onSettings: @escaping () -> Void = {}) {
+    public init(pluginName: String, handler: MenuActionHandling, hasSettings: Bool = false, trustSummary: TrustSummary? = nil, refreshOnOpen: Bool = false, aboutText: String? = nil, aboutURL: URL? = nil, onRefresh: @escaping () -> Void, onSettings: @escaping () -> Void = {}, onReveal: @escaping () -> Void = {}, onEdit: @escaping () -> Void = {}) {
         self.pluginName = pluginName
         self.hasSettings = hasSettings
         self.trustSummary = trustSummary
@@ -58,6 +64,8 @@ public final class StatusItemController {
             onRefresh: onRefresh,
             onSettings: onSettings,
             onAbout: { Self.showAbout(name: name, text: aboutText, url: aboutURL) },
+            onReveal: onReveal,
+            onEdit: onEdit,
             refreshOnOpen: refreshOnOpen
         )
     }
@@ -86,7 +94,7 @@ public final class StatusItemController {
     }
 
     /// Renders an error surface (the launcher stays up; the plugin shows ⚠️).
-    public func renderError(_ message: String) {
+    public func renderError(_ message: String, detail: String? = nil) {
         cycleTimer?.invalidate()
         frames = []
         if let button = statusItem.button {
@@ -101,6 +109,20 @@ public final class StatusItemController {
         let error = NSMenuItem(title: message, action: nil, keyEquivalent: "")
         error.isEnabled = false
         menu.addItem(error)
+
+        if let detail, !detail.isEmpty {
+            let details = NSMenuItem(title: "Show error output…", action: nil, keyEquivalent: "")
+            let submenu = NSMenu()
+            for line in detail.split(separator: "\n").prefix(12) {
+                let row = NSMenuItem(title: String(line), action: nil, keyEquivalent: "")
+                row.isEnabled = false
+                submenu.addItem(row)
+            }
+            details.submenu = submenu
+            menu.addItem(details)
+        }
+
+        menu.delegate = controls
         appendFooter(to: menu)
         statusItem.menu = menu
     }
@@ -231,6 +253,14 @@ public final class StatusItemController {
             about.target = controls
             menu.addItem(about)
         }
+
+        let reveal = NSMenuItem(title: "Reveal in Finder", action: #selector(ControlsTarget.reveal), keyEquivalent: "")
+        reveal.target = controls
+        menu.addItem(reveal)
+
+        let edit = NSMenuItem(title: "Edit Plugin…", action: #selector(ControlsTarget.edit), keyEquivalent: "")
+        edit.target = controls
+        menu.addItem(edit)
 
         let quit = NSMenuItem(title: "Quit Vee", action: #selector(ControlsTarget.quit), keyEquivalent: "q")
         quit.target = controls

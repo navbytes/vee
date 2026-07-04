@@ -17,9 +17,19 @@ public struct InstallTrustSheet: View {
 
     public var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text("Install \(prompt.entry.filename)?").font(.headline)
-            Text("From \(prompt.entry.category) · matryer/xbar-plugins")
+            Text("Install \(prompt.title)?").font(.headline)
+            Text("\(prompt.entry.filename) · \(prompt.entry.category) · matryer/xbar-plugins")
                 .font(.caption).foregroundStyle(.secondary)
+
+            if let description = prompt.description, !description.isEmpty {
+                Text(description).font(.callout).foregroundStyle(.secondary).lineLimit(4)
+            }
+
+            if !prompt.dependencies.isEmpty {
+                Label("Requires: \(prompt.dependencies.joined(separator: ", "))", systemImage: "shippingbox")
+                    .font(.callout)
+                    .foregroundStyle(.orange)
+            }
 
             Divider()
 
