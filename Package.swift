@@ -38,5 +38,6 @@ let package = Package(
         .testTarget(name: "VeeMenuTests", dependencies: ["VeeMenu"]),
         .testTarget(name: "VeePreferencesTests", dependencies: ["VeePreferences"]),
         .testTarget(name: "VeeTrustTests", dependencies: ["VeeTrust"]),
+        .testTarget(name: "VeeAppTests", dependencies: ["VeeApp"]),
     ]
 )

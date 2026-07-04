@@ -62,4 +62,21 @@ final class AnsiTests: XCTestCase {
         XCTAssertEqual(plain, "no escapes here")
         XCTAssertTrue(runs.isEmpty)
     }
+
+    func test256Foreground() {
+        // xterm 46 → (0,255,0) in the 6×6×6 cube.
+        let (_, runs) = Ansi.parse("\u{1B}[38;5;46mX\u{1B}[0m")
+        XCTAssertEqual(runs.first?.foreground, .rgb(r: 0, g: 255, b: 0, a: 255))
+    }
+
+    func testBackground256() {
+        // xterm 196 → (255,0,0).
+        let (_, runs) = Ansi.parse("\u{1B}[48;5;196mX\u{1B}[0m")
+        XCTAssertEqual(runs.first?.background, .rgb(r: 255, g: 0, b: 0, a: 255))
+    }
+
+    func testBasicBackground() {
+        let (_, runs) = Ansi.parse("\u{1B}[41mX\u{1B}[0m")
+        XCTAssertEqual(runs.first?.background, .named("red"))
+    }
 }
