@@ -20,7 +20,7 @@ public final class PluginManagerWindow {
 
         let window = NSWindow(contentViewController: NSHostingController(rootView: PluginManagerView(model: model)))
         window.title = "Vee — Plugins"
-        window.styleMask = [.titled, .closable]
+        window.styleMask = [.titled, .closable, .miniaturizable, .resizable]
         window.isReleasedWhenClosed = false
         window.center()
         self.window = window
