@@ -8,8 +8,17 @@
 
 Vee runs plugins — any executable, in any language — on a schedule and renders their standard output as menu-bar titles and dropdown menus. Your existing xbar/SwiftBar plugins run unchanged; Vee adds a native AppKit UI, a trust/transparency layer, a built-in plugin catalog, and a typed TypeScript SDK.
 
-<!-- Promo banner. Replace with a real app screenshot when available (see docs/assets/). -->
+<!-- Promo banner. -->
 ![Vee — native macOS menu-bar script runner](docs/assets/og-image.png)
+
+## Screenshots
+
+|  |  |
+|---|---|
+| ![Vee's Discover window showing a category sidebar and a grid of plugin cards, each with a trust chip and an Install button](docs/assets/screenshots/discover.png) | ![The install trust sheet titled "What this plugin can do", listing plain-language capability rows with severity-colored icons and an un-sandboxed footer](docs/assets/screenshots/trust.png) |
+| **Discover** — browse the catalog with trust chips and install in one click. | **Trust at install** — see a plugin's footprint in plain language before it runs. |
+| ![The Plugin Manager showing plugin rows with trust badges and trailing on/off switches, plus a General settings section](docs/assets/screenshots/manager.png) | ![An auto-generated plugin settings form built from declared preferences, including a masked secret field](docs/assets/screenshots/settings.png) |
+| **Plugin Manager** — enable, disable, and review every plugin's trust badges. | **Plugin settings** — typed forms from `<xbar.var>`; secrets masked in the Keychain. |
 
 ## Why Vee
 

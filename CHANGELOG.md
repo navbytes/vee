@@ -1,0 +1,47 @@
+# Changelog
+
+All notable changes to Vee are documented here. The format is based on
+[Keep a Changelog](https://keepachangelog.com/), and Vee follows
+[Semantic Versioning](https://semver.org/).
+
+## [Unreleased]
+
+### Added
+- Liquid Glass redesign of the Discover browser, Plugin Manager, install trust
+  sheet, and the auto-generated plugin settings form.
+- Marketing + documentation website (GitHub Pages, under `docs/`).
+- User documentation: getting started, migration, plugin authoring, trust model,
+  preferences, SDK, CLI/URL actions, FAQ, and troubleshooting.
+- Project hygiene: MIT `LICENSE`, `CONTRIBUTING`, `SECURITY`, issue/PR templates,
+  and showcase example plugins under `examples/`.
+- Homebrew cask (`Casks/vee.rb`) for `brew install --cask vee` once the
+  repository is public.
+
+## [0.1.1] - 2026-07-04
+
+### Added
+- Application icon.
+- Richer plugin metadata in the Discover browser (title, author, description).
+
+### Fixed
+- Dependency and error-state UX in the plugin browser.
+- Interpreter detection for non-executable plugins.
+
+## [0.1.0] - 2026-07-04
+
+### Added
+- Initial release: a native macOS menu-bar script runner.
+- Runs the xbar/SwiftBar plugin protocol unchanged (filename intervals,
+  `---`/`--` menus, `|` params, `<xbar.*>`/`<swiftbar.*>` headers, SF Symbols,
+  ANSI, Markdown, streaming, cron, `swiftbar://`/`vee://` URL actions).
+- Trust-at-install: `<vee.*>` capability declarations with a plain-language
+  trust summary and per-plugin badges (advisory, never enforced).
+- Declared typed preferences (`<xbar.var>`) rendered as a settings form, with
+  secrets stored in the macOS Keychain.
+- Discover: a built-in browser over the shared `matryer/xbar-plugins` catalog.
+- Zero-dependency TypeScript SDK with a golden-fixture drift guard.
+- Developer-ID-signed, notarized distribution outside the Mac App Store.
+
+[Unreleased]: https://github.com/navbytes/vee/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/navbytes/vee/compare/v0.1.0...v0.1.1
+[0.1.0]: https://github.com/navbytes/vee/releases/tag/v0.1.0
