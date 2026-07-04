@@ -21,6 +21,12 @@ export interface ItemOptions {
   tooltip?: string;
   /** SF Symbol name (SwiftBar/Vee extension). */
   sfimage?: string;
+  /** Render the text as inline Markdown. */
+  md?: boolean;
+  /** Trailing badge chip. */
+  badge?: string;
+  /** Render `:sf.symbol:` tokens in the text as inline SF Symbols. */
+  symbolize?: boolean;
 }
 
 function quote(value: string): string {
@@ -51,6 +57,9 @@ function encode(options?: ItemOptions): string {
   push("key", options.key);
   push("tooltip", options.tooltip);
   push("sfimage", options.sfimage);
+  push("md", options.md);
+  push("badge", options.badge);
+  push("symbolize", options.symbolize);
   return parts.length ? " | " + parts.join(" ") : "";
 }
 

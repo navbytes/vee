@@ -1,0 +1,5 @@
+Build | sfimage=hammer
+---
+**Bold** and _italic_ | md=true
+Inbox | badge=12
+Status :checkmark.circle: | symbolize=true
