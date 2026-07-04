@@ -71,6 +71,35 @@ final class PluginExecutorTests: XCTestCase {
     }
 }
 
+final class ShebangLaunchTests: XCTestCase {
+    private func tempFile(_ contents: String) -> String {
+        let path = NSTemporaryDirectory() + "vee-shebang-" + UUID().uuidString
+        try! contents.write(toFile: path, atomically: true, encoding: .utf8)
+        return path
+    }
+
+    func testDirectExecWhenNotBash() {
+        let (path, args) = PluginExecutor.launchCommand(pluginPath: "/x/p.sh", runInBash: false)
+        XCTAssertEqual(path, "/x/p.sh")
+        XCTAssertEqual(args, [])
+    }
+
+    func testBashWhenNoShebang() {
+        let p = tempFile("echo hi\n"); defer { try? FileManager.default.removeItem(atPath: p) }
+        let (path, args) = PluginExecutor.launchCommand(pluginPath: p, runInBash: true)
+        XCTAssertEqual(path, "/bin/bash")
+        XCTAssertEqual(args, [p])
+    }
+
+    func testHonorsShebangInterpreter() {
+        // A non-executable .ts/.py plugin with a shebang runs with its interpreter.
+        let p = tempFile("#!/usr/bin/env node\nconsole.log('hi')\n"); defer { try? FileManager.default.removeItem(atPath: p) }
+        let (path, args) = PluginExecutor.launchCommand(pluginPath: p, runInBash: true)
+        XCTAssertEqual(path, "/usr/bin/env")
+        XCTAssertEqual(args, ["node", p])
+    }
+}
+
 final class PluginRuntimeTests: XCTestCase {
     func testRefreshParsesOutput() async throws {
         let stub = ProcessOutcome(standardOutput: "CPU 5%\n---\nDetails | color=red", standardError: "", exitCode: 0, timedOut: false)
