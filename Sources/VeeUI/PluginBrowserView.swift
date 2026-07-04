@@ -8,8 +8,11 @@ public struct InstallPrompt: Identifiable {
     public let id = UUID()
     public let entry: CatalogEntry
     public let source: String
+    public let title: String
     public let summary: TrustSummary
     public let warnings: [String]
+    public let description: String?
+    public let dependencies: [String]
 }
 
 /// Backs the plugin browser: fetches the catalog, filters it, and runs the
@@ -21,6 +24,8 @@ public final class PluginBrowserModel: ObservableObject {
     @Published public var isLoading = false
     @Published public var errorMessage: String?
     @Published public var prompt: InstallPrompt?
+    /// Lazily-fetched header metadata, keyed by catalog path.
+    @Published public var headers: [String: HeaderMetadata] = [:]
 
     private let fetcher: CatalogFetching
     private let pluginsDirectory: String
@@ -30,6 +35,23 @@ public final class PluginBrowserModel: ObservableObject {
         self.fetcher = fetcher
         self.pluginsDirectory = pluginsDirectory
         self.onInstalled = onInstalled
+    }
+
+    // Display helpers — fall back to the filename until the header loads.
+    func title(for entry: CatalogEntry) -> String {
+        let t = headers[entry.path]?.title
+        return (t?.isEmpty == false ? t! : nil) ?? entry.filename
+    }
+    func summary(for entry: CatalogEntry) -> String? { headers[entry.path]?.summary }
+    func author(for entry: CatalogEntry) -> String? { headers[entry.path]?.author }
+
+    /// Fetches and parses an entry's header once, for display in its row.
+    func loadHeader(for entry: CatalogEntry) async {
+        guard headers[entry.path] == nil else { return }
+        headers[entry.path] = HeaderMetadata() // mark in-flight so we fetch once
+        if let source = try? await fetcher.fetchSource(entry) {
+            headers[entry.path] = HeaderParser.parse(source: source)
+        }
     }
 
     public func load() async {
@@ -46,7 +68,12 @@ public final class PluginBrowserModel: ObservableObject {
     var filtered: [CatalogEntry] {
         guard !search.isEmpty else { return entries }
         let q = search.lowercased()
-        return entries.filter { $0.filename.lowercased().contains(q) || $0.category.lowercased().contains(q) }
+        return entries.filter {
+            $0.filename.lowercased().contains(q)
+                || $0.category.lowercased().contains(q)
+                || (headers[$0.path]?.title?.lowercased().contains(q) ?? false)
+                || (headers[$0.path]?.summary?.lowercased().contains(q) ?? false)
+        }
     }
 
     var groups: [(category: String, entries: [CatalogEntry])] {
@@ -66,7 +93,17 @@ public final class PluginBrowserModel: ObservableObject {
             let declaration = TrustParser.parse(source: source)
             let summary = TrustAnalyzer.analyze(declaration)
             let warnings = summary.warnings + TrustAnalyzer.installWarnings(declaration: declaration, source: source)
-            prompt = InstallPrompt(entry: entry, source: source, summary: summary, warnings: warnings)
+            let header = HeaderParser.parse(source: source)
+            headers[entry.path] = header
+            prompt = InstallPrompt(
+                entry: entry,
+                source: source,
+                title: (header.title?.isEmpty == false ? header.title! : entry.filename),
+                summary: summary,
+                warnings: warnings,
+                description: header.summary,
+                dependencies: header.dependencies
+            )
         } catch {
             errorMessage = "Couldn't fetch \(entry.filename): \(error.localizedDescription)"
         }
@@ -113,8 +150,15 @@ public struct PluginBrowserView: View {
                     ForEach(model.groups, id: \.category) { group in
                         Section(group.category) {
                             ForEach(group.entries) { entry in
-                                HStack {
-                                    Text(entry.filename)
+                                HStack(alignment: .top, spacing: 12) {
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(model.title(for: entry)).fontWeight(.medium)
+                                        if let desc = model.summary(for: entry), !desc.isEmpty {
+                                            Text(desc).font(.caption).foregroundStyle(.secondary).lineLimit(2)
+                                        }
+                                        Text(entry.filename + (model.author(for: entry).map { " · \($0)" } ?? ""))
+                                            .font(.caption2).foregroundStyle(.tertiary)
+                                    }
                                     Spacer()
                                     if model.isInstalled(entry) {
                                         Text("Installed").foregroundStyle(.secondary).font(.caption)
@@ -122,6 +166,7 @@ public struct PluginBrowserView: View {
                                         Button("Install") { Task { await model.requestInstall(entry) } }
                                     }
                                 }
+                                .task { await model.loadHeader(for: entry) }
                             }
                         }
                     }
