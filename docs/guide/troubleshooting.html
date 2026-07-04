@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Troubleshooting — Vee docs</title>
+  <meta name="description" content="Fix common Vee issues: a plugin not appearing, Gatekeeper blocks, timeouts, missing interpreters and PATH differences, and refreshes not happening.">
+  <link rel="canonical" href="https://navbytes.github.io/vee/guide/troubleshooting.html">
+  <link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
+  <link rel="stylesheet" href="../assets/style.css">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Vee">
+  <meta property="og:title" content="Troubleshooting — Vee docs">
+  <meta property="og:description" content="Fix common Vee issues: a plugin not appearing, Gatekeeper blocks, timeouts, missing interpreters and PATH differences, and refreshes not happening.">
+  <meta property="og:url" content="https://navbytes.github.io/vee/guide/troubleshooting.html">
+  <meta property="og:image" content="https://navbytes.github.io/vee/assets/og-image.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Troubleshooting — Vee docs">
+  <meta name="twitter:description" content="Fix common Vee issues: a plugin not appearing, Gatekeeper blocks, timeouts, missing interpreters and PATH differences, and refreshes not happening.">
+  <meta name="twitter:image" content="https://navbytes.github.io/vee/assets/og-image.png">
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="../index.html" aria-label="Vee home">
+      <img class="mark" src="../assets/favicon.svg" alt="" width="28" height="28">
+      <span><b>Vee</b></span>
+    </a>
+    <button class="nav-toggle" aria-label="Toggle navigation" aria-expanded="false" aria-controls="nav-links">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+    </button>
+    <ul class="nav-links" id="nav-links">
+      <li><a href="../index.html#features">Features</a></li>
+      <li><a href="../index.html#trust">Trust</a></li>
+      <li><a href="../compare/index.html">Compare</a></li>
+      <li><a href="./index.html" aria-current="page">Docs</a></li>
+      <li><a class="nav-cta" href="https://github.com/navbytes/vee" rel="noopener">GitHub</a></li>
+    </ul>
+  </div>
+</header>
+<div class="docs-layout">
+  <aside class="docs-side" aria-label="Documentation navigation">
+    <p class="docs-nav-title">Documentation</p>
+<ul class="docs-nav">
+<li><a href="./index.html">Overview</a></li>
+<li><a href="./getting-started.html">Getting started</a></li>
+<li><a href="./migrating-from-swiftbar.html">Migrating from SwiftBar / xbar</a></li>
+<li><a href="./plugin-authoring.html">Plugin authoring</a></li>
+<li><a href="./trust-model.html">Trust model</a></li>
+<li><a href="./preferences.html">Preferences</a></li>
+<li><a href="./sdk.html">TypeScript SDK</a></li>
+<li><a href="./cli-and-urls.html">CLI &amp; URL actions</a></li>
+<li><a href="./faq.html">FAQ</a></li>
+<li><a href="./troubleshooting.html" aria-current="page">Troubleshooting</a></li>
+</ul>
+  </aside>
+  <main class="docs-main" id="main">
+    <article class="docs-content">
+      <p class="doc-hero-note">Vee documentation</p>
+<h1>Troubleshooting</h1>
+<p>Common issues and how to fix them. If none of these help, open an issue at <a href="https://github.com/navbytes/vee" rel="noopener">github.com/navbytes/vee</a>.</p>
+<h2 id="a-plugin-doesn-t-appear-in-the-menu-bar">A plugin doesn't appear in the menu bar</h2>
+<p>Work through these in order:</p>
+<ol>
+<li><strong>Is it executable?</strong> Vee runs plugins as programs. Mark the file executable:</li>
+</ol>
+<p>   ``<code>sh    chmod +x ~/Library/Application\ Support/Vee/plugins/mine.5s.sh    </code>`<code>    (If a file is not executable, Vee still tries its shebang interpreter and falls back to bash — but </code>chmod +x` is the reliable path.)</p>
+<ol>
+<li><strong>Is it in the plugins folder?</strong> The default is <code>~/Library/Application Support/Vee/plugins</code>. Confirm the folder Vee is using in the Plugin Manager (Choose Folder), and make sure the plugin is directly inside it.</li>
+<li><strong>Is the filename valid?</strong> The interval token must sit right before the extension: <code>cpu.5s.sh</code>, not <code>cpu.sh.5s</code>. A file like <code>cpu.sh</code> with no interval runs on demand, not on a timer.</li>
+<li><strong>Is it enabled?</strong> Check the Plugin Manager — a disabled plugin stays on disk but is not run or shown.</li>
+<li><strong>Force a scan.</strong> Use <strong>Refresh all</strong> from the Vee menu, or toggle the plugin off and on.</li>
+</ol>
+<h2 id="unidentified-developer-gatekeeper-blocks-the-app">"unidentified developer" / Gatekeeper blocks the app</h2>
+<p>Vee is notarized, so a normal double-click should work. If macOS still blocks it:</p>
+<ul>
+<li>Right-click (or Control-click) <code>Vee.app</code> in <code>/Applications</code> and choose <strong>Open</strong>, then confirm the dialog. macOS remembers the choice after the first time.</li>
+<li>Alternatively, open <strong>System Settings → Privacy &amp; Security</strong>, scroll to the message about Vee being blocked, and click <strong>Open Anyway</strong>.</li>
+</ul>
+<p>Make sure you downloaded <code>Vee.app</code> from the official <a href="https://github.com/navbytes/vee/releases" rel="noopener">GitHub Releases</a> page.</p>
+<h2 id="a-plugin-errors-or-shows-nothing-useful">A plugin errors or shows nothing useful</h2>
+<ul>
+<li><strong>Run it in a terminal first.</strong> A plugin is just a script — run it directly and read the output:</li>
+</ul>
+<p>  ``<code>sh   ~/Library/Application\ Support/Vee/plugins/mine.5s.sh   </code>``   If it errors there, fix it there. Vee runs the plugin with your environment plus its own injected variables (see <a href="plugin-authoring.html#environment-variables-vee-injects">authoring</a>).</p>
+<ul>
+<li><strong>Check the first line before <code>---</code>.</strong> Only the text before the first <code>---</code> becomes the menu-bar title. If your title line is empty or errors, the menu-bar item looks blank.</li>
+<li><strong>Watch quoting.</strong> Line parameters after <code>|</code> must be quoted when they contain spaces (<code>title="two words"</code>), and quotes inside values escaped (<code>\"</code>).</li>
+</ul>
+<h2 id="a-plugin-times-out">A plugin times out</h2>
+<p>Vee runs each on-demand plugin with a timeout (30 seconds by default) and kills the process if it overruns. If your plugin does slow work (a slow network call, a heavy computation):</p>
+<ul>
+<li>Make it faster, or cache results between runs (use <code>SWIFTBAR_PLUGIN_CACHE_PATH</code> / <code>SWIFTBAR_PLUGIN_DATA_PATH</code>).</li>
+<li>If it is genuinely long-running and pushes continuous updates, make it a <strong>streaming</strong> plugin instead (<code>&lt;swiftbar.type&gt;streamable&lt;/swiftbar.type&gt;</code> with <code>~~~</code> separators), which stays running rather than being re-invoked on a timer. See <a href="plugin-authoring.html#streaming">Streaming</a>.</li>
+</ul>
+<h2 id="command-not-found-a-dependency-or-interpreter-is-missing">"command not found" / a dependency or interpreter is missing</h2>
+<p>Vee does not install your plugin's dependencies. If a plugin needs <code>python3</code>, <code>node</code>, <code>jq</code>, <code>gh</code>, etc., that tool must be installed and on the <code>PATH</code>.</p>
+<ul>
+<li>Check the plugin's <code>&lt;xbar.dependencies&gt;</code> header for what it needs.</li>
+<li>Verify the tool exists: <code>which python3</code>, <code>which jq</code>, and so on.</li>
+<li><strong>PATH differences:</strong> a GUI app may see a narrower <code>PATH</code> than your interactive shell. If a plugin works in Terminal but not in Vee, use the tool's <strong>absolute path</strong> in the plugin (e.g. <code>/opt/homebrew/bin/jq</code> instead of <code>jq</code>), or set the <code>PATH</code> explicitly at the top of the script.</li>
+<li>For a script without a shebang and without the executable bit, Vee falls back to <code>/bin/bash</code>. Add a proper shebang (<code>#!/usr/bin/env python3</code>) so the right interpreter is used.</li>
+</ul>
+<h2 id="refreshes-aren-t-happening">Refreshes aren't happening</h2>
+<ul>
+<li><strong>Confirm the interval.</strong> The filename controls it: <code>weather.10m.sh</code> is every 10 minutes, <code>weather.sh</code> is on demand only.</li>
+<li><strong>Cron plugins</strong> use <code>&lt;swiftbar.schedule&gt;</code> (5-field cron). Double-check the expression — an invalid field means it never fires.</li>
+<li><strong>Manual refresh</strong> always works: the plugin's own dropdown has a refresh action if it prints one (<code>refresh=true</code>), and the Vee menu has <strong>Refresh all</strong>.</li>
+<li>Plugins can trigger refreshes via <a href="cli-and-urls.html">URL actions</a> (<code>vee://refreshplugin?name=…</code>).</li>
+</ul>
+<h2 id="permissions-network-files-notifications">Permissions (network, files, notifications)</h2>
+<p>Plugins run with your user privileges, so they generally have the access you do. A few things to know:</p>
+<ul>
+<li><strong>macOS privacy prompts.</strong> The first time a plugin (through Vee) touches a protected area — Contacts, Calendar, files in protected folders, etc. — macOS may prompt. Grant access in <strong>System Settings → Privacy &amp; Security</strong> if you trust the plugin.</li>
+<li><strong>Notifications.</strong> For <code>vee://notify</code> to show alerts, allow notifications for Vee in <strong>System Settings → Notifications</strong>.</li>
+<li>The <code>&lt;vee.*&gt;</code> trust declarations are <strong>advisory</strong> — they describe what a plugin says it does, and Vee never blocks based on them. See the <a href="trust-model.html">trust model</a>.</li>
+</ul>
+<h2 id="still-stuck">Still stuck?</h2>
+<ul>
+<li>Reveal the plugin in Finder from the Plugin Manager and read its source.</li>
+<li>Run it directly in Terminal to isolate app-vs-script issues.</li>
+<li>File an issue with the plugin's output and your macOS version at <a href="https://github.com/navbytes/vee" rel="noopener">github.com/navbytes/vee</a>.</li>
+</ul>
+    </article>
+    <nav class="doc-nextprev" aria-label="Guide pagination"><a class="prev" href="./faq.html"><span class="dir">&larr; Previous</span><span class="lbl">FAQ</span></a></nav>
+  </main>
+</div>
+<script src="../assets/app.js" defer></script>
+</body>
+</html>

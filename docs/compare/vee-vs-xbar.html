@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Vee vs xbar: native, without the memory-growth reports — Menu-Bar Script Runner</title>
+  <meta name="description" content="Vee vs xbar: Vee runs your xbar plugins unchanged, natively in Swift/AppKit — without the documented, still-open memory-growth reports on xbar's WebView runtime. Plus a trust layer and typed SDK.">
+  <link rel="canonical" href="https://navbytes.github.io/vee/compare/vee-vs-xbar.html">
+  <link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
+  <link rel="stylesheet" href="../assets/style.css">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Vee">
+  <meta property="og:title" content="Vee vs xbar: native, without the memory-growth reports">
+  <meta property="og:description" content="Vee runs your xbar plugins unchanged, natively in Swift/AppKit — without the documented, still-open memory-growth reports on xbar's WebView runtime. Plus a trust layer and typed SDK.">
+  <meta property="og:url" content="https://navbytes.github.io/vee/compare/vee-vs-xbar.html">
+  <meta property="og:image" content="https://navbytes.github.io/vee/assets/og-image.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Vee vs xbar: native, without the memory-growth reports">
+  <meta name="twitter:description" content="Vee runs your xbar plugins unchanged, natively — without the documented memory-growth reports. Plus a trust layer and typed SDK.">
+  <meta name="twitter:image" content="https://navbytes.github.io/vee/assets/og-image.png">
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="../index.html" aria-label="Vee home">
+      <img class="mark" src="../assets/favicon.svg" alt="" width="28" height="28">
+      <span><b>Vee</b></span>
+    </a>
+    <button class="nav-toggle" aria-label="Toggle navigation" aria-expanded="false" aria-controls="nav-links">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+    </button>
+    <ul class="nav-links" id="nav-links">
+      <li><a href="../index.html#features">Features</a></li>
+      <li><a href="../index.html#trust">Trust</a></li>
+      <li><a href="./index.html" aria-current="page">Compare</a></li>
+      <li><a href="../guide/index.html">Docs</a></li>
+      <li><a class="nav-cta" href="https://github.com/navbytes/vee" rel="noopener">GitHub</a></li>
+    </ul>
+  </div>
+</header>
+
+<div class="docs-layout">
+  <aside class="docs-side" aria-label="Comparison navigation">
+    <p class="docs-nav-title">Compare</p>
+    <ul class="docs-nav">
+      <li><a href="./index.html">Overview</a></li>
+      <li><a href="./vee-vs-swiftbar.html">Vee vs SwiftBar</a></li>
+      <li><a href="./vee-vs-xbar.html" aria-current="page">Vee vs xbar</a></li>
+    </ul>
+    <p class="docs-nav-title">Related</p>
+    <ul class="docs-nav">
+      <li><a href="../guide/migrating-from-swiftbar.html">Migrating guide</a></li>
+      <li><a href="../guide/trust-model.html">Trust model</a></li>
+    </ul>
+  </aside>
+
+  <main class="docs-main" id="main">
+    <article class="docs-content">
+      <p class="doc-hero-note">Comparison</p>
+      <h1>Vee vs xbar</h1>
+      <p class="lede" style="max-width:var(--measure);">xbar pioneered the &ldquo;any script &rarr; menu bar&rdquo; format and the community plugin catalog that Vee also draws from. Vee runs your <strong>xbar plugins unchanged</strong> — natively in Swift/AppKit — and its central pitch is aimed at one specific, documented problem: xbar&rsquo;s long-running memory growth.</p>
+
+      <div class="callout">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8h.01M11 12h1v4h1" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <div><strong>A fact worth getting right:</strong> since its v2 rewrite, xbar is built with <strong>Go + Wails (a WKWebKit WebView)</strong> — it is <em>not</em> an Electron app. (Its deprecated predecessor, <strong>BitBar</strong>, was the Electron one.) Vee&rsquo;s performance argument is about xbar&rsquo;s <em>documented memory-growth reports</em>, not an architecture label.</div>
+      </div>
+
+      <h2 id="the-memory-point">The memory point, stated carefully</h2>
+      <p>Vee doesn&rsquo;t assert a benchmark; it points at xbar&rsquo;s own issue tracker. Users have reported xbar&rsquo;s memory usage climbing over a session into the multiple-gigabyte range, and those reports are <strong>still open</strong>:</p>
+      <ul>
+        <li><a href="https://github.com/matryer/xbar/issues/731" rel="noopener">xbar #731</a> — memory growth report</li>
+        <li><a href="https://github.com/matryer/xbar/issues/725" rel="noopener">xbar #725</a> — memory growth report</li>
+        <li><a href="https://github.com/matryer/xbar/issues/493" rel="noopener">xbar #493</a> — memory growth report</li>
+      </ul>
+      <p>Vee&rsquo;s answer is architectural: the menu bar is a real <code>NSStatusItem</code>/<code>NSMenu</code> with <strong>no embedded WebView in the menu</strong>, subprocess output is drained incrementally, and runaway processes are timed out and killed — so long-running use is designed to stay light.</p>
+
+      <h2 id="at-a-glance">At a glance</h2>
+      <div class="table-scroll">
+        <table>
+          <thead>
+            <tr><th>&nbsp;</th><th>Vee</th><th>xbar</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><strong>Engine</strong></td><td>Native Swift 6.2 / SwiftUI + AppKit</td><td>Go + Wails (WKWebKit WebView)</td></tr>
+            <tr><td><strong>Menu rendering</strong></td><td>Native <code>NSStatusItem</code> / <code>NSMenu</code></td><td>WebView-based runtime</td></tr>
+            <tr><td><strong>Long-running memory</strong></td><td>Designed to stay light</td><td class="v-mid">Documented growth reports (open)</td></tr>
+            <tr><td><strong>Runs xbar plugins</strong></td><td class="v-yes">Yes, unchanged</td><td class="v-yes">Yes (native format)</td></tr>
+            <tr><td><strong>Runs SwiftBar plugins</strong></td><td class="v-yes">Yes</td><td class="v-mid">Shared core format</td></tr>
+            <tr><td><strong>Trust-at-install layer</strong></td><td class="v-yes">Yes — plain-language summary + badges</td><td class="v-no">No</td></tr>
+            <tr><td><strong>Plugin catalog</strong></td><td class="v-yes">Built-in Discover (same catalog)</td><td class="v-yes">Web-based plugin site</td></tr>
+            <tr><td><strong>Typed preference forms</strong></td><td class="v-yes">Yes — Keychain secrets</td><td class="v-yes"><code>&lt;xbar.var&gt;</code> forms</td></tr>
+            <tr><td><strong>Typed SDK</strong></td><td class="v-yes">Yes — TypeScript, no build step</td><td class="v-no">No</td></tr>
+            <tr><td><strong>URL scheme</strong></td><td><code>vee://</code> &amp; <code>swiftbar://</code></td><td><code>xbar://</code></td></tr>
+            <tr><td><strong>License</strong></td><td>MIT, open source</td><td>MIT, open source</td></tr>
+            <tr><td><strong>macOS support</strong></td><td class="v-mid">26+ only</td><td class="v-yes">Wider (older macOS)</td></tr>
+            <tr><td><strong>Architecture</strong></td><td class="v-mid">Apple Silicon only</td><td class="v-yes">Intel + Apple Silicon</td></tr>
+            <tr><td><strong>Install</strong></td><td class="v-mid">GitHub Releases (notarized)</td><td class="v-yes">Homebrew cask + Releases</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <h2 id="what-you-keep">What you keep when you move</h2>
+      <p>Migration is just pointing Vee at your existing xbar plugins folder. The whole xbar protocol works — filename intervals, <code>---</code>/<code>--</code> menus, <code>|</code> params, <code>&lt;xbar.*&gt;</code> headers, SF Symbols, ANSI, Markdown, streaming — and Vee even injects xbar&rsquo;s <code>XBARDarkMode</code> environment variable for plugins that switch appearance. See <a href="../guide/migrating-from-swiftbar.html">Migrating from SwiftBar/xbar</a>.</p>
+
+      <h2 id="what-you-gain">What you gain</h2>
+      <ul>
+        <li><strong>Native menu rendering</strong> with no WebView in the menu, aimed squarely at the memory-growth reports above.</li>
+        <li><strong>A trust layer</strong> — plugins declare what they touch and Vee shows a plain-language summary before install. See the <a href="../guide/trust-model.html">trust model</a>.</li>
+        <li><strong>A typed TypeScript SDK</strong> with no build step. See the <a href="../guide/sdk.html">SDK docs</a>.</li>
+        <li><strong>Keychain-backed secrets</strong> in auto-generated preference forms.</li>
+      </ul>
+
+      <h2 id="bottom-line">Bottom line — when to choose which</h2>
+      <div class="bottom-line">
+        <div class="card bl-card">
+          <h3 class="bl-yes">Choose Vee if&hellip;</h3>
+          <ul style="margin:0;">
+            <li>You&rsquo;ve watched xbar&rsquo;s <strong>memory climb</strong> over a day and had to relaunch it.</li>
+            <li>You want the same plugins rendered by a <strong>native menu</strong>.</li>
+            <li>You want a <strong>trust summary</strong> before installing catalog plugins.</li>
+            <li>You&rsquo;re on <strong>macOS 26 + Apple Silicon</strong>.</li>
+          </ul>
+        </div>
+        <div class="card bl-card">
+          <h3>Choose xbar if&hellip;</h3>
+          <ul style="margin:0;">
+            <li>You need <strong>older macOS</strong> or an <strong>Intel Mac</strong>.</li>
+            <li>You want a <strong>Homebrew cask</strong> install today.</li>
+            <li>Its memory profile isn&rsquo;t a problem for your usage.</li>
+          </ul>
+        </div>
+      </div>
+      <p>Prefer SwiftBar&rsquo;s native approach? See <a href="./vee-vs-swiftbar.html">Vee vs SwiftBar</a> — and note that SwiftBar, like Vee, is native, so the memory argument above is specific to xbar&rsquo;s WebView runtime, not to SwiftBar.</p>
+
+      <div class="hero-cta" style="margin-top:2rem;">
+        <a class="btn btn-primary" href="https://github.com/navbytes/vee/releases" rel="noopener">Download Vee for macOS</a>
+        <a class="btn btn-ghost" href="./vee-vs-swiftbar.html">Compare Vee vs SwiftBar</a>
+      </div>
+    </article>
+  </main>
+</div>
+<script src="../assets/app.js" defer></script>
+</body>
+</html>

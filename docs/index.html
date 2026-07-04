@@ -1,0 +1,441 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Vee — Native macOS Menu-Bar Script Runner (xbar &amp; SwiftBar compatible)</title>
+  <meta name="description" content="Turn any script into a live macOS menu-bar widget. Native, leak-free, and drop-in compatible with your xbar and SwiftBar plugins. Open source, notarized.">
+  <link rel="canonical" href="https://navbytes.github.io/vee/">
+  <link rel="icon" type="image/svg+xml" href="./assets/favicon.svg">
+  <link rel="stylesheet" href="./assets/style.css">
+
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="Vee">
+  <meta property="og:title" content="Vee — Native macOS Menu-Bar Script Runner">
+  <meta property="og:description" content="Turn any script into a live macOS menu-bar widget. Native, leak-free, and drop-in compatible with your xbar and SwiftBar plugins. Open source, notarized.">
+  <meta property="og:url" content="https://navbytes.github.io/vee/">
+  <meta property="og:image" content="https://navbytes.github.io/vee/assets/og-image.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Vee — Native macOS Menu-Bar Script Runner">
+  <meta name="twitter:description" content="Every xbar plugin. None of the memory leaks. Native, leak-free, and drop-in compatible with your xbar and SwiftBar plugins.">
+  <meta name="twitter:image" content="https://navbytes.github.io/vee/assets/og-image.png">
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="./index.html" aria-label="Vee home">
+      <img class="mark" src="./assets/favicon.svg" alt="" width="28" height="28">
+      <span><b>Vee</b></span>
+    </a>
+    <button class="nav-toggle" aria-label="Toggle navigation" aria-expanded="false" aria-controls="nav-links">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+    </button>
+    <ul class="nav-links" id="nav-links">
+      <li><a href="#features">Features</a></li>
+      <li><a href="#trust">Trust</a></li>
+      <li><a href="./compare/index.html">Compare</a></li>
+      <li><a href="./guide/index.html">Docs</a></li>
+      <li><a class="nav-cta" href="https://github.com/navbytes/vee" rel="noopener">GitHub</a></li>
+    </ul>
+  </div>
+</header>
+
+<main id="main">
+
+  <!-- ===================== HERO ===================== -->
+  <section class="hero wrap">
+    <div class="hero-grid">
+      <div class="hero-copy">
+        <p class="eyebrow">Native macOS menu-bar script runner</p>
+        <h1>Every xbar plugin.<br><span class="grad-text">None of the memory leaks.</span></h1>
+        <p class="sub">A native macOS app that turns any script into a live menu-bar widget — and tells you what each one touches before you install it.</p>
+        <div class="hero-cta">
+          <a class="btn btn-primary" href="https://github.com/navbytes/vee/releases" rel="noopener">
+            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 3a1 1 0 0 1 1 1v9.6l3.3-3.3a1 1 0 1 1 1.4 1.4l-5 5a1 1 0 0 1-1.4 0l-5-5a1 1 0 1 1 1.4-1.4L11 13.6V4a1 1 0 0 1 1-1Zm-7 15a1 1 0 0 1 1 1v1h12v-1a1 1 0 1 1 2 0v2a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-2a1 1 0 0 1 1-1Z"/></svg>
+            Download for macOS
+          </a>
+          <a class="btn btn-ghost" href="https://github.com/navbytes/vee" rel="noopener">
+            <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2a10 10 0 0 0-3.16 19.49c.5.09.68-.22.68-.48v-1.7c-2.78.6-3.37-1.34-3.37-1.34-.45-1.16-1.11-1.47-1.11-1.47-.9-.62.07-.6.07-.6 1 .07 1.53 1.03 1.53 1.03.9 1.52 2.34 1.08 2.91.83.09-.65.35-1.09.63-1.34-2.22-.25-4.55-1.11-4.55-4.94 0-1.09.39-1.98 1.03-2.68-.1-.26-.45-1.27.1-2.65 0 0 .84-.27 2.75 1.02a9.5 9.5 0 0 1 5 0c1.91-1.29 2.75-1.02 2.75-1.02.55 1.38.2 2.39.1 2.65.64.7 1.03 1.59 1.03 2.68 0 3.84-2.34 4.68-4.57 4.93.36.31.68.92.68 1.85v2.74c0 .27.18.58.69.48A10 10 0 0 0 12 2Z"/></svg>
+            View on GitHub
+          </a>
+        </div>
+        <p class="req-line">
+          <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M16.4 12.9c0-2 1.6-3 1.7-3-1-1.4-2.4-1.6-2.9-1.6-1.2-.1-2.4.7-3 .7-.6 0-1.6-.7-2.6-.7-1.3 0-2.6.8-3.2 2-1.4 2.4-.4 6 1 8 .6 1 1.4 2.1 2.4 2 .9 0 1.3-.6 2.4-.6 1.1 0 1.4.6 2.4.6 1 0 1.6-1 2.2-2 .7-1.1 1-2.2 1-2.3-.1 0-1.9-.7-1.8-2.8ZM14.6 6.3c.5-.6.9-1.5.8-2.4-.8 0-1.7.5-2.2 1.1-.5.6-.9 1.5-.8 2.4.9.1 1.8-.5 2.2-1.1Z"/></svg>
+          macOS 26+ <span class="req-dot"></span> Apple Silicon <span class="req-dot"></span> Notarized <span class="req-dot"></span> Open source
+        </p>
+      </div>
+
+      <!-- Faux menu-bar + open dropdown -->
+      <div class="hero-visual">
+        <div class="macwin" role="img" aria-label="A macOS menu bar with Vee plugins and an open dropdown showing CPU details, a GitHub notifications count, and a Bitcoin price ticker.">
+          <div class="menubar" aria-hidden="true">
+            <span class="mb-item is-open"><span class="glyph">⚡</span> CPU 12%</span>
+            <span class="mb-item"><span class="glyph">🐙</span> GH 3</span>
+            <span class="mb-item"><span class="glyph">₿</span> $67,204</span>
+            <span class="mb-spacer"></span>
+            <span class="mb-item mb-sys">100%</span>
+            <span class="mb-item mb-sys">9:41</span>
+          </div>
+
+          <div class="menu" aria-hidden="true">
+            <div class="menu-header">
+              <span class="glyph">⚡</span>
+              <span class="h-title">CPU 12%</span>
+              <span class="h-sub">● live</span>
+            </div>
+            <div class="menu-sep"></div>
+            <div class="menu-row"><span class="ic">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="7" y="7" width="10" height="10" rx="2"/><path d="M10 2v3M14 2v3M10 19v3M14 19v3M2 10h3M2 14h3M19 10h3M19 14h3" stroke-linecap="round"/></svg>
+            </span> Top processes <span class="chev">›</span></div>
+            <div class="menu-row"><span class="ic">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 17l5-6 4 4 5-7 4 5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </span> Load average <span class="val">1.20</span></div>
+            <div class="menu-row"><span class="ic">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="3"/><path d="M9 9h6v6H9z"/></svg>
+            </span> Cores <span class="val">8</span></div>
+            <div class="menu-sep"></div>
+            <div class="menu-row sel"><span class="ic">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 4v6h6M20 20v-6h-6" stroke-linecap="round" stroke-linejoin="round"/><path d="M20 10a8 8 0 0 0-14-4M4 14a8 8 0 0 0 14 4" stroke-linecap="round"/></svg>
+            </span> Refresh <span class="val">⌘R</span></div>
+            <div class="menu-caption">Updated just now · runs every 5s</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== COMPAT ===================== -->
+  <section class="section" id="features">
+    <div class="wrap">
+      <div class="center">
+        <p class="eyebrow">Drop-in for everything you already have</p>
+        <h2 class="section-title">Runs everything you already have</h2>
+        <p class="lede">Vee implements a superset of the xbar <em>and</em> SwiftBar protocols. Point it at your existing plugins folder — nothing to rewrite, re-tag, or port.</p>
+      </div>
+
+      <div class="chip-cloud" style="justify-content:center;margin-top:2.2rem;max-width:820px;margin-inline:auto;">
+        <span class="proto-chip"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="12" r="9"/></svg> Filename intervals</span>
+        <span class="proto-chip"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="12" r="9"/></svg> <code>---</code> / <code>--</code> menus</span>
+        <span class="proto-chip"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="12" r="9"/></svg> <code>|</code> line params</span>
+        <span class="proto-chip"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="12" r="9"/></svg> <code>&lt;xbar.*&gt;</code> &amp; <code>&lt;swiftbar.*&gt;</code> headers</span>
+        <span class="proto-chip"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="12" r="9"/></svg> SF Symbols</span>
+        <span class="proto-chip"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="12" r="9"/></svg> ANSI color</span>
+        <span class="proto-chip"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="12" r="9"/></svg> Inline Markdown</span>
+        <span class="proto-chip"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="12" r="9"/></svg> Streaming <code>~~~</code></span>
+        <span class="proto-chip"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="12" r="9"/></svg> Cron schedules</span>
+      </div>
+
+      <div class="grid" style="margin-top:2.8rem;">
+        <div class="card feature">
+          <div class="feature__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8Z" stroke-linejoin="round"/></svg></div>
+          <h3>Native and leak-free</h3>
+          <p>Pure Swift 6.2 / SwiftUI + AppKit with zero third-party dependencies. No embedded WebView in the menu; subprocess output is drained incrementally and runaway processes are timed out and killed — so it stays light for days.</p>
+        </div>
+        <div class="card feature">
+          <div class="feature__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h10" stroke-linecap="round"/></svg></div>
+          <h3>Zero-migration compatibility</h3>
+          <p>The full xbar/SwiftBar protocol works on day one — filenames, submenus, params, metadata headers, SF Symbols, ANSI, Markdown, streaming and cron. Vee even injects the same <code>XBARDarkMode</code>, <code>SWIFTBAR_*</code> and <code>OS_*</code> variables.</p>
+        </div>
+        <div class="card feature">
+          <div class="feature__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M12 3l7 3v5c0 4.5-3 8.2-7 9-4-.8-7-4.5-7-9V6l7-3Z" stroke-linejoin="round"/><path d="M9 12l2 2 4-4" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+          <h3>Trust at install</h3>
+          <p>Plugins declare what they touch — network, files, secrets, external binaries — and Vee shows a plain-language summary <em>before</em> you install. Transparency, not a sandbox. The one thing no other runner does.</p>
+        </div>
+        <div class="card feature">
+          <div class="feature__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5" stroke-linecap="round"/></svg></div>
+          <h3>Discover &amp; install</h3>
+          <p>A built-in browser over the shared <code>matryer/xbar-plugins</code> catalog, with trust chips and one-click install through the trust gate. Find a plugin, see its footprint, install it.</p>
+        </div>
+        <div class="card feature">
+          <div class="feature__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M8 6H5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-3" stroke-linecap="round"/><path d="M12 3v11m0 0-3-3m3 3 3-3" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+          <h3>Config belongs to the plugin</h3>
+          <p><code>&lt;xbar.var&gt;</code> declarations become an auto-generated settings form. Secret fields are masked and stored in the macOS Keychain — the app never hardcodes a service name or credential.</p>
+        </div>
+        <div class="card feature">
+          <div class="feature__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m8 8-4 4 4 4M16 8l4 4-4 4M13 5l-2 14" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+          <h3>A real SDK for authors</h3>
+          <p>An optional, typed, zero-dependency TypeScript SDK with <code>Menu</code>/<code>Section</code> builders. Node 24 runs the <code>.ts</code> directly — no build step — with a golden-fixture drift guard against the Swift parser.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== TRUST ===================== -->
+  <section class="section" id="trust">
+    <div class="wrap">
+      <div class="split">
+        <div class="split__copy">
+          <p class="eyebrow">The standout — uncontested</p>
+          <h2 class="section-title">See what it touches, before you run it</h2>
+          <p class="lede">Every runner in this category executes plugins un-sandboxed — it&rsquo;s inherent to the idea. The honest question isn&rsquo;t &ldquo;is it isolated?&rdquo; but &ldquo;do you know what you&rsquo;re running?&rdquo;</p>
+          <p style="color:var(--ink-soft);max-width:var(--measure);">Vee is the only one that makes plugins <strong>declare their reach</strong> with <code>&lt;vee.*&gt;</code> tags, then translates those declarations into a plain-language trust summary at install and trust badges in the Plugin Manager.</p>
+          <ul class="check-list">
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M20 6 9 17l-5-5" stroke-linecap="round" stroke-linejoin="round"/></svg><span><b>Plain language.</b> &ldquo;Connects to the internet &rarr; api.github.com,&rdquo; not a permission dump.</span></li>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M20 6 9 17l-5-5" stroke-linecap="round" stroke-linejoin="round"/></svg><span><b>Severity at a glance.</b> Green, amber and red badges flag wildcards, broad writes, and undeclared footprints.</span></li>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M20 6 9 17l-5-5" stroke-linecap="round" stroke-linejoin="round"/></svg><span><b>Advisory, never enforced.</b> It&rsquo;s honest about the trade-off — read the source of anything you don&rsquo;t trust.</span></li>
+          </ul>
+          <p style="margin-top:1.6rem;"><a href="./guide/trust-model.html">Read the full trust model &rarr;</a></p>
+        </div>
+
+        <!-- Trust install sheet -->
+        <div class="split__visual">
+          <div class="trust-sheet" role="img" aria-label="Install trust sheet for a GitHub Notifications plugin. What this plugin can do: connects to the internet at api.github.com (low severity), uses stored credentials GITHUB_TOKEN (medium severity), runs external tools git (medium severity), reads files at tilde slash dot config slash gh (low severity). Overall trust: fully declared. Cancel and Install buttons.">
+            <div class="trust-sheet__head">
+              <span class="trust-sheet__icon" aria-hidden="true">
+                <svg viewBox="0 0 40 40"><defs><linearGradient id="ts1" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#5b5be6"/><stop offset="1" stop-color="#2f6bfb"/></linearGradient></defs><rect width="40" height="40" rx="11" fill="url(#ts1)"/><path d="M20 10a10 10 0 0 0-3.16 19.49c.5.09.68-.22.68-.48v-1.5c-2.5.55-3.05-1.05-3.05-1.05-.4-1-.98-1.28-.98-1.28-.8-.55.06-.54.06-.54.9.07 1.37.92 1.37.92.79 1.35 2.08.96 2.59.73.08-.57.31-.96.56-1.18-1.97-.22-4.04-.98-4.04-4.38 0-.97.35-1.76.92-2.38-.1-.23-.4-1.14.08-2.36 0 0 .75-.24 2.45.9a8.5 8.5 0 0 1 4.46 0c1.7-1.14 2.45-.9 2.45-.9.48 1.22.18 2.13.09 2.36.57.62.91 1.41.91 2.38 0 3.41-2.07 4.16-4.05 4.38.32.27.6.81.6 1.64v2.43c0 .26.18.58.69.48A10 10 0 0 0 20 10Z" fill="#fff"/></svg>
+              </span>
+              <div>
+                <div class="trust-sheet__title">GitHub Notifications</div>
+                <div class="trust-sheet__by">by octomaker · github.10m.py</div>
+              </div>
+            </div>
+
+            <div class="trust-sheet__q">What this plugin can do</div>
+            <div class="trust-rows">
+              <div class="trust-row sev-low">
+                <span class="trust-row__ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.5 2.5 3.5 6 3.5 9s-1 6.5-3.5 9c-2.5-2.5-3.5-6-3.5-9s1-6.5 3.5-9Z"/></svg></span>
+                <div class="trust-row__body">
+                  <div class="trust-row__what">Connects to the internet</div>
+                  <div class="trust-row__detail">api.github.com</div>
+                </div>
+              </div>
+              <div class="trust-row sev-med">
+                <span class="trust-row__ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3" stroke-linecap="round"/></svg></span>
+                <div class="trust-row__body">
+                  <div class="trust-row__what">Uses stored credentials</div>
+                  <div class="trust-row__detail">GITHUB_TOKEN</div>
+                </div>
+              </div>
+              <div class="trust-row sev-med">
+                <span class="trust-row__ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="m5 7 4 5-4 5M12 17h7" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+                <div class="trust-row__body">
+                  <div class="trust-row__what">Runs external tools</div>
+                  <div class="trust-row__detail">git</div>
+                </div>
+              </div>
+              <div class="trust-row sev-low">
+                <span class="trust-row__ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><path d="M4 7a2 2 0 0 1 2-2h4l2 2h6a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7Z" stroke-linejoin="round"/></svg></span>
+                <div class="trust-row__body">
+                  <div class="trust-row__what">Reads files</div>
+                  <div class="trust-row__detail">~/.config/gh</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="trust-sheet__foot">
+              <span class="trust-pill trust-pill--declared"><span class="dot"></span> Fully declared</span>
+              <span class="spacer"></span>
+              <button class="btn btn-ghost btn-sm" type="button" tabindex="-1">Cancel</button>
+              <button class="btn btn-primary btn-sm" type="button" tabindex="-1">Install</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== DISCOVER ===================== -->
+  <section class="section">
+    <div class="wrap">
+      <div class="split split--rev">
+        <div class="split__copy">
+          <p class="eyebrow">Discover</p>
+          <h2 class="section-title">A catalog, one click, through the trust gate</h2>
+          <p class="lede">Browse the shared <code>matryer/xbar-plugins</code> catalog right inside the app. Every entry carries a trust chip, and install always passes through the trust summary first.</p>
+          <ul class="check-list">
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M20 6 9 17l-5-5" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Thousands of existing community plugins, searchable by category.</span></li>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M20 6 9 17l-5-5" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Trust chips surface each plugin&rsquo;s declared footprint up front.</span></li>
+            <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M20 6 9 17l-5-5" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Manage everything from the Plugin Manager — enable, disable, per-plugin settings, reveal in Finder.</span></li>
+          </ul>
+        </div>
+
+        <!-- Discover plugin card -->
+        <div class="split__visual">
+          <div class="card plugin-card" role="img" aria-label="A Discover catalog card for a plugin called Bitcoin Price by satoshi-fan. Shows a live BTC/USD ticker in your menu bar. Trust chip: fully declared, low severity. Install button.">
+            <div class="plugin-card__top">
+              <span class="plugin-tile" aria-hidden="true">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 6h6a3 3 0 0 1 0 6H8m0 0h7a3 3 0 0 1 0 6H8m0-12v12M9 4v3M13 4v3M9 18v2M13 18v2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </span>
+              <div>
+                <div class="plugin-card__name">Bitcoin Price</div>
+                <div class="plugin-card__author">by satoshi-fan · Cryptocurrency</div>
+              </div>
+            </div>
+            <p class="plugin-card__desc">Shows a live BTC/USD ticker in your menu bar with a 24-hour sparkline and quick links to your exchange.</p>
+            <div class="plugin-card__foot">
+              <span class="chip chip--low"><span class="dot"></span> Fully declared</span>
+              <span class="muted" style="font-size:0.82rem;">1 domain</span>
+              <span style="flex:1"></span>
+              <button class="btn btn-primary btn-sm" type="button" tabindex="-1">Install</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== A CLOSER LOOK (real screenshots) ===================== -->
+  <section class="section" id="screenshots">
+    <div class="wrap">
+      <div class="center">
+        <p class="eyebrow" style="justify-content:center;">A closer look</p>
+        <h2 class="section-title">The real app</h2>
+        <p class="lede" style="margin-inline:auto;">The redesigned Liquid Glass UI — Discover, the install trust sheet, the Plugin Manager, and auto-generated settings. Actual captures, not mockups.</p>
+      </div>
+
+      <div class="shots">
+        <figure class="shot">
+          <div class="shot__stage">
+            <img src="./assets/screenshots/discover.png" width="900" height="628" loading="lazy" decoding="async"
+                 alt="Vee's Discover window: a category sidebar on the left, and a grid of plugin cards on the right, each showing an icon, name, author, description, a trust chip, and an Install button.">
+          </div>
+          <figcaption class="shot__cap"><b>Discover</b> <span>Browse the catalog with trust chips, install in one click.</span></figcaption>
+        </figure>
+
+        <figure class="shot shot--narrow">
+          <div class="shot__stage">
+            <img src="./assets/screenshots/trust.png" width="480" height="508" loading="lazy" decoding="async"
+                 alt="The install trust sheet titled 'What this plugin can do', listing plain-language capability rows with severity-colored icons, and a footer noting the plugin runs un-sandboxed. Cancel and Install buttons.">
+          </div>
+          <figcaption class="shot__cap"><b>Trust at install</b> <span>See a plugin&rsquo;s footprint in plain language before it runs.</span></figcaption>
+        </figure>
+
+        <figure class="shot">
+          <div class="shot__stage">
+            <img src="./assets/screenshots/manager.png" width="560" height="568" loading="lazy" decoding="async"
+                 alt="The Plugin Manager window: a list of installed plugins, each row showing a name, a trust badge, and a trailing on/off switch, with a General settings section below.">
+          </div>
+          <figcaption class="shot__cap"><b>Plugin Manager</b> <span>Enable, disable, and review every plugin&rsquo;s trust badges.</span></figcaption>
+        </figure>
+
+        <figure class="shot shot--narrow">
+          <div class="shot__stage">
+            <img src="./assets/screenshots/settings.png" width="460" height="468" loading="lazy" decoding="async"
+                 alt="An auto-generated plugin settings form built from the plugin's declared preferences, including a masked secret field stored in the macOS Keychain.">
+          </div>
+          <figcaption class="shot__cap"><b>Plugin settings</b> <span>Typed forms from <code>&lt;xbar.var&gt;</code>; secrets masked in the Keychain.</span></figcaption>
+        </figure>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== FOR AUTHORS ===================== -->
+  <section class="section">
+    <div class="wrap">
+      <div class="center">
+        <p class="eyebrow">For plugin authors</p>
+        <h2 class="section-title">Typed builders, zero build step</h2>
+        <p class="lede">Prefer code to hand-formatting text? The <code>vee-plugins</code> TypeScript SDK gives you <code>Menu</code> and <code>Section</code> builders. Node runs the <code>.ts</code> file directly — drop it in and go.</p>
+      </div>
+
+      <div class="code-window" style="max-width:720px;margin:2.2rem auto 0;">
+        <div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">cpu.5s.ts</span></div>
+<pre><code><span class="tok-com">#!/usr/bin/env node</span>
+<span class="tok-key">import</span> { <span class="tok-fn">Menu</span> } <span class="tok-key">from</span> <span class="tok-str">"./src/vee.ts"</span>;
+
+<span class="tok-key">const</span> menu = <span class="tok-key">new</span> <span class="tok-fn">Menu</span>();
+menu.<span class="tok-fn">title</span>(<span class="tok-str">"CPU 12%"</span>, { color: <span class="tok-str">"green"</span>, sfimage: <span class="tok-str">"cpu"</span> });
+
+<span class="tok-key">const</span> d = menu.dropdown;
+d.<span class="tok-fn">item</span>(<span class="tok-str">"Top processes"</span>, { href: <span class="tok-str">"https://example.com/procs"</span> });
+d.<span class="tok-fn">separator</span>();
+
+<span class="tok-key">const</span> details = d.<span class="tok-fn">submenu</span>(<span class="tok-str">"Details"</span>);
+details.<span class="tok-fn">item</span>(<span class="tok-str">"Load: 1.20"</span>);
+details.<span class="tok-fn">item</span>(<span class="tok-str">"Cores: 8"</span>);
+
+d.<span class="tok-fn">item</span>(<span class="tok-str">"Refresh"</span>, { refresh: <span class="tok-key">true</span> });
+
+menu.<span class="tok-fn">print</span>();
+</code></pre>
+      </div>
+      <p class="center" style="margin-top:1.6rem;"><a href="./guide/sdk.html">Read the SDK reference &rarr;</a></p>
+    </div>
+  </section>
+
+  <!-- ===================== COMPARE TEASER ===================== -->
+  <section class="section-tight">
+    <div class="wrap">
+      <div class="glass" style="padding:clamp(28px,4vw,44px);">
+        <div class="center" style="margin-bottom:1.6rem;">
+          <p class="eyebrow" style="justify-content:center;">Coming from xbar or SwiftBar?</p>
+          <h2 class="section-title" style="margin-bottom:0.2em;">Honest, side-by-side comparisons</h2>
+          <p class="lede" style="margin-inline:auto;">No disparagement — SwiftBar is the native, mature category leader. Here&rsquo;s exactly where Vee is different, and when each one is the right pick.</p>
+        </div>
+        <div class="teaser-grid">
+          <a class="card card--hover teaser-card" href="./compare/vee-vs-swiftbar.html">
+            <h3>Vee vs SwiftBar</h3>
+            <p class="muted" style="margin:0;">Same native lightness, plus a trust layer, a built-in catalog, refresh reliability, and a typed SDK.</p>
+            <span class="arrow">Compare &rarr;</span>
+          </a>
+          <a class="card card--hover teaser-card" href="./compare/vee-vs-xbar.html">
+            <h3>Vee vs xbar</h3>
+            <p class="muted" style="margin:0;">Runs your xbar plugins unchanged — without the documented memory-growth reports.</p>
+            <span class="arrow">Compare &rarr;</span>
+          </a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== FINAL CTA ===================== -->
+  <section class="section">
+    <div class="wrap">
+      <div class="glass cta-band">
+        <p class="eyebrow" style="justify-content:center;">Free &amp; open source</p>
+        <h2>Put your scripts in the menu bar.<br><span class="grad-text">Know what they touch.</span></h2>
+        <p class="lede" style="margin-inline:auto;">Notarized, signed, and open source. v0.1.x — early, and better with your feedback.</p>
+        <div class="hero-cta">
+          <a class="btn btn-primary" href="https://github.com/navbytes/vee/releases" rel="noopener">Download for macOS</a>
+          <a class="btn btn-ghost" href="./guide/getting-started.html">Read the docs</a>
+        </div>
+        <p class="req-line" style="justify-content:center;">macOS 26+ <span class="req-dot"></span> Apple Silicon <span class="req-dot"></span> No Homebrew cask yet</p>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer class="site-footer">
+  <div class="wrap">
+    <div class="footer-grid">
+      <div>
+        <a class="brand" href="./index.html" aria-label="Vee home">
+          <img class="mark" src="./assets/favicon.svg" alt="" width="28" height="28">
+          <span><b>Vee</b></span>
+        </a>
+        <p class="footer-about">A native, leak-free macOS menu-bar script runner — the modern successor to xbar and SwiftBar, with trust at install.</p>
+      </div>
+      <div>
+        <h4>Documentation</h4>
+        <ul>
+          <li><a href="./guide/getting-started.html">Getting started</a></li>
+          <li><a href="./guide/plugin-authoring.html">Plugin authoring</a></li>
+          <li><a href="./guide/trust-model.html">Trust model</a></li>
+          <li><a href="./guide/sdk.html">TypeScript SDK</a></li>
+          <li><a href="./guide/index.html">All docs</a></li>
+        </ul>
+      </div>
+      <div>
+        <h4>Project</h4>
+        <ul>
+          <li><a href="https://github.com/navbytes/vee" rel="noopener">GitHub repository</a></li>
+          <li><a href="https://github.com/navbytes/vee/releases" rel="noopener">Releases</a></li>
+          <li><a href="./compare/index.html">Compare</a></li>
+          <li><a href="./guide/faq.html">FAQ</a></li>
+          <li><a href="https://github.com/navbytes/vee/blob/main/LICENSE" rel="noopener">MIT License</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="footer-bar">
+      <span>&copy; 2026 Vee · MIT-licensed open source</span>
+      <span>macOS 26+ · Apple Silicon · Notarized</span>
+    </div>
+  </div>
+</footer>
+
+<script src="./assets/app.js" defer></script>
+</body>
+</html>
