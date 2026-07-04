@@ -114,19 +114,23 @@ final class PluginDiscoveryTests: XCTestCase {
         defer { try? FileManager.default.removeItem(atPath: dir) }
         let fm = FileManager.default
 
-        // Two plugins (one executable), a sidecar, a hidden file, and a subdir.
+        // Two plugins (one executable), a sidecar, a hidden file, a doc file, and a subdir.
         fm.createFile(atPath: dir + "/cpu.5s.sh", contents: Data("x".utf8), attributes: [.posixPermissions: 0o755])
         fm.createFile(atPath: dir + "/weather.1m.py", contents: Data("x".utf8), attributes: [.posixPermissions: 0o644])
         fm.createFile(atPath: dir + "/cpu.5s.sh.vars.json", contents: Data("{}".utf8))
+        fm.createFile(atPath: dir + "/README.md", contents: Data("# doc".utf8))
         fm.createFile(atPath: dir + "/.hidden", contents: Data())
         try fm.createDirectory(atPath: dir + "/disabled", withIntermediateDirectories: true)
 
+        // Sidecar, hidden, doc (.md), and subdir are excluded.
         let all = PluginDiscovery.enumerate(directory: dir)
         XCTAssertEqual(all.map { $0.filename.name }, ["cpu", "weather"])
         XCTAssertEqual(all[0].filename.interval, .seconds(5))
 
+        // Non-executable plugins are now included (run bash-wrapped, like SwiftBar).
         let enabled = PluginDiscovery.enabled(directory: dir)
-        XCTAssertEqual(enabled.map { $0.filename.name }, ["cpu"]) // only the +x one
+        XCTAssertEqual(enabled.map { $0.filename.name }, ["cpu", "weather"])
+        XCTAssertEqual(enabled.first { $0.filename.name == "weather" }?.isExecutable, false)
     }
 
     func testMissingDirectory() {
