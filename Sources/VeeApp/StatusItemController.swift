@@ -6,16 +6,23 @@ import VeeTrust
 
 /// A small `@objc` target for the per-plugin menu footer (Refresh / Quit).
 @MainActor
-private final class ControlsTarget: NSObject {
+private final class ControlsTarget: NSObject, NSMenuDelegate {
     let onRefresh: () -> Void
     let onSettings: () -> Void
-    init(onRefresh: @escaping () -> Void, onSettings: @escaping () -> Void) {
+    let refreshOnOpen: Bool
+    init(onRefresh: @escaping () -> Void, onSettings: @escaping () -> Void, refreshOnOpen: Bool) {
         self.onRefresh = onRefresh
         self.onSettings = onSettings
+        self.refreshOnOpen = refreshOnOpen
     }
     @objc func refresh() { onRefresh() }
     @objc func settings() { onSettings() }
     @objc func quit() { NSApp.terminate(nil) }
+
+    // <swiftbar.refreshOnOpen>: re-run the plugin when its menu is opened.
+    func menuWillOpen(_ menu: NSMenu) {
+        if refreshOnOpen { onRefresh() }
+    }
 }
 
 /// Owns one `NSStatusItem` and renders a plugin's parsed output into it: the
@@ -33,13 +40,13 @@ public final class StatusItemController {
     private let hasSettings: Bool
     private let trustSummary: TrustSummary?
 
-    public init(pluginName: String, handler: MenuActionHandling, hasSettings: Bool = false, trustSummary: TrustSummary? = nil, onRefresh: @escaping () -> Void, onSettings: @escaping () -> Void = {}) {
+    public init(pluginName: String, handler: MenuActionHandling, hasSettings: Bool = false, trustSummary: TrustSummary? = nil, refreshOnOpen: Bool = false, onRefresh: @escaping () -> Void, onSettings: @escaping () -> Void = {}) {
         self.pluginName = pluginName
         self.hasSettings = hasSettings
         self.trustSummary = trustSummary
         self.statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         self.actionTarget = MenuActionTarget(handler: handler)
-        self.controls = ControlsTarget(onRefresh: onRefresh, onSettings: onSettings)
+        self.controls = ControlsTarget(onRefresh: onRefresh, onSettings: onSettings, refreshOnOpen: refreshOnOpen)
     }
 
     /// Renders a successful refresh.
@@ -116,6 +123,7 @@ public final class StatusItemController {
             menu.insertItem(trust, at: 0)
         }
         appendFooter(to: menu)
+        menu.delegate = controls
         return menu
     }
 

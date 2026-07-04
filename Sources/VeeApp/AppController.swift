@@ -33,11 +33,38 @@ public final class AppController: NSObject, NSApplicationDelegate {
             onOpenFolder: { [weak self] in self?.openFolder() }
         )
 
+        Notifier.requestAuthorization()
+
         reload()
         watcher = PluginDirectoryWatcher(directory: directory) { [weak self] in
             Task { @MainActor in self?.reload() }
         }
         watcher?.start()
+    }
+
+    // MARK: - URL scheme (vee:// and swiftbar://)
+
+    public func application(_ application: NSApplication, open urls: [URL]) {
+        for url in urls { perform(URLActionRouter.parse(url)) }
+    }
+
+    private func perform(_ action: URLAction) {
+        switch action {
+        case .refreshAll:
+            refreshAll()
+        case .refreshPlugin(let name):
+            coordinators[name]?.forceRefresh()
+        case .enablePlugin(let name):
+            setEnabled(true, id: name)
+        case .disablePlugin(let name):
+            setEnabled(false, id: name)
+        case .togglePlugin(let name):
+            setEnabled(prefs.isDisabled(name), id: name)
+        case .notify(let title, let subtitle, let body, _):
+            Notifier.post(title: title, subtitle: subtitle, body: body)
+        case .unknown:
+            break
+        }
     }
 
     public func applicationWillTerminate(_ notification: Notification) {

@@ -16,6 +16,31 @@ enum Emoji {
         "calendar": "📅", "clock": "🕐", "hourglass": "⏳", "lock": "🔒", "unlock": "🔓",
         "green_circle": "🟢", "red_circle": "🔴", "yellow_circle": "🟡", "large_blue_circle": "🔵",
         "battery": "🔋", "wifi": "📶", "moon": "🌙", "thermometer": "🌡️",
+        // Faces & gestures
+        "smiley": "😃", "laughing": "😆", "blush": "😊", "heart_eyes": "😍",
+        "thinking": "🤔", "sob": "😭", "rage": "😡", "cry": "😢", "sweat_smile": "😅",
+        "clap": "👏", "pray": "🙏", "muscle": "💪", "point_right": "👉", "ok_hand": "👌",
+        // Status & symbols
+        "heavy_multiplication_x": "✖️", "heavy_plus_sign": "➕", "heavy_minus_sign": "➖",
+        "question": "❓", "exclamation": "❗️", "bangbang": "‼️", "recycle": "♻️",
+        "arrow_up": "⬆️", "arrow_down": "⬇️", "arrow_left": "⬅️", "arrow_right": "➡️",
+        "arrows_counterclockwise": "🔄", "hourglass_flowing_sand": "⏳", "stopwatch": "⏱️",
+        "check": "✅", "heavy_exclamation_mark": "❗️", "no_entry": "⛔️", "no_entry_sign": "🚫",
+        // Objects & tech
+        "gear": "⚙️", "wrench": "🔧", "hammer": "🔨", "package": "📦", "memo": "📝",
+        "chart_with_upwards_trend": "📈", "chart_with_downwards_trend": "📉", "bar_chart": "📊",
+        "floppy_disk": "💾", "cd": "💿", "iphone": "📱", "keyboard": "⌨️", "printer": "🖨️",
+        "bulb": "💡", "flashlight": "🔦", "mag": "🔍", "key": "🔑", "link": "🔗", "pushpin": "📌",
+        "moneybag": "💰", "dollar": "💵", "credit_card": "💳", "gem": "💎", "crown": "👑",
+        // Nature & weather
+        "zap_cloud": "🌩️", "umbrella": "☔️", "snowman": "⛄️", "ocean": "🌊", "droplet": "💧",
+        "seedling": "🌱", "leaves": "🍃", "maple_leaf": "🍁", "cactus": "🌵", "dog": "🐶", "cat": "🐱",
+        // Food & travel
+        "pizza": "🍕", "hamburger": "🍔", "beer": "🍺", "wine_glass": "🍷", "cake": "🍰",
+        "car": "🚗", "airplane": "✈️", "rocket_ship": "🚀", "house": "🏠", "office": "🏢",
+        // Circles & squares
+        "white_circle": "⚪️", "black_circle": "⚫️", "orange_circle": "🟠", "purple_circle": "🟣",
+        "brown_circle": "🟤", "green_square": "🟩", "red_square": "🟥", "yellow_square": "🟨",
     ]
 
     private static let pattern = try! NSRegularExpression(pattern: ":([a-z0-9_+-]+):", options: [])

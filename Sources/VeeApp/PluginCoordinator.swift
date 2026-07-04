@@ -20,6 +20,7 @@ final class PluginCoordinator {
 
     private var controller: StatusItemController!
     private var timer: RefreshTimer?
+    private var cron: CronScheduler?
     private var streaming: StreamingSession?
     private var isRefreshing = false
 
@@ -42,6 +43,7 @@ final class PluginCoordinator {
             handler: AppActionDispatcher(runner: SystemProcessRunner()) { [weak self] in self?.refresh() },
             hasSettings: !header.vars.isEmpty,
             trustSummary: trustSummary,
+            refreshOnOpen: header.refreshOnOpen ?? false,
             onRefresh: { [weak self] in self?.refresh() },
             onSettings: { [weak self] in self?.openSettings() }
         )
@@ -63,6 +65,9 @@ final class PluginCoordinator {
     func start() {
         if header.streamable {
             startStreaming()
+        } else if !header.schedule.isEmpty {
+            refresh()
+            startCron()
         } else {
             refresh()
             scheduleTimer()
@@ -72,13 +77,29 @@ final class PluginCoordinator {
     func stop() {
         timer?.stop()
         timer = nil
+        cron?.stop()
+        cron = nil
         streaming?.stop()
         streaming = nil
         controller.remove()
     }
 
+    /// Declared preferences merged over `<swiftbar.environment>` values (a
+    /// declared `<xbar.var>` wins over a static environment value of the same name).
+    private func mergedDeclaredVariables() -> [String: String] {
+        header.environment.merging(preferences.environmentValues()) { _, pref in pref }
+    }
+
+    /// Schedules refreshes from `<swiftbar.schedule>` cron expressions.
+    private func startCron() {
+        cron = CronScheduler(schedules: header.schedule) { [weak self] in
+            Task { @MainActor in self?.refresh() }
+        }
+        cron?.start()
+    }
+
     private func startStreaming() {
-        let context = PluginsDirectory.context(pluginPath: plugin.path, pluginsDirectory: pluginsDirectory, declaredVariables: preferences.environmentValues())
+        let context = PluginsDirectory.context(pluginPath: plugin.path, pluginsDirectory: pluginsDirectory, declaredVariables: mergedDeclaredVariables())
         let environment = EnvironmentBuilder.merged(base: ProcessInfo.processInfo.environment, context: context)
         let invocation = ProcessInvocation(
             launchPath: runInBash ? "/bin/bash" : plugin.path,
@@ -121,7 +142,7 @@ final class PluginCoordinator {
         guard !isRefreshing else { return }
         isRefreshing = true
 
-        let context = PluginsDirectory.context(pluginPath: plugin.path, pluginsDirectory: pluginsDirectory, declaredVariables: preferences.environmentValues())
+        let context = PluginsDirectory.context(pluginPath: plugin.path, pluginsDirectory: pluginsDirectory, declaredVariables: mergedDeclaredVariables())
         let runtime = self.runtime
         let path = plugin.path
         let header = self.header

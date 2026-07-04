@@ -38,6 +38,7 @@ public enum EnvironmentBuilder {
         // SwiftBar compatibility
         env["SWIFTBAR"] = "1"
         env["SWIFTBAR_VERSION"] = ctx.appVersion
+        env["SWIFTBAR_BUILD"] = ctx.appVersion
         env["SWIFTBAR_PLUGINS_PATH"] = ctx.pluginsDirectory
         env["SWIFTBAR_PLUGIN_PATH"] = ctx.pluginPath
         env["SWIFTBAR_PLUGIN_CACHE_PATH"] = ctx.cacheDirectory
