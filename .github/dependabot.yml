@@ -8,12 +8,6 @@ updates:
     groups:
       actions:
         patterns: ["*"]
-  # The plugin SDK + esbuild pipeline. (No SwiftPM entry: Vee has no external
-  # SwiftPM dependencies, so there is nothing for Dependabot to bump there.)
-  - package-ecosystem: npm
-    directory: "/plugins"
-    schedule:
-      interval: weekly
-    groups:
-      npm:
-        patterns: ["*"]
+  # No npm or SwiftPM entries: Vee currently has no external dependencies (all
+  # Swift targets are first-party). Re-add an npm entry when the TypeScript
+  # plugin SDK lands (Stage 8).

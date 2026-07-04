@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!--
+	  Vee is intentionally UN-SANDBOXED: it runs arbitrary user plugins as child
+	  processes with full user privileges (the xbar model). A child Process
+	  inherits the parent's sandbox, so App Sandbox is incompatible with the
+	  plugin model. There is therefore no com.apple.security.app-sandbox key.
+
+	  The security story is transparency (plugins declare capabilities; the app
+	  surfaces a trust summary), not OS-enforced isolation. Distribution is
+	  Developer-ID + notarization outside the Mac App Store.
+	-->
+</dict>
+</plist>

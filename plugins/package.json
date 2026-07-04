@@ -1,0 +1,14 @@
+{
+  "name": "vee-plugins",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "TypeScript SDK and example plugins for Vee.",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "test": "node --test \"test/**/*.test.ts\"",
+    "build:fixtures": "for f in examples/*.ts; do node \"$f\" > \"fixtures/$(basename \"${f%.ts}\").txt\"; done"
+  }
+}
