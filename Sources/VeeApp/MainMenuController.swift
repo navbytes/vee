@@ -7,12 +7,14 @@ import VeeCore
 final class MainMenuController: NSObject, NSMenuDelegate {
     private let statusItem: NSStatusItem
     private let onManager: () -> Void
+    private let onDiscover: () -> Void
     private let onRefreshAll: () -> Void
     private let onOpenFolder: () -> Void
     private var loginItem: NSMenuItem!
 
-    init(onManager: @escaping () -> Void, onRefreshAll: @escaping () -> Void, onOpenFolder: @escaping () -> Void) {
+    init(onManager: @escaping () -> Void, onDiscover: @escaping () -> Void, onRefreshAll: @escaping () -> Void, onOpenFolder: @escaping () -> Void) {
         self.onManager = onManager
+        self.onDiscover = onDiscover
         self.onRefreshAll = onRefreshAll
         self.onOpenFolder = onOpenFolder
         self.statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
@@ -29,6 +31,7 @@ final class MainMenuController: NSObject, NSMenuDelegate {
         menu.autoenablesItems = false
 
         menu.addItem(item("Plugin Manager…", #selector(manage), key: "m"))
+        menu.addItem(item("Discover Plugins…", #selector(discover), key: "d"))
         menu.addItem(item("Refresh All Plugins", #selector(refreshAll), key: "r"))
         menu.addItem(.separator())
         loginItem = item("Launch Vee at Login", #selector(toggleLogin), key: "")
@@ -50,6 +53,7 @@ final class MainMenuController: NSObject, NSMenuDelegate {
     }
 
     @objc private func manage() { onManager() }
+    @objc private func discover() { onDiscover() }
     @objc private func refreshAll() { onRefreshAll() }
     @objc private func openFolder() { onOpenFolder() }
     @objc private func toggleLogin() { LoginItemManager.setEnabled(!LoginItemManager.isEnabled) }

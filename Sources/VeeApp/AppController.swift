@@ -4,6 +4,7 @@ import VeePluginFormat
 import VeeRuntime
 import VeePreferences
 import VeeTrust
+import VeeCatalog
 import VeeUI
 
 /// The application delegate. Owns the always-present Vee menu and one coordinator
@@ -19,7 +20,7 @@ public final class AppController: NSObject, NSApplicationDelegate {
     private let prefs = AppPreferences.shared
     private let log = VeeLog.make("app-controller")
 
-    private lazy var directory: String = PluginsDirectory.resolve()
+    private var directory: String = PluginsDirectory.resolve()
 
     public override init() { super.init() }
 
@@ -29,6 +30,7 @@ public final class AppController: NSObject, NSApplicationDelegate {
 
         mainMenu = MainMenuController(
             onManager: { [weak self] in self?.openManager() },
+            onDiscover: { [weak self] in self?.openBrowser() },
             onRefreshAll: { [weak self] in self?.refreshAll() },
             onOpenFolder: { [weak self] in self?.openFolder() }
         )
@@ -36,6 +38,11 @@ public final class AppController: NSObject, NSApplicationDelegate {
         Notifier.requestAuthorization()
 
         reload()
+        startWatching()
+    }
+
+    private func startWatching() {
+        watcher?.stop()
         watcher = PluginDirectoryWatcher(directory: directory) { [weak self] in
             Task { @MainActor in self?.reload() }
         }
@@ -105,15 +112,47 @@ public final class AppController: NSObject, NSApplicationDelegate {
     private func openManager() {
         let model = PluginManagerModel(
             rows: managerRows(),
+            currentDirectory: directory,
             launchAtLogin: LoginItemManager.isEnabled,
             onToggleEnabled: { [weak self] id, enabled in self?.setEnabled(enabled, id: id) },
             onReveal: { [weak self] id in self?.reveal(id) },
             onSettings: { [weak self] id in self?.coordinators[id]?.showSettings() },
             onLaunchAtLogin: { enabled in LoginItemManager.setEnabled(enabled) },
             onOpenFolder: { [weak self] in self?.openFolder() },
+            onChooseFolder: { [weak self] in self?.chooseFolder() },
             onRefreshAll: { [weak self] in self?.refreshAll() }
         )
         PluginManagerWindow.shared.show(model: model)
+    }
+
+    private func openBrowser() {
+        let model = PluginBrowserModel(
+            fetcher: GitHubCatalogClient(),
+            pluginsDirectory: directory,
+            onInstalled: { [weak self] in self?.reload() }
+        )
+        PluginBrowserWindow.shared.show(model: model)
+    }
+
+    /// Prompts for a plugins folder (e.g. an existing SwiftBar folder) and
+    /// switches to it.
+    private func chooseFolder() {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.allowsMultipleSelection = false
+        panel.directoryURL = URL(fileURLWithPath: directory)
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        setPluginsDirectory(url.path)
+    }
+
+    private func setPluginsDirectory(_ path: String) {
+        prefs.pluginsDirectory = path
+        directory = path
+        PluginsDirectory.ensureExists(directory)
+        loadedPaths.removeAll()
+        reload()
+        startWatching()
     }
 
     private func setEnabled(_ enabled: Bool, id: String) {

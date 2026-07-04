@@ -1,14 +1,18 @@
 import AppKit
 import Foundation
+import VeePreferences
 import VeeRuntime
 
 /// Resolves the directories Vee uses and builds the per-run environment context.
 enum PluginsDirectory {
-    /// The plugins directory. Overridable via `VEE_PLUGINS_DIR` (useful for
-    /// development and testing).
+    /// The plugins directory. Precedence: `VEE_PLUGINS_DIR` env (dev/testing) →
+    /// a user-chosen folder → the default under Application Support.
     static func resolve() -> String {
         if let override = ProcessInfo.processInfo.environment["VEE_PLUGINS_DIR"], !override.isEmpty {
             return (override as NSString).expandingTildeInPath
+        }
+        if let custom = AppPreferences.shared.pluginsDirectory, !custom.isEmpty {
+            return (custom as NSString).expandingTildeInPath
         }
         return support("plugins")
     }

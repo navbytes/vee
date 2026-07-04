@@ -24,6 +24,7 @@ public struct PluginManagerRow: Identifiable, Sendable {
 @MainActor
 public final class PluginManagerModel: ObservableObject {
     @Published public var rows: [PluginManagerRow]
+    @Published public var currentDirectory: String
     @Published public var launchAtLogin: Bool
 
     public var onToggleEnabled: (String, Bool) -> Void
@@ -31,25 +32,30 @@ public final class PluginManagerModel: ObservableObject {
     public var onSettings: (String) -> Void
     public var onLaunchAtLogin: (Bool) -> Void
     public var onOpenFolder: () -> Void
+    public var onChooseFolder: () -> Void
     public var onRefreshAll: () -> Void
 
     public init(
         rows: [PluginManagerRow],
+        currentDirectory: String,
         launchAtLogin: Bool,
         onToggleEnabled: @escaping (String, Bool) -> Void,
         onReveal: @escaping (String) -> Void,
         onSettings: @escaping (String) -> Void,
         onLaunchAtLogin: @escaping (Bool) -> Void,
         onOpenFolder: @escaping () -> Void,
+        onChooseFolder: @escaping () -> Void,
         onRefreshAll: @escaping () -> Void
     ) {
         self.rows = rows
+        self.currentDirectory = currentDirectory
         self.launchAtLogin = launchAtLogin
         self.onToggleEnabled = onToggleEnabled
         self.onReveal = onReveal
         self.onSettings = onSettings
         self.onLaunchAtLogin = onLaunchAtLogin
         self.onOpenFolder = onOpenFolder
+        self.onChooseFolder = onChooseFolder
         self.onRefreshAll = onRefreshAll
     }
 
@@ -113,6 +119,17 @@ public struct PluginManagerView: View {
             }
 
             Divider()
+
+            HStack(spacing: 8) {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Plugins folder").font(.caption).foregroundStyle(.secondary)
+                    Text((model.currentDirectory as NSString).abbreviatingWithTildeInPath)
+                        .font(.caption).lineLimit(1).truncationMode(.middle)
+                }
+                Spacer()
+                Button("Choose…") { model.onChooseFolder() }
+            }
+
             Toggle("Launch Vee at login", isOn: Binding(
                 get: { model.launchAtLogin },
                 set: { model.launchAtLogin = $0; model.onLaunchAtLogin($0) }
