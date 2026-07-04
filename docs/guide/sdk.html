@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TypeScript SDK — Vee docs</title>
+  <meta name="description" content="vee-plugins is a zero-dependency TypeScript SDK for writing Vee plugins with typed Menu/Section builders. Node runs the .ts directly — no build step.">
+  <link rel="canonical" href="https://navbytes.github.io/vee/guide/sdk.html">
+  <link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
+  <link rel="stylesheet" href="../assets/style.css">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Vee">
+  <meta property="og:title" content="TypeScript SDK — Vee docs">
+  <meta property="og:description" content="vee-plugins is a zero-dependency TypeScript SDK for writing Vee plugins with typed Menu/Section builders. Node runs the .ts directly — no build step.">
+  <meta property="og:url" content="https://navbytes.github.io/vee/guide/sdk.html">
+  <meta property="og:image" content="https://navbytes.github.io/vee/assets/og-image.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="TypeScript SDK — Vee docs">
+  <meta name="twitter:description" content="vee-plugins is a zero-dependency TypeScript SDK for writing Vee plugins with typed Menu/Section builders. Node runs the .ts directly — no build step.">
+  <meta name="twitter:image" content="https://navbytes.github.io/vee/assets/og-image.png">
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="../index.html" aria-label="Vee home">
+      <img class="mark" src="../assets/favicon.svg" alt="" width="28" height="28">
+      <span><b>Vee</b></span>
+    </a>
+    <button class="nav-toggle" aria-label="Toggle navigation" aria-expanded="false" aria-controls="nav-links">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+    </button>
+    <ul class="nav-links" id="nav-links">
+      <li><a href="../index.html#features">Features</a></li>
+      <li><a href="../index.html#trust">Trust</a></li>
+      <li><a href="../compare/index.html">Compare</a></li>
+      <li><a href="./index.html" aria-current="page">Docs</a></li>
+      <li><a class="nav-cta" href="https://github.com/navbytes/vee" rel="noopener">GitHub</a></li>
+    </ul>
+  </div>
+</header>
+<div class="docs-layout">
+  <aside class="docs-side" aria-label="Documentation navigation">
+    <p class="docs-nav-title">Documentation</p>
+<ul class="docs-nav">
+<li><a href="./index.html">Overview</a></li>
+<li><a href="./getting-started.html">Getting started</a></li>
+<li><a href="./migrating-from-swiftbar.html">Migrating from SwiftBar / xbar</a></li>
+<li><a href="./plugin-authoring.html">Plugin authoring</a></li>
+<li><a href="./trust-model.html">Trust model</a></li>
+<li><a href="./preferences.html">Preferences</a></li>
+<li><a href="./sdk.html" aria-current="page">TypeScript SDK</a></li>
+<li><a href="./cli-and-urls.html">CLI &amp; URL actions</a></li>
+<li><a href="./faq.html">FAQ</a></li>
+<li><a href="./troubleshooting.html">Troubleshooting</a></li>
+</ul>
+  </aside>
+  <main class="docs-main" id="main">
+    <article class="docs-content">
+      <p class="doc-hero-note">Vee documentation</p>
+<h1>TypeScript SDK</h1>
+<p><code>vee-plugins</code> is a tiny, zero-dependency TypeScript SDK for writing Vee plugins with typed builders instead of hand-formatting the xbar/SwiftBar text protocol. Node runs the TypeScript directly (type-stripping), so there is <strong>no build step</strong> — you drop a <code>.ts</code> file straight into your plugins folder.</p>
+<p>The SDK lives in the <a href="https://github.com/navbytes/vee/tree/main/plugins" rel="noopener"><code>plugins/</code></a> directory of the repository.</p>
+<h2 id="requirements">Requirements</h2>
+<ul>
+<li>Node 24 or later (for native TypeScript execution / type stripping).</li>
+</ul>
+<h2 id="layout">Layout</h2>
+<div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">text</span></div><pre><code>plugins/
+├─ src/vee.ts        # the SDK: Menu, Section, ItemOptions
+├─ examples/*.ts     # example plugins; each exports build(): string
+├─ fixtures/*.txt    # golden output for each example
+├─ test/*.test.ts    # drift guard (see below)
+├─ package.json
+└─ tsconfig.json</code></pre></div>
+<h2 id="hello-world">Hello world</h2>
+<p>Create <code>cpu.5s.ts</code> and import the SDK:</p>
+<div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">ts</span></div><pre><code>#!/usr/bin/env node
+import { Menu } from "./src/vee.ts";
+
+const menu = new Menu();
+menu.title("CPU 12%", { color: "green", sfimage: "cpu" });
+
+const d = menu.dropdown;
+d.item("Top processes", { href: "https://example.com/procs" });
+d.separator();
+
+const details = d.submenu("Details");
+details.item("Load: 1.20");
+details.item("Cores: 8");
+
+d.item("Refresh", { refresh: true });
+
+menu.print();</code></pre></div>
+<p>Make it executable and drop it in your plugins folder:</p>
+<div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">sh</span></div><pre><code>chmod +x cpu.5s.ts</code></pre></div>
+<p>The <code>.5s</code> in the filename sets a 5-second refresh, exactly as with any other plugin (see <a href="plugin-authoring.html#filenames-and-refresh-intervals">plugin authoring</a>). Adjust the import path to point at wherever <code>src/vee.ts</code> lives relative to your plugin.</p>
+<h2 id="the-api">The API</h2>
+<h3 id="menu"><code>Menu</code></h3>
+<p>The top-level menu: title line(s) plus a dropdown.</p>
+<ul>
+<li><code>title(text, options?)</code> — add a menu-bar title line. Call it more than once for multiple title lines.</li>
+<li><code>dropdown</code> — a getter returning a <code>Section</code> for the dropdown body (everything after <code>---</code>).</li>
+<li><code>toString()</code> — render the whole menu to the text protocol string.</li>
+<li><code>print()</code> — write <code>toString()</code> (plus a trailing newline) to stdout. This is what a real plugin calls.</li>
+</ul>
+<h3 id="section"><code>Section</code></h3>
+<p>A menu section at a given submenu depth (0 = top level).</p>
+<ul>
+<li><code>item(text, options?)</code> — add a menu item. Returns <code>this</code> for chaining.</li>
+<li><code>separator()</code> — add a <code>---</code> divider. Returns <code>this</code>.</li>
+<li><code>submenu(text, options?)</code> — add an item and return a new <code>Section</code> for its children (one level deeper).</li>
+</ul>
+<h3 id="itemoptions"><code>ItemOptions</code></h3>
+<p>Options map onto the line parameters in the <a href="plugin-authoring.html#line-parameters">authoring reference</a>. The supported keys are:</p>
+<p><code>color</code>, <code>size</code>, <code>font</code>, <code>length</code>, <code>href</code>, <code>shell</code> (with <code>params: string[]</code> → <code>param1..N</code>), <code>terminal</code>, <code>refresh</code>, <code>alternate</code>, <code>disabled</code>, <code>checked</code>, <code>key</code>, <code>tooltip</code>, <code>sfimage</code>, <code>md</code>, <code>badge</code>, <code>symbolize</code>.</p>
+<p>For example:</p>
+<div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">ts</span></div><pre><code>d.item("Open build", { shell: "/usr/bin/open", params: ["-a", "Xcode"], terminal: false });
+d.item("Inbox", { badge: "12" });
+d.item("**Bold** text", { md: true });
+d.item("Status :checkmark.circle:", { symbolize: true });</code></pre></div>
+<p>Values containing spaces or <code>|</code> are quoted automatically.</p>
+<h2 id="the-no-build-step-note">The no-build-step note</h2>
+<p>There is deliberately no compiler or bundler in the loop. Node 24+ strips the TypeScript types at load time and runs the file, so:</p>
+<ul>
+<li>Your plugin is a plain <code>.ts</code> file with a <code>#!/usr/bin/env node</code> shebang.</li>
+<li>You edit it and Vee re-runs it — nothing to compile.</li>
+<li>The SDK ships as source (<code>src/vee.ts</code>), imported directly.</li>
+</ul>
+<h2 id="drift-guard-and-fixtures">Drift guard and fixtures</h2>
+<p>The SDK, the golden fixtures, and the Swift parser are kept in lockstep by a fixture drift guard:</p>
+<ul>
+<li>Each example in <code>examples/*.ts</code> exports a <code>build(): string</code> function.</li>
+<li>Its committed output lives in <code>fixtures/&lt;name&gt;.txt</code>.</li>
+<li><code>test/drift.test.ts</code> asserts that every example's <code>build()</code> still matches its fixture.</li>
+<li>The <strong>same fixtures</strong> are parsed by the Swift <code>VeePluginFormat</code> tests. So if the SDK's output format ever diverges from what the Swift parser expects, a test fails on one side or the other.</li>
+</ul>
+<p>Commands (run from <code>plugins/</code>):</p>
+<div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">sh</span></div><pre><code>npm test                 # run the drift guard (node --test)
+npm run build:fixtures   # regenerate fixtures from the examples</code></pre></div>
+<p>If you change the SDK's output, run <code>npm run build:fixtures</code> to update the golden files, then <code>npm test</code> to confirm — and the Swift-side tests will confirm the parser still agrees.</p>
+<h2 id="see-also">See also</h2>
+<ul>
+<li><a href="plugin-authoring.html">Plugin authoring reference</a> — the underlying text format the SDK emits.</li>
+<li><a href="getting-started.html">Getting started</a> — where the plugins folder is.</li>
+</ul>
+    </article>
+    <nav class="doc-nextprev" aria-label="Guide pagination"><a class="prev" href="./preferences.html"><span class="dir">&larr; Previous</span><span class="lbl">Preferences</span></a><a class="next" href="./cli-and-urls.html"><span class="dir">Next &rarr;</span><span class="lbl">CLI &amp; URL actions</span></a></nav>
+  </main>
+</div>
+<script src="../assets/app.js" defer></script>
+</body>
+</html>

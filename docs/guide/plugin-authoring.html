@@ -1,0 +1,237 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Plugin authoring reference — Vee docs</title>
+  <meta name="description" content="The full Vee plugin reference: filenames and intervals, menu structure, line parameters, metadata headers, SF Symbols, ANSI, Markdown, streaming, and cron.">
+  <link rel="canonical" href="https://navbytes.github.io/vee/guide/plugin-authoring.html">
+  <link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
+  <link rel="stylesheet" href="../assets/style.css">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Vee">
+  <meta property="og:title" content="Plugin authoring reference — Vee docs">
+  <meta property="og:description" content="The full Vee plugin reference: filenames and intervals, menu structure, line parameters, metadata headers, SF Symbols, ANSI, Markdown, streaming, and cron.">
+  <meta property="og:url" content="https://navbytes.github.io/vee/guide/plugin-authoring.html">
+  <meta property="og:image" content="https://navbytes.github.io/vee/assets/og-image.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Plugin authoring reference — Vee docs">
+  <meta name="twitter:description" content="The full Vee plugin reference: filenames and intervals, menu structure, line parameters, metadata headers, SF Symbols, ANSI, Markdown, streaming, and cron.">
+  <meta name="twitter:image" content="https://navbytes.github.io/vee/assets/og-image.png">
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="../index.html" aria-label="Vee home">
+      <img class="mark" src="../assets/favicon.svg" alt="" width="28" height="28">
+      <span><b>Vee</b></span>
+    </a>
+    <button class="nav-toggle" aria-label="Toggle navigation" aria-expanded="false" aria-controls="nav-links">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+    </button>
+    <ul class="nav-links" id="nav-links">
+      <li><a href="../index.html#features">Features</a></li>
+      <li><a href="../index.html#trust">Trust</a></li>
+      <li><a href="../compare/index.html">Compare</a></li>
+      <li><a href="./index.html" aria-current="page">Docs</a></li>
+      <li><a class="nav-cta" href="https://github.com/navbytes/vee" rel="noopener">GitHub</a></li>
+    </ul>
+  </div>
+</header>
+<div class="docs-layout">
+  <aside class="docs-side" aria-label="Documentation navigation">
+    <p class="docs-nav-title">Documentation</p>
+<ul class="docs-nav">
+<li><a href="./index.html">Overview</a></li>
+<li><a href="./getting-started.html">Getting started</a></li>
+<li><a href="./migrating-from-swiftbar.html">Migrating from SwiftBar / xbar</a></li>
+<li><a href="./plugin-authoring.html" aria-current="page">Plugin authoring</a></li>
+<li><a href="./trust-model.html">Trust model</a></li>
+<li><a href="./preferences.html">Preferences</a></li>
+<li><a href="./sdk.html">TypeScript SDK</a></li>
+<li><a href="./cli-and-urls.html">CLI &amp; URL actions</a></li>
+<li><a href="./faq.html">FAQ</a></li>
+<li><a href="./troubleshooting.html">Troubleshooting</a></li>
+</ul>
+  </aside>
+  <main class="docs-main" id="main">
+    <article class="docs-content">
+      <p class="doc-hero-note">Vee documentation</p>
+<h1>Plugin authoring reference</h1>
+<p>A Vee plugin is any executable that prints text to standard output in the xbar/SwiftBar format. This page is the full reference: filenames, menu structure, the parameter table, metadata headers, and the richer features (SF Symbols, ANSI, Markdown, streaming, cron).</p>
+<p>If you would rather build menus with typed code than format text by hand, see the <a href="sdk.html">TypeScript SDK</a>.</p>
+<h2 id="filenames-and-refresh-intervals">Filenames and refresh intervals</h2>
+<p>The refresh interval is encoded in the filename as <code>name.INTERVAL.ext</code>:</p>
+<div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">text</span></div><pre><code>cpu.5s.sh      → run every 5 seconds
+mail.10m.py    → run every 10 minutes
+backup.1h.rb   → run every hour
+report.1d.js   → run every day
+ping.500ms.sh  → run every 500 milliseconds
+weather.sh     → no interval → run once / on demand only</code></pre></div>
+<p>Interval units: <code>ms</code> (milliseconds), <code>s</code> (seconds), <code>m</code> (minutes), <code>h</code> (hours), <code>d</code> (days). The interval token is only recognised when it sits immediately before the extension and there is a name in front of it, so <code>10s.sh</code> is treated as a plugin named <code>10s</code> with no interval, not an anonymous 10-second plugin.</p>
+<p>A plugin without an interval token runs on demand (and on launch). You can also drive scheduling with a cron header — see <a href="#cron-schedules">Cron schedules</a>.</p>
+<p>Make every plugin executable:</p>
+<div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">sh</span></div><pre><code>chmod +x cpu.5s.sh</code></pre></div>
+<p>If a file is not marked executable, Vee still tries to run it using its shebang interpreter, falling back to <code>/bin/bash</code>. Marking it <code>+x</code> is the reliable path.</p>
+<h2 id="title-vs-dropdown">Title vs. dropdown</h2>
+<p>Standard output is split into two parts by the first <code>---</code> line:</p>
+<div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">text</span></div><pre><code>CPU 12%          ← menu-bar title (before ---)
+---              ← separator
+Top processes    ← dropdown items (after ---)
+Details</code></pre></div>
+<ul>
+<li>Everything <strong>before</strong> the first <code>---</code> is the <strong>menu-bar title</strong>. You can print multiple title lines; Vee cycles or stacks them.</li>
+<li>Everything <strong>after</strong> <code>---</code> is the <strong>dropdown menu</strong>.</li>
+<li>A plugin with no <code>---</code> shows only a title and no dropdown.</li>
+</ul>
+<h2 id="separators-and-submenus">Separators and submenus</h2>
+<ul>
+<li><code>---</code> on its own line inside the dropdown draws a divider.</li>
+<li>Prefix a line with <code>--</code> to nest it one level into a submenu. The item immediately above becomes the submenu's parent. Each extra <code>--</code> nests one more level.</li>
+</ul>
+<div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">text</span></div><pre><code>---
+Network
+-- Wi-Fi: connected
+-- IP: 192.168.1.20
+-- Speed
+---- Down: 120 Mbps
+---- Up: 24 Mbps</code></pre></div>
+<p>Here <code>Network</code> is a submenu containing <code>Wi-Fi</code>, <code>IP</code>, and a further <code>Speed</code> submenu.</p>
+<h2 id="line-parameters">Line parameters</h2>
+<p>Append <code>| key=value key2=value2 …</code> to any line to attach parameters. Quote values that contain spaces (<code>title="Open in browser"</code>), and escape quotes with <code>\"</code>.</p>
+<div class="table-scroll"><table><thead><tr><th>Parameter</th><th>Description</th></tr></thead><tbody><tr><td><code>color</code></td><td>Text color — a named color (<code>red</code>, <code>green</code>, …) or a hex value like <code>#00ff00</code>.</td></tr><tr><td><code>font</code></td><td>Font family name for the text.</td></tr><tr><td><code>size</code></td><td>Font point size.</td></tr><tr><td><code>length</code></td><td>Truncate the displayed text to this many characters.</td></tr><tr><td><code>trim</code></td><td><code>true</code>/<code>false</code> — trim surrounding whitespace from the text.</td></tr><tr><td><code>href</code></td><td>Open this URL when the item is clicked.</td></tr><tr><td><code>shell</code> / <code>bash</code></td><td>Run this command on click. Positional args come from <code>param0</code>, <code>param1</code>, …</td></tr><tr><td><code>param0</code>, <code>param1</code>, …</td><td>Ordered arguments passed to <code>shell</code>/<code>bash</code>.</td></tr><tr><td><code>terminal</code></td><td><code>true</code> to run the <code>shell</code> command in a visible Terminal window; <code>false</code> to run it in the background.</td></tr><tr><td><code>refresh</code></td><td><code>true</code> — re-run the plugin when the item is clicked.</td></tr><tr><td><code>dropdown</code></td><td><code>false</code> — show the line only in the menu bar, not the dropdown.</td></tr><tr><td><code>alternate</code></td><td><code>true</code> — this line is the Option-key alternate of the line above it.</td></tr><tr><td><code>disabled</code></td><td><code>true</code> — render the item greyed-out and non-clickable.</td></tr><tr><td><code>key</code></td><td>Keyboard shortcut for the item (e.g. <code>key=Cmd+R</code>).</td></tr><tr><td><code>image</code></td><td>Base64-encoded image (or file reference) shown next to the text.</td></tr><tr><td><code>templateImage</code></td><td>Like <code>image</code>, but treated as a template image that adapts to light/dark.</td></tr><tr><td><code>sfimage</code></td><td>SF Symbol name to show as the item's icon (e.g. <code>sfimage=cpu</code>).</td></tr><tr><td><code>sfcolor</code></td><td>Color(s) for the SF Symbol; comma-separated for multicolor symbols.</td></tr><tr><td><code>sfsize</code></td><td>Point size for the SF Symbol.</td></tr><tr><td><code>sfconfig</code></td><td>Advanced SF Symbol configuration string.</td></tr><tr><td><code>symbolize</code></td><td><code>true</code> — render inline <code>:symbol.name:</code> tokens in the text as SF Symbols.</td></tr><tr><td><code>md</code> / <code>markdown</code></td><td><code>true</code> — render the text as inline Markdown (bold, italics, etc.).</td></tr><tr><td><code>ansi</code></td><td><code>true</code> — interpret ANSI color escape codes in the text.</td></tr><tr><td><code>emojize</code></td><td><code>true</code>/<code>false</code> — convert <code>:shortcode:</code> tokens (e.g. <code>:smile:</code>) into emoji.</td></tr><tr><td><code>tooltip</code></td><td>Hover tooltip text.</td></tr><tr><td><code>checked</code></td><td><code>true</code> — show a checkmark next to the item.</td></tr><tr><td><code>badge</code></td><td>A short badge/chip shown after the text (e.g. <code>badge=12</code>).</td></tr><tr><td><code>webview</code>, <code>webvieww</code>, <code>webviewh</code></td><td>Open a URL in a WebView popover, with optional width/height.</td></tr><tr><td><code>shortcut</code></td><td>Bind the item to a macOS Shortcut.</td></tr></tbody></table></div>
+<p>Unknown parameters are preserved rather than dropped, so the format can evolve without breaking existing plugins.</p>
+<h2 id="metadata-headers">Metadata headers</h2>
+<p>Put <code>&lt;xbar.*&gt;</code> / <code>&lt;swiftbar.*&gt;</code> tags anywhere in the file (usually in a comment block near the top). They are scanned regardless of the comment syntax, so they work in any language.</p>
+<div class="table-scroll"><table><thead><tr><th>Tag</th><th>Purpose</th></tr></thead><tbody><tr><td><code>&lt;xbar.title&gt;</code></td><td>Human-readable plugin name.</td></tr><tr><td><code>&lt;xbar.version&gt;</code></td><td>Plugin version.</td></tr><tr><td><code>&lt;xbar.author&gt;</code></td><td>Author name.</td></tr><tr><td><code>&lt;xbar.author.github&gt;</code></td><td>Author's GitHub handle.</td></tr><tr><td><code>&lt;xbar.desc&gt;</code></td><td>One-line description.</td></tr><tr><td><code>&lt;xbar.image&gt;</code></td><td>Preview image URL.</td></tr><tr><td><code>&lt;xbar.dependencies&gt;</code></td><td>Comma-separated tools the plugin needs (e.g. <code>python3,jq</code>).</td></tr><tr><td><code>&lt;xbar.abouturl&gt;</code></td><td>A link to the plugin's homepage.</td></tr><tr><td><code>&lt;xbar.var&gt;</code></td><td>A typed, user-editable preference — see <a href="preferences.html">Preferences</a>.</td></tr><tr><td><code>&lt;swiftbar.schedule&gt;</code></td><td>A cron schedule (one or more, `</td><td>`-separated).</td></tr><tr><td><code>&lt;swiftbar.type&gt;streamable&lt;/swiftbar.type&gt;</code></td><td>Marks the plugin as a long-running streaming plugin.</td></tr><tr><td><code>&lt;swiftbar.runInBash&gt;</code></td><td>Whether to run the script through bash.</td></tr><tr><td><code>&lt;swiftbar.refreshOnOpen&gt;</code></td><td>Re-run the plugin each time its menu opens.</td></tr><tr><td><code>&lt;swiftbar.environment&gt;</code></td><td>Inline environment variables, e.g. <code>[VAR1=a, VAR2=b]</code>.</td></tr><tr><td><code>&lt;swiftbar.hideAbout&gt;</code></td><td>Hide the default "About" item.</td></tr></tbody></table></div>
+<p>The <code>&lt;swiftbar.*&gt;</code> tags use the same names as their <code>&lt;xbar.*&gt;</code> counterparts where they overlap.</p>
+<h2 id="sf-symbols">SF Symbols</h2>
+<p>Use Apple's SF Symbols as icons or inline glyphs:</p>
+<ul>
+<li>As an item icon: <code>Some item | sfimage=bolt.fill</code></li>
+<li>Colored: <code>Battery | sfimage=battery.100 sfcolor=green</code></li>
+<li>Inline in text: <code>Status :checkmark.circle: | symbolize=true</code></li>
+</ul>
+<p>Browse names with Apple's <a href="https://developer.apple.com/sf-symbols/" rel="noopener">SF Symbols app</a>.</p>
+<h2 id="ansi-color">ANSI color</h2>
+<p>If your tool emits ANSI escape codes (many CLIs do), pass <code>ansi=true</code> to have Vee interpret them:</p>
+<div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">sh</span></div><pre><code>echo -e "\033[32mOK\033[0m | ansi=true"</code></pre></div>
+<h2 id="markdown">Markdown</h2>
+<p>Render inline Markdown with <code>md=true</code>:</p>
+<div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">text</span></div><pre><code>**Bold** and _italic_ | md=true</code></pre></div>
+<h2 id="streaming">Streaming</h2>
+<p>A streaming plugin stays running and pushes updates instead of being re-run on a timer. Mark it with <code>&lt;swiftbar.type&gt;streamable&lt;/swiftbar.type&gt;</code> and print a <code>~~~</code> line to signal "the menu that follows replaces the current one." Each block between <code>~~~</code> separators is a full menu render. Vee restarts the process with backoff if it exits.</p>
+<div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">bash</span></div><pre><code>#!/bin/bash
+# &lt;swiftbar.type&gt;streamable&lt;/swiftbar.type&gt;
+while true; do
+  echo "~~~"
+  echo "⏱ $(date +%T)"
+  sleep 1
+done</code></pre></div>
+<h2 id="cron-schedules">Cron schedules</h2>
+<p>Instead of (or in addition to) a filename interval, schedule a plugin with a 5-field cron expression:</p>
+<div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">bash</span></div><pre><code># &lt;swiftbar.schedule&gt;0 9 * * 1-5&lt;/swiftbar.schedule&gt;</code></pre></div>
+<p>The fields are <code>minute hour day-of-month month day-of-week</code>, supporting <code>*</code>, single values, lists (<code>a,b</code>), ranges (<code>a-b</code>), and steps (<code>*/n</code>). Day-of-week is <code>0</code>–<code>6</code> (0 = Sunday). Multiple schedules can be separated with <code>|</code>.</p>
+<h2 id="environment-variables-vee-injects">Environment variables Vee injects</h2>
+<p>Every plugin run inherits your shell environment plus these variables:</p>
+<p><strong>xbar compatibility</strong></p>
+<ul>
+<li><code>XBARDarkMode</code> — <code>true</code> when the system is in dark mode, else <code>false</code>.</li>
+</ul>
+<p><strong>SwiftBar compatibility</strong></p>
+<ul>
+<li><code>SWIFTBAR</code> — <code>1</code> when running under Vee's SwiftBar-compatible runtime.</li>
+<li><code>SWIFTBAR_VERSION</code>, <code>SWIFTBAR_BUILD</code> — the app version.</li>
+<li><code>SWIFTBAR_PLUGINS_PATH</code> — the plugins directory.</li>
+<li><code>SWIFTBAR_PLUGIN_PATH</code> — the absolute path of this plugin.</li>
+<li><code>SWIFTBAR_PLUGIN_CACHE_PATH</code>, <code>SWIFTBAR_PLUGIN_DATA_PATH</code> — per-app cache and data directories.</li>
+<li><code>OS_APPEARANCE</code> — <code>Dark</code> or <code>Light</code>.</li>
+<li><code>OS_VERSION_MAJOR</code>, <code>OS_VERSION_MINOR</code>, <code>OS_VERSION_PATCH</code> — the macOS version.</li>
+</ul>
+<p><strong>Vee-native</strong></p>
+<ul>
+<li><code>VEE</code> — <code>1</code>.</li>
+<li><code>VEE_VERSION</code> — the app version.</li>
+<li><code>VEE_PLUGIN_PATH</code> — the absolute path of this plugin.</li>
+</ul>
+<p>Any values from the plugin's declared <code>&lt;xbar.var&gt;</code> <a href="preferences.html">preferences</a> are also injected as environment variables (they take precedence over the above).</p>
+<h2 id="worked-examples">Worked examples</h2>
+<h3 id="1-bash-cpu-usage-with-a-submenu">1. Bash — CPU usage with a submenu</h3>
+<p>Filename: <code>cpu.5s.sh</code></p>
+<div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">bash</span></div><pre><code>#!/bin/bash
+# &lt;xbar.title&gt;CPU&lt;/xbar.title&gt;
+# &lt;xbar.desc&gt;Shows CPU load in the menu bar.&lt;/xbar.desc&gt;
+# &lt;xbar.author&gt;You&lt;/xbar.author&gt;
+
+load=$(uptime | awk -F'load average:' '{print $2}' | awk -F, '{print $1}' | xargs)
+
+echo "CPU $load | sfimage=cpu"
+echo "---"
+echo "Top processes"
+top -l 1 -o cpu -n 5 -stats command,cpu | tail -n 5 | while read -r line; do
+  echo "--$line | font=Menlo"
+done
+echo "---"
+echo "Activity Monitor | bash=/usr/bin/open param0=-a param1='Activity Monitor' terminal=false"
+echo "Refresh | refresh=true"</code></pre></div>
+<h3 id="2-python-github-notifications-with-a-preference-and-a-link">2. Python — GitHub notifications with a preference and a link</h3>
+<p>Filename: <code>github.10m.py</code></p>
+<div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">python</span></div><pre><code>#!/usr/bin/env python3
+# &lt;xbar.title&gt;GitHub Notifications&lt;/xbar.title&gt;
+# &lt;xbar.desc&gt;Unread GitHub notifications count.&lt;/xbar.desc&gt;
+# &lt;xbar.dependencies&gt;python3&lt;/xbar.dependencies&gt;
+# &lt;xbar.var&gt;string(GITHUB_TOKEN=): A GitHub personal access token.&lt;/xbar.var&gt;
+# &lt;vee.network&gt;api.github.com&lt;/vee.network&gt;
+# &lt;vee.secrets&gt;GITHUB_TOKEN&lt;/vee.secrets&gt;
+
+import os, json, urllib.request
+
+token = os.environ.get("GITHUB_TOKEN", "")
+if not token:
+    print("GH ⚙️")
+    print("---")
+    print("Set a token in Vee settings")
+    raise SystemExit
+
+req = urllib.request.Request(
+    "https://api.github.com/notifications",
+    headers={"Authorization": f"Bearer {token}"},
+)
+items = json.load(urllib.request.urlopen(req))
+
+print(f"GH {len(items)} | sfimage=bell")
+print("---")
+for n in items[:10]:
+    title = n["subject"]["title"]
+    print(f"{title} | href=https://github.com/notifications")
+print("---")
+print("Refresh | refresh=true")</code></pre></div>
+<p>This example also declares a <a href="preferences.html">preference</a> (<code>&lt;xbar.var&gt;</code>) and its <a href="trust-model.html">trust</a> footprint (<code>&lt;vee.network&gt;</code>, <code>&lt;vee.secrets&gt;</code>).</p>
+<h3 id="3-bash-streaming-clock">3. Bash — streaming clock</h3>
+<p>Filename: <code>clock.sh</code> (no interval — streaming drives the updates)</p>
+<div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">bash</span></div><pre><code>#!/bin/bash
+# &lt;xbar.title&gt;Clock&lt;/xbar.title&gt;
+# &lt;swiftbar.type&gt;streamable&lt;/swiftbar.type&gt;
+
+while true; do
+  echo "~~~"
+  echo "🕒 $(date +%H:%M:%S)"
+  echo "---"
+  echo "$(date '+%A, %B %d')"
+  sleep 1
+done</code></pre></div>
+<h2 id="see-also">See also</h2>
+<ul>
+<li><a href="trust-model.html">Trust model</a> — declare what your plugin accesses.</li>
+<li><a href="preferences.html">Preferences</a> — declare typed settings and secrets.</li>
+<li><a href="cli-and-urls.html">CLI and URL actions</a> — trigger refresh/notify from a plugin.</li>
+<li><a href="troubleshooting.html">Troubleshooting</a> — when a plugin does not appear or errors.</li>
+</ul>
+    </article>
+    <nav class="doc-nextprev" aria-label="Guide pagination"><a class="prev" href="./migrating-from-swiftbar.html"><span class="dir">&larr; Previous</span><span class="lbl">Migrating from SwiftBar / xbar</span></a><a class="next" href="./trust-model.html"><span class="dir">Next &rarr;</span><span class="lbl">Trust model</span></a></nav>
+  </main>
+</div>
+<script src="../assets/app.js" defer></script>
+</body>
+</html>

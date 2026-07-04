@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Vee">
+  <defs>
+    <linearGradient id="vg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#5b5be6"/>
+      <stop offset="1" stop-color="#2f6bfb"/>
+    </linearGradient>
+    <linearGradient id="vgloss" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.35"/>
+      <stop offset="0.5" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  <rect x="4" y="4" width="56" height="56" rx="15" fill="url(#vg)"/>
+  <rect x="4" y="4" width="56" height="56" rx="15" fill="url(#vgloss)"/>
+  <!-- menu-bar strip hint -->
+  <rect x="14" y="15" width="36" height="5" rx="2.5" fill="#ffffff" opacity="0.55"/>
+  <circle cx="45" cy="17.5" r="1.6" fill="#ffffff" opacity="0.9"/>
+  <!-- the V -->
+  <path d="M18 27 L30.5 48 a2 2 0 0 0 3.4 0 L46 27 a2 2 0 0 0 -1.7 -3 h-3.2 a2 2 0 0 0 -1.8 1.1 L32.2 40 L27.7 25.1 A2 2 0 0 0 25.9 24 h-3.3 A2 2 0 0 0 18 27 Z"
+        fill="#ffffff"/>
+</svg>

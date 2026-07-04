@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CLI and URL actions — Vee docs</title>
+  <meta name="description" content="Run Vee from source with swift run vee, and drive it at runtime with vee:// and swiftbar:// URL actions — refresh, enable/disable, toggle, and notify.">
+  <link rel="canonical" href="https://navbytes.github.io/vee/guide/cli-and-urls.html">
+  <link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
+  <link rel="stylesheet" href="../assets/style.css">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Vee">
+  <meta property="og:title" content="CLI and URL actions — Vee docs">
+  <meta property="og:description" content="Run Vee from source with swift run vee, and drive it at runtime with vee:// and swiftbar:// URL actions — refresh, enable/disable, toggle, and notify.">
+  <meta property="og:url" content="https://navbytes.github.io/vee/guide/cli-and-urls.html">
+  <meta property="og:image" content="https://navbytes.github.io/vee/assets/og-image.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="CLI and URL actions — Vee docs">
+  <meta name="twitter:description" content="Run Vee from source with swift run vee, and drive it at runtime with vee:// and swiftbar:// URL actions — refresh, enable/disable, toggle, and notify.">
+  <meta name="twitter:image" content="https://navbytes.github.io/vee/assets/og-image.png">
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="../index.html" aria-label="Vee home">
+      <img class="mark" src="../assets/favicon.svg" alt="" width="28" height="28">
+      <span><b>Vee</b></span>
+    </a>
+    <button class="nav-toggle" aria-label="Toggle navigation" aria-expanded="false" aria-controls="nav-links">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+    </button>
+    <ul class="nav-links" id="nav-links">
+      <li><a href="../index.html#features">Features</a></li>
+      <li><a href="../index.html#trust">Trust</a></li>
+      <li><a href="../compare/index.html">Compare</a></li>
+      <li><a href="./index.html" aria-current="page">Docs</a></li>
+      <li><a class="nav-cta" href="https://github.com/navbytes/vee" rel="noopener">GitHub</a></li>
+    </ul>
+  </div>
+</header>
+<div class="docs-layout">
+  <aside class="docs-side" aria-label="Documentation navigation">
+    <p class="docs-nav-title">Documentation</p>
+<ul class="docs-nav">
+<li><a href="./index.html">Overview</a></li>
+<li><a href="./getting-started.html">Getting started</a></li>
+<li><a href="./migrating-from-swiftbar.html">Migrating from SwiftBar / xbar</a></li>
+<li><a href="./plugin-authoring.html">Plugin authoring</a></li>
+<li><a href="./trust-model.html">Trust model</a></li>
+<li><a href="./preferences.html">Preferences</a></li>
+<li><a href="./sdk.html">TypeScript SDK</a></li>
+<li><a href="./cli-and-urls.html" aria-current="page">CLI &amp; URL actions</a></li>
+<li><a href="./faq.html">FAQ</a></li>
+<li><a href="./troubleshooting.html">Troubleshooting</a></li>
+</ul>
+  </aside>
+  <main class="docs-main" id="main">
+    <article class="docs-content">
+      <p class="doc-hero-note">Vee documentation</p>
+<h1>CLI and URL actions</h1>
+<p>Vee can be driven from the command line during development and controlled at runtime through URL actions. Plugins use those same URL schemes to trigger refreshes and post notifications.</p>
+<h2 id="running-from-source-swift-run-vee">Running from source (<code>swift run vee</code>)</h2>
+<p>For development, run the menu-bar app straight from the SwiftPM package:</p>
+<div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">sh</span></div><pre><code>swift build          # build the libraries + dev executable
+swift test           # run the test suites
+swift run vee        # launch the menu-bar app for development</code></pre></div>
+<p><code>swift run vee</code> starts the app so you can iterate on plugins and code without producing a full app bundle. See the project README for building the distributable, notarized <code>Vee.app</code>.</p>
+<p>While developing you can point Vee at a specific plugins folder with an environment variable, which overrides the folder chosen in the UI:</p>
+<div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">sh</span></div><pre><code>VEE_PLUGINS_DIR=~/dev/my-plugins swift run vee</code></pre></div>
+<h2 id="url-actions">URL actions</h2>
+<p>Vee registers two URL schemes: <code>vee://</code> and <code>swiftbar://</code>. The <code>swiftbar://</code> scheme is supported for compatibility, so plugins written for SwiftBar keep working. Both schemes accept the same actions.</p>
+<p>The <strong>action is the URL host</strong>, and parameters come from the query string. The plugin name is passed as <code>name</code> (or <code>path</code>).</p>
+<div class="table-scroll"><table><thead><tr><th>Action</th><th>Description</th><th>Example</th></tr></thead><tbody><tr><td><code>refreshallplugins</code> (alias <code>refreshall</code>)</td><td>Re-run every plugin.</td><td><code>vee://refreshallplugins</code></td></tr><tr><td><code>refreshplugin</code></td><td>Re-run one plugin by name.</td><td><code>vee://refreshplugin?name=cpu</code></td></tr><tr><td><code>enableplugin</code></td><td>Enable a plugin.</td><td><code>vee://enableplugin?name=cpu</code></td></tr><tr><td><code>disableplugin</code></td><td>Disable a plugin.</td><td><code>vee://disableplugin?name=cpu</code></td></tr><tr><td><code>toggleplugin</code></td><td>Toggle a plugin's enabled state.</td><td><code>vee://toggleplugin?name=cpu</code></td></tr><tr><td><code>notify</code></td><td>Post a system notification.</td><td><code>vee://notify?title=Done&amp;subtitle=Build&amp;body=Succeeded&amp;href=https://example.com</code></td></tr></tbody></table></div>
+<p>The same URLs work with the <code>swiftbar://</code> scheme, e.g. <code>swiftbar://refreshplugin?name=cpu</code>.</p>
+<h3 id="the-notify-action">The <code>notify</code> action</h3>
+<p><code>notify</code> posts a macOS notification. Its parameters:</p>
+<ul>
+<li><code>title</code> — the notification title.</li>
+<li><code>subtitle</code> — an optional subtitle.</li>
+<li><code>body</code> — the notification body text.</li>
+<li><code>href</code> — an optional URL to open when the notification is clicked.</li>
+</ul>
+<div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">text</span></div><pre><code>vee://notify?title=Backup&amp;subtitle=Nightly&amp;body=Completed%20successfully&amp;href=https://example.com</code></pre></div>
+<p>Remember to URL-encode parameter values that contain spaces or special characters.</p>
+<h2 id="triggering-actions-from-a-plugin">Triggering actions from a plugin</h2>
+<p>Because these are ordinary URLs, a plugin triggers them the same way it opens any link — either as an <code>href</code> on a menu item, or by opening the URL from the script.</p>
+<p><strong>As a clickable menu item</strong> (<code>href=</code>):</p>
+<div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">bash</span></div><pre><code>echo "Refresh now | href=vee://refreshplugin?name=cpu"
+echo "Enable weather | href=vee://enableplugin?name=weather"</code></pre></div>
+<p><strong>From the script itself</strong> (open the URL with <code>open</code>):</p>
+<div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">bash</span></div><pre><code># Notify when a long task finishes
+open "vee://notify?title=Build&amp;body=Done"
+
+# Force this plugin to re-render immediately
+open "vee://refreshplugin?name=$VEE_PLUGIN_PATH"</code></pre></div>
+<p>Note that a menu item can also refresh the plugin without a URL at all, using the <code>refresh=true</code> line parameter:</p>
+<div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">bash</span></div><pre><code>echo "Refresh | refresh=true"</code></pre></div>
+<p>Use <code>refresh=true</code> for the common "re-run me" case; use the URL actions when a plugin needs to refresh, enable/disable, or toggle a <em>different</em> plugin, or to post a notification.</p>
+<h2 id="see-also">See also</h2>
+<ul>
+<li><a href="plugin-authoring.html#line-parameters">Plugin authoring reference</a> — the <code>href</code> and <code>refresh</code> parameters.</li>
+<li><a href="plugin-authoring.html#environment-variables-vee-injects">Plugin authoring reference</a> — <code>VEE_PLUGIN_PATH</code> and other injected variables.</li>
+</ul>
+    </article>
+    <nav class="doc-nextprev" aria-label="Guide pagination"><a class="prev" href="./sdk.html"><span class="dir">&larr; Previous</span><span class="lbl">TypeScript SDK</span></a><a class="next" href="./faq.html"><span class="dir">Next &rarr;</span><span class="lbl">FAQ</span></a></nav>
+  </main>
+</div>
+<script src="../assets/app.js" defer></script>
+</body>
+</html>
