@@ -18,6 +18,9 @@ public enum MenuBuilder {
             case .separator:
                 menu.addItem(.separator())
             case .item(let item):
+                // `dropdown=false` marks a menu-bar-only line; omit it from the
+                // dropdown (its alternate goes with it).
+                if item.params.dropdown == false { continue }
                 menu.addItem(makeItem(item, target: target))
                 if let alternate = item.alternate {
                     menu.addItem(makeItem(alternate, target: target, isAlternate: true))
@@ -40,6 +43,10 @@ public enum MenuBuilder {
         if isAlternate {
             menuItem.isAlternate = true
             menuItem.keyEquivalentModifierMask = .option
+        } else if let key = item.params.key, let equivalent = KeyEquivalentParser.parse(key) {
+            // `key=`: attach a keyboard shortcut, active while the menu is open.
+            menuItem.keyEquivalent = equivalent.key
+            menuItem.keyEquivalentModifierMask = equivalent.modifiers
         }
 
         if !item.submenu.isEmpty {
@@ -52,9 +59,12 @@ public enum MenuBuilder {
         return menuItem
     }
 
-    /// A leaf item is clickable if it opens a URL, runs a shell command, or
-    /// requests a refresh. Purely-decorative lines stay inert.
+    /// A leaf item is clickable if it opens a URL, runs a shell command, runs a
+    /// macOS Shortcut, or requests a refresh. Purely-decorative lines stay inert.
     private static func isActionable(_ item: MenuItem) -> Bool {
-        item.params.href != nil || item.params.shell != nil || item.params.refresh == true
+        item.params.href != nil
+            || item.params.shell != nil
+            || item.params.refresh == true
+            || item.params.swiftbar.shortcut?.isEmpty == false
     }
 }

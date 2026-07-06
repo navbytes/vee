@@ -7,6 +7,12 @@ All notable changes to Vee are documented here. The format is based on
 ## [Unreleased]
 
 ### Added
+- Menu-item keyboard shortcuts: the `key=` parameter (e.g. `key=Cmd+R`,
+  `key=shift+F2`) is now applied to dropdown items while the menu is open.
+- `shortcut=` runs a named macOS Shortcut when a menu item is clicked — a
+  lightweight bridge into the Shortcuts ecosystem.
+- `dropdown=false` lines are now honored: they are kept out of the dropdown.
+- `swiftbar://notify?href=…` notifications are now clickable and open the URL.
 - Liquid Glass redesign of the Discover browser, Plugin Manager, install trust
   sheet, and the auto-generated plugin settings form.
 - Marketing + documentation website (GitHub Pages, under `docs/`).

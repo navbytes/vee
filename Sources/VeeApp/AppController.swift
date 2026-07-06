@@ -67,8 +67,8 @@ public final class AppController: NSObject, NSApplicationDelegate {
             setEnabled(false, id: name)
         case .togglePlugin(let name):
             setEnabled(prefs.isDisabled(name), id: name)
-        case .notify(let title, let subtitle, let body, _):
-            Notifier.post(title: title, subtitle: subtitle, body: body)
+        case .notify(let title, let subtitle, let body, let href):
+            Notifier.post(title: title, subtitle: subtitle, body: body, href: href)
         case .unknown:
             break
         }
