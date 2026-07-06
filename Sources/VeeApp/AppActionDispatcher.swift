@@ -27,8 +27,27 @@ final class AppActionDispatcher: MenuActionHandling {
             }
         } else if let url = params.href {
             NSWorkspace.shared.open(url)
+        } else if let shortcut = params.swiftbar.shortcut, !shortcut.isEmpty {
+            runShortcut(named: shortcut, refreshAfter: params.refresh == true)
         } else if params.refresh == true {
             onRefresh()
+        }
+    }
+
+    /// Runs a macOS Shortcut by name via the `shortcuts` CLI (`shortcut=` param).
+    private func runShortcut(named name: String, refreshAfter: Bool) {
+        let invocation = ProcessInvocation(
+            launchPath: "/usr/bin/shortcuts",
+            arguments: ["run", name],
+            environment: baseEnvironment
+        )
+        let runner = self.runner
+        let onRefresh = self.onRefresh
+        Task {
+            _ = try? await runner.run(invocation)
+            if refreshAfter {
+                await MainActor.run { onRefresh() }
+            }
         }
     }
 

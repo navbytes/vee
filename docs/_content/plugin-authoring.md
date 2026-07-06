@@ -80,7 +80,7 @@ Append `| key=value key2=value2 …` to any line to attach parameters. Quote val
 | `dropdown` | `false` — show the line only in the menu bar, not the dropdown. |
 | `alternate` | `true` — this line is the Option-key alternate of the line above it. |
 | `disabled` | `true` — render the item greyed-out and non-clickable. |
-| `key` | Keyboard shortcut for the item (e.g. `key=Cmd+R`). |
+| `key` | Keyboard shortcut for the item, active while the menu is open (e.g. `key=Cmd+R`, `key=shift+F2`, `key=cmd+space`). |
 | `image` | Base64-encoded image (or file reference) shown next to the text. |
 | `templateImage` | Like `image`, but treated as a template image that adapts to light/dark. |
 | `sfimage` | SF Symbol name to show as the item's icon (e.g. `sfimage=cpu`). |
@@ -94,8 +94,8 @@ Append `| key=value key2=value2 …` to any line to attach parameters. Quote val
 | `tooltip` | Hover tooltip text. |
 | `checked` | `true` — show a checkmark next to the item. |
 | `badge` | A short badge/chip shown after the text (e.g. `badge=12`). |
-| `webview`, `webvieww`, `webviewh` | Open a URL in a WebView popover, with optional width/height. |
-| `shortcut` | Bind the item to a macOS Shortcut. |
+| `shortcut` | Run a macOS Shortcut by name when the item is clicked (e.g. `shortcut="Start Meeting"`). |
+| `webview`, `webvieww`, `webviewh` | _Not yet supported._ Parsed for forward-compatibility; a WebView popover is on the roadmap. |
 
 Unknown parameters are preserved rather than dropped, so the format can evolve without breaking existing plugins.
 
