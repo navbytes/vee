@@ -42,6 +42,22 @@ final class ProcessRunnerIntegrationTests: XCTestCase {
         XCTAssertEqual(out.standardOutput.count, 75000 * 9) // "ABCDEFGH\n"
     }
 
+    /// Regression: a plugin spewing far more than the capture cap must be
+    /// truncated in memory (bounded-memory guarantee), not buffered wholesale —
+    /// while still draining to EOF so the child never blocks.
+    func testHugeOutputIsCappedNotUnbounded() async throws {
+        // Emit ~12 MB, well past the 8 MB cap.
+        let out = try await runner.run(ProcessInvocation(
+            launchPath: "/bin/sh",
+            arguments: ["-c", "head -c 12582912 /dev/zero"],
+            timeout: 30
+        ))
+        XCTAssertEqual(out.exitCode, 0)
+        XCTAssertFalse(out.timedOut)
+        XCTAssertLessThanOrEqual(out.standardOutput.utf8.count, 8 * 1024 * 1024)
+        XCTAssertGreaterThan(out.standardOutput.utf8.count, 4 * 1024 * 1024) // captured a lot, just bounded
+    }
+
     func testTimeoutTerminatesProcess() async throws {
         let start = Date()
         let out = try await runner.run(ProcessInvocation(
