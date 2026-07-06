@@ -1,12 +1,14 @@
 import AppKit
 import SwiftUI
+import VeePluginFormat
 import VeeUI
 
-/// Presents a plugin's inline `sparkline=…` series in a native `NSPopover`
-/// hosting a SwiftUI Swift Charts view (`SparklineChartView`). Like
-/// `WebViewPresenter`, this lives *outside* the `NSMenu` — the menu that
-/// launched it has already closed — so the menu itself stays native and
-/// leak-free. Only one popover is shown at a time.
+/// Presents a plugin's native Liquid Glass `NSPopover` — either a read-only
+/// `sparkline=…` chart (`SparklineChartView`) or an interactive `toggle=`/
+/// `slider=` control (`PluginControlView`). Like `WebViewPresenter`, this lives
+/// *outside* the `NSMenu` — the menu that launched it has already closed — so
+/// the menu itself stays native and leak-free. Only one popover is shown at a
+/// time.
 @MainActor
 final class PluginPopover: NSObject, NSPopoverDelegate {
     static let shared = PluginPopover()
@@ -17,16 +19,33 @@ final class PluginPopover: NSObject, NSPopoverDelegate {
     /// Retained so ARC doesn't drop the anchor while the popover is on screen.
     private var anchorWindow: NSWindow?
 
+    /// Shows an inline `sparkline=…` series as a Swift Charts popover.
     func show(series: [Double], title: String) {
+        present(size: NSSize(width: 260, height: 150)) {
+            NSHostingController(rootView: SparklineChartView(values: series, title: title))
+        }
+    }
+
+    /// Shows an interactive `toggle=`/`slider=` control. `onCommit` fires with
+    /// the settled numeric value each time the user changes the control.
+    func show(control: PluginControl, title: String, onCommit: @escaping @MainActor (Double) -> Void) {
+        present(size: NSSize(width: 260, height: 130)) {
+            NSHostingController(
+                rootView: PluginControlView(control: control, title: title, onCommit: onCommit)
+            )
+        }
+    }
+
+    /// Builds the transparent mouse-anchored window and shows `popover` from it.
+    /// Shared by every popover kind so positioning/leak behavior stays identical.
+    private func present(size: NSSize, makeContent: () -> NSViewController) {
         dismiss()
 
         let popover = NSPopover()
         popover.behavior = .transient
         popover.animates = true
-        popover.contentSize = NSSize(width: 260, height: 150)
-        popover.contentViewController = NSHostingController(
-            rootView: SparklineChartView(values: series, title: title)
-        )
+        popover.contentSize = size
+        popover.contentViewController = makeContent()
         popover.delegate = self
 
         let mouse = NSEvent.mouseLocation

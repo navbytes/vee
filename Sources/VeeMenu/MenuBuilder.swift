@@ -68,5 +68,6 @@ public enum MenuBuilder {
             || item.params.swiftbar.shortcut?.isEmpty == false
             || item.params.swiftbar.webview != nil
             || item.params.sparkline != nil
+            || item.params.control != nil
     }
 }
