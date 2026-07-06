@@ -99,6 +99,7 @@ Append `| key=value key2=value2 …` to any line to attach parameters. Quote val
 | `sparkline` | A comma-separated list of numbers (e.g. `sparkline=1,2,3,4,5`). Clicking the item opens a native Liquid Glass popover that renders the series as an inline Swift Charts sparkline — rich UI without a WebView. |
 | `toggle` | `toggle=on` / `toggle=off` (also `true`/`false`/`1`/`0`). Clicking opens a Liquid Glass popover with a switch; flipping it re-invokes the item's `shell=`/`bash=` with the new value. |
 | `slider` | `slider=min,max,value` (e.g. `slider=0,100,40`). Clicking opens a Liquid Glass popover with a slider; releasing it re-invokes the item's `shell=`/`bash=` with the chosen value. |
+| `progress`, `trackcolor`, `progressw`, `progressh` | `progress=<0..1>` or `progress=value,max` (e.g. `progress=0.72` or `progress=23.65,100`). Draws a real capsule bar **inline in the menu row**. Fill uses `color=`; `trackcolor=` is the groove, `progressw=`/`progressh=` set the bar size in points. |
 
 Unknown parameters are preserved rather than dropped, so the format can evolve without breaking existing plugins.
 
@@ -148,6 +149,28 @@ clamped into range. Malformed controls are ignored.
 > **Proposal, subject to change.** The `sparkline=`, `toggle=`, and `slider=`
 > syntax (and the popover surface they opt into) are an early proposal; the exact
 > convention may still evolve.
+
+### Inline progress bars (`progress=`)
+
+Unlike the popover items above, `progress=` draws a **real capsule bar right in
+the menu row** — no click, no popover. It's the native answer to hand-drawn
+block-glyph bars:
+
+```
+$23.65 of $100 | progress=23.65,100 color=#36C26E trackcolor=#3C4046 progressw=210
+Disk | progress=0.88 color=#F5A623
+```
+
+- `progress=<0..1>` (a fraction) **or** `progress=value,max` (mirrors `slider=`'s
+  grammar). The result is always clamped to `0…1`.
+- The **fill** color is the row's `color=`; `trackcolor=` sets the groove.
+- `progressw=` / `progressh=` set the bar's width/height in points (defaults 120×6).
+- The row's text renders to the left of the bar; the row auto-sizes so the label
+  never truncates. Unknown to xbar/SwiftBar, so plugins stay portable (they just
+  ignore it).
+
+Progress rows are display-only (they don't fire a click action) and can't have a
+submenu.
 
 ## Metadata headers
 

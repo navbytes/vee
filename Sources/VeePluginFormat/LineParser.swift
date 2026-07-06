@@ -78,6 +78,10 @@ enum LineParser {
         var shellPath: String?
         var terminal: Bool?
         var positional: [Int: String] = [:]
+        var progressFraction: Double?
+        var progressTrack: VeeColor?
+        var progressW: Double?
+        var progressH: Double?
 
         func bool(_ v: String) -> Bool { v == "true" || v == "1" || v == "yes" }
 
@@ -136,6 +140,20 @@ enum LineParser {
                 } else if !value.isEmpty {
                     diagnostics.append(.init(severity: .warning, message: "slider= expects 'min,max,value' with min < max"))
                 }
+            case "progress":
+                // Vee-native: `0..1` (a single fraction) or `value,max`. Result is
+                // always clamped to 0...1.
+                let nums = value.split(separator: ",").compactMap { Double($0.trimmingCharacters(in: .whitespaces)) }
+                if nums.count == 1 {
+                    progressFraction = Swift.min(Swift.max(nums[0], 0), 1)
+                } else if nums.count == 2, nums[1] != 0 {
+                    progressFraction = Swift.min(Swift.max(nums[0] / nums[1], 0), 1)
+                } else if !value.isEmpty {
+                    diagnostics.append(.init(severity: .warning, message: "progress= expects a fraction (0..1) or 'value,max'"))
+                }
+            case "trackcolor": progressTrack = VeeColor.parse(value)
+            case "progressw": progressW = Double(value)
+            case "progressh": progressH = Double(value)
             default:
                 if key.hasPrefix("param"), let n = Int(key.dropFirst(5)) {
                     positional[n] = value
@@ -151,6 +169,10 @@ enum LineParser {
             p.shell = ShellCommand(launchPath: path, arguments: args, openInTerminal: terminal ?? false)
         } else if !positional.isEmpty {
             diagnostics.append(.init(severity: .warning, message: "paramN given without shell=/bash="))
+        }
+
+        if let fraction = progressFraction {
+            p.progress = ProgressParams(fraction: fraction, trackColor: progressTrack, width: progressW, height: progressH)
         }
 
         return (p, diagnostics)
