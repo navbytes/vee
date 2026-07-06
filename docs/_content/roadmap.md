@@ -149,10 +149,10 @@ capability keywords at install time and diffs detected-vs-declared. The leap is
 to make trust **observed at runtime** and to make *changes* to a plugin's
 footprint visible.
 
-- ⬜ **Trust diff on update.** When Discover updates an installed plugin, show a
+- ✅ **Trust diff on update.** When Discover updates an installed plugin, show a
   diff of its declared/detected capabilities ("this update adds filesystem-write
   and a new domain"). Reuses the existing `SourceScan` — the highest-value,
-  lowest-cost step; do this first. _(1 commit.)_
+  lowest-cost step; do this first. _(1 commit.)_ (VeeTrust/TrustDiff.swift)
 - ⬜ **Observed network.** Record the domains a plugin actually connects to (a
   lightweight local resolver/proxy shim around plugin subprocesses) and diff
   against `<vee.network>` declarations; surface undeclared connections in the
