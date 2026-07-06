@@ -19,7 +19,12 @@ final class AppActionDispatcher: MenuActionHandling {
 
     func perform(_ item: MenuItem) {
         let params = item.params
-        if let shell = params.shell {
+        // A control item also carries `shell=` (to re-invoke on change), so it
+        // must be handled before the plain `shell` branch — otherwise clicking
+        // it would fire the command immediately instead of opening the popover.
+        if let control = params.control {
+            presentControl(control, item: item)
+        } else if let shell = params.shell {
             if shell.openInTerminal {
                 runInTerminal(shell)
             } else {
@@ -35,6 +40,31 @@ final class AppActionDispatcher: MenuActionHandling {
             runShortcut(named: shortcut, refreshAfter: params.refresh == true)
         } else if params.refresh == true {
             onRefresh()
+        }
+    }
+
+    /// Opens the interactive control popover for `item`. When the user commits
+    /// a value, re-invokes the item's `shell=`/`bash=` command carrying that
+    /// value (`VEE_CONTROL_VALUE` + trailing arg), then refreshes if requested.
+    /// A control with no `shell` still shows — it just has nothing to re-invoke.
+    private func presentControl(_ control: PluginControl, item: MenuItem) {
+        let shell = item.params.shell
+        let refreshAfter = item.params.refresh == true
+        PluginPopover.shared.show(control: control, title: item.text) { [weak self] value in
+            guard let self, let shell else { return }
+            let invocation = ControlReinvocation.invocation(
+                shell: shell,
+                value: value,
+                baseEnvironment: self.baseEnvironment
+            )
+            let runner = self.runner
+            let onRefresh = self.onRefresh
+            Task {
+                _ = try? await runner.run(invocation)
+                if refreshAfter {
+                    await MainActor.run { onRefresh() }
+                }
+            }
         }
     }
 

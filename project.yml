@@ -27,6 +27,9 @@ targets:
     dependencies:
       - package: Vee
         product: VeeApp
+      # WidgetKit + Control Center extension, embedded in the app bundle.
+      - target: VeeWidgetExtension
+        embed: true
     info:
       path: App/Info.plist
       properties:
@@ -56,3 +59,38 @@ targets:
         CODE_SIGN_STYLE: Manual
         CODE_SIGN_IDENTITY: "-"
         DEVELOPMENT_TEAM: ""
+
+  # WidgetKit widget (plugin output on the desktop / Notification Center) + a
+  # Control Center control (refresh all plugins). Runs as a separate sandboxed
+  # process and talks to the app only through the App Group (VeeWidgetShared).
+  VeeWidgetExtension:
+    type: app-extension
+    platform: macOS
+    sources:
+      - WidgetExtension
+    dependencies:
+      - package: Vee
+        product: VeeWidgetShared
+    info:
+      path: WidgetExtension/Info.plist
+      properties:
+        CFBundleName: VeeWidgetExtension
+        CFBundleDisplayName: Vee
+        CFBundleShortVersionString: "0.1.2"
+        CFBundleVersion: "1"
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.vee.app.widgets
+        PRODUCT_NAME: VeeWidgetExtension
+        MARKETING_VERSION: "0.1.2"
+        CURRENT_PROJECT_VERSION: "1"
+        SWIFT_VERSION: "6.0"
+        ENABLE_HARDENED_RUNTIME: YES
+        CODE_SIGN_ENTITLEMENTS: WidgetExtension/WidgetExtension.entitlements
+        CODE_SIGN_STYLE: Manual
+        CODE_SIGN_IDENTITY: "-"
+        DEVELOPMENT_TEAM: ""
+        # Widget extensions must not carry a main-executable Info key.
+        GENERATE_INFOPLIST_FILE: NO
