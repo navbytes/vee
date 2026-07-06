@@ -83,12 +83,17 @@ incumbent to copy:
 - ✅ **Refresh on wake** with a regression test (`VeeApp/WakeMonitor.swift`,
   `WakeMonitorTests`).
 - ✅ **`swiftbar://` API parity.** `addplugin?src=…` and `setephemeralplugin`.
-- ⬜ **Prove reliability with a public soak benchmark.** A CI job (or a
-  documented, scripted local harness) that runs N plugins for many hours and
-  publishes an RSS/CPU-over-time graph, plus a "Vee vs SwiftBar after 24h"
-  comparison on the landing page. Reliability is built; it must be *proven*.
-  _(1 commit: add the soak harness + CI job; a follow-up commit wires the
-  published chart into the docs site.)_
+- 🟡 **Prove reliability with a public soak benchmark.** Harness + CI job
+  shipped: `Tests/VeeRuntimeTests/MemorySoakBenchmarkTests.swift` drives the real
+  execution/refresh pipeline (`RefreshTimer` → `PluginExecutor` →
+  `SystemProcessRunner` → `StreamAccumulator`) for a configurable window,
+  sampling RSS via `task_info`/`mach_task_basic_info` and asserting bounded memory
+  growth *and* that refreshes keep firing (no silent stall). It is opt-in
+  (`VEE_SOAK=1`) so it never slows normal `swift test`, and runs as its own
+  nightly/dispatch CI job (`.github/workflows/ci.yml`, job `soak`, on `macos-26`).
+  Still open: publish the RSS/CPU-over-time graph and the "Vee vs SwiftBar after
+  24h" comparison on the docs landing page. _(follow-up commit wires the published
+  chart into the docs site.)_
 
 ### P1 — Clear superiority
 
