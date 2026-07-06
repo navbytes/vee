@@ -26,6 +26,9 @@ All notable changes to Vee are documented here. The format is based on
   xbar/SwiftBar).
 - **Stable menu-bar position:** each plugin's status item now has a persistent
   autosave name, so a position set by ⌘-dragging survives relaunch.
+- **Shortcuts & Spotlight (App Intents):** "Refresh All Plugins", "Refresh
+  Plugin", and "Enable or Disable Plugin" are exposed as App Intents, so Vee's
+  actions can be run from Shortcuts, Spotlight, and automations.
 
 ### Changed
 - Each plugin's menu now collects Vee's own chrome — the capability summary and

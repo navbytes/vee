@@ -26,7 +26,29 @@ public final class AppController: NSObject, NSApplicationDelegate {
 
     private var directory: String = PluginsDirectory.resolve()
 
-    public override init() { super.init() }
+    /// The running controller, so App Intents (Shortcuts/Spotlight) can drive it.
+    public static weak var shared: AppController?
+
+    public override init() {
+        super.init()
+        Self.shared = self
+    }
+
+    // MARK: - Intent entry points (Shortcuts / Spotlight)
+
+    /// Re-runs every enabled plugin. Exposed for App Intents.
+    public func intentRefreshAll() { refreshAll() }
+
+    /// Re-runs one plugin by name (its filename id). Returns whether it matched.
+    @discardableResult
+    public func intentRefresh(name: String) -> Bool {
+        guard let coordinator = coordinators[name] else { return false }
+        coordinator.forceRefresh()
+        return true
+    }
+
+    /// Enables or disables one plugin by name. Exposed for App Intents.
+    public func intentSetEnabled(_ enabled: Bool, name: String) { setEnabled(enabled, id: name) }
 
     public func applicationDidFinishLaunching(_ notification: Notification) {
         PluginsDirectory.ensureExists(directory)
