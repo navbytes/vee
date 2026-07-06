@@ -17,7 +17,7 @@ Seed evergreen assets first, then fire the time-boxed launches in one window. **
 | 7 | r/macapps (rules-gated: need 10 karma, no shortened links, disclose dev) | Low | Med | Non-ad post | Day 2 |
 | 8 | Lobsters `show` (needs account standing) | Low | Med | HN URL | Day 2–3 |
 | 9 | Michael Tsai (mjtsai.com) | Low | Med-High authority backlink | Short factual email | Day 2–5 |
-| 10 | **Homebrew cask** (gated: ~225★, notarized ✓) | Med | High durability | Cask ruby file | Week 2–4, post-HN star bump |
+| 10 | **Homebrew cask** — own tap `navbytes/vee` ships **now** (`brew install --cask vee`); homebrew-core submission later (gated ~225★) | Med | High durability | Cask ruby file (already in repo) | Launch day (own tap); core Week 2–4 |
 | 11 | MacStories / Club MacStories | Low-Med | Med editorial | Press kit | Week 1–2 |
 | 12 | X + Mastodon (fosstodon) | Low | Amplify | Demo GIF | Day 1 with HN |
 | 13 | r/macOS + r/apple | Low | Low-Med | Screenshot | Week 2, only if HN validated |
@@ -85,11 +85,11 @@ Seed evergreen assets first, then fire the time-boxed launches in one window. **
 3. **Day 1 (Show HN, Tue–Thu 08:00 PT):** submit → post first comment → X/Mastodon thread → **tend every comment for 3h**, factually, fix trivia live.
 4. **Day 2:** r/macapps (if qualified) + Lobsters (if standing) + email Michael Tsai with the HN hook.
 5. **Day 3–4 (Product Hunt, 00:01 PT):** gallery + tagline + maker comment; notify network individually; reply all day.
-6. **Week 1–2:** pitch MacStories; r/macOS/r/apple if HN validated; **Homebrew cask PR once ★ threshold clears**; publish blog #1 and #2; post-mortem by channel.
+6. **Week 1–2:** pitch MacStories; r/macOS/r/apple if HN validated; **submit to homebrew-core once the ★ threshold clears** (the own-tap `brew install --cask vee` is already live from day 1); publish blog #1 and #2; post-mortem by channel.
 
 ## Biggest strategic notes
 
 - Keep the leak/native hammer pointed at **xbar**, never SwiftBar. HN and SwiftBar's author will catch over-claiming.
 - Lead with the **macOS 26 + Apple Silicon** limits honestly — biggest conversion ceiling and the #1 "when will you support…" question.
-- **Homebrew cask** is the highest-leverage durable asset but gated on stars → HN is the qualifier. Sequence: HN → stars → cask.
+- **Homebrew is a day-1 asset, not a reward.** The own-tap cask (`navbytes/vee`) ships at launch — `brew install --cask vee` works immediately and is a stronger Show HN / Product Hunt hook than "download a zip." Only the homebrew-core listing is star-gated; don't conflate the two. Sequence: launch with own-tap cask → HN → stars → homebrew-core PR.
 - The **trust layer** is the only uncontested position. Blog #3 can define a category, not just win a comparison.

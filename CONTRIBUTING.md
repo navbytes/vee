@@ -79,11 +79,17 @@ the `vee` executable is a thin entry point.
 | `VeeMenu`         | `ParsedOutput` -> `NSMenu` (colors, ANSI, SF Symbols, actions). |
 | `VeePreferences`  | `<xbar.var>` preference sidecar + Keychain-backed secret store. |
 | `VeeTrust`        | `<vee.*>` capability declarations -> advisory trust summaries. |
-| `VeeCatalog`      | The plugin catalog / gallery model. |
+| `VeeCatalog`      | The `matryer/xbar-plugins` catalog client + installer (fetch, parse, freshness, provenance). |
 | `VeeUI`           | SwiftUI settings and plugin-manager windows. |
+| `VeeWidgetShared` | Foundation-only snapshot model + store shared with the WidgetKit / Control Center extension. |
+| `VeeCLI`          | AppKit-free logic for the `vee render`/`lint`/`new` authoring subcommands. |
 | `VeeApp`          | AppKit shell: status items, coordinators, app delegate (as a library). |
-| `vee`             | Thin executable entry point (`swift run vee`). |
-| `plugins/`        | TypeScript plugin SDK, example plugins, and golden fixtures. |
+| `vee`             | Thin executable entry point: boots the app, or dispatches CLI subcommands. |
+| `plugins/`        | Typed plugin SDKs (TypeScript, Python, Go), example plugins, and golden fixtures. |
+
+For a deeper tour of how the pieces fit together — the execution pipeline, the
+leak-free design, the trust model, and the widget channel — see
+**[ARCHITECTURE.md](ARCHITECTURE.md)**.
 
 App bundle configuration lives in `project.yml` (XcodeGen spec) and `App/`
 (Info.plist properties + entitlements). Showcase example plugins live in
