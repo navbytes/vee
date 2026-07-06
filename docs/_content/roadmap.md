@@ -141,12 +141,17 @@ an embedded cross-platform runtime (see the decision note below). Menu rendering
 today is plain native `NSMenu` (`VeeMenu/MenuBuilder.swift`); none of the items
 below exist yet in `Sources/`.
 
-- ⬜ **Liquid Glass `.window`-style interactive popovers** with inline
+- 🟡 **Liquid Glass `.window`-style interactive popovers** with inline
   charts/toggles/sliders, so common rich UIs no longer need a WebView. This is
-  the on-brand answer to the RN/Flutter question. _(Land incrementally: (1) an
-  `NSPopover`-based rich surface behind a plugin opt-in header, (2) inline
-  Swift Charts sparkline/series rendering, (3) interactive toggle/slider items
-  that re-invoke the plugin with a param.)_
+  the on-brand answer to the RN/Flutter question. The opt-in + Swift Charts
+  sparkline rendering shipped: a dropdown item carrying `sparkline=1,2,3` (parsed
+  to `[Double]` on `LineParams`, `VeePluginFormat/LineParser.swift`) opens a
+  native `NSPopover` (`VeeApp/PluginPopover.swift`) hosting a SwiftUI Swift
+  Charts line/area sparkline on a Liquid Glass surface
+  (`VeeUI/SparklineChartView.swift`), kept out of the `NSMenu` like the WebView
+  window so the menu stays native and leak-free. _(Still open: interactive
+  toggle/slider items inside the popover that re-invoke the plugin with a
+  param — the next commit.)_
 - ⬜ **Control Center Controls** (`ControlWidget` +
   `AppIntentControlConfiguration`) so plugin actions live in Control Center and
   can be dragged to the menu bar — a native answer to menu-bar overflow.
