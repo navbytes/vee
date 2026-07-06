@@ -16,7 +16,7 @@ merged.
   and the TypeScript SDK is dependency-free (Node runs the `.ts` directly). A PR
   that adds a dependency will almost always be declined — please open an issue to
   discuss before writing code that needs one.
-- **Tests come with the change.** Vee is built test-first (currently ~120 tests).
+- **Tests come with the change.** Vee is built test-first (a comprehensive XCTest suite).
   New behavior needs new tests; a bug fix needs a test that fails before and
   passes after.
 

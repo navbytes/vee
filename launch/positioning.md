@@ -7,7 +7,7 @@ Internal reference for all public copy. Keep claims honest and defensible.
 - **xbar is not Electron.** Since its v2 rewrite xbar is **Go + Wails (WKWebKit WebView)**. *BitBar* — the deprecated predecessor — was the Electron one. Never write "xbar is Electron."
 - Aim the performance argument at xbar's **documented, still-open memory-growth reports** (RAM creeping to multiple GB), not at any architecture label: xbar issues [#731](https://github.com/matryer/xbar/issues/731), [#725](https://github.com/matryer/xbar/issues/725), [#493](https://github.com/matryer/xbar/issues/493). This is the single most defensible proof point.
 - **SwiftBar is the category leader** — native Swift, light, mature, MIT, Homebrew. Do **not** claim Vee is "faster/lighter than SwiftBar." Position against SwiftBar's *gaps*: no trust layer (it auto-`chmod +x`es and runs whatever lands in the folder), plus refresh-after-sleep reliability issues ([#179](https://github.com/swiftbar/SwiftBar/issues/179), [#390](https://github.com/swiftbar/SwiftBar/issues/390)). Never disparage it.
-- Real limits, stated plainly: **macOS 26+, Apple Silicon only, no Homebrew cask yet.**
+- Real limits, stated plainly: **macOS 26+, Apple Silicon only.** (Vee installs via a Homebrew cask — `brew install --cask vee` — so do not describe "no cask" as a limitation.)
 
 ## Positioning statement
 

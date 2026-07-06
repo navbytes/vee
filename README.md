@@ -6,7 +6,7 @@
 
 > **Every xbar plugin. None of the memory leaks.** Run any script in your menu bar — and see what it touches before you install it.
 
-Vee runs plugins — any executable, in any language — on a schedule and renders their standard output as menu-bar titles and dropdown menus. Your existing xbar/SwiftBar plugins run unchanged; Vee adds a native AppKit UI, a trust/transparency layer, a built-in plugin catalog, and a typed TypeScript SDK.
+Vee runs plugins — any executable, in any language — on a schedule and renders their standard output as menu-bar titles and dropdown menus. Your existing xbar/SwiftBar plugins run unchanged; Vee adds a native AppKit UI, a trust/transparency layer, a built-in plugin catalog, and typed SDKs (TypeScript, Python, Go).
 
 <!-- Promo banner. -->
 ![Vee — native macOS menu-bar script runner](docs/assets/og-image.png)
@@ -38,17 +38,30 @@ Vee runs plugins — any executable, in any language — on a schedule and rende
 
 Vee is distributed Developer-ID-signed and **notarized**, outside the Mac App Store (the App Store sandbox is incompatible with arbitrary plugin execution).
 
+**Homebrew (recommended):**
+
+```sh
+brew tap navbytes/vee https://github.com/navbytes/vee
+brew install --cask vee
+```
+
+`brew upgrade --cask vee` picks up new releases automatically.
+
+**Or download directly:**
+
 1. Download the latest `Vee.app` from [GitHub Releases](https://github.com/navbytes/vee/releases).
 2. Drag it into `/Applications`.
 3. Launch it. On first launch, if Gatekeeper prompts, right-click `Vee.app` → **Open** and confirm.
 
-No Homebrew cask yet.
-
 ## Quick start — your first plugin
 
-Plugins live in `~/Library/Application Support/Vee/plugins` by default (change it in the Plugin Manager → **Choose Folder**). A plugin's filename encodes its refresh interval: `name.INTERVAL.ext`.
+Plugins live in `~/Library/Application Support/Vee/plugins` by default (Vee creates this folder on first launch; change it in the Plugin Manager → **Choose Folder**). A plugin's filename encodes its refresh interval: `name.INTERVAL.ext`.
 
-Create `hello.5s.sh`:
+Create the folder if you haven't launched Vee yet, then add `hello.5s.sh`:
+
+```sh
+mkdir -p ~/Library/Application\ Support/Vee/plugins
+```
 
 ```sh
 #!/bin/bash
@@ -81,7 +94,7 @@ Point Vee at your existing plugins folder (Plugin Manager → **Choose Folder**)
 - Discover: catalog browser with one-click, trust-gated install
 - Plugin Manager: enable/disable, per-plugin settings, reveal in Finder, choose folder, launch-at-login, refresh all
 - `vee://` and `swiftbar://` URL actions
-- Zero-dependency TypeScript SDK with a golden-fixture drift guard
+- Zero-dependency typed SDKs (TypeScript, Python, Go) with golden-fixture drift guards
 
 ## Documentation
 
@@ -90,7 +103,7 @@ Point Vee at your existing plugins folder (Plugin Manager → **Choose Folder**)
 - [Plugin authoring reference](docs/_content/plugin-authoring.md)
 - [Trust model](docs/_content/trust-model.md)
 - [Preferences](docs/_content/preferences.md)
-- [TypeScript SDK](docs/_content/sdk.md)
+- [Plugin SDKs (TypeScript, Python, Go)](docs/_content/sdk.md)
 - [CLI and URL actions](docs/_content/cli-and-urls.md)
 - [FAQ](docs/_content/faq.md)
 - [Troubleshooting](docs/_content/troubleshooting.md)
@@ -99,9 +112,15 @@ Point Vee at your existing plugins folder (Plugin Manager → **Choose Folder**)
 
 A plugin is any executable that prints the xbar/SwiftBar format to stdout — bash, Python, Ruby, a compiled binary, anything. See the **[plugin authoring reference](docs/_content/plugin-authoring.md)** for the full format, and [`examples/`](examples/) for ready-to-run showcase plugins.
 
-## TypeScript SDK
+## Typed SDKs (TypeScript, Python, Go)
 
-Prefer typed builders to hand-formatting text? The zero-dependency **[`vee-plugins` SDK](docs/_content/sdk.md)** (in [`plugins/`](plugins/)) lets you write plugins with `Menu`/`Section` builders. Node 24+ runs the `.ts` directly — no build step. A golden-fixture drift guard keeps the SDK and the Swift parser in lockstep.
+Prefer typed builders to hand-formatting text? Vee ships zero-dependency SDKs in three languages, each with `Menu`/`Section` builders and typed builders for the rich params (`sparkline`/`toggle`/`slider`/`progress`) so quoting and escaping are handled for you:
+
+- **[TypeScript](docs/_content/sdk.md)** ([`plugins/`](plugins/)) — Node 24+ runs the `.ts` directly, no build step.
+- **[Python](plugins/python/README.md)** ([`plugins/python/`](plugins/python/)) — standard library only.
+- **[Go](plugins/go/README.md)** ([`plugins/go/`](plugins/go/)) — standard library only.
+
+A golden-fixture drift guard shared byte-for-byte across all three keeps every SDK and the Swift parser in lockstep.
 
 ## Trust model
 

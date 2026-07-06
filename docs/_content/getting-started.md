@@ -11,15 +11,24 @@ Vee is a native macOS menu-bar script runner. It runs plugins — any executable
 
 Vee is distributed as a Developer-ID-signed and notarized app **outside** the Mac App Store.
 
-1. Download the latest `Vee.app` (inside a `.zip` or `.dmg`) from the [GitHub Releases](https://github.com/navbytes/vee/releases) page.
+**Homebrew (recommended):**
+
+```sh
+brew tap navbytes/vee https://github.com/navbytes/vee
+brew install --cask vee
+```
+
+`brew upgrade --cask vee` picks up new releases automatically.
+
+**Or download directly:**
+
+1. Download the latest `Vee.app` (inside a `.zip`) from the [GitHub Releases](https://github.com/navbytes/vee/releases) page.
 2. Drag `Vee.app` into `/Applications`.
 3. Launch it.
 
 ### First launch
 
 Because Vee ships outside the App Store, the first launch goes through Gatekeeper. Vee is notarized, so a normal double-click should just work. If macOS shows an "unidentified developer" prompt, right-click (or Control-click) `Vee.app` and choose **Open**, then confirm. See [Troubleshooting](troubleshooting.md) if it is blocked.
-
-There is no Homebrew cask yet.
 
 ### The menu-bar icon
 
@@ -39,7 +48,13 @@ To use a different folder (for example, an existing SwiftBar plugins directory),
 
 A plugin is just an executable file whose name encodes how often Vee re-runs it. The pattern is `name.INTERVAL.ext`, where the interval is a number plus a unit: `s` (seconds), `m` (minutes), `h` (hours), `d` (days), or `ms` (milliseconds).
 
-Create `hello.5s.sh` in your plugins folder:
+Vee creates the plugins folder on first launch. If you haven't launched Vee yet, create it first:
+
+```sh
+mkdir -p ~/Library/Application\ Support/Vee/plugins
+```
+
+Then create `hello.5s.sh` in your plugins folder:
 
 ```sh
 #!/bin/bash

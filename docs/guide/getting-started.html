@@ -67,14 +67,18 @@
 </ul>
 <h2 id="install">Install</h2>
 <p>Vee is distributed as a Developer-ID-signed and notarized app <strong>outside</strong> the Mac App Store.</p>
+<p><strong>Homebrew (recommended):</strong></p>
+<pre><code>brew tap navbytes/vee https://github.com/navbytes/vee
+brew install --cask vee</code></pre>
+<p><code>brew upgrade --cask vee</code> picks up new releases automatically.</p>
+<p><strong>Or download directly:</strong></p>
 <ol>
-<li>Download the latest <code>Vee.app</code> (inside a <code>.zip</code> or <code>.dmg</code>) from the <a href="https://github.com/navbytes/vee/releases" rel="noopener">GitHub Releases</a> page.</li>
+<li>Download the latest <code>Vee.app</code> (inside a <code>.zip</code>) from the <a href="https://github.com/navbytes/vee/releases" rel="noopener">GitHub Releases</a> page.</li>
 <li>Drag <code>Vee.app</code> into <code>/Applications</code>.</li>
 <li>Launch it.</li>
 </ol>
 <h3 id="first-launch">First launch</h3>
 <p>Because Vee ships outside the App Store, the first launch goes through Gatekeeper. Vee is notarized, so a normal double-click should just work. If macOS shows an "unidentified developer" prompt, right-click (or Control-click) <code>Vee.app</code> and choose <strong>Open</strong>, then confirm. See <a href="troubleshooting.html">Troubleshooting</a> if it is blocked.</p>
-<p>There is no Homebrew cask yet.</p>
 <h3 id="the-menu-bar-icon">The menu-bar icon</h3>
 <p>Once running, Vee lives in the menu bar. With no plugins installed you will see the Vee icon; open it to reach <strong>Discover</strong>, the <strong>Plugin Manager</strong>, <strong>Settings</strong>, and <strong>Refresh all</strong>. As you add plugins, each one renders its own menu-bar item.</p>
 <h2 id="where-plugins-live">Where plugins live</h2>
