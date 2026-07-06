@@ -72,4 +72,5 @@ The `.5s` in the filename tells Vee to re-run it every 5 seconds. Vee detects th
 - [Plugin authoring reference](plugin-authoring.md) — the full output format, params, metadata, SF Symbols, ANSI, Markdown, streaming, and cron.
 - [Preferences](preferences.md) — let a plugin declare typed settings that Vee turns into a form.
 - [Trust model](trust-model.md) — how plugins declare what they access.
-- [TypeScript SDK](sdk.md) — build plugins with typed builders instead of hand-formatting text.
+- [Plugin SDKs](sdk.md) — build plugins with typed builders (TypeScript, Python, or Go) instead of hand-formatting text.
+- [JSON output format](json-output.md) — the optional structured-JSON alternative to the text protocol.

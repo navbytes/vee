@@ -28,7 +28,7 @@ Vee runs the same plugins, so it is a superset in practice, plus:
 - **A trust/transparency layer** — plugins declare their footprint and Vee surfaces it.
 - **Discover** — a built-in catalog browser with one-click install through a trust gate.
 - **Auto-generated preference forms** with Keychain-backed secrets.
-- **An optional typed TypeScript SDK.**
+- **Optional typed SDKs** for TypeScript, Python, and Go.
 
 See [Migrating from SwiftBar/xbar](migrating-from-swiftbar.md).
 

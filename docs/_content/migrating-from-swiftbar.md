@@ -31,7 +31,7 @@ See the [plugin authoring reference](plugin-authoring.md) for the full list.
 - **A trust/transparency layer.** Plugins can declare what they touch — network domains, filesystem paths, secrets, external binaries — with `<vee.*>` tags. Vee shows a plain-language summary before you install a catalog plugin and trust badges in the Manager. It is advisory, not a sandbox. See the [trust model](trust-model.md).
 - **Discover.** A built-in browser over the shared [matryer/xbar-plugins](https://github.com/matryer/xbar-plugins) catalog, with trust chips and one-click install through the trust gate.
 - **Auto-generated preference forms.** `<xbar.var>` declarations become a typed settings form; secret fields are masked and stored in the macOS Keychain. See [preferences](preferences.md).
-- **Optional typed SDK.** A zero-dependency TypeScript SDK lets you build plugins with `Menu`/`Section` builders instead of hand-formatting text. See the [SDK docs](sdk.md).
+- **Optional typed SDKs.** Zero-dependency SDKs for TypeScript, Python, and Go let you build plugins with `Menu`/`Section` builders instead of hand-formatting text. See the [SDK docs](sdk.md).
 
 ## A note for xbar users
 

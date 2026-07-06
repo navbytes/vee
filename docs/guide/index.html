@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Documentation — Vee</title>
-  <meta name="description" content="Vee documentation: getting started, migrating from SwiftBar/xbar, plugin authoring, the trust model, preferences, the TypeScript SDK, CLI and URL actions, FAQ, and troubleshooting.">
+  <meta name="description" content="Vee documentation: getting started, migrating from SwiftBar/xbar, plugin authoring, the trust model, preferences, the plugin SDKs, CLI and URL actions, FAQ, and troubleshooting.">
   <link rel="canonical" href="https://navbytes.github.io/vee/guide/">
   <link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
   <link rel="stylesheet" href="../assets/style.css">
@@ -50,7 +50,8 @@
       <li><a href="./plugin-authoring.html">Plugin authoring</a></li>
       <li><a href="./trust-model.html">Trust model</a></li>
       <li><a href="./preferences.html">Preferences</a></li>
-      <li><a href="./sdk.html">TypeScript SDK</a></li>
+      <li><a href="./sdk.html">Plugin SDKs</a></li>
+      <li><a href="./json-output.html">JSON output</a></li>
       <li><a href="./cli-and-urls.html">CLI &amp; URL actions</a></li>
       <li><a href="./faq.html">FAQ</a></li>
       <li><a href="./troubleshooting.html">Troubleshooting</a></li>
@@ -91,11 +92,16 @@
         </a>
         <a class="card card--hover guide-index-card" href="./sdk.html">
           <span class="num">06</span>
-          <h3>TypeScript SDK</h3>
-          <p>Typed <code>Menu</code>/<code>Section</code> builders, no build step, with a golden-fixture drift guard.</p>
+          <h3>Plugin SDKs</h3>
+          <p>Typed <code>Menu</code>/<code>Section</code> builders for TypeScript, Python, and Go — byte-identical output, with a golden-fixture drift guard.</p>
+        </a>
+        <a class="card card--hover guide-index-card" href="./json-output.html">
+          <span class="num">07</span>
+          <h3>JSON output</h3>
+          <p>An optional structured-JSON format — opt in with a <code>{"vee":1}</code> object and skip the text protocol's quoting and nesting rules.</p>
         </a>
         <a class="card card--hover guide-index-card" href="./cli-and-urls.html">
-          <span class="num">07</span>
+          <span class="num">08</span>
           <h3>CLI &amp; URL actions</h3>
           <p>Run from source and drive Vee with <code>vee://</code> / <code>swiftbar://</code> actions — refresh, toggle, notify.</p>
         </a>
@@ -109,12 +115,12 @@
           <p>How plugins declare what they touch, and how Vee turns that into a plain-language summary. Advisory, not a sandbox.</p>
         </a>
         <a class="card card--hover guide-index-card" href="./faq.html">
-          <span class="num">08</span>
+          <span class="num">09</span>
           <h3>FAQ</h3>
           <p>Safety, compatibility, requirements, secrets, updates — the questions people ask first.</p>
         </a>
         <a class="card card--hover guide-index-card" href="./troubleshooting.html">
-          <span class="num">09</span>
+          <span class="num">10</span>
           <h3>Troubleshooting</h3>
           <p>Plugin not appearing, Gatekeeper blocks, timeouts, missing interpreters, PATH differences.</p>
         </a>
