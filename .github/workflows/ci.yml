@@ -104,3 +104,19 @@ jobs:
       # build() output matches its golden fixture (shared with the TS SDK).
       - name: Test (fixture drift guard)
         run: python3 -m unittest discover -s test -v
+
+  plugins-go:
+    name: Plugin SDK (Go)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: plugins/go
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v6
+        with:
+          go-version: "1.21"
+      # Zero-dep, standard-library only. `go test` runs the fixture drift guard
+      # (the fixture is shared byte-for-byte with the TS/Python SDKs).
+      - name: Test (fixture drift guard)
+        run: go test ./...
