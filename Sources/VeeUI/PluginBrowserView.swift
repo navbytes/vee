@@ -86,7 +86,7 @@ public final class PluginBrowserModel: ObservableObject {
     /// the whole grid. Failures leave the date `nil` so the badge is hidden.
     func loadLastUpdated(for entry: CatalogEntry) async {
         guard lastUpdatedRequested.insert(entry.path).inserted else { return }
-        guard let date = try? await fetcher.fetchLastUpdated(entry), let date else { return }
+        guard let date = try? await fetcher.fetchLastUpdated(entry) else { return }
         lastUpdated[entry.path] = date
     }
 
