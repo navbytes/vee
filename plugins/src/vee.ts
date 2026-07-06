@@ -27,6 +27,23 @@ export interface ItemOptions {
   badge?: string;
   /** Render `:sf.symbol:` tokens in the text as inline SF Symbols. */
   symbolize?: boolean;
+  /** Inline data series → `sparkline=1,2,3`. */
+  sparkline?: number[];
+  /** On/off switch → `toggle=on` / `toggle=off`. */
+  toggle?: boolean;
+  /** Continuous control → `slider=min,max,value`. */
+  slider?: { min: number; max: number; value: number };
+  /**
+   * Progress gauge → `progress=<fraction>`. Pass a fraction directly, or
+   * `{ value, max }` to have the SDK compute `value / max`.
+   */
+  progress?: number | { value: number; max: number };
+  /** Progress track (background) color → `trackcolor=`. */
+  trackColor?: Color;
+  /** Progress bar width in points → `progressw=`. */
+  progressW?: number;
+  /** Progress bar height in points → `progressh=`. */
+  progressH?: number;
 }
 
 function quote(value: string): string {
@@ -60,6 +77,20 @@ function encode(options?: ItemOptions): string {
   push("md", options.md);
   push("badge", options.badge);
   push("symbolize", options.symbolize);
+  if (options.sparkline !== undefined) push("sparkline", options.sparkline.map(String).join(","));
+  if (options.toggle !== undefined) push("toggle", options.toggle ? "on" : "off");
+  if (options.slider !== undefined) {
+    const s = options.slider;
+    push("slider", `${s.min},${s.max},${s.value}`);
+  }
+  if (options.progress !== undefined) {
+    const p = options.progress;
+    const fraction = typeof p === "number" ? p : p.max === 0 ? 0 : p.value / p.max;
+    push("progress", String(fraction));
+  }
+  push("trackcolor", options.trackColor);
+  push("progressw", options.progressW);
+  push("progressh", options.progressH);
   return parts.length ? " | " + parts.join(" ") : "";
 }
 
