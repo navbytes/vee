@@ -54,4 +54,34 @@ final class FixtureRoundTripTests: XCTestCase {
         XCTAssertEqual(items[1].params.swiftbar.badge, "12")
         XCTAssertEqual(items[2].params.swiftbar.symbolize, true)
     }
+
+    /// Closes the SDK→parser loop for the typed rich-param builders: the TS/
+    /// Python/Go SDKs emit controls.txt, and the Swift parser must recover the
+    /// progress fraction, toggle/slider controls, and sparkline series from it.
+    func testControlsFixtureParams() throws {
+        let url = fixturesDirectory().appendingPathComponent("controls.txt")
+        let source = try String(contentsOf: url, encoding: .utf8)
+        let items = OutputParser.parse(source).body.compactMap { node -> MenuItem? in
+            if case .item(let i) = node { return i } else { return nil }
+        }
+        XCTAssertEqual(items.map(\.text), ["Disk usage", "Notifications", "Volume", "Load history"])
+
+        // progress=0.72 with a track color and explicit size; the tooltip's
+        // spaces prove the SDK quoting round-trips.
+        let progress = try XCTUnwrap(items[0].params.progress)
+        XCTAssertEqual(progress.fraction, 0.72, accuracy: 1e-9)
+        XCTAssertEqual(progress.trackColor, .rgb(r: 0x33, g: 0x33, b: 0x33, a: 255))
+        XCTAssertEqual(progress.width, 80)
+        XCTAssertEqual(progress.height, 6)
+        XCTAssertEqual(items[0].params.swiftbar.tooltip, "72 GB of 100 GB used")
+
+        // toggle=on
+        XCTAssertEqual(items[1].params.control, .toggle(on: true))
+
+        // slider=0,100,40
+        XCTAssertEqual(items[2].params.control, .slider(min: 0, max: 100, value: 40))
+
+        // sparkline=1,2,3,5,8,13
+        XCTAssertEqual(items[3].params.sparkline, [1, 2, 3, 5, 8, 13])
+    }
 }
