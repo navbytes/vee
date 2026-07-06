@@ -28,6 +28,11 @@ final class PluginCoordinator {
     private var lastResult: PluginRunResult?
     private var debugModel: PluginDebugModel?
 
+    /// Called with the plugin's current menu-bar title text after each render
+    /// (or an error marker), so `AppController` can publish it to the widget
+    /// snapshot. Set by the owner after init.
+    var onPublish: ((String) -> Void)?
+
     init(plugin: DiscoveredPlugin, pluginsDirectory: String, runtime: PluginRuntime, baseEnvironment: [String: String] = ProcessInfo.processInfo.environment) {
         self.plugin = plugin
         self.pluginsDirectory = pluginsDirectory
@@ -124,6 +129,13 @@ final class PluginCoordinator {
         controller.remove()
     }
 
+    /// The plugin's current menu-bar text for the widget snapshot: the first
+    /// title line, trimmed. Empty when the plugin printed no title (e.g. an
+    /// icon-only item), which the widget renders as a neutral dot.
+    static func publishableTitle(_ output: ParsedOutput) -> String {
+        (output.titleLines.first?.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     /// A human-friendly one-line error for a failed run — detects a missing
     /// command (the most common cause) rather than dumping raw stderr.
     static func friendlyError(_ outcome: ProcessOutcome) -> String {
@@ -176,8 +188,14 @@ final class PluginCoordinator {
         let session = StreamingSession(
             runner: SystemStreamingRunner(),
             makeInvocation: { invocation },
-            onUpdate: { [weak self] output in self?.controller.render(output) },
-            onStopped: { [weak self] message in self?.controller.renderError(message) }
+            onUpdate: { [weak self] output in
+                self?.controller.render(output)
+                self?.onPublish?(Self.publishableTitle(output))
+            },
+            onStopped: { [weak self] message in
+                self?.controller.renderError(message)
+                self?.onPublish?("⚠︎ stopped")
+            }
         )
         streaming = session
         session.start()
@@ -222,16 +240,20 @@ final class PluginCoordinator {
                 self?.updateDebugModel()
                 if result.outcome.timedOut {
                     self?.controller.renderError("Plugin timed out", detail: nil)
+                    self?.onPublish?("⚠︎ timed out")
                 } else if result.outcome.exitCode != 0 && result.output.titleLines.isEmpty {
                     self?.controller.renderError(
                         Self.friendlyError(result.outcome),
                         detail: result.outcome.standardError.isEmpty ? nil : String(result.outcome.standardError.prefix(500))
                     )
+                    self?.onPublish?("⚠︎ error")
                 } else {
                     self?.controller.render(result.output)
+                    self?.onPublish?(Self.publishableTitle(result.output))
                 }
             } catch {
                 self?.controller.renderError("\(error)")
+                self?.onPublish?("⚠︎ error")
             }
         }
     }
