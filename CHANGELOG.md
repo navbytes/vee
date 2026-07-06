@@ -16,6 +16,11 @@ All notable changes to Vee are documented here. The format is based on
   `swiftbar://setephemeralplugin` shows transient, file-less menu content.
 - `webview=` now opens the URL in a standalone WebView window (never inside the
   menu, preserving the leak-free native menu), sized by `webvieww`/`webviewh`.
+- **Debug console** (per plugin, via the gear submenu → "Debug…"): shows the
+  last run's exit status, parse diagnostics, and raw stdout/stderr, with a
+  "Run again" button — answering "why didn't my plugin work?".
+- **Discover: one-click Update** for installed plugins — re-fetches the latest
+  catalog source through the same trust gate and overwrites in place.
 
 ### Changed
 - Each plugin's menu now collects Vee's own chrome — the capability summary and

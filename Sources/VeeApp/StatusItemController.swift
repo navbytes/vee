@@ -12,13 +12,15 @@ private final class ControlsTarget: NSObject, NSMenuDelegate {
     let onAbout: () -> Void
     let onReveal: () -> Void
     let onEdit: () -> Void
+    let onDebug: () -> Void
     let refreshOnOpen: Bool
-    init(onRefresh: @escaping () -> Void, onSettings: @escaping () -> Void, onAbout: @escaping () -> Void, onReveal: @escaping () -> Void, onEdit: @escaping () -> Void, refreshOnOpen: Bool) {
+    init(onRefresh: @escaping () -> Void, onSettings: @escaping () -> Void, onAbout: @escaping () -> Void, onReveal: @escaping () -> Void, onEdit: @escaping () -> Void, onDebug: @escaping () -> Void, refreshOnOpen: Bool) {
         self.onRefresh = onRefresh
         self.onSettings = onSettings
         self.onAbout = onAbout
         self.onReveal = onReveal
         self.onEdit = onEdit
+        self.onDebug = onDebug
         self.refreshOnOpen = refreshOnOpen
     }
     @objc func refresh() { onRefresh() }
@@ -26,6 +28,7 @@ private final class ControlsTarget: NSObject, NSMenuDelegate {
     @objc func about() { onAbout() }
     @objc func reveal() { onReveal() }
     @objc func edit() { onEdit() }
+    @objc func debug() { onDebug() }
     @objc func quit() { NSApp.terminate(nil) }
 
     // <swiftbar.refreshOnOpen>: re-run the plugin when its menu is opened.
@@ -60,7 +63,7 @@ public final class StatusItemController {
         return f
     }()
 
-    public init(pluginName: String, handler: MenuActionHandling, hasSettings: Bool = false, trustSummary: TrustSummary? = nil, refreshOnOpen: Bool = false, hideLastUpdated: Bool = false, aboutText: String? = nil, aboutURL: URL? = nil, onRefresh: @escaping () -> Void, onSettings: @escaping () -> Void = {}, onReveal: @escaping () -> Void = {}, onEdit: @escaping () -> Void = {}) {
+    public init(pluginName: String, handler: MenuActionHandling, hasSettings: Bool = false, trustSummary: TrustSummary? = nil, refreshOnOpen: Bool = false, hideLastUpdated: Bool = false, aboutText: String? = nil, aboutURL: URL? = nil, onRefresh: @escaping () -> Void, onSettings: @escaping () -> Void = {}, onReveal: @escaping () -> Void = {}, onEdit: @escaping () -> Void = {}, onDebug: @escaping () -> Void = {}) {
         self.pluginName = pluginName
         self.hasSettings = hasSettings
         self.trustSummary = trustSummary
@@ -76,6 +79,7 @@ public final class StatusItemController {
             onAbout: { Self.showAbout(name: name, text: aboutText, url: aboutURL) },
             onReveal: onReveal,
             onEdit: onEdit,
+            onDebug: onDebug,
             refreshOnOpen: refreshOnOpen
         )
     }
@@ -294,6 +298,10 @@ public final class StatusItemController {
         let edit = NSMenuItem(title: "Edit Plugin…", action: #selector(ControlsTarget.edit), keyEquivalent: "")
         edit.target = controls
         menu.addItem(edit)
+
+        let debug = NSMenuItem(title: "Debug…", action: #selector(ControlsTarget.debug), keyEquivalent: "")
+        debug.target = controls
+        menu.addItem(debug)
 
         menu.addItem(.separator())
 
