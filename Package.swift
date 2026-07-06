@@ -31,7 +31,7 @@ let package = Package(
         .target(name: "VeeMenu", dependencies: ["VeeCore", "VeePluginFormat"]),
         .target(name: "VeePreferences", dependencies: ["VeeCore", "VeePluginFormat"]),
         .target(name: "VeeTrust", dependencies: ["VeeCore"]),
-        .target(name: "VeeCatalog"),
+        .target(name: "VeeCatalog", dependencies: ["VeeCore"]),
         .target(name: "VeeUI", dependencies: ["VeeCore", "VeePluginFormat", "VeePreferences", "VeeTrust", "VeeCatalog"]),
         // Tiny Foundation-only module shared between the app and the WidgetKit /
         // Control Center extension via an App Group container. Kept dependency-free

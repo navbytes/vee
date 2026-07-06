@@ -163,8 +163,11 @@ public final class AppController: NSObject, NSApplicationDelegate {
                 let (data, _) = try await URLSession.shared.data(from: url)
                 let source = String(data: data, encoding: .utf8) ?? ""
                 guard !source.isEmpty else { return }
+                // `lastPathComponent` percent-decodes, so a crafted `src` can
+                // carry path separators here; PluginInstaller sanitizes, but fall
+                // back to a fixed name when the component is unusable.
                 let name = url.lastPathComponent
-                let filename = name.isEmpty ? "plugin.1m.sh" : name
+                let filename = (try? PluginInstaller.sanitizedFilename(name)) ?? "plugin.1m.sh"
                 try PluginInstaller.install(filename: filename, source: source, into: directory)
                 self.reload()
             } catch {
