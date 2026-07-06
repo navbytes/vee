@@ -6,6 +6,30 @@ All notable changes to Vee are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added (compatibility & UX, batch 2)
+- `sfconfig=` now applies SF Symbol `scale` and `weight` (JSON), fixing the
+  scale-ignored gap.
+- `<swiftbar.hideLastUpdated / hideRunInTerminal / hideDisablePlugin /
+  hideSwiftBar>` headers are parsed; a per-plugin "Updated <time>" line is shown
+  (suppressed by `hideLastUpdated`).
+- `swiftbar://addplugin?src=…` installs a plugin from a URL, and
+  `swiftbar://setephemeralplugin` shows transient, file-less menu content.
+- `webview=` now opens the URL in a standalone WebView window (never inside the
+  menu, preserving the leak-free native menu), sized by `webvieww`/`webviewh`.
+- **Debug console** (per plugin, via the gear submenu → "Debug…"): shows the
+  last run's exit status, parse diagnostics, and raw stdout/stderr, with a
+  "Run again" button — answering "why didn't my plugin work?".
+- **Discover: one-click Update** for installed plugins — re-fetches the latest
+  catalog source through the same trust gate and overwrites in place.
+- **Refresh on wake:** every plugin re-runs when the Mac wakes from sleep, so the
+  menu bar is never stale after wake (the top reliability complaint for
+  xbar/SwiftBar).
+- **Stable menu-bar position:** each plugin's status item now has a persistent
+  autosave name, so a position set by ⌘-dragging survives relaunch.
+- **Shortcuts & Spotlight (App Intents):** "Refresh All Plugins", "Refresh
+  Plugin", and "Enable or Disable Plugin" are exposed as App Intents, so Vee's
+  actions can be run from Shortcuts, Spotlight, and automations.
+
 ### Changed
 - Each plugin's menu now collects Vee's own chrome — the capability summary and
   the Refresh / Settings / About / Reveal / Edit / Quit controls — under a

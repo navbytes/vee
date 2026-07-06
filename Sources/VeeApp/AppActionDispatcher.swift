@@ -25,6 +25,8 @@ final class AppActionDispatcher: MenuActionHandling {
             } else {
                 runDetached(shell, refreshAfter: params.refresh == true)
             }
+        } else if let webview = params.swiftbar.webview {
+            WebViewPresenter.shared.show(url: webview, width: params.swiftbar.webviewWidth, height: params.swiftbar.webviewHeight)
         } else if let url = params.href {
             NSWorkspace.shared.open(url)
         } else if let shortcut = params.swiftbar.shortcut, !shortcut.isEmpty {

@@ -241,9 +241,14 @@ private struct PluginCard: View {
 
             Spacer(minLength: 6)
 
-            VStack {
+            VStack(spacing: 4) {
                 if model.isInstalled(entry) {
                     Label("Installed", systemImage: "checkmark").font(.caption).foregroundStyle(.secondary)
+                    // Re-fetch the latest catalog source and overwrite in place,
+                    // through the same trust gate.
+                    Button("Update") { Task { await model.requestInstall(entry) } }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
                 } else {
                     Button("Install") { Task { await model.requestInstall(entry) } }
                         .buttonStyle(.borderedProminent)

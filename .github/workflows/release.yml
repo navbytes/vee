@@ -84,16 +84,26 @@ jobs:
         if: env.APPLE_NOTARY_PASSWORD != ''
         run: |
           ditto -c -k --keepParent "$APP_PATH" Vee-notarize.zip
+          # Capture the exit code without `set -e` aborting on the assignment,
+          # so the notarytool output is always printed — otherwise a submit
+          # failure (e.g. bad credentials) exits before we can show why.
+          set +e
           out=$(xcrun notarytool submit Vee-notarize.zip \
             --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_NOTARY_PASSWORD" --wait 2>&1)
+          code=$?
+          set -e
           echo "$out"
-          if echo "$out" | grep -q "status: Accepted"; then
+          if [ "$code" -eq 0 ] && echo "$out" | grep -q "status: Accepted"; then
             xcrun stapler staple "$APP_PATH"
           else
             id=$(echo "$out" | awk '/id:/{print $2; exit}')
-            echo "::error::Notarization not accepted — fetching detailed log for submission $id"
-            xcrun notarytool log "$id" \
-              --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_NOTARY_PASSWORD" || true
+            if [ -n "$id" ]; then
+              echo "::error::Notarization not accepted — fetching detailed log for submission $id"
+              xcrun notarytool log "$id" \
+                --apple-id "$APPLE_ID" --team-id "$APPLE_TEAM_ID" --password "$APPLE_NOTARY_PASSWORD" || true
+            else
+              echo "::error::notarytool submit failed before creating a submission (exit $code) — usually invalid/expired APPLE_NOTARY_PASSWORD, wrong APPLE_ID/APPLE_TEAM_ID, or an unaccepted Apple Developer agreement."
+            fi
             exit 1
           fi
 

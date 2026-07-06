@@ -7,6 +7,8 @@ public enum URLAction: Equatable, Sendable {
     case enablePlugin(name: String)
     case disablePlugin(name: String)
     case togglePlugin(name: String)
+    case addPlugin(src: URL)
+    case setEphemeralPlugin(name: String, content: String, exitAfter: TimeInterval?)
     case notify(title: String, subtitle: String, body: String, href: URL?)
     case unknown
 }
@@ -35,6 +37,15 @@ public enum URLActionRouter {
             return .disablePlugin(name: name)
         case "toggleplugin":
             return .togglePlugin(name: name)
+        case "addplugin":
+            guard let src = (param("src") ?? param("url")).flatMap(URL.init(string:)) else { return .unknown }
+            return .addPlugin(src: src)
+        case "setephemeralplugin":
+            return .setEphemeralPlugin(
+                name: name,
+                content: param("content") ?? "",
+                exitAfter: param("exitafter").flatMap(Double.init).map { TimeInterval($0) }
+            )
         case "notify":
             return .notify(
                 title: param("title") ?? "",
