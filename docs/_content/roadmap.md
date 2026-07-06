@@ -83,17 +83,21 @@ incumbent to copy:
 - ✅ **Refresh on wake** with a regression test (`VeeApp/WakeMonitor.swift`,
   `WakeMonitorTests`).
 - ✅ **`swiftbar://` API parity.** `addplugin?src=…` and `setephemeralplugin`.
-- 🟡 **Prove reliability with a public soak benchmark.** Harness + CI job
-  shipped: `Tests/VeeRuntimeTests/MemorySoakBenchmarkTests.swift` drives the real
+- ✅ **Prove reliability with a public soak benchmark — now charted.** Harness +
+  CI job: `Tests/VeeRuntimeTests/MemorySoakBenchmarkTests.swift` drives the real
   execution/refresh pipeline (`RefreshTimer` → `PluginExecutor` →
   `SystemProcessRunner` → `StreamAccumulator`) for a configurable window,
-  sampling RSS via `task_info`/`mach_task_basic_info` and asserting bounded memory
-  growth *and* that refreshes keep firing (no silent stall). It is opt-in
-  (`VEE_SOAK=1`) so it never slows normal `swift test`, and runs as its own
+  sampling RSS + in-process CPU (`task_info` `MACH_TASK_BASIC_INFO` +
+  `TASK_THREAD_TIMES_INFO`) and asserting bounded memory growth *and* that
+  refreshes keep firing (no silent stall). Opt-in (`VEE_SOAK=1`); its own
   nightly/dispatch CI job (`.github/workflows/ci.yml`, job `soak`, on `macos-26`).
-  Still open: publish the RSS/CPU-over-time graph and the "Vee vs SwiftBar after
-  24h" comparison on the docs landing page. _(follow-up commit wires the published
-  chart into the docs site.)_
+  It now also emits an `elapsed_s,rss_mb,cpu_pct` time-series
+  (`VEE_SOAK_SAMPLES_PATH`) which `docs/scripts/soak_chart.py` (pure stdlib)
+  renders to a themed SVG, published in a **Reliability** section on the docs
+  landing page (`docs/index.html`, `docs/assets/soak-chart.svg`) — flat memory +
+  low steady CPU across a continuous 20-min run. _(1 commit.)_ The head-to-head
+  "Vee vs SwiftBar after 24h" comparison remains a separate follow-up (needs a
+  SwiftBar install + a real 24h capture; not fabricated).
 
 ### P1 — Clear superiority
 
@@ -160,6 +164,16 @@ below exist yet in `Sources/`.
     (`VeeApp/ControlReinvocation.swift`, `Tests/VeeAppTests/ControlReinvocationTests.swift`);
     the parser is covered by `Tests/VeePluginFormatTests/ControlParamTests.swift`.
     _(1 commit.)_
+- ⬜ **`progress=` inline gauge.** A value-driven progress bar drawn as a real
+  SwiftUI view, completing the native rich-rendering family alongside
+  `sparkline=`/`toggle=`/`slider=`. Grammar mirrors `slider=`: `progress=<0..1>`
+  or `progress=value,max`; inherits `color=`, with optional `trackcolor=` and
+  `progressw=`/`progressh=`. Unlike the popover family, it renders **inline in the
+  row** via a custom `NSMenuItem.view` (`NSHostingView` over a SwiftUI capsule/
+  `Gauge`) — Vee's first in-row rich view, which also unlocks the Day-2 in-row
+  sparkline. Unknown-param degradation keeps plugins portable to xbar/SwiftBar.
+  Parser → `ProgressParams` on `LineParams` → a `VeeMenu` view; typed SDK builders
+  land with the P4 rich-param item. _(1 commit.)_
 - ✅ **WidgetKit widget + Control Center control.** A signed `app-extension`
   target (`WidgetExtension/`, wired in `project.yml`) ships both a WidgetKit
   widget that surfaces current plugin output on the desktop / Notification Center
@@ -185,8 +199,8 @@ below exist yet in `Sources/`.
     closed one via `openAppWhenRun` (which refreshes all plugins on startup), so
     no shared request-flag is needed. _(1 commit.)_
 - ⬜ **Focus filters** (`SetFocusFilterIntent`) to show/hide plugin groups per
-  Focus mode (Work/Personal/DND). _(1 commit.)_
-  **→ Deferred to local macOS development** (App Intents extension + entitlements).
+  Focus mode. **→ Moved to Day 2** (post-launch backlog below) — needs a
+  plugin-grouping model and a lightweight status-item hide, and isn't gating launch.
 - ✅ **Actionable, time-sensitive notifications** (Re-run / Silence / Open log
   buttons) for monitor-style plugins. A plugin passes `swiftbar://notify?plugin=…`
   to get a `VEE_PLUGIN_ALERT` `UNNotificationCategory` with Re-run / Silence /
@@ -240,6 +254,22 @@ footprint visible.
     "Plugin SDK (Python)").
   - ✅ **Go SDK** — `plugins/go/` (`vee.go` Menu/Section builders, `go test`
     drift guard against the shared fixture; CI job "Plugin SDK (Go)").
+- ⬜ **SDK builders for the rich params.** Extend all three SDKs (TS/Python/Go)
+  with typed builders for `sparkline=`/`toggle=`/`slider=`/`progress=`, with
+  quoting/escaping handled internally so the whole class of "tooltip has spaces
+  but isn't quoted" bugs is impossible to write. Golden-fixture drift guards
+  extended to cover them. _(1 commit.)_
+- ⬜ **`vee` CLI: `render`, `lint`, `new`.** The `vee` binary exists as the app
+  entry point but has no subcommands. Add a zero-install authoring loop:
+  `vee render ./plugin.js` prints the parsed menu tree + every `ParseDiagnostic`;
+  `vee lint` flags unknown params, a title with a bare `|`, an unquoted `tooltip=`
+  with spaces, etc.; `vee new` scaffolds a plugin (language/SDK, interval, trust
+  tags). Reuses the existing `VeePluginFormat` parser — no new rendering. _(1–2
+  commits.)_
+- ⬜ **Promote & document JSON output.** `VeePluginFormat/JSONOutputParser.swift`
+  already decodes a structured-JSON alternative to the text protocol; document it
+  as first-class (typed items, no escaping games) and add an SDK example. Mostly
+  docs + a small polish pass. _(1 commit.)_
 
 ## Decision note — React Native / Flutter
 
@@ -263,6 +293,55 @@ which Vee does not and cannot use for the menu bar. The three ways one might
 So "rich UI" is delivered the native way (P2), and broader authoring reach is
 delivered via typed SDKs in more languages (P4) — not by embedding a
 cross-platform UI framework.
+
+## Day 2 — post-launch backlog
+
+Good ideas that aren't gating launch. Grouped from an authoring-session wishlist
+and triaged against what already ships. Ordered roughly by value.
+
+- **Focus filters** (`SetFocusFilterIntent`) — per-Focus show/hide of plugin
+  groups. Needs a plugin-grouping model (new `<vee.group>`-style tag or a
+  preferences mapping), a lightweight status-item hide (today only full
+  teardown exists), and a plugin `AppEntity` picker.
+- **In-row sparkline** — render a `sparkline=` inline in the menu row (not only
+  click-to-popover). Rides on the `progress=` custom-`NSMenuItem.view` work.
+- **Trailing accessory slot** — let a bar/badge sit at the *end* of a text row
+  (today an item has only one leading image). Pairs with `progress=`.
+- **Column / table layout** — an auto-aligned `columns=`/table-row primitive so
+  authors stop hand-padding `label · bar · amount` with monospace.
+- **Multi-color inline spans without ANSI** — a lightweight span markup (or
+  `md=true` extended with color) instead of hand-rolled truecolor escapes.
+- **First-class section headers** — a real section-header/divider-with-label
+  concept, not a `disabled` line.
+- **Stale-while-revalidate for the open menu** — Vee already keeps the last
+  render; the gap is *live-updating a menu that's currently open* mid-refresh.
+- **Hot-reload on save** — the dir watcher reloads on add/remove, but editing an
+  existing plugin's header/interval isn't picked up (`reload()` early-returns on
+  an unchanged plugin set). Small fix.
+- **Catalog update notifications** — the trust-gated update flow + freshness
+  badges ship; a "new version available" nudge is the missing sliver.
+- **Signed plugins** — provenance (source URL + content hash) already ships;
+  cryptographic author signing is the next step up.
+- **Command-palette / fuzzy picker** — a Spotlight-style type-to-filter chooser
+  bound to a global hotkey. The largest new surface here and the most orthogonal
+  to the menu-bar model; parked deliberately.
+
+## Explicitly out of scope
+
+Considered and declined — recorded so they don't get re-proposed:
+
+- **Cross-machine sync** of installed plugins / `<xbar.var>` prefs — product
+  decision: not Vee's job.
+- **Partial refresh** (update one row without re-running the script) — plugins
+  emit whole menus by design; stale-while-revalidate wins the same
+  perceived-latency battle far more cheaply.
+- **Optional hard-enforcement sandbox** (real network/FS blocking) — conflicts
+  with the stated capability boundary: Vee differentiates via *transparency*
+  (observed, advisory), not OS-enforced isolation. The P3 observed-* items
+  capture the honest version of this intent.
+- **Built-in HTTP/JSON helpers in the SDKs** — mild conflict with the thin,
+  zero-dependency SDK ethos; plugins already have language stdlib
+  (`fetch`/`urllib`/`net/http`). A docs example beats shipping helper code.
 
 ## Execution status & handoff (PR #15)
 
@@ -288,13 +367,17 @@ Apple-Silicon macOS 26 — the local-development handoff the items below waited 
 - Interactive toggle/slider control popovers (P2 follow-up) — `VeeUI/PluginControlView.swift`, `VeeApp/ControlReinvocation.swift`.
 - WidgetKit widget + Control Center control (P2) — `WidgetExtension/`, `Sources/VeeWidgetShared/`. On-device verified; uses a file + temporary-exception channel (App Groups don't work for a non-sandboxed writer — see P2 above).
 
-**Still deferred to local macOS development** (each needs a new signed Xcode
-extension target and/or provisioned entitlements only exercisable on a real Mac):
+**Still deferred to local macOS development** (each needs a real run environment
+and/or provisioned entitlements only exercisable on a real Mac):
 
-- Focus filters (P2) — App Intents extension.
 - Observed network (P3) — subprocess network interception.
 - Observed filesystem/exec via Endpoint Security (P3) — provisioned entitlement + signed build.
-- Published soak chart / "Vee vs SwiftBar after 24h" on the docs site (P0 follow-up).
+- "Vee vs SwiftBar after 24h" head-to-head (P0 follow-up) — needs a SwiftBar
+  install + a real 24h capture; the Vee soak chart itself now ships (below).
+
+The Vee **soak chart** (P0) and **Focus filters** were the two remaining local-Mac
+items on the previous list; the soak chart shipped (RSS/CPU chart on the docs
+landing page) and Focus filters moved to the Day 2 backlog.
 
 ## Positioning
 
