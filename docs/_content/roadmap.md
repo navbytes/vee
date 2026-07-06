@@ -157,11 +157,16 @@ below exist yet in `Sources/`.
   can be dragged to the menu bar — a native answer to menu-bar overflow.
   (Verify on current 26.x; third-party controls were flaky at Tahoe launch.)
   _(1 commit for a Widget/Control extension target + a first control.)_
+  **→ Deferred to local macOS development** (needs a new signed Xcode extension
+  target in `project.yml` + entitlements; can't be exercised in headless CI).
 - ⬜ **Focus filters** (`SetFocusFilterIntent`) to show/hide plugin groups per
   Focus mode (Work/Personal/DND). _(1 commit.)_
+  **→ Deferred to local macOS development** (App Intents extension + entitlements).
 - ⬜ **Interactive WidgetKit widgets** surfacing plugin output on the desktop and
   in Notification Center. _(1 commit for the widget extension + a timeline
   provider reading plugin output.)_
+  **→ Deferred to local macOS development** (needs a WidgetKit extension target
+  + signing; only verifiable on a real Mac).
 - ✅ **Actionable, time-sensitive notifications** (Re-run / Silence / Open log
   buttons) for monitor-style plugins. A plugin passes `swiftbar://notify?plugin=…`
   to get a `VEE_PLUGIN_ALERT` `UNNotificationCategory` with Re-run / Silence /
@@ -188,9 +193,13 @@ footprint visible.
   lightweight local resolver/proxy shim around plugin subprocesses) and diff
   against `<vee.network>` declarations; surface undeclared connections in the
   Manager. _(1–2 commits.)_
+  **→ Deferred to local macOS development** (subprocess network interception
+  needs a real run environment; not meaningfully testable in CI).
 - ⬜ **Observed filesystem/exec** via Endpoint Security (or an entitlement-gated
   observer) to flag reads/writes/exec beyond what was declared. Advisory, never
   enforced — consistent with the existing trust philosophy. _(later; larger.)_
+  **→ Deferred to local macOS development** (Endpoint Security requires a
+  provisioned entitlement + a signed build; cannot function in CI).
 - ✅ **Provenance for catalog plugins.** Record source URL + content hash at
   install so a later silent change (local tampering or a re-install from a
   different source) is detectable, and surface a Verified/Modified indicator on
@@ -234,6 +243,36 @@ which Vee does not and cannot use for the menu bar. The three ways one might
 So "rich UI" is delivered the native way (P2), and broader authoring reach is
 delivered via typed SDKs in more languages (P4) — not by embedding a
 cross-platform UI framework.
+
+## Execution status & handoff (PR #15)
+
+The roadmap above was executed step by step on the
+`claude/project-differentiation-research-c97pjh` branch, one commit per step,
+each validated by CI on `macos-26` (Swift) or a language job (SDKs).
+
+**Shipped on this PR:**
+
+1. Trust diff on update (P3) — `VeeTrust/TrustDiff.swift`
+2. Reliability soak harness + CI job (P0) — `Tests/VeeRuntimeTests/MemorySoakBenchmarkTests.swift`, CI `soak`
+3. Catalog last-updated + freshness badges (P1) — `VeeCatalog/PluginFreshness.swift`
+4. App-wide Preferences window + cross-plugin Variables editor (P1) — `VeeUI/PreferencesWindow.swift`, `VeePreferences/VariableAggregator.swift`
+5. Liquid Glass sparkline popover (P2, partial) — `VeeUI/SparklineChartView.swift`, `VeeApp/PluginPopover.swift`
+6. Actionable, time-sensitive notifications (P2) — `VeeApp/Notifier.swift`
+7. Catalog provenance / modified-plugin flag (P3) — `VeeCatalog/PluginProvenance.swift`
+8. Python plugin SDK (P4) — `plugins/python/`
+9. Go plugin SDK (P4) — `plugins/go/`
+
+**Deferred to local macOS development** (each needs a new signed Xcode extension
+target and/or provisioned entitlements, so it can be built *and exercised* only
+on a real Apple-Silicon Mac running macOS 26 — headless CI can't validate them):
+
+- Control Center Controls (P2) — Widget/Control extension target.
+- Focus filters (P2) — App Intents extension.
+- Interactive WidgetKit widgets (P2) — WidgetKit extension.
+- Interactive toggle/slider items inside the Liquid Glass popover (P2 follow-up).
+- Observed network (P3) — subprocess network interception.
+- Observed filesystem/exec via Endpoint Security (P3) — provisioned entitlement + signed build.
+- Published soak chart / "Vee vs SwiftBar after 24h" on the docs site (P0 follow-up).
 
 ## Positioning
 
