@@ -51,11 +51,13 @@ public final class PluginBrowserModel: ObservableObject {
 
     private let fetcher: CatalogFetching
     private let pluginsDirectory: String
+    private let provenanceStore: ProvenanceStore
     private let onInstalled: () -> Void
 
     public init(fetcher: CatalogFetching, pluginsDirectory: String, onInstalled: @escaping () -> Void) {
         self.fetcher = fetcher
         self.pluginsDirectory = pluginsDirectory
+        self.provenanceStore = ProvenanceStore(directory: pluginsDirectory)
         self.onInstalled = onInstalled
     }
 
@@ -132,6 +134,17 @@ public final class PluginBrowserModel: ObservableObject {
         PluginInstaller.isInstalled(filename: entry.filename, in: pluginsDirectory)
     }
 
+    /// Provenance status of an installed plugin: `.verified` when its on-disk
+    /// source still matches what was recorded at install, `.modified` when it has
+    /// changed since (local edit or a re-install from a different source), and
+    /// `.unknown` when there's no record (e.g. a hand-authored plugin).
+    func provenanceStatus(for entry: CatalogEntry) -> ProvenanceStatus {
+        let record = provenanceStore.record(for: entry.filename)
+        let path = (pluginsDirectory as NSString).appendingPathComponent(entry.filename)
+        let current = try? String(contentsOfFile: path, encoding: .utf8)
+        return ProvenanceStatus.evaluate(record: record, currentSource: current)
+    }
+
     /// The installed plugin's source on disk, if any — used to diff against an
     /// incoming update at the trust gate.
     private func installedSource(for entry: CatalogEntry) -> String? {
@@ -171,6 +184,11 @@ public final class PluginBrowserModel: ObservableObject {
         guard let prompt else { return }
         do {
             try PluginInstaller.install(filename: prompt.entry.filename, source: prompt.source, into: pluginsDirectory)
+            // Record where this came from + its content hash so a later silent
+            // change is detectable. Provenance is advisory — a write failure must
+            // not block the install itself.
+            let provenance = PluginProvenance(filename: prompt.entry.filename, sourceURL: prompt.entry.rawURL, source: prompt.source)
+            try? provenanceStore.record(provenance)
             onInstalled()
         } catch {
             errorMessage = "Install failed: \(error.localizedDescription)"
@@ -280,6 +298,7 @@ private struct PluginCard: View {
             VStack(spacing: 4) {
                 if model.isInstalled(entry) {
                     Label("Installed", systemImage: "checkmark").font(.caption).foregroundStyle(.secondary)
+                    ProvenanceBadge(status: model.provenanceStatus(for: entry))
                     // Re-fetch the latest catalog source and overwrite in place,
                     // through the same trust gate.
                     Button("Update") { Task { await model.requestInstall(entry) } }
@@ -302,6 +321,24 @@ private struct PluginCard: View {
         .onHover { hovering = $0 }
         .animation(.easeOut(duration: 0.15), value: hovering)
         .task { await model.loadLastUpdated(for: entry) }
+    }
+}
+
+/// A subtle "Verified"/"Modified" chip for an installed catalog plugin, driven
+/// by its recorded provenance. Hidden entirely when there's no record
+/// (`.unknown`), so hand-authored plugins show nothing. Matches ``TrustChip``.
+private struct ProvenanceBadge: View {
+    let status: ProvenanceStatus
+
+    var body: some View {
+        switch status {
+        case .verified:
+            TrustChip(symbol: "checkmark.seal.fill", label: "Verified", tint: .green)
+        case .modified:
+            TrustChip(symbol: "exclamationmark.triangle.fill", label: "Modified", tint: .orange)
+        case .unknown:
+            EmptyView()
+        }
     }
 }
 

@@ -191,8 +191,11 @@ footprint visible.
 - ⬜ **Observed filesystem/exec** via Endpoint Security (or an entitlement-gated
   observer) to flag reads/writes/exec beyond what was declared. Advisory, never
   enforced — consistent with the existing trust philosophy. _(later; larger.)_
-- ⬜ **Provenance for catalog plugins.** Record source URL + content hash at
-  install so a later silent upstream change is detectable. _(1 commit.)_
+- ✅ **Provenance for catalog plugins.** Record source URL + content hash at
+  install so a later silent change (local tampering or a re-install from a
+  different source) is detectable, and surface a Verified/Modified indicator on
+  installed plugins. _(1 commit.)_ (VeeCatalog/PluginProvenance.swift,
+  VeeUI/PluginBrowserView.swift)
 
 ### P4 — Authoring reach (typed SDKs, not UI frameworks)
 
