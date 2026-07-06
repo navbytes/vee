@@ -97,4 +97,53 @@ final class MenuBuilderTests: XCTestCase {
         XCTAssertTrue(m.items[1].isAlternate)
         XCTAssertEqual(m.items[1].keyEquivalentModifierMask, .option)
     }
+
+    func testKeyEquivalentApplied() {
+        let m = menu("T\n---\nOpen | href=https://example.com key=CMD+SHIFT+O")
+        XCTAssertEqual(m.items[0].keyEquivalent, "o")
+        XCTAssertTrue(m.items[0].keyEquivalentModifierMask.contains(.command))
+        XCTAssertTrue(m.items[0].keyEquivalentModifierMask.contains(.shift))
+    }
+
+    func testDropdownFalseHidden() {
+        let m = menu("T\n---\nVisible\nHidden | dropdown=false")
+        XCTAssertEqual(m.items.count, 1)
+        XCTAssertEqual(m.items[0].title, "Visible")
+    }
+
+    func testShortcutItemIsActionable() {
+        let m = menu("T\n---\nRun | shortcut=\"My Shortcut\"")
+        XCTAssertNotNil(m.items[0].target, "shortcut= item should be wired")
+    }
+}
+
+final class KeyEquivalentParserTests: XCTestCase {
+    func testModifiersAndKey() {
+        let r = KeyEquivalentParser.parse("CMD+SHIFT+K")
+        XCTAssertEqual(r?.key, "k")
+        XCTAssertTrue(r?.modifiers.contains(.command) ?? false)
+        XCTAssertTrue(r?.modifiers.contains(.shift) ?? false)
+    }
+
+    func testModifierSynonyms() {
+        let r = KeyEquivalentParser.parse("control+option+t")
+        XCTAssertEqual(r?.key, "t")
+        XCTAssertTrue(r?.modifiers.contains(.control) ?? false)
+        XCTAssertTrue(r?.modifiers.contains(.option) ?? false)
+    }
+
+    func testBareKey() {
+        let r = KeyEquivalentParser.parse("r")
+        XCTAssertEqual(r?.key, "r")
+        XCTAssertEqual(r?.modifiers, [])
+    }
+
+    func testNamedKey() {
+        XCTAssertEqual(KeyEquivalentParser.parse("cmd+space")?.key, " ")
+        XCTAssertEqual(KeyEquivalentParser.parse("F5")?.key, String(UnicodeScalar(UInt32(NSF1FunctionKey + 4))!))
+    }
+
+    func testEmptyIsNil() {
+        XCTAssertNil(KeyEquivalentParser.parse(""))
+    }
 }

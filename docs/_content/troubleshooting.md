@@ -48,7 +48,7 @@ Vee does not install your plugin's dependencies. If a plugin needs `python3`, `n
 
 - Check the plugin's `<xbar.dependencies>` header for what it needs.
 - Verify the tool exists: `which python3`, `which jq`, and so on.
-- **PATH differences:** a GUI app may see a narrower `PATH` than your interactive shell. If a plugin works in Terminal but not in Vee, use the tool's **absolute path** in the plugin (e.g. `/opt/homebrew/bin/jq` instead of `jq`), or set the `PATH` explicitly at the top of the script.
+- **PATH:** Vee resolves your login shell's `PATH` at launch (running `$SHELL -ilc`) and adds the usual Homebrew locations, so tools installed via Homebrew, pyenv, asdf, or nvm are normally found just like in Terminal. If a tool is configured somewhere unusual (or only in a non-login shell rc file) and still isn't found, use its **absolute path** in the plugin (e.g. `/opt/homebrew/bin/jq`), or set `PATH` explicitly at the top of the script.
 - For a script without a shebang and without the executable bit, Vee falls back to `/bin/bash`. Add a proper shebang (`#!/usr/bin/env python3`) so the right interpreter is used.
 
 ## Refreshes aren't happening
