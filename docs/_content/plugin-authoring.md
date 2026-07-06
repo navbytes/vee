@@ -95,7 +95,7 @@ Append `| key=value key2=value2 …` to any line to attach parameters. Quote val
 | `checked` | `true` — show a checkmark next to the item. |
 | `badge` | A short badge/chip shown after the text (e.g. `badge=12`). |
 | `shortcut` | Run a macOS Shortcut by name when the item is clicked (e.g. `shortcut="Start Meeting"`). |
-| `webview`, `webvieww`, `webviewh` | _Not yet supported._ Parsed for forward-compatibility; a WebView popover is on the roadmap. |
+| `webview`, `webvieww`, `webviewh` | Open a URL in a standalone WebView window (never inside the menu), with optional width/height. |
 
 Unknown parameters are preserved rather than dropped, so the format can evolve without breaking existing plugins.
 

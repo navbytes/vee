@@ -115,6 +115,11 @@ final class MenuBuilderTests: XCTestCase {
         let m = menu("T\n---\nRun | shortcut=\"My Shortcut\"")
         XCTAssertNotNil(m.items[0].target, "shortcut= item should be wired")
     }
+
+    func testWebviewItemIsActionable() {
+        let m = menu("T\n---\nDocs | webview=https://example.com")
+        XCTAssertNotNil(m.items[0].target, "webview= item should be wired")
+    }
 }
 
 final class SFSymbolConfigTests: XCTestCase {

@@ -14,6 +14,8 @@ All notable changes to Vee are documented here. The format is based on
   (suppressed by `hideLastUpdated`).
 - `swiftbar://addplugin?src=…` installs a plugin from a URL, and
   `swiftbar://setephemeralplugin` shows transient, file-less menu content.
+- `webview=` now opens the URL in a standalone WebView window (never inside the
+  menu, preserving the leak-free native menu), sized by `webvieww`/`webviewh`.
 
 ### Changed
 - Each plugin's menu now collects Vee's own chrome — the capability summary and
