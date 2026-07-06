@@ -6,6 +6,12 @@ All notable changes to Vee are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+- The structured-JSON output format now supports the rich inline controls —
+  `sparkline`, `toggle`, `slider`, and `progress` (plus `trackColor` /
+  `progressWidth` / `progressHeight`) — as typed item fields, mapping to the same
+  controls as the text protocol.
+
 ### Security
 - **Path traversal in plugin install fixed.** `swiftbar://addplugin?src=…`
   derived the on-disk filename from the URL's `lastPathComponent`, which
