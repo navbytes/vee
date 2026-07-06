@@ -99,20 +99,14 @@ public struct PluginManagerView: View {
                     }
                 }
 
-                Section("General") {
-                    LabeledContent("Plugins folder") {
-                        HStack(spacing: 8) {
-                            Text((model.currentDirectory as NSString).abbreviatingWithTildeInPath)
-                                .foregroundStyle(.secondary)
-                                .lineLimit(1).truncationMode(.middle)
-                            Button("Choose…") { model.onChooseFolder() }
-                        }
-                    }
-                    Toggle("Launch Vee at login", isOn: Binding(
+                GeneralSettingsContent(
+                    directory: model.currentDirectory,
+                    launchAtLogin: Binding(
                         get: { model.launchAtLogin },
                         set: { model.launchAtLogin = $0; model.onLaunchAtLogin($0) }
-                    ))
-                }
+                    ),
+                    onChooseFolder: { model.onChooseFolder() }
+                )
             }
             .formStyle(.grouped)
             .navigationTitle("Plugins")

@@ -8,13 +8,15 @@ final class MainMenuController: NSObject, NSMenuDelegate {
     private let statusItem: NSStatusItem
     private let onManager: () -> Void
     private let onDiscover: () -> Void
+    private let onPreferences: () -> Void
     private let onRefreshAll: () -> Void
     private let onOpenFolder: () -> Void
     private var loginItem: NSMenuItem!
 
-    init(onManager: @escaping () -> Void, onDiscover: @escaping () -> Void, onRefreshAll: @escaping () -> Void, onOpenFolder: @escaping () -> Void) {
+    init(onManager: @escaping () -> Void, onDiscover: @escaping () -> Void, onPreferences: @escaping () -> Void, onRefreshAll: @escaping () -> Void, onOpenFolder: @escaping () -> Void) {
         self.onManager = onManager
         self.onDiscover = onDiscover
+        self.onPreferences = onPreferences
         self.onRefreshAll = onRefreshAll
         self.onOpenFolder = onOpenFolder
         self.statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
@@ -30,6 +32,7 @@ final class MainMenuController: NSObject, NSMenuDelegate {
         menu.delegate = self
         menu.autoenablesItems = false
 
+        menu.addItem(item("Preferences…", #selector(openPreferences), key: ","))
         menu.addItem(item("Plugin Manager…", #selector(manage), key: "m"))
         menu.addItem(item("Discover Plugins…", #selector(discover), key: "d"))
         menu.addItem(item("Refresh All Plugins", #selector(refreshAll), key: "r"))
@@ -52,6 +55,7 @@ final class MainMenuController: NSObject, NSMenuDelegate {
         loginItem.state = LoginItemManager.isEnabled ? .on : .off
     }
 
+    @objc private func openPreferences() { onPreferences() }
     @objc private func manage() { onManager() }
     @objc private func discover() { onDiscover() }
     @objc private func refreshAll() { onRefreshAll() }
