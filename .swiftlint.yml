@@ -1,10 +1,9 @@
-# Starter SwiftLint config for Vee.
+# SwiftLint config for Vee.
 #
-# Intentionally lenient so it passes on the current tree and acts as an advisory
-# gate (the lint.yml workflow runs without `--strict`, so warnings annotate PRs
-# but don't fail the build). Tighten over time: remove entries from
-# `disabled_rules`, promote the force_* rules back to error, and/or add
-# `--strict` in .github/workflows/lint.yml to make lint blocking like nt's.
+# The tree is kept clean of the enabled rules, and the lint.yml workflow runs
+# with `--strict`, so any new warning fails the build. Size/naming rules below
+# are disabled deliberately (they're high-noise for this codebase); the sharp
+# correctness rules stay on.
 
 included:
   - Sources
@@ -29,7 +28,12 @@ disabled_rules:
   - nesting
   - large_tuple
   - todo
+  # Vee intentionally decodes subprocess/network bytes with the non-failable
+  # `String(decoding:as:UTF8.self)` (lossy — replaces invalid scalars) rather
+  # than the failable `String(bytes:encoding:)`: we must never DROP plugin
+  # output on a stray invalid byte. This rule pushes the opposite, so it is off.
+  - optional_data_string_conversion
 
-# Keep the sharp correctness rules on, but as warnings for now.
+# Keep the sharp correctness rules on, as errors under --strict.
 force_cast: warning
 force_try: warning

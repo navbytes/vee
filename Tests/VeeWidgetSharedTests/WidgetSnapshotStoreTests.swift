@@ -15,7 +15,7 @@ final class WidgetSnapshotStoreTests: XCTestCase {
         let snapshot = WidgetSnapshot(
             plugins: [
                 PluginSnapshot(id: "cpu.5s.sh", name: "cpu", title: "42%", updated: Date(timeIntervalSince1970: 1_700_000_000)),
-                PluginSnapshot(id: "net.1m.sh", name: "net", title: "↓ 1.2MB", updated: Date(timeIntervalSince1970: 1_700_000_050)),
+                PluginSnapshot(id: "net.1m.sh", name: "net", title: "↓ 1.2MB", updated: Date(timeIntervalSince1970: 1_700_000_050))
             ],
             generated: Date(timeIntervalSince1970: 1_700_000_100)
         )

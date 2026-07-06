@@ -26,7 +26,7 @@ public enum AttributedTitleFactory {
 
         let attributed = NSMutableAttributedString(string: display, attributes: [
             .font: baseFont,
-            .foregroundColor: baseColor,
+            .foregroundColor: baseColor
         ])
 
         let chars = Array(display)
@@ -71,11 +71,13 @@ public enum AttributedTitleFactory {
         let result = NSMutableAttributedString(attributedString: base)
         result.append(NSAttributedString(string: "  \(badge)", attributes: [
             .font: NSFont.systemFont(ofSize: font.pointSize - 1, weight: .semibold),
-            .foregroundColor: NSColor.secondaryLabelColor,
+            .foregroundColor: NSColor.secondaryLabelColor
         ]))
         return result
     }
 
+    // Compile-time-constant pattern; cannot fail at runtime.
+    // swiftlint:disable:next force_try
     private static let symbolPattern = try! NSRegularExpression(pattern: ":([A-Za-z0-9._-]+):", options: [])
 
     /// Replaces `:sf.symbol.name:` tokens with inline SF Symbol attachments.

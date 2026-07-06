@@ -65,7 +65,7 @@ enum KeyEquivalentParser {
             "home": fnKey(NSHomeFunctionKey),
             "end": fnKey(NSEndFunctionKey),
             "pageup": fnKey(NSPageUpFunctionKey),
-            "pagedown": fnKey(NSPageDownFunctionKey),
+            "pagedown": fnKey(NSPageDownFunctionKey)
         ]
         for n in 1...12 { map["f\(n)"] = fnKey(NSF1FunctionKey + (n - 1)) }
         return map

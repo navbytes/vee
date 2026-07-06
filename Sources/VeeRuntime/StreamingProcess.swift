@@ -71,6 +71,10 @@ private final class StreamingProc: @unchecked Sendable {
         }
     }
 
+    /// A single line with no terminating newline would otherwise grow `partial`
+    /// without limit. 1 MB for one menu line is already pathological.
+    private static let maxLineBytes = 1 * 1024 * 1024
+
     private func ingest(_ data: Data) {
         var linesToYield: [String] = []
         lock.withLock {
@@ -79,6 +83,12 @@ private final class StreamingProc: @unchecked Sendable {
                 let lineData = partial[partial.startIndex..<nl]
                 linesToYield.append(String(decoding: lineData, as: UTF8.self))
                 partial.removeSubrange(partial.startIndex...nl)
+            }
+            // Bound a pathological no-newline stream: flush the oversized partial
+            // as a line so memory stays bounded.
+            if partial.count > Self.maxLineBytes {
+                linesToYield.append(String(decoding: partial, as: UTF8.self))
+                partial.removeAll(keepingCapacity: false)
             }
         }
         for line in linesToYield { continuation.yield(line) }
@@ -110,7 +120,11 @@ private final class StreamingProc: @unchecked Sendable {
     }
 
     func cancel() {
-        if process.isRunning { process.terminate() }
+        // Guard the Process access under the same lock the reader uses, so a
+        // cancel racing the reader's natural EOF can't interleave on `process`.
+        lock.withLock {
+            if process.isRunning { process.terminate() }
+        }
         finish(error: nil)
     }
 }

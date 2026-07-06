@@ -74,6 +74,8 @@ final class PluginExecutorTests: XCTestCase {
 final class ShebangLaunchTests: XCTestCase {
     private func tempFile(_ contents: String) -> String {
         let path = NSTemporaryDirectory() + "vee-shebang-" + UUID().uuidString
+        // Test setup; a write failure should fail the test loudly.
+        // swiftlint:disable:next force_try
         try! contents.write(toFile: path, atomically: true, encoding: .utf8)
         return path
     }

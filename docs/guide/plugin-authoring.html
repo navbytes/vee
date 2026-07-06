@@ -49,7 +49,8 @@
 <li><a href="./plugin-authoring.html" aria-current="page">Plugin authoring</a></li>
 <li><a href="./trust-model.html">Trust model</a></li>
 <li><a href="./preferences.html">Preferences</a></li>
-<li><a href="./sdk.html">TypeScript SDK</a></li>
+<li><a href="./sdk.html">Plugin SDKs</a></li>
+<li><a href="./json-output.html">JSON output</a></li>
 <li><a href="./cli-and-urls.html">CLI &amp; URL actions</a></li>
 <li><a href="./faq.html">FAQ</a></li>
 <li><a href="./troubleshooting.html">Troubleshooting</a></li>
@@ -60,7 +61,7 @@
       <p class="doc-hero-note">Vee documentation</p>
 <h1>Plugin authoring reference</h1>
 <p>A Vee plugin is any executable that prints text to standard output in the xbar/SwiftBar format. This page is the full reference: filenames, menu structure, the parameter table, metadata headers, and the richer features (SF Symbols, ANSI, Markdown, streaming, cron).</p>
-<p>If you would rather build menus with typed code than format text by hand, see the <a href="sdk.html">TypeScript SDK</a>.</p>
+<p>If you would rather build menus with typed code than format text by hand, see the <a href="sdk.html">Plugin SDKs</a> (TypeScript, Python, and Go). For a structured alternative to the text protocol, see the <a href="json-output.html">JSON output format</a>.</p>
 <h2 id="filenames-and-refresh-intervals">Filenames and refresh intervals</h2>
 <p>The refresh interval is encoded in the filename as <code>name.INTERVAL.ext</code>:</p>
 <div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">text</span></div><pre><code>cpu.5s.sh      → run every 5 seconds

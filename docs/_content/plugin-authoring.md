@@ -2,7 +2,7 @@
 
 A Vee plugin is any executable that prints text to standard output in the xbar/SwiftBar format. This page is the full reference: filenames, menu structure, the parameter table, metadata headers, and the richer features (SF Symbols, ANSI, Markdown, streaming, cron).
 
-If you would rather build menus with typed code than format text by hand, see the [TypeScript SDK](sdk.md).
+If you would rather build menus with typed code than format text by hand, see the [Plugin SDKs](sdk.md) (TypeScript, Python, and Go). For a structured alternative to the text protocol, see the [JSON output format](json-output.md).
 
 ## Filenames and refresh intervals
 

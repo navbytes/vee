@@ -6,7 +6,15 @@ import Foundation
 public struct StreamAccumulator {
     public static let separator = "~~~"
 
+    /// Upper bound on bytes buffered between `~~~` separators. A streaming plugin
+    /// that emits forever without a separator would otherwise grow this buffer
+    /// without limit, breaking the bounded-memory guarantee. A single menu render
+    /// this large is already pathological; past the cap we stop appending (the
+    /// block is truncated) until the next separator resets us.
+    public static let maxBufferedBytes = 4 * 1024 * 1024
+
     private var buffer: [String] = []
+    private var bufferedBytes = 0
 
     public init() {}
 
@@ -16,9 +24,13 @@ public struct StreamAccumulator {
         if line == Self.separator {
             let block = buffer.joined(separator: "\n")
             buffer.removeAll(keepingCapacity: true)
+            bufferedBytes = 0
             return block
         }
-        buffer.append(line)
+        if bufferedBytes < Self.maxBufferedBytes {
+            buffer.append(line)
+            bufferedBytes += line.utf8.count + 1 // +1 for the joining newline
+        }
         return nil
     }
 
@@ -28,6 +40,7 @@ public struct StreamAccumulator {
         guard !buffer.isEmpty else { return nil }
         let block = buffer.joined(separator: "\n")
         buffer.removeAll(keepingCapacity: true)
+        bufferedBytes = 0
         return block
     }
 }

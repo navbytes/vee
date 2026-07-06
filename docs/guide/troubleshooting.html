@@ -49,7 +49,8 @@
 <li><a href="./plugin-authoring.html">Plugin authoring</a></li>
 <li><a href="./trust-model.html">Trust model</a></li>
 <li><a href="./preferences.html">Preferences</a></li>
-<li><a href="./sdk.html">TypeScript SDK</a></li>
+<li><a href="./sdk.html">Plugin SDKs</a></li>
+<li><a href="./json-output.html">JSON output</a></li>
 <li><a href="./cli-and-urls.html">CLI &amp; URL actions</a></li>
 <li><a href="./faq.html">FAQ</a></li>
 <li><a href="./troubleshooting.html" aria-current="page">Troubleshooting</a></li>
@@ -99,7 +100,7 @@
 <ul>
 <li>Check the plugin's <code>&lt;xbar.dependencies&gt;</code> header for what it needs.</li>
 <li>Verify the tool exists: <code>which python3</code>, <code>which jq</code>, and so on.</li>
-<li><strong>PATH differences:</strong> a GUI app may see a narrower <code>PATH</code> than your interactive shell. If a plugin works in Terminal but not in Vee, use the tool's <strong>absolute path</strong> in the plugin (e.g. <code>/opt/homebrew/bin/jq</code> instead of <code>jq</code>), or set the <code>PATH</code> explicitly at the top of the script.</li>
+<li><strong>PATH:</strong> Vee resolves your login shell's <code>PATH</code> at launch (running <code>$SHELL -ilc</code>) and adds the usual Homebrew locations, so tools installed via Homebrew, pyenv, asdf, or nvm are normally found just like in Terminal. If a tool is configured somewhere unusual (or only in a non-login shell rc file) and still isn't found, use its <strong>absolute path</strong> in the plugin (e.g. <code>/opt/homebrew/bin/jq</code>), or set <code>PATH</code> explicitly at the top of the script.</li>
 <li>For a script without a shebang and without the executable bit, Vee falls back to <code>/bin/bash</code>. Add a proper shebang (<code>#!/usr/bin/env python3</code>) so the right interpreter is used.</li>
 </ul>
 <h2 id="refreshes-aren-t-happening">Refreshes aren't happening</h2>

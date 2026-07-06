@@ -1,0 +1,6 @@
+Controls | sfimage=slider.horizontal.3
+---
+Disk usage | color=green tooltip="72 GB of 100 GB used" progress=0.72 trackcolor=#333333 progressw=80 progressh=6
+Notifications | toggle=on
+Volume | slider=0,100,40
+Load history | sparkline=1,2,3,5,8,13

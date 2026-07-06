@@ -49,7 +49,8 @@
 <li><a href="./plugin-authoring.html">Plugin authoring</a></li>
 <li><a href="./trust-model.html">Trust model</a></li>
 <li><a href="./preferences.html">Preferences</a></li>
-<li><a href="./sdk.html">TypeScript SDK</a></li>
+<li><a href="./sdk.html">Plugin SDKs</a></li>
+<li><a href="./json-output.html">JSON output</a></li>
 <li><a href="./cli-and-urls.html">CLI &amp; URL actions</a></li>
 <li><a href="./faq.html">FAQ</a></li>
 <li><a href="./troubleshooting.html">Troubleshooting</a></li>
@@ -86,7 +87,7 @@
 <li><strong>A trust/transparency layer.</strong> Plugins can declare what they touch — network domains, filesystem paths, secrets, external binaries — with <code>&lt;vee.*&gt;</code> tags. Vee shows a plain-language summary before you install a catalog plugin and trust badges in the Manager. It is advisory, not a sandbox. See the <a href="trust-model.html">trust model</a>.</li>
 <li><strong>Discover.</strong> A built-in browser over the shared <a href="https://github.com/matryer/xbar-plugins" rel="noopener">matryer/xbar-plugins</a> catalog, with trust chips and one-click install through the trust gate.</li>
 <li><strong>Auto-generated preference forms.</strong> <code>&lt;xbar.var&gt;</code> declarations become a typed settings form; secret fields are masked and stored in the macOS Keychain. See <a href="preferences.html">preferences</a>.</li>
-<li><strong>Optional typed SDK.</strong> A zero-dependency TypeScript SDK lets you build plugins with <code>Menu</code>/<code>Section</code> builders instead of hand-formatting text. See the <a href="sdk.html">SDK docs</a>.</li>
+<li><strong>Optional typed SDKs.</strong> Zero-dependency SDKs for TypeScript, Python, and Go let you build plugins with <code>Menu</code>/<code>Section</code> builders instead of hand-formatting text. See the <a href="sdk.html">SDK docs</a>.</li>
 </ul>
 <h2 id="a-note-for-xbar-users">A note for xbar users</h2>
 <p>xbar and SwiftBar share the same core plugin format, and Vee reads both dialects. If you are coming from xbar, everything above applies — point Vee at your xbar plugins folder and they run. Vee also injects xbar's <code>XBARDarkMode</code> environment variable for plugins that switch appearance based on it.</p>

@@ -21,6 +21,7 @@ let package = Package(
         .library(name: "VeeCatalog", targets: ["VeeCatalog"]),
         .library(name: "VeeUI", targets: ["VeeUI"]),
         .library(name: "VeeWidgetShared", targets: ["VeeWidgetShared"]),
+        .library(name: "VeeCLI", targets: ["VeeCLI"]),
         .library(name: "VeeApp", targets: ["VeeApp"]),
         .executable(name: "vee", targets: ["vee"]),
     ],
@@ -31,14 +32,17 @@ let package = Package(
         .target(name: "VeeMenu", dependencies: ["VeeCore", "VeePluginFormat"]),
         .target(name: "VeePreferences", dependencies: ["VeeCore", "VeePluginFormat"]),
         .target(name: "VeeTrust", dependencies: ["VeeCore"]),
-        .target(name: "VeeCatalog"),
+        .target(name: "VeeCatalog", dependencies: ["VeeCore"]),
         .target(name: "VeeUI", dependencies: ["VeeCore", "VeePluginFormat", "VeePreferences", "VeeTrust", "VeeCatalog"]),
         // Tiny Foundation-only module shared between the app and the WidgetKit /
         // Control Center extension via an App Group container. Kept dependency-free
         // so the extension links almost nothing.
         .target(name: "VeeWidgetShared"),
+        // AppKit-free CLI logic (render/lint/new subcommands) so it builds
+        // headless in CI. The `vee` executable dispatches to it.
+        .target(name: "VeeCLI", dependencies: ["VeePluginFormat", "VeeRuntime"]),
         .target(name: "VeeApp", dependencies: ["VeeCore", "VeePluginFormat", "VeeRuntime", "VeeMenu", "VeePreferences", "VeeTrust", "VeeCatalog", "VeeUI", "VeeWidgetShared"]),
-        .executableTarget(name: "vee", dependencies: ["VeeApp"]),
+        .executableTarget(name: "vee", dependencies: ["VeeApp", "VeeCLI"]),
         .testTarget(name: "VeeCoreTests", dependencies: ["VeeCore"]),
         .testTarget(name: "VeePluginFormatTests", dependencies: ["VeePluginFormat"]),
         .testTarget(name: "VeeRuntimeTests", dependencies: ["VeeRuntime"]),
@@ -47,6 +51,7 @@ let package = Package(
         .testTarget(name: "VeeTrustTests", dependencies: ["VeeTrust"]),
         .testTarget(name: "VeeCatalogTests", dependencies: ["VeeCatalog"]),
         .testTarget(name: "VeeWidgetSharedTests", dependencies: ["VeeWidgetShared"]),
+        .testTarget(name: "VeeCLITests", dependencies: ["VeeCLI"]),
         .testTarget(name: "VeeAppTests", dependencies: ["VeeApp"]),
     ]
 )

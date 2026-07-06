@@ -10,4 +10,7 @@ public enum VeeError: Error, Equatable, Sendable {
     case launchFailed(pluginID: PluginID, reason: String)
     /// A plugin's stdout could not be decoded as text.
     case undecodableOutput(pluginID: PluginID)
+    /// A plugin install was rejected because the requested filename was unsafe
+    /// (path traversal, separators, or an empty/hidden name).
+    case unsafePluginFilename(String)
 }

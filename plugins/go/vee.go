@@ -9,6 +9,7 @@ package vee
 import (
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 )
 
@@ -34,6 +35,23 @@ type Options struct {
 	MD        *bool
 	Badge     *string
 	Symbolize *bool
+
+	// Vee-native rich params, emitted last in a fixed order shared across SDKs.
+	Sparkline  []float64
+	Toggle     *bool
+	Slider     *Slider
+	Progress   *float64
+	TrackColor *string
+	ProgressW  *float64
+	ProgressH  *float64
+}
+
+// Slider is a continuous control bounded by Min..Max at the current Value,
+// emitted as `slider=min,max,value`.
+type Slider struct {
+	Min   float64
+	Max   float64
+	Value float64
 }
 
 // Str returns a pointer to s, for setting optional string options.
@@ -44,6 +62,15 @@ func Int(i int) *int { return &i }
 
 // Bool returns a pointer to b, for setting optional bool options.
 func Bool(b bool) *bool { return &b }
+
+// Float returns a pointer to f, for setting optional float64 options.
+func Float(f float64) *float64 { return &f }
+
+// fmtFloat formats a float like JS String(): whole values without a trailing
+// ".0", shortest round-trippable representation otherwise.
+func fmtFloat(f float64) string {
+	return strconv.FormatFloat(f, 'g', -1, 64)
+}
 
 func quote(value string) string {
 	if strings.ContainsAny(value, " \t\n|") {
@@ -108,6 +135,36 @@ func encode(o *Options) string {
 		push("badge", *o.Badge)
 	}
 	pushBool("symbolize", o.Symbolize)
+
+	if o.Sparkline != nil {
+		nums := make([]string, len(o.Sparkline))
+		for i, v := range o.Sparkline {
+			nums[i] = fmtFloat(v)
+		}
+		push("sparkline", strings.Join(nums, ","))
+	}
+	if o.Toggle != nil {
+		if *o.Toggle {
+			push("toggle", "on")
+		} else {
+			push("toggle", "off")
+		}
+	}
+	if o.Slider != nil {
+		push("slider", fmtFloat(o.Slider.Min)+","+fmtFloat(o.Slider.Max)+","+fmtFloat(o.Slider.Value))
+	}
+	if o.Progress != nil {
+		push("progress", fmtFloat(*o.Progress))
+	}
+	if o.TrackColor != nil {
+		push("trackcolor", *o.TrackColor)
+	}
+	if o.ProgressW != nil {
+		push("progressw", fmtFloat(*o.ProgressW))
+	}
+	if o.ProgressH != nil {
+		push("progressh", fmtFloat(*o.ProgressH))
+	}
 
 	if len(parts) == 0 {
 		return ""

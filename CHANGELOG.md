@@ -6,6 +6,44 @@ All notable changes to Vee are documented here. The format is based on
 
 ## [Unreleased]
 
+### Security
+- **Path traversal in plugin install fixed.** `swiftbar://addplugin?src=…`
+  derived the on-disk filename from the URL's `lastPathComponent`, which
+  percent-decodes — so a crafted `src` (`…/..%2f..%2fevil.sh`) could write an
+  executable outside the plugins directory. Filenames are now validated as a
+  single safe path component and the resolved path is confined to the plugins
+  folder.
+- **Run-in-Terminal injection fixed.** Untrusted plugin values (`bash=`,
+  `paramN=`) are now POSIX single-quote escaped and the AppleScript string is
+  escaped, so a menu item can no longer inject shell or AppleScript on click.
+
+### Added
+- **`vee` command-line tool** — `vee render <plugin>` prints the parsed menu
+  tree + diagnostics (text or JSON plugins), `vee lint <plugin>` flags unknown
+  params / bare `|` in titles / unquoted values, and `vee new` scaffolds a
+  plugin with `<xbar.*>`/`<vee.*>` headers. Running `vee` with no subcommand
+  still launches the menu-bar app.
+- **Typed rich-param SDK builders** for `sparkline`/`toggle`/`slider`/`progress`
+  (+ `trackColor`/`progressW`/`progressH`) across the TypeScript, Python, and Go
+  SDKs, with quoting/escaping handled internally and a golden fixture shared
+  byte-for-byte across all three and round-tripped through the Swift parser.
+- **`ARCHITECTURE.md`** — a contributor guide to the module graph, the leak-free
+  execution pipeline, the parser, the trust model, and the widget channel.
+- **Homebrew install** surfaced across the README and docs
+  (`brew install --cask vee`).
+
+### Fixed
+- Non-finite numeric params (`progress=nan`, `size=inf`, …) are rejected at the
+  parser instead of producing NaN bar geometry / `NSFont` sizes.
+- Subprocess output buffers are now bounded (stdout/stderr capture, the
+  streaming partial line, and the `~~~` accumulator), preserving the
+  bounded-memory guarantee against a plugin that spews output without limit.
+- The JSON output parser caps menu nesting depth so deeply-nested `submenu`/
+  `alternate` chains can't overflow the stack.
+
+### Changed
+- The SwiftLint tree is clean and CI now runs `swiftlint --strict` as a hard gate.
+
 ### Added (compatibility & UX, batch 2)
 - `sfconfig=` now applies SF Symbol `scale` and `weight` (JSON), fixing the
   scale-ignored gap.

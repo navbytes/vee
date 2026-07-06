@@ -16,7 +16,7 @@ public enum ShellPathResolver {
         "/opt/homebrew/bin",
         "/opt/homebrew/sbin",
         "/usr/local/bin",
-        "/usr/local/sbin",
+        "/usr/local/sbin"
     ]
 
     private static let fallbackPath = "/usr/bin:/bin:/usr/sbin:/sbin"
