@@ -52,36 +52,32 @@ not just built.**
   - ✅ `shortcut=` runs a macOS Shortcut (shipped).
   - ✅ `dropdown=false` honored (shipped).
   - ✅ clickable `notify?href=` (shipped).
-  - ☐ `sfconfig` SF Symbol rendering mode/scale/weight.
-  - ☐ `webview=` popover (a `.window`-style WebView, kept out of the menu
-    itself to preserve the leak-free guarantee) — or formally drop it.
-  - ☐ `<swiftbar.hideRunInTerminal/hideLastUpdated/hideDisablePlugin>` header
-    family; a per-plugin "last updated" line.
-- **Deterministic environment.** Resolve the login-shell `PATH` and detect
-  Homebrew / pyenv / asdf / nvm interpreters so plugins that work in Terminal
-  work in Vee. This is the highest-leverage reliability fix for new users.
-- **Prove reliability.** An explicit sleep/wake re-arm path with a regression
-  test, and a long-running soak test in CI, so "leak-free, survives sleep" is a
-  claim backed by evidence.
-- **`swiftbar://` API parity.** Add `addplugin?src=…` (one-click install from a
-  link) and `setephemeralplugin` (transient menu content without a file).
+  - ✅ `sfconfig` SF Symbol scale/weight (shipped).
+  - ✅ `webview=` opens a standalone WebView window, kept out of the menu
+    itself to preserve the leak-free guarantee (shipped).
+  - ✅ `<swiftbar.hideRunInTerminal/hideLastUpdated/hideDisablePlugin/hideSwiftBar>`
+    parsed; per-plugin "Updated <time>" line honoring `hideLastUpdated` (shipped).
+- ✅ **Deterministic environment.** Login-shell `PATH` resolution + Homebrew
+  backstop so plugins that work in Terminal work in Vee (shipped).
+- ✅ **Prove reliability.** Refresh-on-wake with a regression test (shipped). A
+  long-running soak test in CI remains open.
+- ✅ **`swiftbar://` API parity.** `addplugin?src=…` and `setephemeralplugin`
+  (shipped).
 
 ### P1 — Clear superiority
 
 - **App-wide Preferences window** and a first-class **Variables/config UX** that
   supersedes xbar's `xbar.var` GUI, with Keychain-backed secret fields (Vee
-  already has the storage; it needs the top-level surface).
-- **Catalog quality signals** in Discover: last-updated, works-on-this-macOS
-  badges, and **update notifications / one-click update** for installed
-  plugins (currently install-only).
-- **In-app debugging.** Surface the parse diagnostics Vee already collects, plus
-  a live stdout/stderr/exit-code console and a "dry run" — directly answering
-  "why did my plugin fail?"
-- **Menu-bar ordering & overflow** that persists across relaunch and is
-  notch-aware, so users don't need Bartender/Ice.
-- **Deep Shortcuts / App Intents integration.** Model core actions (refresh,
-  enable/disable, run plugin) as `AppIntent`s so they appear in Shortcuts and
-  Spotlight; let a plugin render a user Shortcut's output.
+  already has the storage; it needs the top-level surface). _(open)_
+- ✅ **Catalog updates** in Discover: one-click, trust-gated update for installed
+  plugins (shipped). Last-updated / works-on-this-macOS badges remain open.
+- ✅ **In-app debugging.** Per-plugin debug console (exit status, parse
+  diagnostics, raw stdout/stderr, "Run again") (shipped).
+- ✅ **Menu-bar ordering** persists across relaunch via a stable autosave name
+  (shipped). Notch-aware overflow handling remains open.
+- ✅ **Shortcuts / App Intents integration.** Refresh-all / refresh-one /
+  enable-disable exposed as `AppIntent`s for Shortcuts + Spotlight (shipped).
+  Rendering a user Shortcut's output remains open.
 
 ### P2 — 2026 platform leap
 
