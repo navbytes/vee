@@ -19,6 +19,7 @@ public final class AppController: NSObject, NSApplicationDelegate {
     private var ephemerals: [String: StatusItemController] = [:]
     private var loadedPaths: Set<String> = []
     private var watcher: PluginDirectoryWatcher?
+    private var wakeMonitor: WakeMonitor?
     private var mainMenu: MainMenuController?
     private let prefs = AppPreferences.shared
     private let log = VeeLog.make("app-controller")
@@ -50,6 +51,10 @@ public final class AppController: NSObject, NSApplicationDelegate {
             self.reload()
             self.startWatching()
         }
+
+        let monitor = WakeMonitor { [weak self] in self?.refreshAll() }
+        monitor.start()
+        wakeMonitor = monitor
     }
 
     private func startWatching() {
@@ -92,6 +97,7 @@ public final class AppController: NSObject, NSApplicationDelegate {
     public func applicationWillTerminate(_ notification: Notification) {
         coordinators.values.forEach { $0.stop() }
         ephemerals.values.forEach { $0.remove() }
+        wakeMonitor?.stop()
         watcher?.stop()
     }
 
