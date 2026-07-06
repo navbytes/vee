@@ -96,8 +96,28 @@ Append `| key=value key2=value2 …` to any line to attach parameters. Quote val
 | `badge` | A short badge/chip shown after the text (e.g. `badge=12`). |
 | `shortcut` | Run a macOS Shortcut by name when the item is clicked (e.g. `shortcut="Start Meeting"`). |
 | `webview`, `webvieww`, `webviewh` | Open a URL in a standalone WebView window (never inside the menu), with optional width/height. |
+| `sparkline` | A comma-separated list of numbers (e.g. `sparkline=1,2,3,4,5`). Clicking the item opens a native Liquid Glass popover that renders the series as an inline Swift Charts sparkline — rich UI without a WebView. |
 
 Unknown parameters are preserved rather than dropped, so the format can evolve without breaking existing plugins.
+
+## Rich inline charts (Liquid Glass popovers)
+
+Attach `sparkline=` to a dropdown item to opt it into a **native** rich-UI surface:
+
+```
+Load average | sparkline=0.4,0.6,0.9,1.2,0.8,0.5
+```
+
+Clicking the item opens an `NSPopover` that renders the numbers as a Swift Charts
+line/area sparkline on a macOS 26 Liquid Glass background. This is Vee's answer to
+"rich plugin UI without a WebView" — everything is drawn with SwiftUI + Swift
+Charts and AppKit, so there is no embedded browser or cross-platform runtime.
+Malformed values are skipped; an empty list is ignored.
+
+> **Proposal, subject to change.** The `sparkline=` syntax (and the popover
+> surface it opts into) is an early proposal. A future release will add
+> interactive toggle/slider items inside the popover that re-invoke the plugin
+> with a parameter; the exact convention may still evolve.
 
 ## Metadata headers
 
