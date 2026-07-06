@@ -66,6 +66,12 @@ public final class AppController: NSObject, NSApplicationDelegate {
         )
 
         Notifier.requestAuthorization()
+        // Wire the plugin-alert action buttons to the live coordinators:
+        // Re-run refreshes the plugin; Open-log opens its debug console.
+        Notifier.configure(
+            onRerun: { [weak self] id in self?.coordinators[id]?.forceRefresh() },
+            onOpenLog: { [weak self] id in self?.coordinators[id]?.showDebugConsole() }
+        )
 
         // Resolve the user's real login-shell PATH before loading plugins, so a
         // Finder/Dock launch finds Homebrew/pyenv/asdf/nvm binaries just like a
@@ -113,8 +119,8 @@ public final class AppController: NSObject, NSApplicationDelegate {
             installPlugin(from: src)
         case .setEphemeralPlugin(let name, let content, let exitAfter):
             showEphemeral(name: name, content: content, exitAfter: exitAfter)
-        case .notify(let title, let subtitle, let body, let href):
-            Notifier.post(title: title, subtitle: subtitle, body: body, href: href)
+        case .notify(let title, let subtitle, let body, let href, let pluginID):
+            Notifier.post(title: title, subtitle: subtitle, body: body, href: href, pluginID: pluginID)
         case .unknown:
             break
         }

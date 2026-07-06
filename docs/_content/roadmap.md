@@ -162,10 +162,15 @@ below exist yet in `Sources/`.
 - ⬜ **Interactive WidgetKit widgets** surfacing plugin output on the desktop and
   in Notification Center. _(1 commit for the widget extension + a timeline
   provider reading plugin output.)_
-- ⬜ **Actionable, time-sensitive notifications** (Re-run / Silence / Open log
-  buttons) for monitor-style plugins. `Notifier.swift` posts content + href
-  today; this adds `UNNotificationAction` categories and interruption levels.
-  _(1 commit.)_
+- ✅ **Actionable, time-sensitive notifications** (Re-run / Silence / Open log
+  buttons) for monitor-style plugins. A plugin passes `swiftbar://notify?plugin=…`
+  to get a `VEE_PLUGIN_ALERT` `UNNotificationCategory` with Re-run / Silence /
+  Open-log `UNNotificationAction`s and a `.timeSensitive` interruption level;
+  Silence tracks a per-session suppressed set that skips future alerts. Implemented
+  in `Sources/VeeApp/Notifier.swift` (category, actions, `NotificationSuppressor`,
+  `NotificationRouter`), `Sources/VeeApp/URLActionRouter.swift` (`plugin=` param),
+  `Sources/VeeApp/AppController.swift` (wires Re-run→refresh, Open-log→debug console),
+  and `Sources/VeeApp/PluginCoordinator.swift` (`showDebugConsole()`). _(1 commit.)_
 
 ### P3 — The verified-trust moat
 
