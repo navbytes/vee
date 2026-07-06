@@ -97,13 +97,21 @@ incumbent to copy:
 
 ### P1 — Clear superiority
 
-- 🟡 **App-wide Preferences window + first-class Variables/config UX.**
-  Per-plugin settings and a Plugin Manager already exist
-  (`VeeUI/PluginManagerView.swift`, `PluginSettingsView.swift`) with
-  Keychain-backed secret fields (`VeePreferences/SecretStore.swift`). Still
-  open: a dedicated app-wide Preferences window and a top-level Variables editor
-  that supersedes xbar's `xbar.var` GUI (today vars are per-plugin sidecars via
-  `VarStore`). _(1 commit.)_
+- ✅ **App-wide Preferences window + first-class Variables/config UX.** A
+  standard ⌘, Preferences window (`VeeUI/PreferencesWindow.swift`) with a
+  **General** tab that reuses the app-level settings — plugins-folder chooser,
+  launch-at-login, refresh-all, open-folder — factored into a shared
+  `GeneralSettingsContent`/`GeneralSettingsTab` (`VeeUI/GeneralSettingsView.swift`)
+  now used by both Preferences and the Plugin Manager — and a **Variables** tab
+  (`VeeUI/VariablesEditorView.swift`) that aggregates every installed plugin's
+  declared `<xbar.var>` variables, grouped by plugin, each editable, with secret
+  fields masked and stored in the Keychain. The pure, unit-tested aggregation
+  (`VeePreferences/VariableAggregator.swift`: `AggregatablePlugin` →
+  `VariableDeclarationReading` → `PluginVariableGroup`, tests in
+  `Tests/VeePreferencesTests/VeePreferencesTests.swift`) reuses `VarStore` and
+  `SecretStore` for persistence and supersedes xbar's per-plugin `xbar.var` GUI.
+  ⌘, is wired through a hidden AppKit app menu (`VeeApp/AppController.swift`,
+  `VeeApp/MainMenuController.swift`). _(1 commit.)_
 - ✅ **Catalog updates** in Discover: one-click, trust-gated update for installed
   plugins (`VeeUI/PluginBrowserView.swift`).
 - ✅ **Catalog quality signals.** Last-updated + freshness badges ship on
