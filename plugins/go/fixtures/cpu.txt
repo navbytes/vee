@@ -1,0 +1,8 @@
+CPU 12% | color=green sfimage=cpu
+---
+Top processes | href=https://example.com/procs
+---
+Details
+--Load: 1.20
+--Cores: 8
+Refresh | refresh=true
