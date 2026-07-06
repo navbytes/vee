@@ -52,6 +52,7 @@ final class PluginCoordinator {
             trustSummary: trustSummary,
             refreshOnOpen: header.refreshOnOpen ?? false,
             hideLastUpdated: header.hideLastUpdated,
+            autosaveName: "com.vee.plugin.\(plugin.id.rawValue)",
             aboutText: aboutText,
             aboutURL: aboutURL,
             onRefresh: { [weak self] in self?.refresh() },

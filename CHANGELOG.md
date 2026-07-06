@@ -21,6 +21,11 @@ All notable changes to Vee are documented here. The format is based on
   "Run again" button — answering "why didn't my plugin work?".
 - **Discover: one-click Update** for installed plugins — re-fetches the latest
   catalog source through the same trust gate and overwrites in place.
+- **Refresh on wake:** every plugin re-runs when the Mac wakes from sleep, so the
+  menu bar is never stale after wake (the top reliability complaint for
+  xbar/SwiftBar).
+- **Stable menu-bar position:** each plugin's status item now has a persistent
+  autosave name, so a position set by ⌘-dragging survives relaunch.
 
 ### Changed
 - Each plugin's menu now collects Vee's own chrome — the capability summary and

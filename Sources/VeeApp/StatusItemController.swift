@@ -63,7 +63,7 @@ public final class StatusItemController {
         return f
     }()
 
-    public init(pluginName: String, handler: MenuActionHandling, hasSettings: Bool = false, trustSummary: TrustSummary? = nil, refreshOnOpen: Bool = false, hideLastUpdated: Bool = false, aboutText: String? = nil, aboutURL: URL? = nil, onRefresh: @escaping () -> Void, onSettings: @escaping () -> Void = {}, onReveal: @escaping () -> Void = {}, onEdit: @escaping () -> Void = {}, onDebug: @escaping () -> Void = {}) {
+    public init(pluginName: String, handler: MenuActionHandling, hasSettings: Bool = false, trustSummary: TrustSummary? = nil, refreshOnOpen: Bool = false, hideLastUpdated: Bool = false, autosaveName: String? = nil, aboutText: String? = nil, aboutURL: URL? = nil, onRefresh: @escaping () -> Void, onSettings: @escaping () -> Void = {}, onReveal: @escaping () -> Void = {}, onEdit: @escaping () -> Void = {}, onDebug: @escaping () -> Void = {}) {
         self.pluginName = pluginName
         self.hasSettings = hasSettings
         self.trustSummary = trustSummary
@@ -71,6 +71,9 @@ public final class StatusItemController {
         self.aboutURL = aboutURL
         self.hideLastUpdated = hideLastUpdated
         self.statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        // A stable autosave name lets macOS remember where the user ⌘-dragged
+        // this item, so plugin order/position survives relaunch.
+        if let autosaveName { self.statusItem.autosaveName = autosaveName }
         self.actionTarget = MenuActionTarget(handler: handler)
         let name = pluginName
         self.controls = ControlsTarget(
