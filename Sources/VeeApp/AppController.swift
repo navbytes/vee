@@ -271,7 +271,7 @@ public final class AppController: NSObject, NSApplicationDelegate {
         self.generalSettingsModel = general
 
         let groups = VariableAggregator.aggregate(plugins: aggregatablePlugins(), reader: HeaderVariableReader())
-        let variables = VariablesEditorModel(groups: groups) { [weak self] in self?.refreshAll() }
+        let variables = VariablesEditorModel(groups: groups, onSaved: { [weak self] in self?.refreshAll() })
 
         PreferencesWindow.shared.show(general: general, variables: variables)
     }
