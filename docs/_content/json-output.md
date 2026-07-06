@@ -141,9 +141,37 @@ An item that runs a command when clicked, passing arguments via `params`.
 
 The repository ships a runnable JSON plugin at [`plugins/examples/json-demo.ts`](https://github.com/navbytes/vee/tree/main/plugins/examples/json-demo.ts). It builds a `{"vee":1,…}` object with a colored title, a link, a separator, and a submenu, then prints it — a good starting point to copy.
 
-## Current limitation: rich params
+## Rich params
 
-The richer inline controls — **sparkline**, **toggle**, **slider**, and **progress** (and their tuning params such as `trackColor`, `progressW`, `progressH`) — are **text-protocol only** at the moment. They are not yet part of the JSON schema. If a plugin needs those controls, emit the text protocol for now; see the [plugin authoring reference](plugin-authoring.md#line-parameters). Everything else — colors, SF Symbols, links, shell actions, submenus, alternates, checkmarks, tooltips — is available in both formats.
+The Vee-native inline controls are available in JSON too, as typed item fields:
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `sparkline` | `number[]` | Inline chart popover data. Non-finite values are dropped. |
+| `toggle` | `boolean` | On/off switch. |
+| `slider` | `{ "min": number, "max": number, "value": number }` | Requires `min < max`; `value` is clamped into range. |
+| `progress` | `number` | A completion fraction, clamped to `0…1`. The fill uses the item's `color`. |
+| `trackColor` | `string` | Progress track color (named or hex). |
+| `progressWidth` | `number` | Progress bar width in points. |
+| `progressHeight` | `number` | Progress bar height in points. |
+
+```json
+{
+  "vee": 1,
+  "title": [{ "text": "System" }],
+  "items": [
+    { "text": "Load history", "sparkline": [1, 2, 3, 5, 8, 13] },
+    { "text": "Notifications", "toggle": true },
+    { "text": "Volume", "slider": { "min": 0, "max": 100, "value": 40 } },
+    { "text": "Disk usage", "color": "green", "progress": 0.72, "trackColor": "#333333", "progressWidth": 80, "progressHeight": 6 }
+  ]
+}
+```
+
+These map to exactly the same controls as the text protocol's `sparkline=` /
+`toggle=` / `slider=` / `progress=` (see the [plugin authoring reference](plugin-authoring.md#line-parameters)),
+so colors, SF Symbols, links, shell actions, submenus, alternates, checkmarks,
+tooltips, and the rich controls are all available in both formats.
 
 ## See also
 

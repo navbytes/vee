@@ -138,8 +138,33 @@
 }</code></pre></div>
 <h2 id="a-runnable-example">A runnable example</h2>
 <p>The repository ships a runnable JSON plugin at <a href="https://github.com/navbytes/vee/tree/main/plugins/examples/json-demo.ts" rel="noopener"><code>plugins/examples/json-demo.ts</code></a>. It builds a <code>{"vee":1,…}</code> object with a colored title, a link, a separator, and a submenu, then prints it — a good starting point to copy.</p>
-<h2 id="current-limitation-rich-params">Current limitation: rich params</h2>
-<p>The richer inline controls — <strong>sparkline</strong>, <strong>toggle</strong>, <strong>slider</strong>, and <strong>progress</strong> (and their tuning params such as <code>trackColor</code>, <code>progressW</code>, <code>progressH</code>) — are <strong>text-protocol only</strong> at the moment. They are not yet part of the JSON schema. If a plugin needs those controls, emit the text protocol for now; see the <a href="plugin-authoring.html#line-parameters">plugin authoring reference</a>. Everything else — colors, SF Symbols, links, shell actions, submenus, alternates, checkmarks, tooltips — is available in both formats.</p>
+<h2 id="rich-params">Rich params</h2>
+<p>The Vee-native inline controls are available in JSON too, as typed item fields:</p>
+<div class="table-wrap">
+<table>
+<thead><tr><th>Field</th><th>Type</th><th>Notes</th></tr></thead>
+<tbody>
+<tr><td><code>sparkline</code></td><td><code>number[]</code></td><td>Inline chart popover data. Non-finite values are dropped.</td></tr>
+<tr><td><code>toggle</code></td><td><code>boolean</code></td><td>On/off switch.</td></tr>
+<tr><td><code>slider</code></td><td><code>{ "min": number, "max": number, "value": number }</code></td><td>Requires <code>min &lt; max</code>; <code>value</code> is clamped into range.</td></tr>
+<tr><td><code>progress</code></td><td><code>number</code></td><td>A completion fraction, clamped to <code>0…1</code>. The fill uses the item's <code>color</code>.</td></tr>
+<tr><td><code>trackColor</code></td><td><code>string</code></td><td>Progress track color (named or hex).</td></tr>
+<tr><td><code>progressWidth</code></td><td><code>number</code></td><td>Progress bar width in points.</td></tr>
+<tr><td><code>progressHeight</code></td><td><code>number</code></td><td>Progress bar height in points.</td></tr>
+</tbody>
+</table>
+</div>
+<div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">json</span></div><pre><code>{
+  "vee": 1,
+  "title": [{ "text": "System" }],
+  "items": [
+    { "text": "Load history", "sparkline": [1, 2, 3, 5, 8, 13] },
+    { "text": "Notifications", "toggle": true },
+    { "text": "Volume", "slider": { "min": 0, "max": 100, "value": 40 } },
+    { "text": "Disk usage", "color": "green", "progress": 0.72, "trackColor": "#333333", "progressWidth": 80, "progressHeight": 6 }
+  ]
+}</code></pre></div>
+<p>These map to exactly the same controls as the text protocol's <code>sparkline=</code> / <code>toggle=</code> / <code>slider=</code> / <code>progress=</code> (see the <a href="plugin-authoring.html#line-parameters">plugin authoring reference</a>), so colors, SF Symbols, links, shell actions, submenus, alternates, checkmarks, tooltips, and the rich controls are all available in both formats.</p>
 <h2 id="see-also">See also</h2>
 <ul>
 <li><a href="plugin-authoring.html">Plugin authoring reference</a> — the text protocol and the full set of line parameters, including the rich params.</li>
