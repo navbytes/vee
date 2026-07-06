@@ -6,6 +6,15 @@ All notable changes to Vee are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added (compatibility & UX, batch 2)
+- `sfconfig=` now applies SF Symbol `scale` and `weight` (JSON), fixing the
+  scale-ignored gap.
+- `<swiftbar.hideLastUpdated / hideRunInTerminal / hideDisablePlugin /
+  hideSwiftBar>` headers are parsed; a per-plugin "Updated <time>" line is shown
+  (suppressed by `hideLastUpdated`).
+- `swiftbar://addplugin?src=…` installs a plugin from a URL, and
+  `swiftbar://setephemeralplugin` shows transient, file-less menu content.
+
 ### Changed
 - Each plugin's menu now collects Vee's own chrome — the capability summary and
   the Refresh / Settings / About / Reveal / Edit / Quit controls — under a

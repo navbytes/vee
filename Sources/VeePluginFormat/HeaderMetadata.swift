@@ -44,6 +44,10 @@ public struct HeaderMetadata: Equatable, Sendable {
     public var environment: [String: String] = [:]
     public var persistentWebView: Bool?
     public var hideAbout: Bool = false
+    public var hideRunInTerminal: Bool = false
+    public var hideLastUpdated: Bool = false
+    public var hideDisablePlugin: Bool = false
+    public var hideSwiftBar: Bool = false
 
     public var vars: [VarDeclaration] = []
 

@@ -33,6 +33,8 @@ The **action is the URL host**, and parameters come from the query string. The p
 | `enableplugin` | Enable a plugin. | `vee://enableplugin?name=cpu` |
 | `disableplugin` | Disable a plugin. | `vee://disableplugin?name=cpu` |
 | `toggleplugin` | Toggle a plugin's enabled state. | `vee://toggleplugin?name=cpu` |
+| `addplugin` | Download and install a plugin from a URL. | `vee://addplugin?src=https://example.com/cpu.5s.sh` |
+| `setephemeralplugin` | Show transient menu content in its own status item, with no file on disk (optionally auto-removed after `exitafter` seconds). | `vee://setephemeralplugin?name=build&content=Done&exitafter=5` |
 | `notify` | Post a system notification. | `vee://notify?title=Done&subtitle=Build&body=Succeeded&href=https://example.com` |
 
 The same URLs work with the `swiftbar://` scheme, e.g. `swiftbar://refreshplugin?name=cpu`.

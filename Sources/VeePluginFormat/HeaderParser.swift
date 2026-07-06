@@ -40,6 +40,10 @@ public enum HeaderParser {
             case "environment": meta.environment = parseEnvironment(value)
             case "persistentwebview": meta.persistentWebView = boolValue(value)
             case "hideabout": meta.hideAbout = boolValue(value)
+            case "hideruninterminal": meta.hideRunInTerminal = boolValue(value)
+            case "hidelastupdated": meta.hideLastUpdated = boolValue(value)
+            case "hidedisableplugin": meta.hideDisablePlugin = boolValue(value)
+            case "hideswiftbar": meta.hideSwiftBar = boolValue(value)
             case "var":
                 if let decl = parseVar(value) { meta.vars.append(decl) }
             default:

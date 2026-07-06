@@ -30,6 +30,26 @@ final class URLActionRouterTests: XCTestCase {
         XCTAssertEqual(parse("swiftbar://notify?body=Only"), .notify(title: "", subtitle: "", body: "Only", href: nil))
     }
 
+    func testAddPlugin() {
+        XCTAssertEqual(
+            parse("swiftbar://addplugin?src=https://example.com/x.5m.sh"),
+            .addPlugin(src: URL(string: "https://example.com/x.5m.sh")!)
+        )
+        // Missing/invalid src is not actionable.
+        XCTAssertEqual(parse("swiftbar://addplugin"), .unknown)
+    }
+
+    func testSetEphemeralPlugin() {
+        XCTAssertEqual(
+            parse("swiftbar://setephemeralplugin?name=build&content=Done&exitafter=5"),
+            .setEphemeralPlugin(name: "build", content: "Done", exitAfter: 5)
+        )
+        XCTAssertEqual(
+            parse("swiftbar://setephemeralplugin?content=Hi"),
+            .setEphemeralPlugin(name: "", content: "Hi", exitAfter: nil)
+        )
+    }
+
     func testUnknownAndWrongScheme() {
         XCTAssertEqual(parse("https://example.com"), .unknown)
         XCTAssertEqual(parse("swiftbar://bogusaction"), .unknown)
