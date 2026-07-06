@@ -11,13 +11,19 @@ public struct CatalogEntry: Identifiable, Sendable, Equatable {
     public var filename: String
     /// Where to download the raw script from.
     public var rawURL: URL
+    /// When the plugin was last changed upstream (last commit that touched
+    /// `path`). Populated lazily — `nil` until fetched via
+    /// ``CatalogFetching/fetchLastUpdated(_:)`` — because it costs one API call
+    /// per plugin.
+    public var lastUpdated: Date?
 
     public var id: String { path }
 
-    public init(path: String, category: String, filename: String, rawURL: URL) {
+    public init(path: String, category: String, filename: String, rawURL: URL, lastUpdated: Date? = nil) {
         self.path = path
         self.category = category
         self.filename = filename
         self.rawURL = rawURL
+        self.lastUpdated = lastUpdated
     }
 }

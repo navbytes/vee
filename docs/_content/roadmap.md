@@ -106,11 +106,19 @@ incumbent to copy:
   `VarStore`). _(1 commit.)_
 - ✅ **Catalog updates** in Discover: one-click, trust-gated update for installed
   plugins (`VeeUI/PluginBrowserView.swift`).
-- ⬜ **Catalog quality signals.** Add last-updated / "works on your macOS" /
-  freshness badges to catalog cards. `CatalogEntry` currently carries only
-  path/category/filename/rawURL — it needs version/date/compat fields and badge
-  rendering. Turns the migratable xbar base into Vee's base. _(1 commit for the
-  model + parse fields, 1 commit for badge rendering.)_
+- ✅ **Catalog quality signals.** Last-updated + freshness badges ship on
+  Discover cards. `CatalogEntry` gained an optional `lastUpdated: Date?`
+  (`VeeCatalog/CatalogEntry.swift`), populated lazily via a new
+  `CatalogFetching.fetchLastUpdated(_:)` that hits the GitHub commits API one
+  call per plugin (`VeeCatalog/CatalogClient.swift`, parsed by
+  `CatalogParser.parseLastCommitDate`). A pure, unit-tested
+  `PluginFreshness.classify(lastUpdated:now:)` (`VeeCatalog/PluginFreshness.swift`,
+  fresh <6mo / aging 6mo–2y / stale >2y) tints an "Updated 3y ago" badge that
+  the card loads lazily on appear (`VeeUI/PluginBrowserView.swift`). A "works on
+  your macOS" badge was intentionally **omitted**: that compatibility data is not
+  sourceable from the xbar git-tree catalog (paths only, no runtime/OS metadata),
+  so shipping it would mean fabricating a signal. Turns the migratable xbar base
+  into Vee's base.
 - ✅ **In-app debugging.** Per-plugin debug console (`VeeUI/PluginDebugView.swift`).
 - ✅ **Menu-bar ordering** persists across relaunch via a stable autosave name.
   Notch-aware overflow handling folds into Control Center Controls (P2). 
