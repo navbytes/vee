@@ -9,7 +9,7 @@ public enum URLAction: Equatable, Sendable {
     case togglePlugin(name: String)
     case addPlugin(src: URL)
     case setEphemeralPlugin(name: String, content: String, exitAfter: TimeInterval?)
-    case notify(title: String, subtitle: String, body: String, href: URL?)
+    case notify(title: String, subtitle: String, body: String, href: URL?, pluginID: String?)
     case unknown
 }
 
@@ -47,11 +47,14 @@ public enum URLActionRouter {
                 exitAfter: param("exitafter").flatMap(Double.init).map { TimeInterval($0) }
             )
         case "notify":
+            // `plugin=` names the originating plugin (SwiftBar-compatible); when
+            // present the alert gains Re-run / Silence / Open-log actions.
             return .notify(
                 title: param("title") ?? "",
                 subtitle: param("subtitle") ?? "",
                 body: param("body") ?? "",
-                href: param("href").flatMap(URL.init(string:))
+                href: param("href").flatMap(URL.init(string:)),
+                pluginID: param("plugin").flatMap { $0.isEmpty ? nil : $0 }
             )
         default:
             return .unknown
