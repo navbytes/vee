@@ -27,6 +27,35 @@ final class JSONOutputParserTests: XCTestCase {
         XCTAssertEqual(sub.submenu.compactMap { if case .item(let i) = $0 { return i.text } else { return nil } }, ["Child"])
     }
 
+    /// Regression: pathologically-nested JSON must not overflow the mapping
+    /// recursion. (Foundation's decoder also rejects input past its own depth
+    /// limit — either way we degrade gracefully instead of crashing.)
+    func testDeeplyNestedSubmenuIsBoundedNotCrashing() {
+        let depth = 300
+        let json = "{\"vee\":1,\"items\":[" +
+            String(repeating: "{\"submenu\":[", count: depth) + "{\"text\":\"leaf\"}" +
+            String(repeating: "]}", count: depth) + "]}"
+        // Either Foundation rejects it (nil → text fallback) or the depth cap
+        // truncates it; neither crashes. Just assert the call returns.
+        _ = JSONOutputParser.parse(json)
+
+        // A moderate, decodable nesting is capped at maxDepth without crashing.
+        let shallow = 80
+        let capped = "{\"vee\":1,\"items\":[" +
+            String(repeating: "{\"submenu\":[", count: shallow) + "{\"text\":\"leaf\"}" +
+            String(repeating: "]}", count: shallow) + "]}"
+        if let out = JSONOutputParser.parse(capped) {
+            // Walk to the deepest reachable item; depth must not exceed the cap.
+            var node = out.body.first
+            var reached = 0
+            while case .item(let item)? = node, let next = item.submenu.first {
+                reached += 1
+                node = next
+            }
+            XCTAssertLessThanOrEqual(reached, 64)
+        }
+    }
+
     func testReturnsNilForNonJSON() {
         XCTAssertNil(JSONOutputParser.parse("CPU 12%\n---\nplain text"))
     }

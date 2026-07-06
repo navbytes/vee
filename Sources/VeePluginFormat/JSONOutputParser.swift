@@ -21,23 +21,31 @@ public enum JSONOutputParser {
         let titleLines = (menu.title ?? []).map {
             TitleLine(text: $0.text, params: lineParams(color: $0.color, sfimage: $0.sfimage, size: $0.size))
         }
-        let body = (menu.items ?? []).map(node(from:))
+        let body = (menu.items ?? []).map { node(from: $0, depth: 0) }
         return ParsedOutput(titleLines: titleLines, body: body)
     }
 
     // MARK: - Mapping
 
-    private static func node(from item: JSONItem) -> MenuNode {
+    /// Guards the mapping recursion against pathologically-nested input. Foundation's
+    /// `JSONDecoder` already rejects input past its own (~512-level) depth limit
+    /// before we get here, but we don't rely on that undocumented behavior: the
+    /// mapping caps its own depth so a deep `submenu`/`alternate` chain can never
+    /// overflow the stack. Real menus are only a few levels deep.
+    private static let maxDepth = 64
+
+    private static func node(from item: JSONItem, depth: Int) -> MenuNode {
         if item.separator == true { return .separator }
-        return .item(menuItem(from: item))
+        return .item(menuItem(from: item, depth: depth))
     }
 
-    private static func menuItem(from item: JSONItem) -> MenuItem {
-        MenuItem(
+    private static func menuItem(from item: JSONItem, depth: Int) -> MenuItem {
+        let children = depth >= maxDepth ? [] : (item.submenu ?? []).map { node(from: $0, depth: depth + 1) }
+        return MenuItem(
             text: item.text ?? "",
             params: params(from: item),
-            submenu: (item.submenu ?? []).map(node(from:)),
-            alternate: item.alternate.map(menuItem(from:))
+            submenu: children,
+            alternate: depth >= maxDepth ? nil : item.alternate.map { menuItem(from: $0, depth: depth + 1) }
         )
     }
 
