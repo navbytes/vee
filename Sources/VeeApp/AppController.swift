@@ -12,7 +12,9 @@ import VeeUI
 /// manager.
 @MainActor
 public final class AppController: NSObject, NSApplicationDelegate {
-    private let runtime = PluginRuntime(executor: PluginExecutor(runner: SystemProcessRunner()))
+    // Rebuilt once the login-shell PATH is resolved (see applicationDidFinishLaunching).
+    private var baseEnvironment = ProcessInfo.processInfo.environment
+    private var runtime = PluginRuntime(executor: PluginExecutor(runner: SystemProcessRunner()))
     private var coordinators: [String: PluginCoordinator] = [:]
     private var loadedPaths: Set<String> = []
     private var watcher: PluginDirectoryWatcher?
@@ -37,8 +39,16 @@ public final class AppController: NSObject, NSApplicationDelegate {
 
         Notifier.requestAuthorization()
 
-        reload()
-        startWatching()
+        // Resolve the user's real login-shell PATH before loading plugins, so a
+        // Finder/Dock launch finds Homebrew/pyenv/asdf/nvm binaries just like a
+        // Terminal launch would. The Vee menu is already up; plugins appear once
+        // this returns (a short, timed-out shell call).
+        Task { @MainActor in
+            self.baseEnvironment = await ShellPathResolver.resolvedEnvironment()
+            self.runtime = PluginRuntime(executor: PluginExecutor(runner: SystemProcessRunner(), baseEnvironment: self.baseEnvironment))
+            self.reload()
+            self.startWatching()
+        }
     }
 
     private func startWatching() {
@@ -67,8 +77,8 @@ public final class AppController: NSObject, NSApplicationDelegate {
             setEnabled(false, id: name)
         case .togglePlugin(let name):
             setEnabled(prefs.isDisabled(name), id: name)
-        case .notify(let title, let subtitle, let body, _):
-            Notifier.post(title: title, subtitle: subtitle, body: body)
+        case .notify(let title, let subtitle, let body, let href):
+            Notifier.post(title: title, subtitle: subtitle, body: body, href: href)
         case .unknown:
             break
         }
@@ -97,7 +107,7 @@ public final class AppController: NSObject, NSApplicationDelegate {
         coordinators.removeAll()
 
         for plugin in plugins {
-            let coordinator = PluginCoordinator(plugin: plugin, pluginsDirectory: directory, runtime: runtime)
+            let coordinator = PluginCoordinator(plugin: plugin, pluginsDirectory: directory, runtime: runtime, baseEnvironment: baseEnvironment)
             coordinators[plugin.id.rawValue] = coordinator
             coordinator.start()
         }
