@@ -141,17 +141,25 @@ an embedded cross-platform runtime (see the decision note below). Menu rendering
 today is plain native `NSMenu` (`VeeMenu/MenuBuilder.swift`); none of the items
 below exist yet in `Sources/`.
 
-- 🟡 **Liquid Glass `.window`-style interactive popovers** with inline
+- ✅ **Liquid Glass `.window`-style interactive popovers** with inline
   charts/toggles/sliders, so common rich UIs no longer need a WebView. This is
-  the on-brand answer to the RN/Flutter question. The opt-in + Swift Charts
-  sparkline rendering shipped: a dropdown item carrying `sparkline=1,2,3` (parsed
-  to `[Double]` on `LineParams`, `VeePluginFormat/LineParser.swift`) opens a
-  native `NSPopover` (`VeeApp/PluginPopover.swift`) hosting a SwiftUI Swift
-  Charts line/area sparkline on a Liquid Glass surface
-  (`VeeUI/SparklineChartView.swift`), kept out of the `NSMenu` like the WebView
-  window so the menu stays native and leak-free. _(Still open: interactive
-  toggle/slider items inside the popover that re-invoke the plugin with a
-  param — the next commit.)_
+  the on-brand answer to the RN/Flutter question. Two kinds ship, both kept out
+  of the `NSMenu` (like the WebView window) so the menu stays native and
+  leak-free:
+  - **Read-only sparkline.** A dropdown item carrying `sparkline=1,2,3` (parsed
+    to `[Double]` on `LineParams`, `VeePluginFormat/LineParser.swift`) opens a
+    native `NSPopover` (`VeeApp/PluginPopover.swift`) hosting a SwiftUI Swift
+    Charts line/area sparkline on a Liquid Glass surface
+    (`VeeUI/SparklineChartView.swift`).
+  - **Interactive controls.** An item carrying `toggle=on` or
+    `slider=min,max,value` (parsed to a `PluginControl` on `LineParams`) opens a
+    Liquid Glass control popover (`VeeUI/PluginControlView.swift`). Committing a
+    value re-invokes the item's `shell=`/`bash=` command with the value provided
+    both as `VEE_CONTROL_VALUE` and as a trailing argument, then refreshes if
+    `refresh=true`. The value→command contract is a pure, unit-tested core
+    (`VeeApp/ControlReinvocation.swift`, `Tests/VeeAppTests/ControlReinvocationTests.swift`);
+    the parser is covered by `Tests/VeePluginFormatTests/ControlParamTests.swift`.
+    _(1 commit.)_
 - ⬜ **Control Center Controls** (`ControlWidget` +
   `AppIntentControlConfiguration`) so plugin actions live in Control Center and
   can be dragged to the menu bar — a native answer to menu-bar overflow.
@@ -269,7 +277,6 @@ on a real Apple-Silicon Mac running macOS 26 — headless CI can't validate them
 - Control Center Controls (P2) — Widget/Control extension target.
 - Focus filters (P2) — App Intents extension.
 - Interactive WidgetKit widgets (P2) — WidgetKit extension.
-- Interactive toggle/slider items inside the Liquid Glass popover (P2 follow-up).
 - Observed network (P3) — subprocess network interception.
 - Observed filesystem/exec via Endpoint Security (P3) — provisioned entitlement + signed build.
 - Published soak chart / "Vee vs SwiftBar after 24h" on the docs site (P0 follow-up).
