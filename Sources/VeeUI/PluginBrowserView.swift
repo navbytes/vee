@@ -13,8 +13,11 @@ public struct InstallPrompt: Identifiable {
     public let warnings: [String]
     public let description: String?
     public let dependencies: [String]
+    /// For an update, how the incoming source's trust footprint differs from the
+    /// installed one. `nil` for a fresh install (nothing to compare against).
+    public let trustDiff: TrustDiff?
 
-    public init(entry: CatalogEntry, source: String, title: String, summary: TrustSummary, warnings: [String], description: String?, dependencies: [String]) {
+    public init(entry: CatalogEntry, source: String, title: String, summary: TrustSummary, warnings: [String], description: String?, dependencies: [String], trustDiff: TrustDiff? = nil) {
         self.entry = entry
         self.source = source
         self.title = title
@@ -22,6 +25,7 @@ public struct InstallPrompt: Identifiable {
         self.warnings = warnings
         self.description = description
         self.dependencies = dependencies
+        self.trustDiff = trustDiff
     }
 }
 
@@ -110,6 +114,13 @@ public final class PluginBrowserModel: ObservableObject {
         PluginInstaller.isInstalled(filename: entry.filename, in: pluginsDirectory)
     }
 
+    /// The installed plugin's source on disk, if any — used to diff against an
+    /// incoming update at the trust gate.
+    private func installedSource(for entry: CatalogEntry) -> String? {
+        let path = (pluginsDirectory as NSString).appendingPathComponent(entry.filename)
+        return try? String(contentsOfFile: path, encoding: .utf8)
+    }
+
     /// Fetch the source and open the trust gate.
     func requestInstall(_ entry: CatalogEntry) async {
         do {
@@ -120,6 +131,9 @@ public final class PluginBrowserModel: ObservableObject {
             let header = HeaderParser.parse(source: source)
             headers[entry.path] = header
             trustLevels[entry.path] = summary.level
+            // When updating an installed plugin, diff the incoming source's
+            // trust footprint against the one on disk so silent changes surface.
+            let trustDiff = installedSource(for: entry).map { TrustDiff.between(old: $0, new: source) }
             prompt = InstallPrompt(
                 entry: entry,
                 source: source,
@@ -127,7 +141,8 @@ public final class PluginBrowserModel: ObservableObject {
                 summary: summary,
                 warnings: warnings,
                 description: header.summary,
-                dependencies: header.dependencies
+                dependencies: header.dependencies,
+                trustDiff: trustDiff
             )
         } catch {
             errorMessage = "Couldn't fetch \(entry.filename): \(error.localizedDescription)"
