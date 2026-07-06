@@ -63,6 +63,13 @@ public struct LineParams: Equatable, Sendable {
     // SwiftBar extensions
     public var swiftbar: SwiftBarParams
 
+    // Vee-native extensions
+    /// An inline data series (`sparkline=1,2,3,4,5`). When non-empty, the item
+    /// opts into a native Liquid Glass `NSPopover` that renders the series as a
+    /// Swift Charts sparkline — rich UI without a WebView. Malformed entries are
+    /// skipped; an empty/all-malformed list parses to `nil`.
+    public var sparkline: [Double]?
+
     // Forward-compatibility: keys we didn't recognise.
     public var unknown: [String: String]
 

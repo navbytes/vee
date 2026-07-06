@@ -21,6 +21,7 @@ public final class AppController: NSObject, NSApplicationDelegate {
     private var watcher: PluginDirectoryWatcher?
     private var wakeMonitor: WakeMonitor?
     private var mainMenu: MainMenuController?
+    private var generalSettingsModel: GeneralSettingsModel?
     private let prefs = AppPreferences.shared
     private let log = VeeLog.make("app-controller")
 
@@ -54,14 +55,23 @@ public final class AppController: NSObject, NSApplicationDelegate {
         PluginsDirectory.ensureExists(directory)
         log.info("plugins directory: \(self.directory, privacy: .public)")
 
+        installAppMenu()
+
         mainMenu = MainMenuController(
             onManager: { [weak self] in self?.openManager() },
             onDiscover: { [weak self] in self?.openBrowser() },
+            onPreferences: { [weak self] in self?.openPreferences() },
             onRefreshAll: { [weak self] in self?.refreshAll() },
             onOpenFolder: { [weak self] in self?.openFolder() }
         )
 
         Notifier.requestAuthorization()
+        // Wire the plugin-alert action buttons to the live coordinators:
+        // Re-run refreshes the plugin; Open-log opens its debug console.
+        Notifier.configure(
+            onRerun: { [weak self] id in self?.coordinators[id]?.forceRefresh() },
+            onOpenLog: { [weak self] id in self?.coordinators[id]?.showDebugConsole() }
+        )
 
         // Resolve the user's real login-shell PATH before loading plugins, so a
         // Finder/Dock launch finds Homebrew/pyenv/asdf/nvm binaries just like a
@@ -109,8 +119,8 @@ public final class AppController: NSObject, NSApplicationDelegate {
             installPlugin(from: src)
         case .setEphemeralPlugin(let name, let content, let exitAfter):
             showEphemeral(name: name, content: content, exitAfter: exitAfter)
-        case .notify(let title, let subtitle, let body, let href):
-            Notifier.post(title: title, subtitle: subtitle, body: body, href: href)
+        case .notify(let title, let subtitle, let body, let href, let pluginID):
+            Notifier.post(title: title, subtitle: subtitle, body: body, href: href, pluginID: pluginID)
         case .unknown:
             break
         }
@@ -221,16 +231,89 @@ public final class AppController: NSObject, NSApplicationDelegate {
         PluginBrowserWindow.shared.show(model: model)
     }
 
+    // MARK: - Preferences
+
+    /// Installs a minimal application main menu. Vee is an `.accessory` app so
+    /// this menu is never shown, but its key equivalents (⌘, for Preferences,
+    /// and the standard Edit-menu clipboard commands used when pasting API
+    /// tokens into the Variables editor) are dispatched to the key window.
+    private func installAppMenu() {
+        let mainMenu = NSMenu()
+
+        let appItem = NSMenuItem()
+        mainMenu.addItem(appItem)
+        let appMenu = NSMenu()
+        appItem.submenu = appMenu
+        let prefs = NSMenuItem(title: "Preferences…", action: #selector(openPreferences), keyEquivalent: ",")
+        prefs.keyEquivalentModifierMask = [.command]
+        prefs.target = self
+        appMenu.addItem(prefs)
+
+        let editItem = NSMenuItem()
+        editItem.title = "Edit"
+        mainMenu.addItem(editItem)
+        let editMenu = NSMenu(title: "Edit")
+        editItem.submenu = editMenu
+        editMenu.addItem(withTitle: "Cut", action: #selector(NSText.cut(_:)), keyEquivalent: "x")
+        editMenu.addItem(withTitle: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
+        editMenu.addItem(withTitle: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
+        editMenu.addItem(withTitle: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
+
+        NSApp.mainMenu = mainMenu
+    }
+
+    /// Opens the app-wide Preferences window (⌘,): a General tab reusing the
+    /// app-level settings and a Variables tab aggregating every installed
+    /// plugin's declared `<xbar.var>` variables.
+    @objc private func openPreferences() {
+        let general = GeneralSettingsModel(
+            currentDirectory: directory,
+            launchAtLogin: LoginItemManager.isEnabled,
+            onLaunchAtLogin: { LoginItemManager.setEnabled($0) },
+            onChooseFolder: { [weak self] in self?.chooseFolderFromPreferences() },
+            onOpenFolder: { [weak self] in self?.openFolder() },
+            onRefreshAll: { [weak self] in self?.refreshAll() }
+        )
+        self.generalSettingsModel = general
+
+        let groups = VariableAggregator.aggregate(plugins: aggregatablePlugins(), reader: HeaderVariableReader())
+        let variables = VariablesEditorModel(groups: groups, onSaved: { [weak self] in self?.refreshAll() })
+
+        PreferencesWindow.shared.show(general: general, variables: variables)
+    }
+
+    /// Every installed plugin, described for the pure variable aggregator.
+    private func aggregatablePlugins() -> [AggregatablePlugin] {
+        PluginDiscovery.enumerate(directory: directory).map {
+            AggregatablePlugin(id: $0.id, name: $0.filename.name, path: $0.path)
+        }
+    }
+
+    /// Folder chooser invoked from the Preferences General tab; also refreshes
+    /// the tab's displayed path so it stays in sync.
+    private func chooseFolderFromPreferences() {
+        guard let path = promptForPluginsFolder() else { return }
+        setPluginsDirectory(path)
+        generalSettingsModel?.currentDirectory = path
+    }
+
     /// Prompts for a plugins folder (e.g. an existing SwiftBar folder) and
     /// switches to it.
     private func chooseFolder() {
+        guard let path = promptForPluginsFolder() else { return }
+        setPluginsDirectory(path)
+    }
+
+    /// Runs the open panel and returns the chosen folder path, or `nil` if
+    /// cancelled.
+    private func promptForPluginsFolder() -> String? {
         let panel = NSOpenPanel()
         panel.canChooseDirectories = true
         panel.canChooseFiles = false
         panel.allowsMultipleSelection = false
         panel.directoryURL = URL(fileURLWithPath: directory)
-        guard panel.runModal() == .OK, let url = panel.url else { return }
-        setPluginsDirectory(url.path)
+        guard panel.runModal() == .OK, let url = panel.url else { return nil }
+        return url.path
     }
 
     private func setPluginsDirectory(_ path: String) {

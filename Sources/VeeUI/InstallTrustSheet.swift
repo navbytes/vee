@@ -28,6 +28,8 @@ public struct InstallTrustSheet: View {
 
                     capabilitiesSection
 
+                    trustDiffSection
+
                     if !prompt.dependencies.isEmpty {
                         callout(
                             symbol: "shippingbox.fill",
@@ -102,6 +104,24 @@ public struct InstallTrustSheet: View {
                         }
                     }
                 }
+            }
+        }
+    }
+
+    /// For an update, the change in the plugin's trust footprint since it was
+    /// installed. Hidden on a fresh install and when nothing changed.
+    @ViewBuilder
+    private var trustDiffSection: some View {
+        if let diff = prompt.trustDiff, diff.hasChanges {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Changes since you installed it")
+                    .font(.subheadline).fontWeight(.semibold)
+                callout(
+                    symbol: "arrow.triangle.2.circlepath",
+                    tint: .orange,
+                    title: "This update changes what the plugin can do",
+                    body: diff.summaryLines.joined(separator: "\n")
+                )
             }
         }
     }

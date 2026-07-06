@@ -90,6 +90,9 @@ final class PluginCoordinator {
 
     func showSettings() { openSettings() }
 
+    /// Opens this plugin's debug console (wired to the notification "Open Log" action).
+    func showDebugConsole() { showDebug() }
+
     private func openSettings() {
         let model = PluginSettingsModel(pluginName: plugin.filename.name, prefs: preferences) { [weak self] in
             self?.refresh()

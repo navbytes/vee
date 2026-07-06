@@ -25,9 +25,21 @@ final class URLActionRouterTests: XCTestCase {
     func testNotify() {
         XCTAssertEqual(
             parse("swiftbar://notify?title=Hi&subtitle=Sub&body=There&href=https://example.com"),
-            .notify(title: "Hi", subtitle: "Sub", body: "There", href: URL(string: "https://example.com"))
+            .notify(title: "Hi", subtitle: "Sub", body: "There", href: URL(string: "https://example.com"), pluginID: nil)
         )
-        XCTAssertEqual(parse("swiftbar://notify?body=Only"), .notify(title: "", subtitle: "", body: "Only", href: nil))
+        XCTAssertEqual(parse("swiftbar://notify?body=Only"), .notify(title: "", subtitle: "", body: "Only", href: nil, pluginID: nil))
+    }
+
+    func testNotifyCarriesPluginID() {
+        XCTAssertEqual(
+            parse("swiftbar://notify?plugin=cpu.5s.sh&body=High"),
+            .notify(title: "", subtitle: "", body: "High", href: nil, pluginID: "cpu.5s.sh")
+        )
+        // An empty plugin param is treated as absent (no plugin context).
+        XCTAssertEqual(
+            parse("swiftbar://notify?plugin=&body=Hi"),
+            .notify(title: "", subtitle: "", body: "Hi", href: nil, pluginID: nil)
+        )
     }
 
     func testAddPlugin() {

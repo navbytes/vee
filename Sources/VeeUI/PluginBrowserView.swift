@@ -13,8 +13,11 @@ public struct InstallPrompt: Identifiable {
     public let warnings: [String]
     public let description: String?
     public let dependencies: [String]
+    /// For an update, how the incoming source's trust footprint differs from the
+    /// installed one. `nil` for a fresh install (nothing to compare against).
+    public let trustDiff: TrustDiff?
 
-    public init(entry: CatalogEntry, source: String, title: String, summary: TrustSummary, warnings: [String], description: String?, dependencies: [String]) {
+    public init(entry: CatalogEntry, source: String, title: String, summary: TrustSummary, warnings: [String], description: String?, dependencies: [String], trustDiff: TrustDiff? = nil) {
         self.entry = entry
         self.source = source
         self.title = title
@@ -22,6 +25,7 @@ public struct InstallPrompt: Identifiable {
         self.warnings = warnings
         self.description = description
         self.dependencies = dependencies
+        self.trustDiff = trustDiff
     }
 }
 
@@ -39,14 +43,21 @@ public final class PluginBrowserModel: ObservableObject {
     /// Lazily-fetched metadata, keyed by catalog path.
     @Published public var headers: [String: HeaderMetadata] = [:]
     @Published public var trustLevels: [String: TrustLevel] = [:]
+    /// Lazily-fetched last-updated dates, keyed by catalog path.
+    @Published public var lastUpdated: [String: Date] = [:]
+    /// Paths whose last-updated fetch has been started, so we only make the
+    /// (one-call-per-plugin) commits-API request once.
+    private var lastUpdatedRequested: Set<String> = []
 
     private let fetcher: CatalogFetching
     private let pluginsDirectory: String
+    private let provenanceStore: ProvenanceStore
     private let onInstalled: () -> Void
 
     public init(fetcher: CatalogFetching, pluginsDirectory: String, onInstalled: @escaping () -> Void) {
         self.fetcher = fetcher
         self.pluginsDirectory = pluginsDirectory
+        self.provenanceStore = ProvenanceStore(directory: pluginsDirectory)
         self.onInstalled = onInstalled
     }
 
@@ -58,6 +69,9 @@ public final class PluginBrowserModel: ObservableObject {
     func summary(for entry: CatalogEntry) -> String? { headers[entry.path]?.summary }
     func author(for entry: CatalogEntry) -> String? { headers[entry.path]?.author }
     func trustLevel(for entry: CatalogEntry) -> TrustLevel? { trustLevels[entry.path] }
+    func freshness(for entry: CatalogEntry, now: Date = Date()) -> PluginFreshness? {
+        PluginFreshness.classify(lastUpdated: lastUpdated[entry.path], now: now)
+    }
 
     /// Fetches and parses an entry's header + trust once, for display in its card.
     func loadHeader(for entry: CatalogEntry) async {
@@ -66,6 +80,16 @@ public final class PluginBrowserModel: ObservableObject {
         guard let source = try? await fetcher.fetchSource(entry) else { return }
         headers[entry.path] = HeaderParser.parse(source: source)
         trustLevels[entry.path] = TrustAnalyzer.analyze(TrustParser.parse(source: source)).level
+    }
+
+    /// Lazily fetches an entry's last-updated date once, for its freshness
+    /// badge. Costs one commits-API call per plugin, so it's guarded to fire a
+    /// single time per card and only when the card appears — never eagerly for
+    /// the whole grid. Failures leave the date `nil` so the badge is hidden.
+    func loadLastUpdated(for entry: CatalogEntry) async {
+        guard lastUpdatedRequested.insert(entry.path).inserted else { return }
+        guard let date = try? await fetcher.fetchLastUpdated(entry) else { return }
+        lastUpdated[entry.path] = date
     }
 
     public func load() async {
@@ -110,6 +134,24 @@ public final class PluginBrowserModel: ObservableObject {
         PluginInstaller.isInstalled(filename: entry.filename, in: pluginsDirectory)
     }
 
+    /// Provenance status of an installed plugin: `.verified` when its on-disk
+    /// source still matches what was recorded at install, `.modified` when it has
+    /// changed since (local edit or a re-install from a different source), and
+    /// `.unknown` when there's no record (e.g. a hand-authored plugin).
+    func provenanceStatus(for entry: CatalogEntry) -> ProvenanceStatus {
+        let record = provenanceStore.record(for: entry.filename)
+        let path = (pluginsDirectory as NSString).appendingPathComponent(entry.filename)
+        let current = try? String(contentsOfFile: path, encoding: .utf8)
+        return ProvenanceStatus.evaluate(record: record, currentSource: current)
+    }
+
+    /// The installed plugin's source on disk, if any — used to diff against an
+    /// incoming update at the trust gate.
+    private func installedSource(for entry: CatalogEntry) -> String? {
+        let path = (pluginsDirectory as NSString).appendingPathComponent(entry.filename)
+        return try? String(contentsOfFile: path, encoding: .utf8)
+    }
+
     /// Fetch the source and open the trust gate.
     func requestInstall(_ entry: CatalogEntry) async {
         do {
@@ -120,6 +162,9 @@ public final class PluginBrowserModel: ObservableObject {
             let header = HeaderParser.parse(source: source)
             headers[entry.path] = header
             trustLevels[entry.path] = summary.level
+            // When updating an installed plugin, diff the incoming source's
+            // trust footprint against the one on disk so silent changes surface.
+            let trustDiff = installedSource(for: entry).map { TrustDiff.between(old: $0, new: source) }
             prompt = InstallPrompt(
                 entry: entry,
                 source: source,
@@ -127,7 +172,8 @@ public final class PluginBrowserModel: ObservableObject {
                 summary: summary,
                 warnings: warnings,
                 description: header.summary,
-                dependencies: header.dependencies
+                dependencies: header.dependencies,
+                trustDiff: trustDiff
             )
         } catch {
             errorMessage = "Couldn't fetch \(entry.filename): \(error.localizedDescription)"
@@ -138,6 +184,11 @@ public final class PluginBrowserModel: ObservableObject {
         guard let prompt else { return }
         do {
             try PluginInstaller.install(filename: prompt.entry.filename, source: prompt.source, into: pluginsDirectory)
+            // Record where this came from + its content hash so a later silent
+            // change is detectable. Provenance is advisory — a write failure must
+            // not block the install itself.
+            let provenance = PluginProvenance(filename: prompt.entry.filename, sourceURL: prompt.entry.rawURL, source: prompt.source)
+            try? provenanceStore.record(provenance)
             onInstalled()
         } catch {
             errorMessage = "Install failed: \(error.localizedDescription)"
@@ -237,6 +288,9 @@ private struct PluginCard: View {
                 if let level = model.trustLevel(for: entry), level != .undeclared {
                     TrustChip(symbol: level.symbol, label: level.label, tint: level.color).padding(.top, 1)
                 }
+                if let date = model.lastUpdated[entry.path], let freshness = model.freshness(for: entry) {
+                    FreshnessBadge(date: date, freshness: freshness).padding(.top, 1)
+                }
             }
 
             Spacer(minLength: 6)
@@ -244,6 +298,7 @@ private struct PluginCard: View {
             VStack(spacing: 4) {
                 if model.isInstalled(entry) {
                     Label("Installed", systemImage: "checkmark").font(.caption).foregroundStyle(.secondary)
+                    ProvenanceBadge(status: model.provenanceStatus(for: entry))
                     // Re-fetch the latest catalog source and overwrite in place,
                     // through the same trust gate.
                     Button("Update") { Task { await model.requestInstall(entry) } }
@@ -265,5 +320,50 @@ private struct PluginCard: View {
         .shadow(color: .black.opacity(hovering ? 0.12 : 0), radius: 8, y: 3)
         .onHover { hovering = $0 }
         .animation(.easeOut(duration: 0.15), value: hovering)
+        .task { await model.loadLastUpdated(for: entry) }
+    }
+}
+
+/// A subtle "Verified"/"Modified" chip for an installed catalog plugin, driven
+/// by its recorded provenance. Hidden entirely when there's no record
+/// (`.unknown`), so hand-authored plugins show nothing. Matches ``TrustChip``.
+private struct ProvenanceBadge: View {
+    let status: ProvenanceStatus
+
+    var body: some View {
+        switch status {
+        case .verified:
+            TrustChip(symbol: "checkmark.seal.fill", label: "Verified", tint: .green)
+        case .modified:
+            TrustChip(symbol: "exclamationmark.triangle.fill", label: "Modified", tint: .orange)
+        case .unknown:
+            EmptyView()
+        }
+    }
+}
+
+/// A small "Updated 3y ago" chip on a plugin card, tinted by how fresh the
+/// plugin is. Matches the ``TrustChip`` capsule styling.
+private struct FreshnessBadge: View {
+    let date: Date
+    let freshness: PluginFreshness
+
+    private static let relative: RelativeDateTimeFormatter = {
+        let f = RelativeDateTimeFormatter()
+        f.unitsStyle = .abbreviated
+        return f
+    }()
+
+    private var tint: Color {
+        switch freshness {
+        case .fresh: return .green
+        case .aging: return .orange
+        case .stale: return .secondary
+        }
+    }
+
+    var body: some View {
+        let relative = Self.relative.localizedString(for: date, relativeTo: Date())
+        TrustChip(symbol: "clock", label: "Updated \(relative)", tint: tint)
     }
 }

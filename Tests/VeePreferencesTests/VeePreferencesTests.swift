@@ -52,6 +52,63 @@ final class AppPreferencesTests: XCTestCase {
     }
 }
 
+final class VariableAggregatorTests: XCTestCase {
+    /// Injectable reader: maps a plugin id to its declared variables, so the
+    /// aggregation is exercised without touching disk.
+    private struct FakeReader: VariableDeclarationReading {
+        let map: [String: [VarDeclaration]]
+        func declarations(for plugin: AggregatablePlugin) -> [VarDeclaration] {
+            map[plugin.id.rawValue] ?? []
+        }
+    }
+
+    private func plugin(_ id: String) -> AggregatablePlugin {
+        AggregatablePlugin(id: PluginID(rawValue: id), name: id, path: "/plugins/\(id)")
+    }
+
+    private func decl(_ name: String, secret: Bool) -> VarDeclaration {
+        VarDeclaration(name: name, kind: .string, defaultValue: "", summary: "", options: [], isSecret: secret)
+    }
+
+    func testAggregatesAcrossPlugins() {
+        let reader = FakeReader(map: [
+            "a.sh": [decl("API_TOKEN", secret: true), decl("COUNT", secret: false)],
+            "b.sh": [decl("URL", secret: false)],
+        ])
+        let groups = VariableAggregator.aggregate(plugins: [plugin("a.sh"), plugin("b.sh")], reader: reader)
+        XCTAssertEqual(groups.count, 2)
+        XCTAssertEqual(groups[0].id, "a.sh")
+        XCTAssertEqual(groups[0].declarations.map(\.name), ["API_TOKEN", "COUNT"])
+        XCTAssertEqual(groups[1].declarations.map(\.name), ["URL"])
+    }
+
+    func testOmitsPluginsWithoutVars() {
+        let reader = FakeReader(map: ["a.sh": [decl("X", secret: false)], "b.sh": []])
+        let groups = VariableAggregator.aggregate(plugins: [plugin("a.sh"), plugin("b.sh")], reader: reader)
+        XCTAssertEqual(groups.map(\.id), ["a.sh"])
+    }
+
+    func testEmptyWhenNoPlugins() {
+        let groups = VariableAggregator.aggregate(plugins: [], reader: FakeReader(map: [:]))
+        XCTAssertTrue(groups.isEmpty)
+    }
+
+    func testSecretPlainPartition() {
+        let reader = FakeReader(map: [
+            "a.sh": [decl("API_TOKEN", secret: true), decl("HOST", secret: false), decl("PASSWORD", secret: true)],
+        ])
+        let groups = VariableAggregator.aggregate(plugins: [plugin("a.sh")], reader: reader)
+        XCTAssertEqual(groups[0].secretDeclarations.map(\.name), ["API_TOKEN", "PASSWORD"])
+        XCTAssertEqual(groups[0].plainDeclarations.map(\.name), ["HOST"])
+    }
+
+    func testPreservesInputOrder() {
+        let reader = FakeReader(map: ["z.sh": [decl("A", secret: false)], "a.sh": [decl("B", secret: false)]])
+        let groups = VariableAggregator.aggregate(plugins: [plugin("z.sh"), plugin("a.sh")], reader: reader)
+        XCTAssertEqual(groups.map(\.id), ["z.sh", "a.sh"])
+    }
+}
+
 final class PluginPreferencesTests: XCTestCase {
     private func decls() -> [VarDeclaration] {
         [

@@ -88,3 +88,98 @@ final class SourceScanTests: XCTestCase {
         XCTAssertTrue(warnings.isEmpty)
     }
 }
+
+final class TrustDiffTests: XCTestCase {
+    func testIdenticalSourcesHaveNoChanges() {
+        let src = """
+        # <vee.network>api.github.com</vee.network>
+        # <vee.exec>git</vee.exec>
+        """
+        let diff = TrustDiff.between(old: src, new: src)
+        XCTAssertFalse(diff.hasChanges)
+        XCTAssertTrue(diff.isEmpty)
+        XCTAssertTrue(diff.summaryLines.isEmpty)
+    }
+
+    func testAddedOnlyDomain() {
+        let old = "# <vee.network>api.github.com</vee.network>"
+        let new = """
+        # <vee.network>api.github.com, evil.tld</vee.network>
+        """
+        let diff = TrustDiff.between(old: old, new: new)
+        XCTAssertTrue(diff.hasChanges)
+        XCTAssertEqual(diff.networkDomains.added, ["evil.tld"])
+        XCTAssertTrue(diff.networkDomains.removed.isEmpty)
+        XCTAssertTrue(diff.summaryLines.contains("adds domain: evil.tld"))
+    }
+
+    func testRemovedOnlyExec() {
+        let old = "# <vee.exec>git, curl</vee.exec>"
+        let new = "# <vee.exec>git</vee.exec>"
+        let diff = TrustDiff.between(old: old, new: new)
+        XCTAssertEqual(diff.externalBinaries.removed, ["curl"])
+        XCTAssertTrue(diff.externalBinaries.added.isEmpty)
+        XCTAssertTrue(diff.summaryLines.contains("removes exec: curl"))
+    }
+
+    func testMixedFilesystemAndCapabilityChanges() {
+        let old = """
+        # <vee.filesystem.read>~/Documents</vee.filesystem.read>
+        # <vee.filesystem.write>~/Library/Application Support/Vee</vee.filesystem.write>
+        # <vee.secrets>GITHUB_TOKEN</vee.secrets>
+        """
+        let new = """
+        # <vee.filesystem.read>~/Documents</vee.filesystem.read>
+        # <vee.filesystem.write>~</vee.filesystem.write>
+        # <vee.network>evil.tld</vee.network>
+        """
+        let diff = TrustDiff.between(old: old, new: new)
+        // filesystem.write path swapped, read unchanged.
+        XCTAssertEqual(diff.fsWritePaths.added, ["~"])
+        XCTAssertEqual(diff.fsWritePaths.removed, ["~/Library/Application Support/Vee"])
+        XCTAssertTrue(diff.fsReadPaths.added.isEmpty)
+        XCTAssertTrue(diff.fsReadPaths.removed.isEmpty)
+        // secrets removed, network added.
+        XCTAssertEqual(diff.secretsUsed.removed, ["GITHUB_TOKEN"])
+        XCTAssertEqual(diff.networkDomains.added, ["evil.tld"])
+        // capability dimension reflects network added and secrets removed.
+        XCTAssertTrue(diff.capabilities.added.contains(.network))
+        XCTAssertTrue(diff.capabilities.removed.contains(.secrets))
+    }
+
+    func testDetectedCapabilitiesFoldIntoDiff() {
+        // Neither source declares network, but the new one uses curl — the
+        // static scan should surface network as an added capability.
+        let old = "#!/bin/bash\necho hi\n"
+        let new = "#!/bin/bash\ncurl https://evil.tld\n"
+        let diff = TrustDiff.between(old: old, new: new)
+        XCTAssertTrue(diff.capabilities.added.contains(.network))
+        XCTAssertTrue(diff.hasChanges)
+        XCTAssertTrue(diff.summaryLines.contains("adds capability: network"))
+    }
+
+    func testDeclarationBasedDiff() {
+        let old = TrustDeclaration(capabilities: [.exec], externalBinaries: ["git"])
+        let new = TrustDeclaration(capabilities: [.exec, .network], networkDomains: ["evil.tld"], externalBinaries: ["git"])
+        let diff = TrustDiff.between(old: old, new: new)
+        XCTAssertEqual(diff.capabilities.added, [.network])
+        XCTAssertTrue(diff.capabilities.removed.isEmpty)
+        XCTAssertEqual(diff.networkDomains.added, ["evil.tld"])
+        XCTAssertTrue(diff.externalBinaries.hasChanges == false)
+    }
+
+    func testSummaryLinesAreSortedAndDeterministic() {
+        let old = "# <vee.network>b.tld</vee.network>"
+        let new = "# <vee.network>a.tld, c.tld</vee.network>"
+        let diff = TrustDiff.between(old: old, new: new)
+        // Additions sorted, then removals.
+        XCTAssertEqual(diff.networkDomains.added, ["a.tld", "c.tld"])
+        XCTAssertEqual(diff.networkDomains.removed, ["b.tld"])
+    }
+
+    func testSetDiffNormalisesOrderAndDuplicates() {
+        let d = TrustSetDiff<String>.between(old: ["a", "a", "b"], new: ["b", "c", "c"])
+        XCTAssertEqual(d.added, ["c"])
+        XCTAssertEqual(d.removed, ["a"])
+    }
+}

@@ -4,6 +4,10 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
+  schedule:
+    # Nightly reliability soak (the `soak` job below is gated to these events).
+    - cron: '0 7 * * *'
 
 # Cancel superseded runs on a PR; let main runs finish.
 concurrency:
@@ -49,6 +53,26 @@ jobs:
           -derivedDataPath .build/xcode
           CODE_SIGNING_ALLOWED=NO build
 
+  soak:
+    name: Reliability soak (memory + refresh)
+    # Opt-in: runs nightly and on manual dispatch only — never on every PR — so
+    # normal CI stays fast. Proves the bounded-memory / no-refresh-death moat by
+    # driving the real execution/refresh pipeline for a sustained window.
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v7
+      - uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+      - name: Toolchain
+        run: swift --version
+      - name: Soak benchmark (VEE_SOAK=1)
+        env:
+          VEE_SOAK: "1"
+          VEE_SOAK_DURATION_SECONDS: "120"
+        run: swift test --filter MemorySoakBenchmarkTests
+
   plugins:
     name: Plugin SDK (TypeScript)
     runs-on: ubuntu-latest
@@ -64,3 +88,35 @@ jobs:
       # TypeScript directly. `npm test` runs the fixture drift guard.
       - name: Test (fixture drift guard)
         run: npm test
+
+  plugins-python:
+    name: Plugin SDK (Python)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: plugins/python
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+      # Zero-dep, standard-library only. The drift guard asserts each example's
+      # build() output matches its golden fixture (shared with the TS SDK).
+      - name: Test (fixture drift guard)
+        run: python3 -m unittest discover -s test -v
+
+  plugins-go:
+    name: Plugin SDK (Go)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: plugins/go
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v6
+        with:
+          go-version: "1.21"
+      # Zero-dep, standard-library only. `go test` runs the fixture drift guard
+      # (the fixture is shared byte-for-byte with the TS/Python SDKs).
+      - name: Test (fixture drift guard)
+        run: go test ./...
