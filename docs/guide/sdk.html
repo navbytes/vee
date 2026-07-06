@@ -172,12 +172,25 @@ d.Item("**Bold** text", &amp;vee.Options{MD: vee.Bool(true)})
 d.Item("Status :checkmark.circle:", &amp;vee.Options{Symbolize: vee.Bool(true)})</code></pre></div>
 <p>Values containing spaces or <code>|</code> are quoted (and embedded quotes escaped) automatically, in every SDK — you never format the protocol by hand.</p>
 <h2 id="rich-params">Rich params</h2>
-<p>The richer inline controls — <strong>sparkline</strong>, <strong>toggle</strong>, <strong>slider</strong>, and <strong>progress</strong> (with their tuning params such as <code>trackColor</code>, <code>progressW</code>, and <code>progressH</code>) — are part of the <strong>text protocol</strong> and are documented in the <a href="plugin-authoring.html#line-parameters">plugin authoring reference</a>. They are emitted directly on a line, for example:</p>
-<div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">text</span></div><pre><code>Load | sparkline="12,18,9,22,30,14"
-Notifications | toggle=true
-Volume | slider=40 trackColor=gray
-Sync | progress=0.6 progressW=120</code></pre></div>
-<p>Because the SDKs pass any option through to the line parameters and handle quoting/escaping for you, you can emit these from a plugin today by setting the corresponding option (using the raw parameter name). The SDKs do not yet expose dedicated typed builders for the rich params — that typed surface is planned. Until then, hand the value through as an option and let the SDK do the quoting.</p>
+<p>All three SDKs expose <strong>typed builders</strong> for Vee's inline controls — <strong>sparkline</strong>, <strong>toggle</strong>, <strong>slider</strong>, and <strong>progress</strong> — plus the progress tuning params (<code>trackColor</code>, <code>progressW</code>, <code>progressH</code>). You pass structured values; the SDK formats the protocol (numbers, ranges, and quoting) for you, so the whole class of "I hand-formatted <code>slider=</code> wrong" bugs is impossible to write. (These render natively in Vee; xbar/SwiftBar ignore the unknown params, so plugins stay portable.)</p>
+<p><strong>TypeScript</strong></p>
+<div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">ts</span></div><pre><code>d.item("Load history", { sparkline: [1, 2, 3, 5, 8, 13] });
+d.item("Notifications", { toggle: true });
+d.item("Volume", { slider: { min: 0, max: 100, value: 40 } });
+d.item("Disk usage", { color: "green", progress: 0.72, trackColor: "#333333", progressW: 80, progressH: 6 });
+// progress also accepts a value/max pair:
+d.item("Budget", { progress: { value: 72, max: 100 } });</code></pre></div>
+<p><strong>Python</strong></p>
+<div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">py</span></div><pre><code>d.item("Load history", sparkline=[1, 2, 3, 5, 8, 13])
+d.item("Notifications", toggle=True)
+d.item("Volume", slider={"min": 0, "max": 100, "value": 40})
+d.item("Disk usage", color="green", progress=0.72, trackColor="#333333", progressW=80, progressH=6)</code></pre></div>
+<p><strong>Go</strong></p>
+<div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">go</span></div><pre><code>d.Item("Load history", &amp;vee.Options{Sparkline: []float64{1, 2, 3, 5, 8, 13}})
+d.Item("Notifications", &amp;vee.Options{Toggle: vee.Bool(true)})
+d.Item("Volume", &amp;vee.Options{Slider: &amp;vee.Slider{Min: 0, Max: 100, Value: 40}})
+d.Item("Disk usage", &amp;vee.Options{Color: vee.Str("green"), Progress: vee.Float(0.72), TrackColor: vee.Str("#333333"), ProgressW: vee.Float(80), ProgressH: vee.Float(6)})</code></pre></div>
+<p>All three emit byte-identical protocol output (there's a <code>controls</code> example and a shared golden fixture proving it). See the underlying line-parameter grammar in the <a href="plugin-authoring.html#line-parameters">plugin authoring reference</a>.</p>
 <h2 id="the-no-build-step-note">The no-build-step note (TypeScript)</h2>
 <p>For TypeScript there is deliberately no compiler or bundler in the loop. Node 24+ strips the TypeScript types at load time and runs the file, so:</p>
 <ul>

@@ -69,6 +69,39 @@ swift run vee        # launch the menu-bar app for development</code></pre></div
 <p><code>swift run vee</code> starts the app so you can iterate on plugins and code without producing a full app bundle. See the project README for building the distributable, notarized <code>Vee.app</code>.</p>
 <p>While developing you can point Vee at a specific plugins folder with an environment variable, which overrides the folder chosen in the UI:</p>
 <div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">sh</span></div><pre><code>VEE_PLUGINS_DIR=~/dev/my-plugins swift run vee</code></pre></div>
+<h2 id="the-vee-command-line-tool">The <code>vee</code> command-line tool</h2>
+<p>Running <code>vee</code> with no subcommand launches the menu-bar app (that's also what happens when the bundled app is opened). Passing a subcommand instead gives you a zero-install authoring loop that reuses Vee's real parser — no app, no GUI:</p>
+<div class="table-wrap">
+<table>
+<thead><tr><th>Command</th><th>What it does</th></tr></thead>
+<tbody>
+<tr><td><code>vee render &lt;plugin&gt;</code></td><td>Runs the plugin and prints the parsed menu tree plus any parse diagnostics.</td></tr>
+<tr><td><code>vee lint &lt;plugin&gt;</code></td><td>Runs the plugin and reports problems: unknown params, a bare <code>|</code> in a title, unquoted values containing spaces, and the parser's own diagnostics. Exits non-zero if anything is flagged.</td></tr>
+<tr><td><code>vee new [flags]</code></td><td>Scaffolds a new plugin file with the right filename, header tags, and a working body.</td></tr>
+</tbody>
+</table>
+</div>
+<h3 id="vee-render"><code>vee render</code></h3>
+<p>Renders exactly what Vee would show, so you can see a plugin's output — text <strong>or</strong> JSON protocol — without installing it:</p>
+<div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">sh</span></div><pre><code>$ vee render ./cpu.5s.sh
+CPU 12%  [sfimage=cpu]
+---
+Top processes  [href=https://example.com/procs]
+───
+Refresh  [refresh]</code></pre></div>
+<p>Parse diagnostics (unknown params, malformed lines) and a non-zero exit, a timeout, or anything on stderr are surfaced too — it's the fastest way to answer "why doesn't my plugin look right?".</p>
+<h3 id="vee-lint"><code>vee lint</code></h3>
+<p>Catches the common authoring mistakes before you ship — especially the quoting bugs the <a href="sdk.html">SDKs</a> prevent by construction:</p>
+<div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">sh</span></div><pre><code>$ vee lint ./broken.5s.sh
+Lint findings:
+  warning [line 3]: value for 'tooltip' contains a space but isn't quoted; wrap it in quotes (e.g. tooltip="a b")
+  warning [line 4]: unknown parameter 'frobnicate'</code></pre></div>
+<p><code>vee lint</code> exits <code>1</code> when it finds anything, so you can wire it into a pre-commit hook or CI.</p>
+<h3 id="vee-new"><code>vee new</code></h3>
+<p>Scaffolds a ready-to-run plugin. Flags: <code>--lang ts|py|sh</code>, <code>--interval</code> (e.g. <code>5s</code>, <code>10m</code>), <code>--name</code>, <code>--trust</code> (comma-separated capabilities, e.g. <code>network,secrets</code>), and <code>--out DIR</code>. When run in a terminal with flags omitted, it prompts.</p>
+<div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">sh</span></div><pre><code>$ vee new --lang sh --interval 30s --name weather --trust network --out ~/plugins
+# writes ~/plugins/weather.30s.sh with &lt;xbar.*&gt; + &lt;vee.*&gt; headers and a working body</code></pre></div>
+<p>For <code>ts</code>/<code>py</code>, the generated body imports the corresponding <a href="sdk.html">SDK</a> so a scaffold doubles as a starting point for typed authoring.</p>
 <h2 id="url-actions">URL actions</h2>
 <p>Vee registers two URL schemes: <code>vee://</code> and <code>swiftbar://</code>. The <code>swiftbar://</code> scheme is supported for compatibility, so plugins written for SwiftBar keep working. Both schemes accept the same actions.</p>
 <p>The <strong>action is the URL host</strong>, and parameters come from the query string. The plugin name is passed as <code>name</code> (or <code>path</code>).</p>

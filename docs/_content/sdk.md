@@ -168,16 +168,46 @@ Values containing spaces or `|` are quoted (and embedded quotes escaped) automat
 
 ## Rich params
 
-The richer inline controls — **sparkline**, **toggle**, **slider**, and **progress** (with their tuning params such as `trackColor`, `progressW`, and `progressH`) — are part of the **text protocol** and are documented in the [plugin authoring reference](plugin-authoring.md#line-parameters). They are emitted directly on a line, for example:
+All three SDKs expose **typed builders** for Vee's inline controls —
+**sparkline**, **toggle**, **slider**, and **progress** — plus the progress
+tuning params (`trackColor`, `progressW`, `progressH`). You pass structured
+values; the SDK formats the protocol (numbers, ranges, and quoting) for you, so
+the whole class of "I hand-formatted `slider=` wrong" bugs is impossible to
+write. (These render natively in Vee; in xbar/SwiftBar the unknown params are
+ignored, so plugins stay portable.)
 
-```text
-Load | sparkline="12,18,9,22,30,14"
-Notifications | toggle=true
-Volume | slider=40 trackColor=gray
-Sync | progress=0.6 progressW=120
+**TypeScript**
+
+```ts
+d.item("Load history", { sparkline: [1, 2, 3, 5, 8, 13] });
+d.item("Notifications", { toggle: true });
+d.item("Volume", { slider: { min: 0, max: 100, value: 40 } });
+d.item("Disk usage", { color: "green", progress: 0.72, trackColor: "#333333", progressW: 80, progressH: 6 });
+// progress also accepts a value/max pair:
+d.item("Budget", { progress: { value: 72, max: 100 } });
 ```
 
-Because the SDKs pass any option through to the line parameters and handle quoting/escaping for you, you can emit these from a plugin today by setting the corresponding option (using the raw parameter name). The SDKs do not yet expose dedicated typed builders for the rich params — that typed surface is planned. Until then, hand the value through as an option and let the SDK do the quoting.
+**Python**
+
+```python
+d.item("Load history", sparkline=[1, 2, 3, 5, 8, 13])
+d.item("Notifications", toggle=True)
+d.item("Volume", slider={"min": 0, "max": 100, "value": 40})
+d.item("Disk usage", color="green", progress=0.72, trackColor="#333333", progressW=80, progressH=6)
+```
+
+**Go**
+
+```go
+d.Item("Load history", &vee.Options{Sparkline: []float64{1, 2, 3, 5, 8, 13}})
+d.Item("Notifications", &vee.Options{Toggle: vee.Bool(true)})
+d.Item("Volume", &vee.Options{Slider: &vee.Slider{Min: 0, Max: 100, Value: 40}})
+d.Item("Disk usage", &vee.Options{Color: vee.Str("green"), Progress: vee.Float(0.72), TrackColor: vee.Str("#333333"), ProgressW: vee.Float(80), ProgressH: vee.Float(6)})
+```
+
+All three emit byte-identical protocol output (there's a `controls` example and a
+shared golden fixture proving it). See the underlying line-parameter grammar in
+the [plugin authoring reference](plugin-authoring.md#line-parameters).
 
 ## The no-build-step note (TypeScript)
 
