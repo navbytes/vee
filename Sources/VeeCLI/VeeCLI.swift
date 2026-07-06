@@ -132,15 +132,19 @@ public enum VeeCLI {
 
         var findings: [ParseDiagnostic] = []
 
-        // Layer 1: the parser's own diagnostics.
+        // The raw-line linter re-detects some issues the parser also flags (e.g.
+        // unknown params), but with accurate line numbers — whereas the parser's
+        // per-line mapping reports them line-less. So take the linter's findings
+        // first, then add only the parser diagnostics whose message the linter
+        // didn't already cover (deduping by message, since the same mistake
+        // reported by both would otherwise appear twice). Final order is by line.
         let parsed = OutputParser.parse(raw)
-        findings += parsed.diagnostics
+        let linterFindings = Linter.lint(rawOutput: raw)
+        findings += linterFindings
 
-        // Layer 2: the raw-line linter (dedup unknown-param messages against
-        // the parser's so a single mistake isn't reported twice).
-        let parserMessages = Set(parsed.diagnostics.map(dedupKey))
-        for finding in Linter.lint(rawOutput: raw) where !parserMessages.contains(dedupKey(finding)) {
-            findings.append(finding)
+        let linterMessages = Set(linterFindings.map(\.message))
+        for diagnostic in parsed.diagnostics where !linterMessages.contains(diagnostic.message) {
+            findings.append(diagnostic)
         }
 
         if findings.isEmpty {
@@ -261,10 +265,6 @@ public enum VeeCLI {
             return "  \(sev) [line \(line)]: \(d.message)"
         }
         return "  \(sev): \(d.message)"
-    }
-
-    private static func dedupKey(_ d: ParseDiagnostic) -> String {
-        "\(d.line.map(String.init) ?? "-"):\(d.message)"
     }
 
     private static func sortDiagnostics(_ a: ParseDiagnostic, _ b: ParseDiagnostic) -> Bool {

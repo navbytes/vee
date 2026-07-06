@@ -41,6 +41,16 @@ final class DispatchTests: XCTestCase {
         XCTAssertTrue(out.contains("bogus"), out)
     }
 
+    /// Regression: an unknown param is flagged by both the parser and the raw
+    /// linter — the merged output must report it exactly once (with its line).
+    func testLintDoesNotDuplicateUnknownParam() async {
+        let fake = FakeRunner(stdout: "Item | frobnicate=yes\n")
+        var out = "", err = ""
+        _ = await VeeCLI.run(["lint", "/tmp/plugin.sh"], runner: fake, out: &out, err: &err)
+        let occurrences = out.components(separatedBy: "unknown parameter 'frobnicate'").count - 1
+        XCTAssertEqual(occurrences, 1, "expected a single unknown-param finding, got:\n\(out)")
+    }
+
     func testLintCleanOutputExitsZero() async {
         let fake = FakeRunner(stdout: "CPU | color=green\n---\nRefresh | refresh=true\n")
         var out = "", err = ""
