@@ -13,6 +13,11 @@ All notable changes to Vee are documented here. The format is based on
   plugin's output.
 
 ### Added
+- Login-shell `PATH` resolution: at launch Vee recovers the user's interactive
+  `PATH` (via `$SHELL -ilc`) and adds the common Homebrew locations, so plugins
+  launched from Finder/Dock find Homebrew / pyenv / asdf / nvm binaries the same
+  way a Terminal launch would — fixing the most common "works in Terminal, not
+  in the launcher" failure.
 - Menu-item keyboard shortcuts: the `key=` parameter (e.g. `key=Cmd+R`,
   `key=shift+F2`) is now applied to dropdown items while the menu is open.
 - `shortcut=` runs a named macOS Shortcut when a menu item is clicked — a
