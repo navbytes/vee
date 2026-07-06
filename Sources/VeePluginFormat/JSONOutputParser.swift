@@ -51,7 +51,7 @@ public enum JSONOutputParser {
 
     private static func params(from item: JSONItem) -> LineParams {
         var p = lineParams(color: item.color, sfimage: item.sfimage, size: item.size)
-        p.href = item.href.flatMap(URL.init(string:))
+        p.href = item.href.flatMap(URL.init(string:)).flatMap { URLScheme.isSafeToOpen($0) ? $0 : nil }
         if let shell = item.shell {
             p.shell = ShellCommand(launchPath: shell, arguments: item.params ?? [], openInTerminal: item.terminal ?? false)
         }

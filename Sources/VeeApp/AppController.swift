@@ -157,6 +157,12 @@ public final class AppController: NSObject, NSApplicationDelegate {
 
     /// `swiftbar://addplugin?src=…`: download a plugin and install it.
     private func installPlugin(from url: URL) {
+        // Only fetch over real web schemes — never `file://` (which would read a
+        // local file and install it as an executable) or other schemes.
+        guard URLScheme.isWebURL(url) else {
+            log.error("addplugin rejected non-web src scheme: \(url.scheme ?? "nil", privacy: .public)")
+            return
+        }
         let directory = self.directory
         Task { @MainActor in
             do {
