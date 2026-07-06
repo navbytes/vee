@@ -59,7 +59,30 @@ public enum JSONOutputParser {
         p.disabled = item.disabled
         p.swiftbar.checked = item.checked
         p.swiftbar.tooltip = item.tooltip
+        applyRichParams(from: item, to: &p)
         return p
+    }
+
+    /// Maps the structured-JSON rich params onto the same `LineParams` fields the
+    /// text parser sets, with identical validation (non-finite values rejected,
+    /// ranges clamped) so JSON and text produce the same model.
+    private static func applyRichParams(from item: JSONItem, to p: inout LineParams) {
+        if let series = item.sparkline?.filter(\.isFinite), !series.isEmpty {
+            p.sparkline = series
+        }
+        if let on = item.toggle {
+            p.control = .toggle(on: on)
+        } else if let s = item.slider, s.min.isFinite, s.max.isFinite, s.value.isFinite, s.min < s.max {
+            p.control = .slider(min: s.min, max: s.max, value: Swift.min(Swift.max(s.value, s.min), s.max))
+        }
+        if let raw = item.progress, raw.isFinite {
+            p.progress = ProgressParams(
+                fraction: Swift.min(Swift.max(raw, 0), 1),
+                trackColor: item.trackColor.flatMap(VeeColor.parse),
+                width: item.progressWidth.flatMap { $0.isFinite ? $0 : nil },
+                height: item.progressHeight.flatMap { $0.isFinite ? $0 : nil }
+            )
+        }
     }
 
     private static func lineParams(color: String?, sfimage: String?, size: Double?) -> LineParams {
@@ -106,6 +129,20 @@ private final class JSONItem: Decodable {
     let disabled: Bool?
     let checked: Bool?
     let tooltip: String?
+    // Rich params (Vee-native inline controls), mirroring the text protocol.
+    let sparkline: [Double]?
+    let toggle: Bool?
+    let slider: JSONSlider?
+    let progress: Double?
+    let trackColor: String?
+    let progressWidth: Double?
+    let progressHeight: Double?
     let submenu: [JSONItem]?
     let alternate: JSONItem?
+}
+
+private struct JSONSlider: Decodable {
+    let min: Double
+    let max: Double
+    let value: Double
 }

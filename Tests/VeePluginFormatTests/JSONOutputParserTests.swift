@@ -56,6 +56,47 @@ final class JSONOutputParserTests: XCTestCase {
         }
     }
 
+    func testRichParamsMapFromJSON() throws {
+        let json = """
+        {"vee":1,"items":[
+          {"text":"Load","sparkline":[1,2,3,5,8]},
+          {"text":"Notify","toggle":true},
+          {"text":"Volume","slider":{"min":0,"max":100,"value":40}},
+          {"text":"Disk","color":"green","progress":0.72,"trackColor":"#333333","progressWidth":80,"progressHeight":6}
+        ]}
+        """
+        let out = try XCTUnwrap(JSONOutputParser.parse(json))
+        func item(_ i: Int) throws -> MenuItem {
+            guard case .item(let m) = out.body[i] else { throw XCTSkip("not an item") }
+            return m
+        }
+        XCTAssertEqual(try item(0).params.sparkline, [1, 2, 3, 5, 8])
+        XCTAssertEqual(try item(1).params.control, .toggle(on: true))
+        XCTAssertEqual(try item(2).params.control, .slider(min: 0, max: 100, value: 40))
+        let disk = try item(3).params
+        XCTAssertEqual(disk.progress?.fraction ?? -1, 0.72, accuracy: 1e-9)
+        XCTAssertEqual(disk.progress?.trackColor, VeeColor.parse("#333333"))
+        XCTAssertEqual(disk.progress?.width, 80)
+        XCTAssertEqual(disk.progress?.height, 6)
+    }
+
+    func testRichParamsRejectNonFiniteAndClamp() throws {
+        let json = """
+        {"vee":1,"items":[
+          {"text":"a","progress":5},
+          {"text":"b","slider":{"min":0,"max":0,"value":1}},
+          {"text":"c","sparkline":[1,2]}
+        ]}
+        """
+        let out = try XCTUnwrap(JSONOutputParser.parse(json))
+        guard case .item(let a) = out.body[0] else { return XCTFail("expected item a") }
+        XCTAssertEqual(a.params.progress?.fraction, 1.0) // clamped
+        guard case .item(let b) = out.body[1] else { return XCTFail("expected item b") }
+        XCTAssertNil(b.params.control) // min == max → rejected
+        guard case .item(let c) = out.body[2] else { return XCTFail("expected item c") }
+        XCTAssertEqual(c.params.sparkline, [1, 2])
+    }
+
     func testReturnsNilForNonJSON() {
         XCTAssertNil(JSONOutputParser.parse("CPU 12%\n---\nplain text"))
     }
