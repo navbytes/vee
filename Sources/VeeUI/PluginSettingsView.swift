@@ -93,25 +93,11 @@ public struct PluginSettingsView: View {
         .frame(width: 460, height: 420)
     }
 
-    @ViewBuilder
     private func row(for declaration: VarDeclaration) -> some View {
-        let label = declaration.summary.isEmpty ? declaration.name : declaration.summary
-        switch declaration.kind {
-        case .boolean:
-            Toggle(label, isOn: model.boolBinding(declaration))
-        case .select:
-            Picker(label, selection: model.stringBinding(declaration)) {
-                ForEach(declaration.options, id: \.self) { Text($0).tag($0) }
-            }
-        case .string, .number:
-            if declaration.isSecret {
-                LabeledContent(label) {
-                    RevealableSecureField("Required", text: model.stringBinding(declaration))
-                        .frame(maxWidth: 200)
-                }
-            } else {
-                TextField(label, text: model.stringBinding(declaration))
-            }
-        }
+        VarDeclarationField(
+            declaration: declaration,
+            stringValue: model.stringBinding(declaration),
+            boolValue: model.boolBinding(declaration)
+        )
     }
 }

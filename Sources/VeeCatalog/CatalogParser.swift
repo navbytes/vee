@@ -43,4 +43,22 @@ public enum CatalogParser {
         }
         .sorted { $0.path < $1.path }
     }
+
+    private struct Commit: Decodable {
+        let commit: Detail
+        struct Detail: Decodable {
+            let committer: Committer
+            struct Committer: Decodable { let date: String }
+        }
+    }
+
+    /// Parses the GitHub commits API response (`/commits?path=…&per_page=1`) and
+    /// returns the first commit's committer date, or `nil` if the payload is
+    /// empty or malformed. Pure and testable (no network).
+    public static func parseLastCommitDate(commitsJSON data: Data) -> Date? {
+        guard let commits = try? JSONDecoder().decode([Commit].self, from: data),
+              let iso = commits.first?.commit.committer.date
+        else { return nil }
+        return ISO8601DateFormatter().date(from: iso)
+    }
 }

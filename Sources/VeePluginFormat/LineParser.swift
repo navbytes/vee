@@ -113,6 +113,11 @@ enum LineParser {
             case "webvieww": p.swiftbar.webviewWidth = Double(value)
             case "webviewh": p.swiftbar.webviewHeight = Double(value)
             case "shortcut": p.swiftbar.shortcut = value
+            case "sparkline":
+                // Vee-native: comma-separated Doubles for an inline chart popover.
+                // Skip malformed entries; an empty result stays `nil`.
+                let series = value.split(separator: ",").compactMap { Double($0.trimmingCharacters(in: .whitespaces)) }
+                p.sparkline = series.isEmpty ? nil : series
             default:
                 if key.hasPrefix("param"), let n = Int(key.dropFirst(5)) {
                     positional[n] = value
