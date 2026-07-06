@@ -12,13 +12,15 @@ private final class ControlsTarget: NSObject, NSMenuDelegate {
     let onAbout: () -> Void
     let onReveal: () -> Void
     let onEdit: () -> Void
+    let onDebug: () -> Void
     let refreshOnOpen: Bool
-    init(onRefresh: @escaping () -> Void, onSettings: @escaping () -> Void, onAbout: @escaping () -> Void, onReveal: @escaping () -> Void, onEdit: @escaping () -> Void, refreshOnOpen: Bool) {
+    init(onRefresh: @escaping () -> Void, onSettings: @escaping () -> Void, onAbout: @escaping () -> Void, onReveal: @escaping () -> Void, onEdit: @escaping () -> Void, onDebug: @escaping () -> Void, refreshOnOpen: Bool) {
         self.onRefresh = onRefresh
         self.onSettings = onSettings
         self.onAbout = onAbout
         self.onReveal = onReveal
         self.onEdit = onEdit
+        self.onDebug = onDebug
         self.refreshOnOpen = refreshOnOpen
     }
     @objc func refresh() { onRefresh() }
@@ -26,6 +28,7 @@ private final class ControlsTarget: NSObject, NSMenuDelegate {
     @objc func about() { onAbout() }
     @objc func reveal() { onReveal() }
     @objc func edit() { onEdit() }
+    @objc func debug() { onDebug() }
     @objc func quit() { NSApp.terminate(nil) }
 
     // <swiftbar.refreshOnOpen>: re-run the plugin when its menu is opened.
@@ -50,14 +53,27 @@ public final class StatusItemController {
     private let trustSummary: TrustSummary?
     private let aboutText: String?
     private let aboutURL: URL?
+    private let hideLastUpdated: Bool
+    private var lastUpdated: Date?
 
-    public init(pluginName: String, handler: MenuActionHandling, hasSettings: Bool = false, trustSummary: TrustSummary? = nil, refreshOnOpen: Bool = false, aboutText: String? = nil, aboutURL: URL? = nil, onRefresh: @escaping () -> Void, onSettings: @escaping () -> Void = {}, onReveal: @escaping () -> Void = {}, onEdit: @escaping () -> Void = {}) {
+    private static let timeFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.timeStyle = .medium
+        f.dateStyle = .none
+        return f
+    }()
+
+    public init(pluginName: String, handler: MenuActionHandling, hasSettings: Bool = false, trustSummary: TrustSummary? = nil, refreshOnOpen: Bool = false, hideLastUpdated: Bool = false, autosaveName: String? = nil, aboutText: String? = nil, aboutURL: URL? = nil, onRefresh: @escaping () -> Void, onSettings: @escaping () -> Void = {}, onReveal: @escaping () -> Void = {}, onEdit: @escaping () -> Void = {}, onDebug: @escaping () -> Void = {}) {
         self.pluginName = pluginName
         self.hasSettings = hasSettings
         self.trustSummary = trustSummary
         self.aboutText = aboutText
         self.aboutURL = aboutURL
+        self.hideLastUpdated = hideLastUpdated
         self.statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        // A stable autosave name lets macOS remember where the user ⌘-dragged
+        // this item, so plugin order/position survives relaunch.
+        if let autosaveName { self.statusItem.autosaveName = autosaveName }
         self.actionTarget = MenuActionTarget(handler: handler)
         let name = pluginName
         self.controls = ControlsTarget(
@@ -66,6 +82,7 @@ public final class StatusItemController {
             onAbout: { Self.showAbout(name: name, text: aboutText, url: aboutURL) },
             onReveal: onReveal,
             onEdit: onEdit,
+            onDebug: onDebug,
             refreshOnOpen: refreshOnOpen
         )
     }
@@ -85,6 +102,7 @@ public final class StatusItemController {
 
     /// Renders a successful refresh.
     public func render(_ output: ParsedOutput) {
+        lastUpdated = Date()
         let presentation = TitleRenderer.presentation(for: output.titleLines)
         frames = presentation.frames
         frameIndex = 0
@@ -254,6 +272,12 @@ public final class StatusItemController {
             menu.addItem(.separator())
         }
 
+        if !hideLastUpdated, let lastUpdated {
+            let stamp = NSMenuItem(title: "Updated \(Self.timeFormatter.string(from: lastUpdated))", action: nil, keyEquivalent: "")
+            stamp.isEnabled = false
+            menu.addItem(stamp)
+        }
+
         let refresh = NSMenuItem(title: "Refresh", action: #selector(ControlsTarget.refresh), keyEquivalent: "r")
         refresh.target = controls
         menu.addItem(refresh)
@@ -277,6 +301,10 @@ public final class StatusItemController {
         let edit = NSMenuItem(title: "Edit Plugin…", action: #selector(ControlsTarget.edit), keyEquivalent: "")
         edit.target = controls
         menu.addItem(edit)
+
+        let debug = NSMenuItem(title: "Debug…", action: #selector(ControlsTarget.debug), keyEquivalent: "")
+        debug.target = controls
+        menu.addItem(debug)
 
         menu.addItem(.separator())
 

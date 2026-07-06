@@ -86,7 +86,7 @@ Append `| key=value key2=value2 …` to any line to attach parameters. Quote val
 | `sfimage` | SF Symbol name to show as the item's icon (e.g. `sfimage=cpu`). |
 | `sfcolor` | Color(s) for the SF Symbol; comma-separated for multicolor symbols. |
 | `sfsize` | Point size for the SF Symbol. |
-| `sfconfig` | Advanced SF Symbol configuration string. |
+| `sfconfig` | SF Symbol configuration as JSON — `scale` (`small`/`medium`/`large`) and `weight` (e.g. `bold`). Example: `sfconfig='{"scale":"large","weight":"bold"}'`. |
 | `symbolize` | `true` — render inline `:symbol.name:` tokens in the text as SF Symbols. |
 | `md` / `markdown` | `true` — render the text as inline Markdown (bold, italics, etc.). |
 | `ansi` | `true` — interpret ANSI color escape codes in the text. |
@@ -95,7 +95,7 @@ Append `| key=value key2=value2 …` to any line to attach parameters. Quote val
 | `checked` | `true` — show a checkmark next to the item. |
 | `badge` | A short badge/chip shown after the text (e.g. `badge=12`). |
 | `shortcut` | Run a macOS Shortcut by name when the item is clicked (e.g. `shortcut="Start Meeting"`). |
-| `webview`, `webvieww`, `webviewh` | _Not yet supported._ Parsed for forward-compatibility; a WebView popover is on the roadmap. |
+| `webview`, `webvieww`, `webviewh` | Open a URL in a standalone WebView window (never inside the menu), with optional width/height. |
 
 Unknown parameters are preserved rather than dropped, so the format can evolve without breaking existing plugins.
 

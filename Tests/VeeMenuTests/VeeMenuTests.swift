@@ -115,6 +115,30 @@ final class MenuBuilderTests: XCTestCase {
         let m = menu("T\n---\nRun | shortcut=\"My Shortcut\"")
         XCTAssertNotNil(m.items[0].target, "shortcut= item should be wired")
     }
+
+    func testWebviewItemIsActionable() {
+        let m = menu("T\n---\nDocs | webview=https://example.com")
+        XCTAssertNotNil(m.items[0].target, "webview= item should be wired")
+    }
+}
+
+final class SFSymbolConfigTests: XCTestCase {
+    func testParsesScaleAndWeight() {
+        let cfg = SFSymbolConfig.parse(#"{"scale":"large","weight":"bold"}"#)
+        XCTAssertEqual(cfg?.nsScale, .large)
+        XCTAssertEqual(cfg?.nsWeight, .bold)
+    }
+
+    func testUnknownAndMalformed() {
+        XCTAssertNil(SFSymbolConfig.parse("not json"))
+        let cfg = SFSymbolConfig.parse(#"{"scale":"gigantic"}"#)
+        XCTAssertNil(cfg?.nsScale)   // unknown scale ignored
+        XCTAssertNil(cfg?.nsWeight)
+    }
+
+    func testNilInput() {
+        XCTAssertNil(SFSymbolConfig.parse(nil))
+    }
 }
 
 final class KeyEquivalentParserTests: XCTestCase {

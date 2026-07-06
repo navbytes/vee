@@ -41,6 +41,20 @@ final class HeaderParserTests: XCTestCase {
         XCTAssertEqual(m.environment["MODE"], "fast")
     }
 
+    func testHideControlHeaders() {
+        let src = """
+        # <swiftbar.hideLastUpdated>true</swiftbar.hideLastUpdated>
+        # <swiftbar.hideRunInTerminal>true</swiftbar.hideRunInTerminal>
+        # <swiftbar.hideDisablePlugin>true</swiftbar.hideDisablePlugin>
+        # <swiftbar.hideSwiftBar>true</swiftbar.hideSwiftBar>
+        """
+        let m = HeaderParser.parse(source: src)
+        XCTAssertTrue(m.hideLastUpdated)
+        XCTAssertTrue(m.hideRunInTerminal)
+        XCTAssertTrue(m.hideDisablePlugin)
+        XCTAssertTrue(m.hideSwiftBar)
+    }
+
     func testVarDeclarations() {
         let src = """
         # <xbar.var>string(API_TOKEN=): Your API token</xbar.var>

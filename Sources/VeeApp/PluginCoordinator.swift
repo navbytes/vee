@@ -25,6 +25,8 @@ final class PluginCoordinator {
     private var cron: CronScheduler?
     private var streaming: StreamingSession?
     private var isRefreshing = false
+    private var lastResult: PluginRunResult?
+    private var debugModel: PluginDebugModel?
 
     init(plugin: DiscoveredPlugin, pluginsDirectory: String, runtime: PluginRuntime, baseEnvironment: [String: String] = ProcessInfo.processInfo.environment) {
         self.plugin = plugin
@@ -49,12 +51,15 @@ final class PluginCoordinator {
             hasSettings: !header.vars.isEmpty,
             trustSummary: trustSummary,
             refreshOnOpen: header.refreshOnOpen ?? false,
+            hideLastUpdated: header.hideLastUpdated,
+            autosaveName: "com.vee.plugin.\(plugin.id.rawValue)",
             aboutText: aboutText,
             aboutURL: aboutURL,
             onRefresh: { [weak self] in self?.refresh() },
             onSettings: { [weak self] in self?.openSettings() },
             onReveal: { [weak self] in self?.revealInFinder() },
-            onEdit: { [weak self] in self?.openInEditor() }
+            onEdit: { [weak self] in self?.openInEditor() },
+            onDebug: { [weak self] in self?.showDebug() }
         )
     }
 
@@ -210,6 +215,8 @@ final class PluginCoordinator {
             defer { self?.isRefreshing = false }
             do {
                 let result = try await runtime.refresh(pluginPath: path, context: context, header: header, runInBash: runInBash, timeout: 30)
+                self?.lastResult = result
+                self?.updateDebugModel()
                 if result.outcome.timedOut {
                     self?.controller.renderError("Plugin timed out", detail: nil)
                 } else if result.outcome.exitCode != 0 && result.output.titleLines.isEmpty {
@@ -224,5 +231,35 @@ final class PluginCoordinator {
                 self?.controller.renderError("\(error)")
             }
         }
+    }
+
+    // MARK: - Debug console
+
+    private func showDebug() {
+        let model = debugModel ?? PluginDebugModel(pluginName: plugin.filename.name) { [weak self] in self?.refresh() }
+        debugModel = model
+        updateDebugModel()
+        DebugWindowManager.shared.show(pluginID: plugin.id.rawValue, model: model)
+    }
+
+    /// Pushes the last run's raw output/diagnostics into the debug console when
+    /// it's open.
+    private func updateDebugModel() {
+        guard let model = debugModel, let result = lastResult else { return }
+        model.update(
+            stdout: result.outcome.standardOutput,
+            stderr: result.outcome.standardError,
+            exitCode: result.outcome.exitCode,
+            timedOut: result.outcome.timedOut,
+            diagnostics: result.output.diagnostics.map(Self.describe)
+        )
+    }
+
+    private static func describe(_ diagnostic: ParseDiagnostic) -> String {
+        let severity = diagnostic.severity == .error ? "error" : "warning"
+        if let line = diagnostic.line {
+            return "[\(severity)] line \(line): \(diagnostic.message)"
+        }
+        return "[\(severity)] \(diagnostic.message)"
     }
 }
