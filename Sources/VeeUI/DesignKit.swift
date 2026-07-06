@@ -37,7 +37,7 @@ public enum CategoryStyle {
         "travel": ("airplane", .cyan),
         "tutorial": ("book.fill", .brown),
         "weather": ("cloud.sun.fill", .teal),
-        "web": ("globe", .blue),
+        "web": ("globe", .blue)
     ]
 }
 

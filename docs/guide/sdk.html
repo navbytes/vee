@@ -3,20 +3,20 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>TypeScript SDK — Vee docs</title>
-  <meta name="description" content="vee-plugins is a zero-dependency TypeScript SDK for writing Vee plugins with typed Menu/Section builders. Node runs the .ts directly — no build step.">
+  <title>Plugin SDKs — Vee docs</title>
+  <meta name="description" content="Zero-dependency Vee plugin SDKs for TypeScript, Python, and Go — the same typed Menu/Section builders in every language, producing byte-identical output.">
   <link rel="canonical" href="https://navbytes.github.io/vee/guide/sdk.html">
   <link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
   <link rel="stylesheet" href="../assets/style.css">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Vee">
-  <meta property="og:title" content="TypeScript SDK — Vee docs">
-  <meta property="og:description" content="vee-plugins is a zero-dependency TypeScript SDK for writing Vee plugins with typed Menu/Section builders. Node runs the .ts directly — no build step.">
+  <meta property="og:title" content="Plugin SDKs — Vee docs">
+  <meta property="og:description" content="Zero-dependency Vee plugin SDKs for TypeScript, Python, and Go — the same typed Menu/Section builders in every language, producing byte-identical output.">
   <meta property="og:url" content="https://navbytes.github.io/vee/guide/sdk.html">
   <meta property="og:image" content="https://navbytes.github.io/vee/assets/og-image.png">
   <meta name="twitter:card" content="summary_large_image">
-  <meta name="twitter:title" content="TypeScript SDK — Vee docs">
-  <meta name="twitter:description" content="vee-plugins is a zero-dependency TypeScript SDK for writing Vee plugins with typed Menu/Section builders. Node runs the .ts directly — no build step.">
+  <meta name="twitter:title" content="Plugin SDKs — Vee docs">
+  <meta name="twitter:description" content="Zero-dependency Vee plugin SDKs for TypeScript, Python, and Go — the same typed Menu/Section builders in every language, producing byte-identical output.">
   <meta name="twitter:image" content="https://navbytes.github.io/vee/assets/og-image.png">
 </head>
 <body>
@@ -49,7 +49,8 @@
 <li><a href="./plugin-authoring.html">Plugin authoring</a></li>
 <li><a href="./trust-model.html">Trust model</a></li>
 <li><a href="./preferences.html">Preferences</a></li>
-<li><a href="./sdk.html" aria-current="page">TypeScript SDK</a></li>
+<li><a href="./sdk.html" aria-current="page">Plugin SDKs</a></li>
+<li><a href="./json-output.html">JSON output</a></li>
 <li><a href="./cli-and-urls.html">CLI &amp; URL actions</a></li>
 <li><a href="./faq.html">FAQ</a></li>
 <li><a href="./troubleshooting.html">Troubleshooting</a></li>
@@ -58,23 +59,25 @@
   <main class="docs-main" id="main">
     <article class="docs-content">
       <p class="doc-hero-note">Vee documentation</p>
-<h1>TypeScript SDK</h1>
-<p><code>vee-plugins</code> is a tiny, zero-dependency TypeScript SDK for writing Vee plugins with typed builders instead of hand-formatting the xbar/SwiftBar text protocol. Node runs the TypeScript directly (type-stripping), so there is <strong>no build step</strong> — you drop a <code>.ts</code> file straight into your plugins folder.</p>
-<p>The SDK lives in the <a href="https://github.com/navbytes/vee/tree/main/plugins" rel="noopener"><code>plugins/</code></a> directory of the repository.</p>
+<h1>Plugin SDKs</h1>
+<p>Vee ships tiny, zero-dependency SDKs for writing plugins with typed builders instead of hand-formatting the xbar/SwiftBar text protocol. There are three, one per language — <strong>TypeScript</strong>, <strong>Python</strong>, and <strong>Go</strong> — and they mirror each other exactly: the same builder shape, option names, encoding order, and quoting, so a plugin reads the same in any language and all three produce <strong>byte-identical</strong> output for the same menu.</p>
+<p>The SDKs live in the <a href="https://github.com/navbytes/vee/tree/main/plugins" rel="noopener"><code>plugins/</code></a> directory of the repository:</p>
+<ul>
+<li>TypeScript — <a href="https://github.com/navbytes/vee/tree/main/plugins/src/vee.ts" rel="noopener"><code>plugins/src/vee.ts</code></a></li>
+<li>Python — <a href="https://github.com/navbytes/vee/tree/main/plugins/python" rel="noopener"><code>plugins/python/</code></a> (<a href="https://github.com/navbytes/vee/tree/main/plugins/python/README.md" rel="noopener">README</a>)</li>
+<li>Go — <a href="https://github.com/navbytes/vee/tree/main/plugins/go" rel="noopener"><code>plugins/go/</code></a> (<a href="https://github.com/navbytes/vee/tree/main/plugins/go/README.md" rel="noopener">README</a>)</li>
+</ul>
+<p>Pick whichever language you are most comfortable in; the API is the same shape in all three.</p>
 <h2 id="requirements">Requirements</h2>
 <ul>
-<li>Node 24 or later (for native TypeScript execution / type stripping).</li>
+<li><strong>TypeScript</strong> — Node 24 or later (for native TypeScript execution / type stripping; there is <strong>no build step</strong>).</li>
+<li><strong>Python</strong> — Python 3.9 or later (standard library only).</li>
+<li><strong>Go</strong> — Go 1.21 or later (standard library only; you build the plugin to a binary).</li>
 </ul>
-<h2 id="layout">Layout</h2>
-<div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">text</span></div><pre><code>plugins/
-├─ src/vee.ts        # the SDK: Menu, Section, ItemOptions
-├─ examples/*.ts     # example plugins; each exports build(): string
-├─ fixtures/*.txt    # golden output for each example
-├─ test/*.test.ts    # drift guard (see below)
-├─ package.json
-└─ tsconfig.json</code></pre></div>
 <h2 id="hello-world">Hello world</h2>
-<p>Create <code>cpu.5s.ts</code> and import the SDK:</p>
+<p>The same menu in each language. Adjust the import path to point at wherever the SDK lives relative to your plugin.</p>
+<h3 id="hello-typescript">TypeScript</h3>
+<p>Create <code>cpu.5s.ts</code>. Node runs the <code>.ts</code> directly (type-stripping), so you drop the file straight into your plugins folder — no compile step.</p>
 <div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">ts</span></div><pre><code>#!/usr/bin/env node
 import { Menu } from "./src/vee.ts";
 
@@ -92,60 +95,138 @@ details.item("Cores: 8");
 d.item("Refresh", { refresh: true });
 
 menu.print();</code></pre></div>
-<p>Make it executable and drop it in your plugins folder:</p>
 <div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">sh</span></div><pre><code>chmod +x cpu.5s.ts</code></pre></div>
-<p>The <code>.5s</code> in the filename sets a 5-second refresh, exactly as with any other plugin (see <a href="plugin-authoring.html#filenames-and-refresh-intervals">plugin authoring</a>). Adjust the import path to point at wherever <code>src/vee.ts</code> lives relative to your plugin.</p>
+<h3 id="hello-python">Python</h3>
+<p>Create <code>cpu.5s.py</code>. Options are passed as keyword arguments.</p>
+<div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">python</span></div><pre><code>#!/usr/bin/env python3
+import sys
+sys.path.insert(0, "/path/to/plugins/python")
+from vee import Menu
+
+menu = Menu()
+menu.title("CPU 12%", color="green", sfimage="cpu")
+
+d = menu.dropdown
+d.item("Top processes", href="https://example.com/procs")
+d.separator()
+
+details = d.submenu("Details")
+details.item("Load: 1.20")
+details.item("Cores: 8")
+
+d.item("Refresh", refresh=True)
+
+menu.print()</code></pre></div>
+<div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">sh</span></div><pre><code>chmod +x cpu.5s.py</code></pre></div>
+<h3 id="hello-go">Go</h3>
+<p>Options are a <code>*vee.Options</code> struct; the <code>vee.Str</code>/<code>vee.Int</code>/<code>vee.Bool</code> helpers set the optional pointer fields concisely. Build to a binary named <code>cpu.5s</code>.</p>
+<div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">go</span></div><pre><code>package main
+
+import "vee"
+
+func main() {
+	m := &amp;vee.Menu{}
+	m.Title("CPU 12%", &amp;vee.Options{Color: vee.Str("green"), SFImage: vee.Str("cpu")})
+
+	d := m.Dropdown()
+	d.Item("Top processes", &amp;vee.Options{Href: vee.Str("https://example.com/procs")})
+	d.Separator()
+
+	details := d.Submenu("Details", nil)
+	details.Item("Load: 1.20", nil)
+	details.Item("Cores: 8", nil)
+
+	d.Item("Refresh", &amp;vee.Options{Refresh: vee.Bool(true)})
+	m.Print()
+}</code></pre></div>
+<div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">sh</span></div><pre><code>go build -o cpu.5s ./...</code></pre></div>
+<p>A compiled binary is a first-class Vee plugin. The <code>.5s</code> in the filename sets a 5-second refresh, exactly as with any other plugin (see <a href="plugin-authoring.html#filenames-and-refresh-intervals">plugin authoring</a>).</p>
 <h2 id="the-api">The API</h2>
+<p>All three SDKs expose the same three types.</p>
 <h3 id="menu"><code>Menu</code></h3>
 <p>The top-level menu: title line(s) plus a dropdown.</p>
-<ul>
-<li><code>title(text, options?)</code> — add a menu-bar title line. Call it more than once for multiple title lines.</li>
-<li><code>dropdown</code> — a getter returning a <code>Section</code> for the dropdown body (everything after <code>---</code>).</li>
-<li><code>toString()</code> — render the whole menu to the text protocol string.</li>
-<li><code>print()</code> — write <code>toString()</code> (plus a trailing newline) to stdout. This is what a real plugin calls.</li>
-</ul>
+<div class="table-scroll"><table><thead><tr><th>Method</th><th>TypeScript</th><th>Python</th><th>Go</th></tr></thead><tbody><tr><td>Add a title line (call more than once for multiple lines)</td><td><code>title(text, options?)</code></td><td><code>title(text, **options)</code></td><td><code>Title(text, *Options)</code></td></tr><tr><td>The dropdown body (everything after <code>---</code>)</td><td><code>dropdown</code> (getter)</td><td><code>dropdown</code> (property)</td><td><code>Dropdown() Section</code></td></tr><tr><td>Render to the text protocol string</td><td><code>toString()</code></td><td><code>to_string()</code> / <code>str(menu)</code></td><td><code>String()</code></td></tr><tr><td>Write the rendered menu (+ newline) to stdout</td><td><code>print()</code></td><td><code>print()</code></td><td><code>Print()</code></td></tr></tbody></table></div>
+<p><code>print()</code> is what a real plugin calls.</p>
 <h3 id="section"><code>Section</code></h3>
 <p>A menu section at a given submenu depth (0 = top level).</p>
 <ul>
-<li><code>item(text, options?)</code> — add a menu item. Returns <code>this</code> for chaining.</li>
-<li><code>separator()</code> — add a <code>---</code> divider. Returns <code>this</code>.</li>
-<li><code>submenu(text, options?)</code> — add an item and return a new <code>Section</code> for its children (one level deeper).</li>
+<li><strong>Item</strong> — <code>item(text, options?)</code> / <code>item(text, **options)</code> / <code>Item(text, *Options)</code> adds a menu item.</li>
+<li><strong>Separator</strong> — <code>separator()</code> / <code>separator()</code> / <code>Separator()</code> adds a <code>---</code> divider.</li>
+<li><strong>Submenu</strong> — <code>submenu(text, …)</code> / <code>Submenu(text, …)</code> adds an item and returns a new <code>Section</code> for its children (one level deeper).</li>
 </ul>
-<h3 id="itemoptions"><code>ItemOptions</code></h3>
-<p>Options map onto the line parameters in the <a href="plugin-authoring.html#line-parameters">authoring reference</a>. The supported keys are:</p>
-<p><code>color</code>, <code>size</code>, <code>font</code>, <code>length</code>, <code>href</code>, <code>shell</code> (with <code>params: string[]</code> → <code>param1..N</code>), <code>terminal</code>, <code>refresh</code>, <code>alternate</code>, <code>disabled</code>, <code>checked</code>, <code>key</code>, <code>tooltip</code>, <code>sfimage</code>, <code>md</code>, <code>badge</code>, <code>symbolize</code>.</p>
-<p>For example:</p>
+<h3 id="options">Options</h3>
+<p>Options map onto the line parameters in the <a href="plugin-authoring.html#line-parameters">authoring reference</a>. The supported keys are the same in every SDK (in TypeScript they are <code>ItemOptions</code>; in Python keyword arguments; in Go the <code>Options</code> struct fields):</p>
+<p><code>color</code>, <code>size</code>, <code>font</code>, <code>length</code>, <code>href</code>, <code>shell</code> (with <code>params</code> → <code>param1..N</code>), <code>terminal</code>, <code>refresh</code>, <code>alternate</code>, <code>disabled</code>, <code>checked</code>, <code>key</code>, <code>tooltip</code>, <code>sfimage</code>, <code>md</code>, <code>badge</code>, <code>symbolize</code>.</p>
+<p>For example, in each language:</p>
 <div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">ts</span></div><pre><code>d.item("Open build", { shell: "/usr/bin/open", params: ["-a", "Xcode"], terminal: false });
 d.item("Inbox", { badge: "12" });
 d.item("**Bold** text", { md: true });
 d.item("Status :checkmark.circle:", { symbolize: true });</code></pre></div>
-<p>Values containing spaces or <code>|</code> are quoted automatically.</p>
-<h2 id="the-no-build-step-note">The no-build-step note</h2>
-<p>There is deliberately no compiler or bundler in the loop. Node 24+ strips the TypeScript types at load time and runs the file, so:</p>
+<div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">python</span></div><pre><code>d.item("Open build", shell="/usr/bin/open", params=["-a", "Xcode"], terminal=False)
+d.item("Inbox", badge="12")
+d.item("**Bold** text", md=True)
+d.item("Status :checkmark.circle:", symbolize=True)</code></pre></div>
+<div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">go</span></div><pre><code>d.Item("Open build", &amp;vee.Options{Shell: vee.Str("/usr/bin/open"), Params: []string{"-a", "Xcode"}, Terminal: vee.Bool(false)})
+d.Item("Inbox", &amp;vee.Options{Badge: vee.Str("12")})
+d.Item("**Bold** text", &amp;vee.Options{MD: vee.Bool(true)})
+d.Item("Status :checkmark.circle:", &amp;vee.Options{Symbolize: vee.Bool(true)})</code></pre></div>
+<p>Values containing spaces or <code>|</code> are quoted (and embedded quotes escaped) automatically, in every SDK — you never format the protocol by hand.</p>
+<h2 id="rich-params">Rich params</h2>
+<p>All three SDKs expose <strong>typed builders</strong> for Vee's inline controls — <strong>sparkline</strong>, <strong>toggle</strong>, <strong>slider</strong>, and <strong>progress</strong> — plus the progress tuning params (<code>trackColor</code>, <code>progressW</code>, <code>progressH</code>). You pass structured values; the SDK formats the protocol (numbers, ranges, and quoting) for you, so the whole class of "I hand-formatted <code>slider=</code> wrong" bugs is impossible to write. (These render natively in Vee; xbar/SwiftBar ignore the unknown params, so plugins stay portable.)</p>
+<p><strong>TypeScript</strong></p>
+<div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">ts</span></div><pre><code>d.item("Load history", { sparkline: [1, 2, 3, 5, 8, 13] });
+d.item("Notifications", { toggle: true });
+d.item("Volume", { slider: { min: 0, max: 100, value: 40 } });
+d.item("Disk usage", { color: "green", progress: 0.72, trackColor: "#333333", progressW: 80, progressH: 6 });
+// progress also accepts a value/max pair:
+d.item("Budget", { progress: { value: 72, max: 100 } });</code></pre></div>
+<p><strong>Python</strong></p>
+<div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">py</span></div><pre><code>d.item("Load history", sparkline=[1, 2, 3, 5, 8, 13])
+d.item("Notifications", toggle=True)
+d.item("Volume", slider={"min": 0, "max": 100, "value": 40})
+d.item("Disk usage", color="green", progress=0.72, trackColor="#333333", progressW=80, progressH=6)</code></pre></div>
+<p><strong>Go</strong></p>
+<div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">go</span></div><pre><code>d.Item("Load history", &amp;vee.Options{Sparkline: []float64{1, 2, 3, 5, 8, 13}})
+d.Item("Notifications", &amp;vee.Options{Toggle: vee.Bool(true)})
+d.Item("Volume", &amp;vee.Options{Slider: &amp;vee.Slider{Min: 0, Max: 100, Value: 40}})
+d.Item("Disk usage", &amp;vee.Options{Color: vee.Str("green"), Progress: vee.Float(0.72), TrackColor: vee.Str("#333333"), ProgressW: vee.Float(80), ProgressH: vee.Float(6)})</code></pre></div>
+<p>All three emit byte-identical protocol output (there's a <code>controls</code> example and a shared golden fixture proving it). See the underlying line-parameter grammar in the <a href="plugin-authoring.html#line-parameters">plugin authoring reference</a>.</p>
+<h2 id="the-no-build-step-note">The no-build-step note (TypeScript)</h2>
+<p>For TypeScript there is deliberately no compiler or bundler in the loop. Node 24+ strips the TypeScript types at load time and runs the file, so:</p>
 <ul>
 <li>Your plugin is a plain <code>.ts</code> file with a <code>#!/usr/bin/env node</code> shebang.</li>
 <li>You edit it and Vee re-runs it — nothing to compile.</li>
 <li>The SDK ships as source (<code>src/vee.ts</code>), imported directly.</li>
 </ul>
+<p>Python plugins run the same way (no build). Go plugins are compiled once to a binary, which Vee then runs like any other executable plugin.</p>
 <h2 id="drift-guard-and-fixtures">Drift guard and fixtures</h2>
-<p>The SDK, the golden fixtures, and the Swift parser are kept in lockstep by a fixture drift guard:</p>
+<p>The SDKs, the golden fixtures, and the Swift parser are kept in lockstep by a fixture drift guard:</p>
 <ul>
-<li>Each example in <code>examples/*.ts</code> exports a <code>build(): string</code> function.</li>
-<li>Its committed output lives in <code>fixtures/&lt;name&gt;.txt</code>.</li>
-<li><code>test/drift.test.ts</code> asserts that every example's <code>build()</code> still matches its fixture.</li>
-<li>The <strong>same fixtures</strong> are parsed by the Swift <code>VeePluginFormat</code> tests. So if the SDK's output format ever diverges from what the Swift parser expects, a test fails on one side or the other.</li>
+<li>Each example (<code>examples/*.ts</code>, <code>python/examples/*.py</code>, <code>go/examples/*</code>) builds a menu and its committed output lives in <code>fixtures/&lt;name&gt;.txt</code>.</li>
+<li>Each SDK's test asserts that its examples still match those fixtures.</li>
+<li>The <strong>same fixtures</strong> are shared byte-for-byte across all three SDKs and are parsed by the Swift <code>VeePluginFormat</code> tests. So if any SDK's output ever diverges from what the Swift parser expects, a test fails on one side or the other.</li>
 </ul>
-<p>Commands (run from <code>plugins/</code>):</p>
-<div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">sh</span></div><pre><code>npm test                 # run the drift guard (node --test)
-npm run build:fixtures   # regenerate fixtures from the examples</code></pre></div>
-<p>If you change the SDK's output, run <code>npm run build:fixtures</code> to update the golden files, then <code>npm test</code> to confirm — and the Swift-side tests will confirm the parser still agrees.</p>
+<p>Commands:</p>
+<div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">sh</span></div><pre><code># TypeScript (run from plugins/)
+npm test                 # run the drift guard (node --test)
+npm run build:fixtures   # regenerate fixtures from the examples
+
+# Python (run from plugins/python)
+python3 -m unittest discover -s test -v
+
+# Go (run from plugins/go)
+go test ./...</code></pre></div>
+<p>If you change an SDK's output, regenerate the fixtures and run the tests — and the Swift-side tests will confirm the parser still agrees.</p>
 <h2 id="see-also">See also</h2>
 <ul>
-<li><a href="plugin-authoring.html">Plugin authoring reference</a> — the underlying text format the SDK emits.</li>
+<li><a href="plugin-authoring.html">Plugin authoring reference</a> — the underlying text format the SDKs emit, including the rich params.</li>
+<li><a href="json-output.html">JSON output format</a> — the optional structured-JSON alternative to the text protocol.</li>
 <li><a href="getting-started.html">Getting started</a> — where the plugins folder is.</li>
+<li>Python SDK README — <a href="https://github.com/navbytes/vee/tree/main/plugins/python/README.md" rel="noopener"><code>plugins/python/README.md</code></a>.</li>
+<li>Go SDK README — <a href="https://github.com/navbytes/vee/tree/main/plugins/go/README.md" rel="noopener"><code>plugins/go/README.md</code></a>.</li>
 </ul>
     </article>
-    <nav class="doc-nextprev" aria-label="Guide pagination"><a class="prev" href="./preferences.html"><span class="dir">&larr; Previous</span><span class="lbl">Preferences</span></a><a class="next" href="./cli-and-urls.html"><span class="dir">Next &rarr;</span><span class="lbl">CLI &amp; URL actions</span></a></nav>
+    <nav class="doc-nextprev" aria-label="Guide pagination"><a class="prev" href="./preferences.html"><span class="dir">&larr; Previous</span><span class="lbl">Preferences</span></a><a class="next" href="./json-output.html"><span class="dir">Next &rarr;</span><span class="lbl">JSON output</span></a></nav>
   </main>
 </div>
 <script src="../assets/app.js" defer></script>

@@ -1,4 +1,5 @@
 import XCTest
+import VeeCore
 @testable import VeeCatalog
 
 final class CatalogParserTests: XCTestCase {
@@ -108,5 +109,30 @@ final class PluginInstallerTests: XCTestCase {
         XCTAssertTrue(FileManager.default.isExecutableFile(atPath: path))
         XCTAssertTrue(PluginInstaller.isInstalled(filename: "x.5s.sh", in: dir))
         XCTAssertEqual(try String(contentsOfFile: path, encoding: .utf8), "#!/bin/bash\necho hi\n")
+    }
+
+    /// Regression: a `swiftbar://addplugin?src=…` URL whose last path component
+    /// percent-decodes to `../../../evil.sh` must not escape the plugins dir.
+    func testInstallRejectsPathTraversal() throws {
+        let root = NSTemporaryDirectory() + "vee-traversal-" + UUID().uuidString
+        let dir = root + "/plugins"
+        defer { try? FileManager.default.removeItem(atPath: root) }
+
+        for hostile in ["../../../evil.sh", "../evil.sh", "a/b/evil.sh", "..", ".", "/", ".hidden.sh", "with:colon.sh", "with\u{0}nul.sh", ""] {
+            XCTAssertThrowsError(
+                try PluginInstaller.install(filename: hostile, source: "#!/bin/bash\necho pwned\n", into: dir),
+                "expected \(hostile.debugDescription) to be rejected"
+            ) { error in
+                XCTAssertEqual(error as? VeeError, .unsafePluginFilename(hostile))
+            }
+        }
+        // Nothing escaped the plugins directory.
+        XCTAssertFalse(FileManager.default.fileExists(atPath: root + "/evil.sh"))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: "/evil.sh"))
+    }
+
+    func testSanitizedFilenameAcceptsPlainNames() throws {
+        XCTAssertEqual(try PluginInstaller.sanitizedFilename("cpu_percent.5s.sh"), "cpu_percent.5s.sh")
+        XCTAssertEqual(try PluginInstaller.sanitizedFilename("weather.1m.py"), "weather.1m.py")
     }
 }

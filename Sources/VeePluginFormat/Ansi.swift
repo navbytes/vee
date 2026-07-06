@@ -20,7 +20,7 @@ enum Ansi {
 
     private static let baseColors: [Int: String] = [
         30: "black", 31: "red", 32: "green", 33: "yellow",
-        34: "blue", 35: "magenta", 36: "cyan", 37: "white",
+        34: "blue", 35: "magenta", 36: "cyan", 37: "white"
     ]
 
     /// Parses `text`, returning the escape-stripped string and its style runs.
@@ -117,7 +117,7 @@ enum Ansi {
                 (0, 0, 0), (128, 0, 0), (0, 128, 0), (128, 128, 0),
                 (0, 0, 128), (128, 0, 128), (0, 128, 128), (192, 192, 192),
                 (128, 128, 128), (255, 0, 0), (0, 255, 0), (255, 255, 0),
-                (0, 0, 255), (255, 0, 255), (0, 255, 255), (255, 255, 255),
+                (0, 0, 255), (255, 0, 255), (0, 255, 255), (255, 255, 255)
             ]
             let (r, g, b) = base[n]
             return .rgb(r: r, g: g, b: b, a: 255)

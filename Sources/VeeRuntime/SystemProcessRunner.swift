@@ -21,6 +21,28 @@ public struct SystemProcessRunner: ProcessRunning {
     }
 }
 
+/// Drains a pipe handle to EOF while capping how much is kept in memory. A plugin
+/// that spews output for the whole timeout window (e.g. `yes`) would otherwise
+/// buffer hundreds of MB before the timeout fires — breaking the bounded-memory
+/// guarantee. Beyond `cap` we keep reading (so the child never blocks on a full
+/// pipe) but stop accumulating; the captured output is truncated at `cap`.
+extension ProcessRun {
+    /// 8 MB is orders of magnitude beyond any real menu render.
+    static let maxCapturedBytes = 8 * 1024 * 1024
+
+    static func boundedDrain(_ handle: FileHandle, cap: Int) -> Data {
+        var accumulated = Data()
+        while true {
+            let chunk = handle.availableData
+            if chunk.isEmpty { break } // EOF
+            if accumulated.count < cap {
+                accumulated.append(chunk.prefix(cap - accumulated.count))
+            }
+        }
+        return accumulated
+    }
+}
+
 /// Owns the mutable, non-`Sendable` machinery for one run and coordinates the
 /// three completion signals (stdout drained, stderr drained, process exited)
 /// so the continuation resumes exactly once. `@unchecked Sendable`: all shared
@@ -81,11 +103,11 @@ private final class ProcessRun: @unchecked Sendable {
         let outHandle = outPipe.fileHandleForReading
         let errHandle = errPipe.fileHandleForReading
         DispatchQueue.global().async { [weak self] in
-            let data = outHandle.readDataToEndOfFile()
+            let data = ProcessRun.boundedDrain(outHandle, cap: ProcessRun.maxCapturedBytes)
             self?.complete { $0.outData = data }
         }
         DispatchQueue.global().async { [weak self] in
-            let data = errHandle.readDataToEndOfFile()
+            let data = ProcessRun.boundedDrain(errHandle, cap: ProcessRun.maxCapturedBytes)
             self?.complete { $0.errData = data }
         }
 

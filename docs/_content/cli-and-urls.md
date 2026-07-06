@@ -20,6 +20,66 @@ While developing you can point Vee at a specific plugins folder with an environm
 VEE_PLUGINS_DIR=~/dev/my-plugins swift run vee
 ```
 
+## The `vee` command-line tool
+
+Running `vee` with no subcommand launches the menu-bar app (that's also what
+happens when the bundled app is opened). Passing a subcommand instead gives you a
+zero-install authoring loop that reuses Vee's real parser — no app, no GUI:
+
+| Command | What it does |
+|---------|--------------|
+| `vee render <plugin>` | Runs the plugin and prints the parsed menu tree plus any parse diagnostics. |
+| `vee lint <plugin>` | Runs the plugin and reports problems: unknown params, a bare `\|` in a title, unquoted values containing spaces, and the parser's own diagnostics. Exits non-zero if anything is flagged. |
+| `vee new [flags]` | Scaffolds a new plugin file with the right filename, header tags, and a working body. |
+
+### `vee render`
+
+Renders exactly what Vee would show, so you can see a plugin's output — text
+**or** JSON protocol — without installing it:
+
+```sh
+$ vee render ./cpu.5s.sh
+CPU 12%  [sfimage=cpu]
+---
+Top processes  [href=https://example.com/procs]
+───
+Refresh  [refresh]
+```
+
+Parse diagnostics (unknown params, malformed lines) and a non-zero exit, a
+timeout, or anything on stderr are surfaced too — it's the fastest way to answer
+"why doesn't my plugin look right?".
+
+### `vee lint`
+
+Catches the common authoring mistakes before you ship — especially the
+quoting bugs the [SDKs](sdk.md) prevent by construction:
+
+```sh
+$ vee lint ./broken.5s.sh
+Lint findings:
+  warning [line 3]: value for 'tooltip' contains a space but isn't quoted; wrap it in quotes (e.g. tooltip="a b")
+  warning [line 4]: unknown parameter 'frobnicate'
+```
+
+`vee lint` exits `1` when it finds anything, so you can wire it into a
+pre-commit hook or CI.
+
+### `vee new`
+
+Scaffolds a ready-to-run plugin. Flags: `--lang ts|py|sh`, `--interval` (e.g.
+`5s`, `10m`), `--name`, `--trust` (comma-separated capabilities, e.g.
+`network,secrets`), and `--out DIR`. When run in a terminal with flags omitted,
+it prompts.
+
+```sh
+$ vee new --lang sh --interval 30s --name weather --trust network --out ~/plugins
+# writes ~/plugins/weather.30s.sh with <xbar.*> + <vee.*> headers and a working body
+```
+
+For `ts`/`py`, the generated body imports the corresponding [SDK](sdk.md) so a
+scaffold doubles as a starting point for typed authoring.
+
 ## URL actions
 
 Vee registers two URL schemes: `vee://` and `swiftbar://`. The `swiftbar://` scheme is supported for compatibility, so plugins written for SwiftBar keep working. Both schemes accept the same actions.

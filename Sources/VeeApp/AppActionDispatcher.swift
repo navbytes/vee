@@ -102,12 +102,44 @@ final class AppActionDispatcher: MenuActionHandling {
     }
 
     private func runInTerminal(_ shell: ShellCommand) {
-        let command = ([shell.launchPath] + shell.arguments)
-            .map { $0.contains(" ") ? "'\($0)'" : $0 }
-            .joined(separator: " ")
-        let escaped = command.replacingOccurrences(of: "\\", with: "\\\\").replacingOccurrences(of: "\"", with: "\\\"")
-        let source = "tell application \"Terminal\"\nactivate\ndo script \"\(escaped)\"\nend tell"
+        let source = Self.terminalAppleScript(launchPath: shell.launchPath, arguments: shell.arguments)
         var error: NSDictionary?
         NSAppleScript(source: source)?.executeAndReturnError(&error)
+    }
+
+    /// Builds the `tell application "Terminal" … do script "…"` AppleScript for a
+    /// shell command. `launchPath`/`arguments` include untrusted plugin values
+    /// (`bash=`, `paramN=`), so each token is POSIX single-quote escaped — making
+    /// it inert to the shell regardless of spaces, quotes, `;`, `$()`, etc. — and
+    /// the whole command is then escaped for the AppleScript string layer so it
+    /// cannot terminate the `do script "…"` statement (the old code only quoted
+    /// tokens containing a space and never escaped embedded quotes or newlines,
+    /// which allowed both shell and AppleScript injection on click).
+    nonisolated static func terminalAppleScript(launchPath: String, arguments: [String]) -> String {
+        let command = ([launchPath] + arguments).map(shellQuote).joined(separator: " ")
+        return "tell application \"Terminal\"\nactivate\ndo script \"\(appleScriptEscape(command))\"\nend tell"
+    }
+
+    /// POSIX single-quote quoting: wrap in `'…'`, rewriting each embedded `'` as
+    /// `'\''`. The result is safe to paste into any POSIX shell verbatim.
+    nonisolated static func shellQuote(_ s: String) -> String {
+        "'" + s.replacingOccurrences(of: "'", with: "'\\''") + "'"
+    }
+
+    /// Escapes a string for embedding inside an AppleScript `"…"` literal.
+    nonisolated static func appleScriptEscape(_ s: String) -> String {
+        var out = ""
+        out.reserveCapacity(s.count)
+        for scalar in s.unicodeScalars {
+            switch scalar {
+            case "\\": out += "\\\\"
+            case "\"": out += "\\\""
+            case "\n": out += "\\n"
+            case "\r": out += "\\r"
+            case "\t": out += "\\t"
+            default: out.unicodeScalars.append(scalar)
+            }
+        }
+        return out
     }
 }

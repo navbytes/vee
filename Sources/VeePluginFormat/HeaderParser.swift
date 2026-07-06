@@ -4,11 +4,15 @@ import Foundation
 /// tags live inside language-specific comments, but they can be scanned
 /// directly regardless of comment syntax, so this is language-agnostic.
 public enum HeaderParser {
+    // Compile-time-constant pattern; cannot fail at runtime.
+    // swiftlint:disable:next force_try
     private static let tag = try! NSRegularExpression(
         pattern: "<(xbar|swiftbar)\\.([a-zA-Z.]+)>([\\s\\S]*?)</\\1\\.\\2>",
         options: []
     )
 
+    // Compile-time-constant pattern; cannot fail at runtime.
+    // swiftlint:disable:next force_try
     private static let varPattern = try! NSRegularExpression(
         pattern: "^\\s*(string|number|boolean|select)\\(([^=]+)=(.*?)\\)\\s*:?\\s*(.*?)\\s*(?:\\[(.*)\\])?\\s*$",
         options: []

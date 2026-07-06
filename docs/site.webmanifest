@@ -1,0 +1,12 @@
+{
+  "name": "Vee",
+  "short_name": "Vee",
+  "description": "Native macOS menu-bar script runner — xbar & SwiftBar compatible.",
+  "icons": [
+    { "src": "./assets/favicon-192.png", "type": "image/png", "sizes": "192x192" },
+    { "src": "./assets/favicon-512.png", "type": "image/png", "sizes": "512x512" }
+  ],
+  "theme_color": "#2f6bfb",
+  "background_color": "#0f1117",
+  "display": "standalone"
+}

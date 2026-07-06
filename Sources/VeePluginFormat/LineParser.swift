@@ -85,11 +85,20 @@ enum LineParser {
 
         func bool(_ v: String) -> Bool { v == "true" || v == "1" || v == "yes" }
 
+        // Numeric params flow into layout/font geometry (bar widths, NSFont
+        // sizes). `Double("nan")`/`Double("inf")` parse successfully and NaN
+        // defeats `min/max` clamps (NaN propagates), producing NaN CGRects and
+        // NSFont sizes from plugin output. Reject non-finite values at the source.
+        func finite(_ v: String) -> Double? {
+            guard let d = Double(v.trimmingCharacters(in: .whitespaces)), d.isFinite else { return nil }
+            return d
+        }
+
         for (key, value) in pairs {
             switch key {
             case "color": p.color = VeeColor.parse(value)
             case "font": p.font = value
-            case "size": p.size = Double(value)
+            case "size": p.size = finite(value)
             case "length": p.length = Int(value)
             case "trim": p.trim = bool(value)
             case "ansi": p.ansi = bool(value)
@@ -106,7 +115,7 @@ enum LineParser {
             case "templateimage": p.templateImage = value
             case "sfimage": p.swiftbar.sfimage = value
             case "sfcolor": p.swiftbar.sfcolor = value.split(separator: ",").compactMap { VeeColor.parse(String($0)) }
-            case "sfsize": p.swiftbar.sfsize = Double(value)
+            case "sfsize": p.swiftbar.sfsize = finite(value)
             case "sfconfig": p.swiftbar.sfconfig = value
             case "symbolize": p.swiftbar.symbolize = bool(value)
             case "tooltip": p.swiftbar.tooltip = value
@@ -114,13 +123,13 @@ enum LineParser {
             case "checked": p.swiftbar.checked = bool(value)
             case "badge": p.swiftbar.badge = value
             case "webview": p.swiftbar.webview = URL(string: value)
-            case "webvieww": p.swiftbar.webviewWidth = Double(value)
-            case "webviewh": p.swiftbar.webviewHeight = Double(value)
+            case "webvieww": p.swiftbar.webviewWidth = finite(value)
+            case "webviewh": p.swiftbar.webviewHeight = finite(value)
             case "shortcut": p.swiftbar.shortcut = value
             case "sparkline":
                 // Vee-native: comma-separated Doubles for an inline chart popover.
                 // Skip malformed entries; an empty result stays `nil`.
-                let series = value.split(separator: ",").compactMap { Double($0.trimmingCharacters(in: .whitespaces)) }
+                let series = value.split(separator: ",").compactMap { finite(String($0)) }
                 p.sparkline = series.isEmpty ? nil : series
             case "toggle":
                 // Vee-native: an on/off switch. Accepts on/off as well as the
@@ -133,7 +142,7 @@ enum LineParser {
                 // Vee-native: `min,max,value`. Requires three Doubles with
                 // min < max; the value is clamped into range. Anything else
                 // stays `nil` and is reported.
-                let nums = value.split(separator: ",").compactMap { Double($0.trimmingCharacters(in: .whitespaces)) }
+                let nums = value.split(separator: ",").compactMap { finite(String($0)) }
                 if nums.count == 3, nums[0] < nums[1] {
                     let clamped = Swift.min(Swift.max(nums[2], nums[0]), nums[1])
                     p.control = .slider(min: nums[0], max: nums[1], value: clamped)
@@ -143,17 +152,21 @@ enum LineParser {
             case "progress":
                 // Vee-native: `0..1` (a single fraction) or `value,max`. Result is
                 // always clamped to 0...1.
-                let nums = value.split(separator: ",").compactMap { Double($0.trimmingCharacters(in: .whitespaces)) }
-                if nums.count == 1 {
+                // Require *every* comma token to be a finite number, so a
+                // non-finite token (e.g. `nan,2`) is flagged malformed rather
+                // than silently dropped into a misread single-value form.
+                let tokens = value.split(separator: ",").map(String.init)
+                let nums = tokens.compactMap { finite($0) }
+                if nums.count == tokens.count, nums.count == 1 {
                     progressFraction = Swift.min(Swift.max(nums[0], 0), 1)
-                } else if nums.count == 2, nums[1] != 0 {
+                } else if nums.count == tokens.count, nums.count == 2, nums[1] != 0 {
                     progressFraction = Swift.min(Swift.max(nums[0] / nums[1], 0), 1)
                 } else if !value.isEmpty {
                     diagnostics.append(.init(severity: .warning, message: "progress= expects a fraction (0..1) or 'value,max'"))
                 }
             case "trackcolor": progressTrack = VeeColor.parse(value)
-            case "progressw": progressW = Double(value)
-            case "progressh": progressH = Double(value)
+            case "progressw": progressW = finite(value)
+            case "progressh": progressH = finite(value)
             default:
                 if key.hasPrefix("param"), let n = Int(key.dropFirst(5)) {
                     positional[n] = value

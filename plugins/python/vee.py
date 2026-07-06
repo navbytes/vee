@@ -77,6 +77,40 @@ def _encode(options: dict[str, Any] | None) -> str:
     for name, key in _TRAILING_KEYS:
         push(key, options.get(name))
 
+    # Vee-native rich params, emitted last in a fixed order shared across SDKs:
+    # sparkline, toggle, slider, progress, trackcolor, progressw, progressh.
+    sparkline = options.get("sparkline")
+    if sparkline is not None:
+        push("sparkline", ",".join(_fmt(v) for v in sparkline))
+
+    toggle = options.get("toggle")
+    if toggle is not None:
+        push("toggle", "on" if toggle else "off")
+
+    slider = options.get("slider")
+    if slider is not None:
+        if isinstance(slider, dict):
+            smin, smax, sval = slider["min"], slider["max"], slider["value"]
+        else:  # tuple/list of (min, max, value)
+            smin, smax, sval = slider
+        push("slider", f"{_fmt(smin)},{_fmt(smax)},{_fmt(sval)}")
+
+    progress = options.get("progress")
+    if progress is not None:
+        if isinstance(progress, (tuple, list)):  # (value, max)
+            value, maximum = progress
+            fraction = 0.0 if maximum == 0 else value / maximum
+        elif isinstance(progress, dict):
+            value, maximum = progress["value"], progress["max"]
+            fraction = 0.0 if maximum == 0 else value / maximum
+        else:  # already a fraction
+            fraction = progress
+        push("progress", _fmt(fraction))
+
+    push("trackcolor", options.get("trackColor"))
+    push("progressw", options.get("progressW"))
+    push("progressh", options.get("progressH"))
+
     return " | " + " ".join(parts) if parts else ""
 
 

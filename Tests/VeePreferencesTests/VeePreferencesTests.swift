@@ -73,7 +73,7 @@ final class VariableAggregatorTests: XCTestCase {
     func testAggregatesAcrossPlugins() {
         let reader = FakeReader(map: [
             "a.sh": [decl("API_TOKEN", secret: true), decl("COUNT", secret: false)],
-            "b.sh": [decl("URL", secret: false)],
+            "b.sh": [decl("URL", secret: false)]
         ])
         let groups = VariableAggregator.aggregate(plugins: [plugin("a.sh"), plugin("b.sh")], reader: reader)
         XCTAssertEqual(groups.count, 2)
@@ -95,7 +95,7 @@ final class VariableAggregatorTests: XCTestCase {
 
     func testSecretPlainPartition() {
         let reader = FakeReader(map: [
-            "a.sh": [decl("API_TOKEN", secret: true), decl("HOST", secret: false), decl("PASSWORD", secret: true)],
+            "a.sh": [decl("API_TOKEN", secret: true), decl("HOST", secret: false), decl("PASSWORD", secret: true)]
         ])
         let groups = VariableAggregator.aggregate(plugins: [plugin("a.sh")], reader: reader)
         XCTAssertEqual(groups[0].secretDeclarations.map(\.name), ["API_TOKEN", "PASSWORD"])
@@ -113,7 +113,7 @@ final class PluginPreferencesTests: XCTestCase {
     private func decls() -> [VarDeclaration] {
         [
             VarDeclaration(name: "API_TOKEN", kind: .string, defaultValue: "", summary: "", options: [], isSecret: true),
-            VarDeclaration(name: "COUNT", kind: .number, defaultValue: "10", summary: "", options: [], isSecret: false),
+            VarDeclaration(name: "COUNT", kind: .number, defaultValue: "10", summary: "", options: [], isSecret: false)
         ]
     }
 

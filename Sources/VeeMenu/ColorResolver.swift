@@ -22,6 +22,6 @@ public enum ColorResolver {
         // AppKit semantic colors (dynamic, adapt to appearance)
         "labelcolor": .labelColor, "secondarylabelcolor": .secondaryLabelColor,
         "tertiarylabelcolor": .tertiaryLabelColor, "linkcolor": .linkColor,
-        "controlaccentcolor": .controlAccentColor,
+        "controlaccentcolor": .controlAccentColor
     ]
 }

@@ -40,9 +40,11 @@ enum Emoji {
         "car": "🚗", "airplane": "✈️", "rocket_ship": "🚀", "house": "🏠", "office": "🏢",
         // Circles & squares
         "white_circle": "⚪️", "black_circle": "⚫️", "orange_circle": "🟠", "purple_circle": "🟣",
-        "brown_circle": "🟤", "green_square": "🟩", "red_square": "🟥", "yellow_square": "🟨",
+        "brown_circle": "🟤", "green_square": "🟩", "red_square": "🟥", "yellow_square": "🟨"
     ]
 
+    // Compile-time-constant pattern; cannot fail at runtime.
+    // swiftlint:disable:next force_try
     private static let pattern = try! NSRegularExpression(pattern: ":([a-z0-9_+-]+):", options: [])
 
     /// Replaces known `:shortcode:` tokens with their emoji. No-op if the string

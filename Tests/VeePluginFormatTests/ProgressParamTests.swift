@@ -52,4 +52,31 @@ final class ProgressParamTests: XCTestCase {
         // trackcolor/width/height alone don't create a gauge.
         XCTAssertNil(progress("x | trackcolor=red progressw=100"))
     }
+
+    /// Regression: `Double("nan")`/`Double("inf")` parse successfully and NaN
+    /// defeats the min/max clamp, producing NaN bar geometry / NSFont sizes from
+    /// plugin output. Non-finite numeric params must be rejected at the parser.
+    func testNonFiniteProgressRejected() {
+        // `nan/2` previously survived the clamp; must now be nil (malformed).
+        XCTAssertNil(progress("x | progress=nan,2"))
+        XCTAssertNil(progress("x | progress=nan"))
+        XCTAssertNil(progress("x | progress=inf"))
+        // A finite value alongside non-finite companions keeps the fraction but
+        // drops the poisoned width/height.
+        let p = progress("x | progress=0.5 progressw=nan progressh=inf")
+        XCTAssertEqual(p?.fraction, 0.5)
+        XCTAssertNil(p?.width)
+        XCTAssertNil(p?.height)
+    }
+
+    func testNonFiniteSizeAndSparklineAndSliderRejected() {
+        XCTAssertNil(parse("x | size=nan").params.size)
+        XCTAssertNil(parse("x | size=inf").params.size)
+        XCTAssertNil(parse("x | sfsize=nan").params.swiftbar.sfsize)
+        // Non-finite sparkline samples are dropped; an all-bad series is nil.
+        XCTAssertNil(parse("x | sparkline=nan,inf").params.sparkline)
+        XCTAssertEqual(parse("x | sparkline=1,nan,3").params.sparkline, [1, 3])
+        // A slider with a non-finite bound has < 3 finite numbers → no control.
+        XCTAssertNil(parse("x | slider=0,inf,5").params.control)
+    }
 }

@@ -20,6 +20,20 @@ final class StreamAccumulatorTests: XCTestCase {
         XCTAssertEqual(acc.flush(), "A\nB")
         XCTAssertNil(acc.flush()) // nothing left
     }
+
+    /// Regression: a streaming plugin that never emits `~~~` must not grow the
+    /// buffer without bound (the bounded-memory guarantee).
+    func testBufferIsCappedWithoutSeparator() {
+        var acc = StreamAccumulator()
+        let line = String(repeating: "x", count: 1024) // ~1 KB
+        // Feed well past the 4 MB cap.
+        for _ in 0..<(6 * 1024) { XCTAssertNil(acc.consume(line)) }
+        let block = acc.flush() ?? ""
+        XCTAssertLessThanOrEqual(block.utf8.count, StreamAccumulator.maxBufferedBytes + line.utf8.count + 1)
+        // A separator after the cap still resets cleanly.
+        XCTAssertNil(acc.consume("fresh"))
+        XCTAssertEqual(acc.consume("~~~"), "fresh")
+    }
 }
 
 final class BackoffPolicyTests: XCTestCase {

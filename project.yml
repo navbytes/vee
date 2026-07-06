@@ -27,6 +27,9 @@ targets:
     dependencies:
       - package: Vee
         product: VeeApp
+      # Sources/vee dispatches to the render/lint/new CLI subcommands.
+      - package: Vee
+        product: VeeCLI
       # WidgetKit + Control Center extension, embedded in the app bundle.
       - target: VeeWidgetExtension
         embed: true
