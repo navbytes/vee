@@ -164,16 +164,20 @@ below exist yet in `Sources/`.
     (`VeeApp/ControlReinvocation.swift`, `Tests/VeeAppTests/ControlReinvocationTests.swift`);
     the parser is covered by `Tests/VeePluginFormatTests/ControlParamTests.swift`.
     _(1 commit.)_
-- ⬜ **`progress=` inline gauge.** A value-driven progress bar drawn as a real
-  SwiftUI view, completing the native rich-rendering family alongside
+- ✅ **`progress=` inline gauge.** A value-driven progress bar drawn as a real
+  capsule, completing the native rich-rendering family alongside
   `sparkline=`/`toggle=`/`slider=`. Grammar mirrors `slider=`: `progress=<0..1>`
-  or `progress=value,max`; inherits `color=`, with optional `trackcolor=` and
-  `progressw=`/`progressh=`. Unlike the popover family, it renders **inline in the
-  row** via a custom `NSMenuItem.view` (`NSHostingView` over a SwiftUI capsule/
-  `Gauge`) — Vee's first in-row rich view, which also unlocks the Day-2 in-row
-  sparkline. Unknown-param degradation keeps plugins portable to xbar/SwiftBar.
-  Parser → `ProgressParams` on `LineParams` → a `VeeMenu` view; typed SDK builders
-  land with the P4 rich-param item. _(1 commit.)_
+  or `progress=value,max` (clamped to 0…1); fill inherits `color=`, with optional
+  `trackcolor=` and `progressw=`/`progressh=`. Unlike the popover family, it
+  renders **inline in the row** via a custom `NSMenuItem.view` — a **pure-AppKit**
+  `ProgressMenuItemView` (`Sources/VeeMenu/`) that draws the label + capsule with
+  CoreGraphics (no SwiftUI hosting per row → stays lightweight and leak-free), and
+  self-sizes so a wide bar never truncates the label. Vee's first in-row rich
+  view, which also unlocks the Day-2 in-row sparkline. Parser → `ProgressParams`
+  on `LineParams` (`VeePluginFormat`); pure geometry (`ProgressBarLayout`) and
+  parsing are unit-tested, and an offscreen render smoke-test guards drawing.
+  Unknown-param degradation keeps plugins portable to xbar/SwiftBar. Typed SDK
+  builders land with the P4 rich-param item. _(1 commit.)_
 - ✅ **WidgetKit widget + Control Center control.** A signed `app-extension`
   target (`WidgetExtension/`, wired in `project.yml`) ships both a WidgetKit
   widget that surfaces current plugin output on the desktop / Notification Center
