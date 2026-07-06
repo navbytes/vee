@@ -21,9 +21,18 @@ public enum SymbolImageFactory {
     private static func sfSymbol(named name: String, params: SwiftBarParams) -> NSImage? {
         guard let image = NSImage(systemSymbolName: name, accessibilityDescription: nil) else { return nil }
         var config = NSImage.SymbolConfiguration.preferringMonochrome()
-        if let size = params.sfsize {
-            config = config.applying(NSImage.SymbolConfiguration(pointSize: CGFloat(size), weight: .regular))
+        let sfconfig = SFSymbolConfig.parse(params.sfconfig)
+
+        // Point size (from sfsize) and weight (from sfconfig).
+        if params.sfsize != nil || sfconfig?.nsWeight != nil {
+            let size = CGFloat(params.sfsize ?? Double(NSFont.systemFontSize))
+            config = config.applying(NSImage.SymbolConfiguration(pointSize: size, weight: sfconfig?.nsWeight ?? .regular))
         }
+        // Symbol scale from sfconfig (small/medium/large).
+        if let scale = sfconfig?.nsScale {
+            config = config.applying(NSImage.SymbolConfiguration(scale: scale))
+        }
+
         if let colors = params.sfcolor, !colors.isEmpty {
             let nsColors = colors.compactMap(ColorResolver.nsColor(for:))
             if !nsColors.isEmpty {

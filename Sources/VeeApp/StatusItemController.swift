@@ -50,13 +50,23 @@ public final class StatusItemController {
     private let trustSummary: TrustSummary?
     private let aboutText: String?
     private let aboutURL: URL?
+    private let hideLastUpdated: Bool
+    private var lastUpdated: Date?
 
-    public init(pluginName: String, handler: MenuActionHandling, hasSettings: Bool = false, trustSummary: TrustSummary? = nil, refreshOnOpen: Bool = false, aboutText: String? = nil, aboutURL: URL? = nil, onRefresh: @escaping () -> Void, onSettings: @escaping () -> Void = {}, onReveal: @escaping () -> Void = {}, onEdit: @escaping () -> Void = {}) {
+    private static let timeFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.timeStyle = .medium
+        f.dateStyle = .none
+        return f
+    }()
+
+    public init(pluginName: String, handler: MenuActionHandling, hasSettings: Bool = false, trustSummary: TrustSummary? = nil, refreshOnOpen: Bool = false, hideLastUpdated: Bool = false, aboutText: String? = nil, aboutURL: URL? = nil, onRefresh: @escaping () -> Void, onSettings: @escaping () -> Void = {}, onReveal: @escaping () -> Void = {}, onEdit: @escaping () -> Void = {}) {
         self.pluginName = pluginName
         self.hasSettings = hasSettings
         self.trustSummary = trustSummary
         self.aboutText = aboutText
         self.aboutURL = aboutURL
+        self.hideLastUpdated = hideLastUpdated
         self.statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         self.actionTarget = MenuActionTarget(handler: handler)
         let name = pluginName
@@ -85,6 +95,7 @@ public final class StatusItemController {
 
     /// Renders a successful refresh.
     public func render(_ output: ParsedOutput) {
+        lastUpdated = Date()
         let presentation = TitleRenderer.presentation(for: output.titleLines)
         frames = presentation.frames
         frameIndex = 0
@@ -252,6 +263,12 @@ public final class StatusItemController {
         if let trust = buildTrustItem() {
             menu.addItem(trust)
             menu.addItem(.separator())
+        }
+
+        if !hideLastUpdated, let lastUpdated {
+            let stamp = NSMenuItem(title: "Updated \(Self.timeFormatter.string(from: lastUpdated))", action: nil, keyEquivalent: "")
+            stamp.isEnabled = false
+            menu.addItem(stamp)
         }
 
         let refresh = NSMenuItem(title: "Refresh", action: #selector(ControlsTarget.refresh), keyEquivalent: "r")

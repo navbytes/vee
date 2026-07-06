@@ -86,7 +86,7 @@ Append `| key=value key2=value2 …` to any line to attach parameters. Quote val
 | `sfimage` | SF Symbol name to show as the item's icon (e.g. `sfimage=cpu`). |
 | `sfcolor` | Color(s) for the SF Symbol; comma-separated for multicolor symbols. |
 | `sfsize` | Point size for the SF Symbol. |
-| `sfconfig` | Advanced SF Symbol configuration string. |
+| `sfconfig` | SF Symbol configuration as JSON — `scale` (`small`/`medium`/`large`) and `weight` (e.g. `bold`). Example: `sfconfig='{"scale":"large","weight":"bold"}'`. |
 | `symbolize` | `true` — render inline `:symbol.name:` tokens in the text as SF Symbols. |
 | `md` / `markdown` | `true` — render the text as inline Markdown (bold, italics, etc.). |
 | `ansi` | `true` — interpret ANSI color escape codes in the text. |

@@ -117,6 +117,25 @@ final class MenuBuilderTests: XCTestCase {
     }
 }
 
+final class SFSymbolConfigTests: XCTestCase {
+    func testParsesScaleAndWeight() {
+        let cfg = SFSymbolConfig.parse(#"{"scale":"large","weight":"bold"}"#)
+        XCTAssertEqual(cfg?.nsScale, .large)
+        XCTAssertEqual(cfg?.nsWeight, .bold)
+    }
+
+    func testUnknownAndMalformed() {
+        XCTAssertNil(SFSymbolConfig.parse("not json"))
+        let cfg = SFSymbolConfig.parse(#"{"scale":"gigantic"}"#)
+        XCTAssertNil(cfg?.nsScale)   // unknown scale ignored
+        XCTAssertNil(cfg?.nsWeight)
+    }
+
+    func testNilInput() {
+        XCTAssertNil(SFSymbolConfig.parse(nil))
+    }
+}
+
 final class KeyEquivalentParserTests: XCTestCase {
     func testModifiersAndKey() {
         let r = KeyEquivalentParser.parse("CMD+SHIFT+K")

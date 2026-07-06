@@ -16,6 +16,7 @@ public final class AppController: NSObject, NSApplicationDelegate {
     private var baseEnvironment = ProcessInfo.processInfo.environment
     private var runtime = PluginRuntime(executor: PluginExecutor(runner: SystemProcessRunner()))
     private var coordinators: [String: PluginCoordinator] = [:]
+    private var ephemerals: [String: StatusItemController] = [:]
     private var loadedPaths: Set<String> = []
     private var watcher: PluginDirectoryWatcher?
     private var mainMenu: MainMenuController?
@@ -77,6 +78,10 @@ public final class AppController: NSObject, NSApplicationDelegate {
             setEnabled(false, id: name)
         case .togglePlugin(let name):
             setEnabled(prefs.isDisabled(name), id: name)
+        case .addPlugin(let src):
+            installPlugin(from: src)
+        case .setEphemeralPlugin(let name, let content, let exitAfter):
+            showEphemeral(name: name, content: content, exitAfter: exitAfter)
         case .notify(let title, let subtitle, let body, let href):
             Notifier.post(title: title, subtitle: subtitle, body: body, href: href)
         case .unknown:
@@ -86,7 +91,51 @@ public final class AppController: NSObject, NSApplicationDelegate {
 
     public func applicationWillTerminate(_ notification: Notification) {
         coordinators.values.forEach { $0.stop() }
+        ephemerals.values.forEach { $0.remove() }
         watcher?.stop()
+    }
+
+    /// `swiftbar://addplugin?src=…`: download a plugin and install it.
+    private func installPlugin(from url: URL) {
+        let directory = self.directory
+        Task { @MainActor in
+            do {
+                let (data, _) = try await URLSession.shared.data(from: url)
+                let source = String(data: data, encoding: .utf8) ?? ""
+                guard !source.isEmpty else { return }
+                let name = url.lastPathComponent
+                let filename = name.isEmpty ? "plugin.1m.sh" : name
+                try PluginInstaller.install(filename: filename, source: source, into: directory)
+                self.reload()
+            } catch {
+                self.log.error("addplugin failed: \(error.localizedDescription, privacy: .public)")
+            }
+        }
+    }
+
+    /// `swiftbar://setephemeralplugin?name=…&content=…&exitafter=N`: show
+    /// transient menu content in its own status item, without a file on disk.
+    private func showEphemeral(name: String, content: String, exitAfter: TimeInterval?) {
+        let key = name.isEmpty ? UUID().uuidString : name
+        let controller: StatusItemController
+        if let existing = ephemerals[key] {
+            controller = existing
+        } else {
+            controller = StatusItemController(
+                pluginName: key,
+                handler: AppActionDispatcher(runner: SystemProcessRunner(), baseEnvironment: baseEnvironment) {},
+                onRefresh: {}
+            )
+            ephemerals[key] = controller
+        }
+        controller.render(OutputParser.parse(content))
+        if let exitAfter, exitAfter > 0 {
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: UInt64(exitAfter * 1_000_000_000))
+                self.ephemerals[key]?.remove()
+                self.ephemerals[key] = nil
+            }
+        }
     }
 
     // MARK: - Loading

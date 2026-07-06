@@ -49,6 +49,7 @@ final class PluginCoordinator {
             hasSettings: !header.vars.isEmpty,
             trustSummary: trustSummary,
             refreshOnOpen: header.refreshOnOpen ?? false,
+            hideLastUpdated: header.hideLastUpdated,
             aboutText: aboutText,
             aboutURL: aboutURL,
             onRefresh: { [weak self] in self?.refresh() },
