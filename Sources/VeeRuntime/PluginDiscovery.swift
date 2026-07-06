@@ -23,7 +23,7 @@ public enum PluginDiscovery {
     /// files in the plugins folder don't get run.
     private static let ignoredExtensions: Set<String> = [
         "md", "markdown", "txt", "json", "plist", "log", "lock",
-        "png", "jpg", "jpeg", "gif", "svg", "pdf", "yml", "yaml",
+        "png", "jpg", "jpeg", "gif", "svg", "pdf", "yml", "yaml"
     ]
 
     /// Lists candidate plugins in `directory`, sorted by filename. Skips hidden

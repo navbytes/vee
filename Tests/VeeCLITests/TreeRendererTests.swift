@@ -12,7 +12,7 @@ final class TreeRendererTests: XCTestCase {
 
         let details = MenuItem(text: "Details", submenu: [
             .item(MenuItem(text: "Load: 1.20")),
-            .item(MenuItem(text: "Cores: 8")),
+            .item(MenuItem(text: "Cores: 8"))
         ])
 
         var titleParams = LineParams()
@@ -25,7 +25,7 @@ final class TreeRendererTests: XCTestCase {
                 .item(MenuItem(text: "Top processes", params: linkParams)),
                 .separator,
                 .item(details),
-                .item(MenuItem(text: "Refresh", params: refreshParams)),
+                .item(MenuItem(text: "Refresh", params: refreshParams))
             ])
 
         let expected = """
@@ -50,7 +50,7 @@ final class TreeRendererTests: XCTestCase {
         let output = ParsedOutput(body: [
             .item(MenuItem(text: "Mute", params: toggleP)),
             .item(MenuItem(text: "Volume", params: sliderP)),
-            .item(MenuItem(text: "Sync", params: progP)),
+            .item(MenuItem(text: "Sync", params: progP))
         ])
 
         let rendered = TreeRenderer.render(output)

@@ -7,12 +7,12 @@ public enum CatalogParser {
 
     /// Top-level entries that are repo scaffolding, not plugin categories.
     private static let ignoredTopLevel: Set<String> = [
-        ".github", "docs", "images", "assets",
+        ".github", "docs", "images", "assets"
     ]
 
     private static let ignoredExtensions: Set<String> = [
         "md", "markdown", "txt", "json", "png", "jpg", "jpeg", "gif", "svg",
-        "yml", "yaml", "lock", "gitignore",
+        "yml", "yaml", "lock", "gitignore"
     ]
 
     private struct Tree: Decodable {

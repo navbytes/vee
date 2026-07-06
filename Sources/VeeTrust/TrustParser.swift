@@ -11,6 +11,8 @@ import Foundation
 /// <vee.exec>git, curl</vee.exec>
 /// ```
 public enum TrustParser {
+    // Compile-time-constant pattern; cannot fail at runtime.
+    // swiftlint:disable:next force_try
     private static let tag = try! NSRegularExpression(
         pattern: "<vee\\.([a-zA-Z.]+)>([\\s\\S]*?)</vee\\.\\1>",
         options: []

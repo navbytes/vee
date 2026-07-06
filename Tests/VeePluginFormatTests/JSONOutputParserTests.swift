@@ -19,11 +19,11 @@ final class JSONOutputParserTests: XCTestCase {
         XCTAssertEqual(out.titleLines.first?.params.swiftbar.sfimage, "cpu")
 
         XCTAssertEqual(out.body.count, 3)
-        guard case .item(let details) = out.body[0] else { return XCTFail() }
+        guard case .item(let details) = out.body[0] else { return XCTFail("expected first item") }
         XCTAssertEqual(details.text, "Details")
         XCTAssertEqual(details.params.href?.absoluteString, "https://example.com")
         guard case .separator = out.body[1] else { return XCTFail("expected separator") }
-        guard case .item(let sub) = out.body[2] else { return XCTFail() }
+        guard case .item(let sub) = out.body[2] else { return XCTFail("expected submenu item") }
         XCTAssertEqual(sub.submenu.compactMap { if case .item(let i) = $0 { return i.text } else { return nil } }, ["Child"])
     }
 

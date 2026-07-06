@@ -24,7 +24,7 @@ final class ProgressRenderSmokeTests: XCTestCase {
             "Jul 3   $100 | progress=100,100 color=#FF5C5C trackcolor=#3C4046 progressw=140 size=11",
             "Jul 2   $86  | progress=86,100 color=#F5A623 trackcolor=#3C4046 progressw=140 size=11",
             "Jul 1   $32  | progress=32,100 color=#36C26E trackcolor=#3C4046 progressw=140 size=11",
-            "Idle            | progress=0",
+            "Idle            | progress=0"
         ]
         let handler = NoopHandler() // retained: MenuActionTarget holds it weakly
         let menu = MenuBuilder.build(lines.map { .item(item($0)) }, target: MenuActionTarget(handler: handler))
