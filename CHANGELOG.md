@@ -13,6 +13,15 @@ All notable changes to Vee are documented here. The format is based on
   controls as the text protocol.
 
 ### Security
+- **URL scheme validation.** Plugin-supplied `href=` / `webview=` and
+  `swiftbar://addplugin?src=` are now scheme-filtered: `href` blocks
+  `file`/`javascript`/`data`/`vbscript`/`blob` (custom app deep links still
+  work), while `webview` and remote fetches are restricted to `http`/`https` —
+  so a menu click can't open a local file, load local content into an in-app
+  WebView, or install a plugin read from `file://`.
+- **Catalog network hardening.** Discover's fetches reject a non-2xx HTTP status
+  (an error body is no longer parsed as catalog data) and stream with a per-
+  endpoint byte cap, so a compromised/redirected upstream can't exhaust memory.
 - **Path traversal in plugin install fixed.** `swiftbar://addplugin?src=…`
   derived the on-disk filename from the URL's `lastPathComponent`, which
   percent-decodes — so a crafted `src` (`…/..%2f..%2fevil.sh`) could write an
@@ -46,6 +55,10 @@ All notable changes to Vee are documented here. The format is based on
   bounded-memory guarantee against a plugin that spews output without limit.
 - The JSON output parser caps menu nesting depth so deeply-nested `submenu`/
   `alternate` chains can't overflow the stack.
+- ANSI color runs now map through UTF-16 offsets, so text mixing ANSI colors
+  with emoji / non-BMP characters is colored correctly instead of shifted.
+- Per-plugin settings windows no longer leak: closing one via the title-bar
+  button (not just the Done button) now clears its tracking entry.
 
 ### Changed
 - The SwiftLint tree is clean and CI now runs `swiftlint --strict` as a hard gate.

@@ -7,8 +7,11 @@ private final class StubURLProtocol: URLProtocol {
     nonisolated(unsafe) static var status = 200
     nonisolated(unsafe) static var body = Data()
 
+    // URLProtocol requires these to be `class func` overrides.
+    // swiftlint:disable static_over_final_class
     override class func canInit(with request: URLRequest) -> Bool { true }
     override class func canonicalRequest(for request: URLRequest) -> URLRequest { request }
+    // swiftlint:enable static_over_final_class
     override func stopLoading() {}
     override func startLoading() {
         let response = HTTPURLResponse(url: request.url!, statusCode: Self.status, httpVersion: "HTTP/1.1", headerFields: nil)!
