@@ -39,6 +39,7 @@
     <ul class="nav-links" id="nav-links">
       <li><a href="#features">Features</a></li>
       <li><a href="#trust">Trust</a></li>
+      <li><a href="#reliability">Reliability</a></li>
       <li><a href="./compare/index.html">Compare</a></li>
       <li><a href="./guide/index.html">Docs</a></li>
       <li><a class="nav-cta" href="https://github.com/navbytes/vee" rel="noopener">GitHub</a></li>
@@ -280,6 +281,33 @@
   <!-- ===================== EDITORIAL PULL-LINE ===================== -->
   <section class="pull-band wrap">
     <p class="pull-line reveal">Every plugin is code you chose to run. <em>Vee just makes sure you knew what you were choosing.</em></p>
+  </section>
+
+  <!-- ===================== RELIABILITY / SOAK ===================== -->
+  <section class="section" id="reliability">
+    <div class="wrap">
+      <div class="reveal" style="text-align:center;max-width:var(--measure);margin:0 auto;">
+        <p class="eyebrow">The reliability moat &mdash; measured, not asserted</p>
+        <h2 class="section-title">It doesn&rsquo;t leak, and it doesn&rsquo;t stop</h2>
+        <p class="lede" style="margin-inline:auto;">The two loudest complaints against every runner in this category are plugins that <strong>silently stop refreshing</strong> after long uptime, and memory that <strong>creeps until you relaunch</strong>. Vee ships a public, reproducible soak benchmark that drives the real execution&#8202;&rarr;&#8202;refresh pipeline nonstop &mdash; and this is what it records.</p>
+      </div>
+
+      <figure class="soak-figure reveal">
+        <div class="soak-stats">
+          <div class="soak-stat"><b>12,000</b><span>refreshes in 20&nbsp;min<br>(10&#8202;/&#8202;sec, continuous)</span></div>
+          <div class="soak-stat is-good"><b>0</b><span>failed or timed-out refreshes</span></div>
+          <div class="soak-stat"><b>~34&nbsp;MB</b><span>resident memory, held flat</span></div>
+          <div class="soak-stat is-good"><b>0.7&nbsp;MB</b><span>RSS growth over 12,000 refreshes</span></div>
+        </div>
+        <img src="./assets/soak-chart.svg" alt="Resident memory holds flat near 33 MB and CPU stays a low, steady 1–2% across a continuous 20-minute soak driving ten refreshes per second." />
+        <figcaption>
+          Resident memory (blue) and in-process CPU (green) over a continuous 20-minute run at 10 refreshes/sec.
+          The harness drives the production timer&#8202;&rarr;&#8202;executor&#8202;&rarr;&#8202;stream-accumulator path and fails on either a stalled timer or bounded-memory violation.
+          Opt-in via <code>VEE_SOAK=1</code>; runs nightly in CI on <code>macos-26</code>.
+          <a href="https://github.com/navbytes/vee/blob/main/Tests/VeeRuntimeTests/MemorySoakBenchmarkTests.swift" rel="noopener">See the benchmark &rarr;</a>
+        </figcaption>
+      </figure>
+    </div>
   </section>
 
   <!-- ===================== DISCOVER ===================== -->
