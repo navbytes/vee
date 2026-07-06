@@ -88,3 +88,19 @@ jobs:
       # TypeScript directly. `npm test` runs the fixture drift guard.
       - name: Test (fixture drift guard)
         run: npm test
+
+  plugins-python:
+    name: Plugin SDK (Python)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: plugins/python
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+      # Zero-dep, standard-library only. The drift guard asserts each example's
+      # build() output matches its golden fixture (shared with the TS SDK).
+      - name: Test (fixture drift guard)
+        run: python3 -m unittest discover -s test -v

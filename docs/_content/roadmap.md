@@ -201,11 +201,16 @@ footprint visible.
 
 - ✅ Zero-dependency **TypeScript SDK** with a golden-fixture drift guard
   (`plugins/`).
-- ⬜ **Typed SDKs in more languages** — Python, Go, and/or Swift builders that
+- 🟡 **Typed SDKs in more languages** — Python, Go, and/or Swift builders that
   emit the same protocol, each with its own golden-fixture guard mirroring the
   TS setup. This gives authors the ergonomics people imagine they want from
   "Flutter/React Native" (typed, structured output) with none of the runtime
   cost. _(1 commit per language.)_
+  - ✅ **Python SDK** — `plugins/python/` (`vee.py` Menu/Section builders,
+    `unittest` drift guard reusing the TS golden fixtures byte-for-byte; CI job
+    "Plugin SDK (Python)").
+  - ⬜ **Go SDK** — same builder shape, `go test` drift guard against the shared
+    fixtures.
 
 ## Decision note — React Native / Flutter
 
