@@ -123,7 +123,7 @@ public final class StatusItemController {
         }
 
         menu.delegate = controls
-        appendFooter(to: menu)
+        appendControls(to: menu)
         statusItem.menu = menu
     }
 
@@ -166,11 +166,7 @@ public final class StatusItemController {
 
     private func buildMenu(body: [MenuNode]) -> NSMenu {
         let menu = MenuBuilder.build(body, target: actionTarget)
-        if let trust = buildTrustItem() {
-            menu.insertItem(.separator(), at: 0)
-            menu.insertItem(trust, at: 0)
-        }
-        appendFooter(to: menu)
+        appendControls(to: menu)
         menu.delegate = controls
         return menu
     }
@@ -232,11 +228,31 @@ public final class StatusItemController {
         }
     }
 
-    private func appendFooter(to menu: NSMenu) {
-        menu.addItem(.separator())
-        let header = NSMenuItem(title: pluginName, action: nil, keyEquivalent: "")
-        header.isEnabled = false
-        menu.addItem(header)
+    /// Appends Vee's own chrome as a *single* trailing item whose submenu holds
+    /// the capability summary and all app controls — so a plugin's own output is
+    /// what fills its menu, not a stack of Vee-added rows.
+    private func appendControls(to menu: NSMenu) {
+        if menu.items.contains(where: { !$0.isSeparatorItem }) {
+            menu.addItem(.separator())
+        }
+        let item = NSMenuItem(title: pluginName, action: nil, keyEquivalent: "")
+        let gear = NSImage(systemSymbolName: "gearshape", accessibilityDescription: "Vee")
+        gear?.isTemplate = true
+        item.image = gear
+        item.submenu = buildControlsSubmenu()
+        menu.addItem(item)
+    }
+
+    /// The submenu behind the single controls item: capabilities (when declared)
+    /// followed by Refresh / Settings / About / Reveal / Edit and Quit.
+    private func buildControlsSubmenu() -> NSMenu {
+        let menu = NSMenu()
+        menu.autoenablesItems = false
+
+        if let trust = buildTrustItem() {
+            menu.addItem(trust)
+            menu.addItem(.separator())
+        }
 
         let refresh = NSMenuItem(title: "Refresh", action: #selector(ControlsTarget.refresh), keyEquivalent: "r")
         refresh.target = controls
@@ -262,8 +278,11 @@ public final class StatusItemController {
         edit.target = controls
         menu.addItem(edit)
 
+        menu.addItem(.separator())
+
         let quit = NSMenuItem(title: "Quit Vee", action: #selector(ControlsTarget.quit), keyEquivalent: "q")
         quit.target = controls
         menu.addItem(quit)
+        return menu
     }
 }

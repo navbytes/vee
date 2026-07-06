@@ -6,6 +6,12 @@ All notable changes to Vee are documented here. The format is based on
 
 ## [Unreleased]
 
+### Changed
+- Each plugin's menu now collects Vee's own chrome — the capability summary and
+  the Refresh / Settings / About / Reveal / Edit / Quit controls — under a
+  single trailing item with a submenu, instead of stacking them around the
+  plugin's output.
+
 ### Added
 - Menu-item keyboard shortcuts: the `key=` parameter (e.g. `key=Cmd+R`,
   `key=shift+F2`) is now applied to dropdown items while the menu is open.
