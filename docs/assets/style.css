@@ -818,3 +818,44 @@ td code, th code { white-space: nowrap; }
 .mt-0 { margin-top: 0; }
 .muted { color: var(--ink-mute); }
 .nowrap { white-space: nowrap; }
+
+/* ===================== RELIABILITY / SOAK CHART ===================== */
+.soak-figure {
+  margin: 2.6rem auto 0;
+  max-width: 900px;
+  padding: 1.4rem 1.4rem 1rem;
+  background: var(--glass);
+  border: 1px solid var(--hair);
+  border-radius: 18px;
+}
+.soak-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.7rem;
+  justify-content: center;
+  margin-bottom: 1.1rem;
+}
+.soak-stat {
+  flex: 1 1 120px;
+  min-width: 120px;
+  text-align: center;
+  padding: 0.7rem 0.6rem;
+  background: var(--surface);
+  border: 1px solid var(--hair);
+  border-radius: 12px;
+}
+.soak-stat b {
+  display: block;
+  font-size: 1.45rem;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+  background: var(--accent-grad);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.soak-stat.is-good b { background: none; -webkit-text-fill-color: initial; color: var(--sev-low); }
+.soak-stat span { display: block; margin-top: 0.25rem; font-size: 0.78rem; color: var(--ink-mute); }
+.soak-figure img { display: block; width: 100%; height: auto; }
+.soak-figure figcaption { margin-top: 0.8rem; font-size: 0.82rem; color: var(--ink-mute); text-align: center; }
+@media (max-width: 560px) { .soak-stat { flex-basis: 44%; min-width: 44%; } }

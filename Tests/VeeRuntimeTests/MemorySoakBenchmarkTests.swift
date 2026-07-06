@@ -24,6 +24,8 @@ import VeeCore
 /// - `VEE_SOAK_DURATION_SECONDS` — wall-clock length of the soak (default 60).
 /// - `VEE_SOAK_INTERVAL_MS` — refresh cadence in milliseconds (default 100).
 /// - `VEE_SOAK_GROWTH_LIMIT_MB` — max tolerated RSS growth (default 25).
+/// - `VEE_SOAK_SAMPLES_PATH` — if set, write an `elapsed_s,rss_mb,cpu_pct` CSV
+///   time-series here for charting (see `docs/scripts/soak_chart.py`).
 final class MemorySoakBenchmarkTests: XCTestCase {
     func testPipelineSoakBoundedMemoryAndNoRefreshDeath() async throws {
         let env = ProcessInfo.processInfo.environment
@@ -67,16 +69,19 @@ final class MemorySoakBenchmarkTests: XCTestCase {
         // Drive refreshes with the production timer at the production-derived
         // leeway, so this proves the real scheduling path — not a bespoke loop.
         let leeway = RefreshScheduler.leeway(forSeconds: interval)
+        let start = ProcessInfo.processInfo.systemUptime
         let timer = RefreshTimer()
         timer.start(interval: interval, leeway: leeway) {
             counters.recordFire()
             Task {
+                let elapsed = ProcessInfo.processInfo.systemUptime - start
+                let usage = sampleResourceUsage()
                 do {
                     let outcome = try await executor.run(pluginPath: pluginPath, context: context, timeout: 5)
                     let healthy = outcome.exitCode == 0 && !outcome.timedOut && Self.parsedBlock(outcome.standardOutput)
-                    counters.recordCompletion(success: healthy, rss: residentMemoryBytes())
+                    counters.recordCompletion(success: healthy, elapsed: elapsed, rss: usage.rssBytes, cpuSeconds: usage.cpuSeconds)
                 } catch {
-                    counters.recordCompletion(success: false, rss: residentMemoryBytes())
+                    counters.recordCompletion(success: false, elapsed: elapsed, rss: usage.rssBytes, cpuSeconds: usage.cpuSeconds)
                 }
             }
         }
@@ -89,8 +94,16 @@ final class MemorySoakBenchmarkTests: XCTestCase {
         let fires = counters.fires
         let completions = counters.completions
         let failures = counters.failures
-        let samples = counters.samples
+        let allSamples = counters.samples
+        let samples = allSamples.map(\.rssBytes)
         let expectedFires = Int(duration / interval)
+
+        // Optional: emit a time-series (elapsed_s, rss_mb, cpu_pct) so a real run
+        // can be charted (see docs). CPU% is derived from the delta in cumulative
+        // task CPU seconds between consecutive samples over their wall-clock gap.
+        if let path = env["VEE_SOAK_SAMPLES_PATH"], !path.isEmpty {
+            writeSamplesCSV(allSamples, to: path)
+        }
 
         // (1) No refresh-death: the timer kept firing across the whole window and
         // work actually completed. Generous floor absorbs CI scheduling jitter and
@@ -148,6 +161,13 @@ final class MemorySoakBenchmarkTests: XCTestCase {
     }
 }
 
+/// One resource sample taken at a refresh completion.
+private struct SoakSample {
+    let elapsed: Double      // seconds since the soak started
+    let rssBytes: UInt64     // resident set size
+    let cpuSeconds: Double   // cumulative task CPU time (user+system)
+}
+
 /// Thread-safe tallies for the soak run. `@unchecked Sendable`: all state is
 /// guarded by `lock` (mirrors `ProcessRun`'s concurrency discipline).
 private final class SoakCounters: @unchecked Sendable {
@@ -155,35 +175,72 @@ private final class SoakCounters: @unchecked Sendable {
     private var _fires = 0
     private var _completions = 0
     private var _failures = 0
-    private var _samples: [UInt64] = []
+    private var _samples: [SoakSample] = []
 
     func recordFire() { lock.withLock { _fires += 1 } }
 
-    func recordCompletion(success: Bool, rss: UInt64) {
+    func recordCompletion(success: Bool, elapsed: Double, rss: UInt64, cpuSeconds: Double) {
         lock.withLock {
             _completions += 1
             if !success { _failures += 1 }
-            if rss > 0 { _samples.append(rss) }
+            if rss > 0 { _samples.append(SoakSample(elapsed: elapsed, rssBytes: rss, cpuSeconds: cpuSeconds)) }
         }
     }
 
     var fires: Int { lock.withLock { _fires } }
     var completions: Int { lock.withLock { _completions } }
     var failures: Int { lock.withLock { _failures } }
-    var samples: [UInt64] { lock.withLock { _samples } }
+    var samples: [SoakSample] { lock.withLock { _samples } }
 }
 
-/// Current resident set size of this process, in bytes, via `task_info` with the
-/// `MACH_TASK_BASIC_INFO` flavor. Returns 0 if the query fails.
-private func residentMemoryBytes() -> UInt64 {
-    var info = mach_task_basic_info()
-    var count = mach_msg_type_number_t(MemoryLayout<mach_task_basic_info>.stride / MemoryLayout<natural_t>.stride)
-    let kr = withUnsafeMutablePointer(to: &info) { infoPtr in
-        infoPtr.withMemoryRebound(to: integer_t.self, capacity: Int(count)) { intPtr in
-            task_info(mach_task_self_, task_flavor_t(MACH_TASK_BASIC_INFO), intPtr, &count)
+/// Current resident set size (bytes) and cumulative task CPU time (seconds).
+/// RSS comes from `MACH_TASK_BASIC_INFO`; CPU sums that flavor's *terminated*
+/// thread time with `TASK_THREAD_TIMES_INFO`'s *live* thread time, so the number
+/// reflects Vee's real in-process overhead (spawn syscalls, pipe draining, parse)
+/// rather than under-reporting to ~0. RSS is 0 if the basic query fails.
+private func sampleResourceUsage() -> (rssBytes: UInt64, cpuSeconds: Double) {
+    func seconds(_ t: time_value_t) -> Double { Double(t.seconds) + Double(t.microseconds) / 1_000_000 }
+
+    var basic = mach_task_basic_info()
+    var bcount = mach_msg_type_number_t(MemoryLayout<mach_task_basic_info>.stride / MemoryLayout<natural_t>.stride)
+    let bkr = withUnsafeMutablePointer(to: &basic) { p in
+        p.withMemoryRebound(to: integer_t.self, capacity: Int(bcount)) { ip in
+            task_info(mach_task_self_, task_flavor_t(MACH_TASK_BASIC_INFO), ip, &bcount)
         }
     }
-    return kr == KERN_SUCCESS ? info.resident_size : 0
+    guard bkr == KERN_SUCCESS else { return (0, 0) }
+    var cpu = seconds(basic.user_time) + seconds(basic.system_time)
+
+    var live = task_thread_times_info()
+    var tcount = mach_msg_type_number_t(MemoryLayout<task_thread_times_info>.stride / MemoryLayout<natural_t>.stride)
+    let tkr = withUnsafeMutablePointer(to: &live) { p in
+        p.withMemoryRebound(to: integer_t.self, capacity: Int(tcount)) { ip in
+            task_info(mach_task_self_, task_flavor_t(TASK_THREAD_TIMES_INFO), ip, &tcount)
+        }
+    }
+    if tkr == KERN_SUCCESS {
+        cpu += seconds(live.user_time) + seconds(live.system_time)
+    }
+    return (basic.resident_size, cpu)
+}
+
+/// Writes the samples as CSV (`elapsed_s,rss_mb,cpu_pct`) so a real run can be
+/// charted. CPU% is the derivative of cumulative CPU seconds over the wall-clock
+/// gap between consecutive samples (0 for the first).
+private func writeSamplesCSV(_ samples: [SoakSample], to path: String) {
+    var lines = ["elapsed_s,rss_mb,cpu_pct"]
+    var prev: SoakSample?
+    for s in samples {
+        let rssMB = Double(s.rssBytes) / (1024 * 1024)
+        var cpuPct = 0.0
+        if let p = prev {
+            let dt = s.elapsed - p.elapsed
+            if dt > 0 { cpuPct = max(0, (s.cpuSeconds - p.cpuSeconds) / dt * 100) }
+        }
+        lines.append(String(format: "%.2f,%.2f,%.1f", s.elapsed, rssMB, cpuPct))
+        prev = s
+    }
+    try? lines.joined(separator: "\n").appending("\n").write(toFile: path, atomically: true, encoding: .utf8)
 }
 
 /// Median of a non-empty sample set (0 if empty).
