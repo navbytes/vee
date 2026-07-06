@@ -14,6 +14,7 @@ final class PluginCoordinator {
     private let plugin: DiscoveredPlugin
     private let pluginsDirectory: String
     private let runtime: PluginRuntime
+    private let baseEnvironment: [String: String]
     private let header: HeaderMetadata
     private let runInBash: Bool
     private let preferences: PluginPreferences
@@ -25,10 +26,11 @@ final class PluginCoordinator {
     private var streaming: StreamingSession?
     private var isRefreshing = false
 
-    init(plugin: DiscoveredPlugin, pluginsDirectory: String, runtime: PluginRuntime) {
+    init(plugin: DiscoveredPlugin, pluginsDirectory: String, runtime: PluginRuntime, baseEnvironment: [String: String] = ProcessInfo.processInfo.environment) {
         self.plugin = plugin
         self.pluginsDirectory = pluginsDirectory
         self.runtime = runtime
+        self.baseEnvironment = baseEnvironment
 
         let source = (try? String(contentsOfFile: plugin.path, encoding: .utf8)) ?? ""
         self.header = HeaderParser.parse(source: source)
@@ -43,7 +45,7 @@ final class PluginCoordinator {
 
         self.controller = StatusItemController(
             pluginName: plugin.filename.name,
-            handler: AppActionDispatcher(runner: SystemProcessRunner()) { [weak self] in self?.refresh() },
+            handler: AppActionDispatcher(runner: SystemProcessRunner(), baseEnvironment: baseEnvironment) { [weak self] in self?.refresh() },
             hasSettings: !header.vars.isEmpty,
             trustSummary: trustSummary,
             refreshOnOpen: header.refreshOnOpen ?? false,
@@ -154,7 +156,7 @@ final class PluginCoordinator {
 
     private func startStreaming() {
         let context = PluginsDirectory.context(pluginPath: plugin.path, pluginsDirectory: pluginsDirectory, declaredVariables: mergedDeclaredVariables())
-        let environment = EnvironmentBuilder.merged(base: ProcessInfo.processInfo.environment, context: context)
+        let environment = EnvironmentBuilder.merged(base: baseEnvironment, context: context)
         let (launchPath, arguments) = PluginExecutor.launchCommand(pluginPath: plugin.path, runInBash: runInBash)
         let invocation = ProcessInvocation(
             launchPath: launchPath,
