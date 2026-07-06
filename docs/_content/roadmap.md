@@ -160,21 +160,33 @@ below exist yet in `Sources/`.
     (`VeeApp/ControlReinvocation.swift`, `Tests/VeeAppTests/ControlReinvocationTests.swift`);
     the parser is covered by `Tests/VeePluginFormatTests/ControlParamTests.swift`.
     _(1 commit.)_
-- ⬜ **Control Center Controls** (`ControlWidget` +
-  `AppIntentControlConfiguration`) so plugin actions live in Control Center and
-  can be dragged to the menu bar — a native answer to menu-bar overflow.
-  (Verify on current 26.x; third-party controls were flaky at Tahoe launch.)
-  _(1 commit for a Widget/Control extension target + a first control.)_
-  **→ Deferred to local macOS development** (needs a new signed Xcode extension
-  target in `project.yml` + entitlements; can't be exercised in headless CI).
+- ✅ **WidgetKit widget + Control Center control.** A signed `app-extension`
+  target (`WidgetExtension/`, wired in `project.yml`) ships both a WidgetKit
+  widget that surfaces current plugin output on the desktop / Notification Center
+  (`PluginStatusWidget`, small/medium/large families) and a `ControlWidget` that
+  refreshes every plugin from Control Center (`RefreshAllControl`), gated
+  `@available(macOS 26.0, *)` inside the `WidgetBundle`. Verified on-device: the
+  widget renders live plugin values and the control refreshes.
+  - **The cross-process channel is the interesting part.** Vee's app is
+    intentionally un-sandboxed (it runs arbitrary plugins); the widget extension
+    is mandatorily sandboxed. An **App Group does not work** here — a
+    non-sandboxed process cannot write into a group container
+    (`NSCocoaError 513`), and a group-suite `UserDefaults` is scoped per-container
+    for the sandboxed side but globally for the non-sandboxed side, so the two
+    never meet (both empirically confirmed on-device). Instead the app writes a
+    small JSON snapshot to `~/Library/Application Support/Vee/widget-snapshot.json`
+    (which it can, being un-sandboxed) and the widget reads it via a read-only
+    `temporary-exception.files.home-relative-path` entitlement — resolving the
+    real home through `getpwuid` so the sandboxed side escapes its container
+    redirect. The shared model + store is a dependency-free module
+    (`Sources/VeeWidgetShared/`, unit-tested). This keeps CI green (ad-hoc /
+    `CODE_SIGNING_ALLOWED=NO`) since no provisioned capability is needed.
+  - The control signals a running app via a Darwin notification and launches a
+    closed one via `openAppWhenRun` (which refreshes all plugins on startup), so
+    no shared request-flag is needed. _(1 commit.)_
 - ⬜ **Focus filters** (`SetFocusFilterIntent`) to show/hide plugin groups per
   Focus mode (Work/Personal/DND). _(1 commit.)_
   **→ Deferred to local macOS development** (App Intents extension + entitlements).
-- ⬜ **Interactive WidgetKit widgets** surfacing plugin output on the desktop and
-  in Notification Center. _(1 commit for the widget extension + a timeline
-  provider reading plugin output.)_
-  **→ Deferred to local macOS development** (needs a WidgetKit extension target
-  + signing; only verifiable on a real Mac).
 - ✅ **Actionable, time-sensitive notifications** (Re-run / Silence / Open log
   buttons) for monitor-style plugins. A plugin passes `swiftbar://notify?plugin=…`
   to get a `VEE_PLUGIN_ALERT` `UNNotificationCategory` with Re-run / Silence /
@@ -270,13 +282,16 @@ each validated by CI on `macos-26` (Swift) or a language job (SDKs).
 8. Python plugin SDK (P4) — `plugins/python/`
 9. Go plugin SDK (P4) — `plugins/go/`
 
-**Deferred to local macOS development** (each needs a new signed Xcode extension
-target and/or provisioned entitlements, so it can be built *and exercised* only
-on a real Apple-Silicon Mac running macOS 26 — headless CI can't validate them):
+**Shipped since PR #15, on a real Mac** (built, signed, and exercised on
+Apple-Silicon macOS 26 — the local-development handoff the items below waited on):
 
-- Control Center Controls (P2) — Widget/Control extension target.
+- Interactive toggle/slider control popovers (P2 follow-up) — `VeeUI/PluginControlView.swift`, `VeeApp/ControlReinvocation.swift`.
+- WidgetKit widget + Control Center control (P2) — `WidgetExtension/`, `Sources/VeeWidgetShared/`. On-device verified; uses a file + temporary-exception channel (App Groups don't work for a non-sandboxed writer — see P2 above).
+
+**Still deferred to local macOS development** (each needs a new signed Xcode
+extension target and/or provisioned entitlements only exercisable on a real Mac):
+
 - Focus filters (P2) — App Intents extension.
-- Interactive WidgetKit widgets (P2) — WidgetKit extension.
 - Observed network (P3) — subprocess network interception.
 - Observed filesystem/exec via Endpoint Security (P3) — provisioned entitlement + signed build.
 - Published soak chart / "Vee vs SwiftBar after 24h" on the docs site (P0 follow-up).

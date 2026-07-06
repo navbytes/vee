@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!--
+	  The widget/control extension is sandboxed (all app extensions are). It reads
+	  the plugin snapshot the un-sandboxed app writes under
+	  ~/Library/Application Support/Vee via a home-relative read-only exception —
+	  the only channel that works when the writer is non-sandboxed (an App Group
+	  container is unwritable by a non-sandboxed process). Read-only and scoped to
+	  one Vee-owned directory, so it grants no broad access.
+	-->
+	<key>com.apple.security.app-sandbox</key>
+	<true/>
+	<key>com.apple.security.temporary-exception.files.home-relative-path.read-only</key>
+	<array>
+		<string>/Library/Application Support/Vee/</string>
+	</array>
+</dict>
+</plist>

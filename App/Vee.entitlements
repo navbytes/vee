@@ -11,6 +11,12 @@
 	  The security story is transparency (plugins declare capabilities; the app
 	  surfaces a trust summary), not OS-enforced isolation. Distribution is
 	  Developer-ID + notarization outside the Mac App Store.
+
+	  The app publishes plugin output for the WidgetKit / Control Center
+	  extension by writing a JSON file under ~/Library/Application Support/Vee
+	  (it can do so freely, being un-sandboxed). The sandboxed extension reads
+	  that file via a temporary-exception entitlement — no App Group, which a
+	  non-sandboxed writer cannot use. See VeeWidgetShared.
 	-->
 </dict>
 </plist>
