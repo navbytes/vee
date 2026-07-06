@@ -1,4 +1,5 @@
 import AppKit
+import VeePluginFormat
 import WebKit
 
 /// Shows a plugin's `webview=` URL in a standalone floating window (a WKWebView
@@ -11,6 +12,9 @@ final class WebViewPresenter {
     private var windows: [NSWindow] = []
 
     func show(url: URL, width: Double?, height: Double?) {
+        // Defense in depth: the parser already restricts `webview=` to http/https,
+        // but never load a non-web URL (e.g. file://) into an in-app WKWebView.
+        guard URLScheme.isWebURL(url) else { return }
         let size = NSSize(width: width ?? 640, height: height ?? 480)
         let webView = WKWebView(frame: NSRect(origin: .zero, size: size))
         webView.load(URLRequest(url: url))

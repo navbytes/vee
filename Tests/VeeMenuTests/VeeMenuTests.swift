@@ -48,6 +48,20 @@ final class AttributedTitleFactoryTests: XCTestCase {
         let color = s.attribute(.foregroundColor, at: 0, effectiveRange: nil) as? NSColor
         XCTAssertEqual(color, .systemBlue)
     }
+
+    /// Regression: ANSI run bounds are grapheme offsets but the attributed string
+    /// is UTF-16 indexed. For "🎉ERR" (🎉 = 2 UTF-16 units), the run over the three
+    /// letters (graphemes 1..<4) must color UTF-16 range 2..<5 — not 1..<4, which
+    /// would color the emoji's surrogate and miss the last letter.
+    func testAnsiRunColorWithEmojiUsesUTF16Offsets() {
+        let runs = [AnsiRun(range: 1..<4, foreground: .named("red"))]
+        let s = AttributedTitleFactory.make(text: "🎉ERR", params: LineParams(), ansiRuns: runs, defaultFont: font)
+        XCTAssertEqual(s.length, 5) // UTF-16 length: 2 (emoji) + 3 (ERR)
+        let lastR = s.attribute(.foregroundColor, at: 4, effectiveRange: nil) as? NSColor
+        XCTAssertEqual(lastR, .systemRed, "last letter should be colored (offsets shifted to UTF-16)")
+        let emoji = s.attribute(.foregroundColor, at: 0, effectiveRange: nil) as? NSColor
+        XCTAssertNotEqual(emoji, .systemRed, "the emoji must not be colored by the letter run")
+    }
 }
 
 @MainActor

@@ -103,7 +103,7 @@ enum LineParser {
             case "trim": p.trim = bool(value)
             case "ansi": p.ansi = bool(value)
             case "emojize": p.emojize = bool(value)
-            case "href": p.href = URL(string: value)
+            case "href": p.href = URL(string: value).flatMap { URLScheme.isSafeToOpen($0) ? $0 : nil }
             case "shell", "bash": shellPath = value
             case "terminal": terminal = bool(value)
             case "refresh": p.refresh = bool(value)
@@ -122,7 +122,7 @@ enum LineParser {
             case "md", "markdown": p.swiftbar.markdown = bool(value)
             case "checked": p.swiftbar.checked = bool(value)
             case "badge": p.swiftbar.badge = value
-            case "webview": p.swiftbar.webview = URL(string: value)
+            case "webview": p.swiftbar.webview = URL(string: value).flatMap { URLScheme.isWebURL($0) ? $0 : nil }
             case "webvieww": p.swiftbar.webviewWidth = finite(value)
             case "webviewh": p.swiftbar.webviewHeight = finite(value)
             case "shortcut": p.swiftbar.shortcut = value

@@ -1,4 +1,5 @@
 import Foundation
+import VeePluginFormat
 
 /// An action requested via the `vee://` or `swiftbar://` URL scheme.
 public enum URLAction: Equatable, Sendable {
@@ -53,7 +54,7 @@ public enum URLActionRouter {
                 title: param("title") ?? "",
                 subtitle: param("subtitle") ?? "",
                 body: param("body") ?? "",
-                href: param("href").flatMap(URL.init(string:)),
+                href: param("href").flatMap(URL.init(string:)).flatMap { URLScheme.isSafeToOpen($0) ? $0 : nil },
                 pluginID: param("plugin").flatMap { $0.isEmpty ? nil : $0 }
             )
         default:
