@@ -43,6 +43,11 @@ public final class PluginBrowserModel: ObservableObject {
     /// Lazily-fetched metadata, keyed by catalog path.
     @Published public var headers: [String: HeaderMetadata] = [:]
     @Published public var trustLevels: [String: TrustLevel] = [:]
+    /// Lazily-fetched last-updated dates, keyed by catalog path.
+    @Published public var lastUpdated: [String: Date] = [:]
+    /// Paths whose last-updated fetch has been started, so we only make the
+    /// (one-call-per-plugin) commits-API request once.
+    private var lastUpdatedRequested: Set<String> = []
 
     private let fetcher: CatalogFetching
     private let pluginsDirectory: String
@@ -62,6 +67,9 @@ public final class PluginBrowserModel: ObservableObject {
     func summary(for entry: CatalogEntry) -> String? { headers[entry.path]?.summary }
     func author(for entry: CatalogEntry) -> String? { headers[entry.path]?.author }
     func trustLevel(for entry: CatalogEntry) -> TrustLevel? { trustLevels[entry.path] }
+    func freshness(for entry: CatalogEntry, now: Date = Date()) -> PluginFreshness? {
+        PluginFreshness.classify(lastUpdated: lastUpdated[entry.path], now: now)
+    }
 
     /// Fetches and parses an entry's header + trust once, for display in its card.
     func loadHeader(for entry: CatalogEntry) async {
@@ -70,6 +78,16 @@ public final class PluginBrowserModel: ObservableObject {
         guard let source = try? await fetcher.fetchSource(entry) else { return }
         headers[entry.path] = HeaderParser.parse(source: source)
         trustLevels[entry.path] = TrustAnalyzer.analyze(TrustParser.parse(source: source)).level
+    }
+
+    /// Lazily fetches an entry's last-updated date once, for its freshness
+    /// badge. Costs one commits-API call per plugin, so it's guarded to fire a
+    /// single time per card and only when the card appears — never eagerly for
+    /// the whole grid. Failures leave the date `nil` so the badge is hidden.
+    func loadLastUpdated(for entry: CatalogEntry) async {
+        guard lastUpdatedRequested.insert(entry.path).inserted else { return }
+        guard let date = try? await fetcher.fetchLastUpdated(entry), let date else { return }
+        lastUpdated[entry.path] = date
     }
 
     public func load() async {
@@ -252,6 +270,9 @@ private struct PluginCard: View {
                 if let level = model.trustLevel(for: entry), level != .undeclared {
                     TrustChip(symbol: level.symbol, label: level.label, tint: level.color).padding(.top, 1)
                 }
+                if let date = model.lastUpdated[entry.path], let freshness = model.freshness(for: entry) {
+                    FreshnessBadge(date: date, freshness: freshness).padding(.top, 1)
+                }
             }
 
             Spacer(minLength: 6)
@@ -280,5 +301,32 @@ private struct PluginCard: View {
         .shadow(color: .black.opacity(hovering ? 0.12 : 0), radius: 8, y: 3)
         .onHover { hovering = $0 }
         .animation(.easeOut(duration: 0.15), value: hovering)
+        .task { await model.loadLastUpdated(for: entry) }
+    }
+}
+
+/// A small "Updated 3y ago" chip on a plugin card, tinted by how fresh the
+/// plugin is. Matches the ``TrustChip`` capsule styling.
+private struct FreshnessBadge: View {
+    let date: Date
+    let freshness: PluginFreshness
+
+    private static let relative: RelativeDateTimeFormatter = {
+        let f = RelativeDateTimeFormatter()
+        f.unitsStyle = .abbreviated
+        return f
+    }()
+
+    private var tint: Color {
+        switch freshness {
+        case .fresh: return .green
+        case .aging: return .orange
+        case .stale: return .secondary
+        }
+    }
+
+    var body: some View {
+        let relative = Self.relative.localizedString(for: date, relativeTo: Date())
+        TrustChip(symbol: "clock", label: "Updated \(relative)", tint: tint)
     }
 }
