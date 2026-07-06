@@ -29,12 +29,17 @@ public enum AttributedTitleFactory {
             .foregroundColor: baseColor
         ])
 
-        let chars = Array(display)
         for run in runs {
+            // ANSI run bounds are Character (grapheme) offsets, but an
+            // NSAttributedString is indexed in UTF-16 code units. Map through
+            // String.Index so a run after an emoji / non-BMP grapheme colors the
+            // right characters instead of shifting onto a surrogate pair.
             let lower = max(0, run.range.lowerBound)
-            let upper = min(chars.count, run.range.upperBound)
+            let upper = min(display.count, run.range.upperBound)
             guard lower < upper else { continue }
-            let nsRange = NSRange(location: lower, length: upper - lower)
+            let startIndex = display.index(display.startIndex, offsetBy: lower)
+            let endIndex = display.index(display.startIndex, offsetBy: upper)
+            let nsRange = NSRange(startIndex..<endIndex, in: display)
 
             if let fg = run.foreground.flatMap(ColorResolver.nsColor(for:)) {
                 attributed.addAttribute(.foregroundColor, value: fg, range: nsRange)

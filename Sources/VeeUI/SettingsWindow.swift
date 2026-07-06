@@ -26,12 +26,21 @@ public final class SettingsWindowManager {
         window.center()
         windows[pluginID] = window
 
+        // Clear the entry when the window is closed *any* way — including the
+        // title-bar close button, which bypasses `close(_:)`. Without this a
+        // closed window is retained forever and reopening re-shows the stale one.
+        NotificationCenter.default.addObserver(
+            forName: NSWindow.willCloseNotification, object: window, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.windows[pluginID] = nil }
+        }
+
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
     }
 
     public func close(_ pluginID: String) {
+        // Triggers willCloseNotification, which clears the entry.
         windows[pluginID]?.close()
-        windows[pluginID] = nil
     }
 }
