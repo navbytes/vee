@@ -77,15 +77,13 @@ public enum ProvenanceStatus: Sendable, Equatable {
 public struct ProvenanceStore: Sendable {
     /// The directory the ledger lives in — the plugins directory in production.
     public let directory: String
-    private let fileManager: FileManager
 
     /// The ledger filename. The leading dot keeps it hidden in Finder and out of
     /// the plugin-discovery scan.
     static let ledgerName = ".vee-provenance.json"
 
-    public init(directory: String, fileManager: FileManager = .default) {
+    public init(directory: String) {
         self.directory = directory
-        self.fileManager = fileManager
     }
 
     private var ledgerPath: String {
@@ -94,7 +92,7 @@ public struct ProvenanceStore: Sendable {
 
     /// All records keyed by filename, or empty if the ledger is missing/unreadable.
     public func all() -> [String: PluginProvenance] {
-        guard let data = fileManager.contents(atPath: ledgerPath),
+        guard let data = FileManager.default.contents(atPath: ledgerPath),
               let records = try? JSONDecoder().decode([String: PluginProvenance].self, from: data)
         else { return [:] }
         return records
@@ -120,7 +118,7 @@ public struct ProvenanceStore: Sendable {
     }
 
     private func write(_ records: [String: PluginProvenance]) throws {
-        try fileManager.createDirectory(atPath: directory, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(atPath: directory, withIntermediateDirectories: true)
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys, .prettyPrinted]
         let data = try encoder.encode(records)
