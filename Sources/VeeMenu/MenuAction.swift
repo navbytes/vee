@@ -15,11 +15,15 @@ final class MenuItemBox: NSObject {
 }
 
 /// `@objc` target that bridges menu-item selection to a `MenuActionHandling`.
-/// One instance is retained per status item (menu-item `target` is weak, so the
-/// owner must keep this alive).
+/// `NSMenuItem.target` is weak and the app creates the handler
+/// (`AppActionDispatcher`) inline, so the target **owns its handler strongly** —
+/// otherwise the handler would deallocate right after init and every click would
+/// call a nil handler (a silent no-op). No retain cycle: the handler never
+/// references the target back. The target itself is kept alive by its owner
+/// (`StatusItemController`).
 @MainActor
 public final class MenuActionTarget: NSObject {
-    private weak var handler: MenuActionHandling?
+    private let handler: MenuActionHandling
 
     public init(handler: MenuActionHandling) {
         self.handler = handler
@@ -27,7 +31,7 @@ public final class MenuActionTarget: NSObject {
 
     @objc func selectItem(_ sender: NSMenuItem) {
         guard let box = sender.representedObject as? MenuItemBox else { return }
-        handler?.perform(box.item)
+        handler.perform(box.item)
     }
 
     var action: Selector { #selector(selectItem(_:)) }
