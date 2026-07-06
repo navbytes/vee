@@ -20,6 +20,7 @@ let package = Package(
         .library(name: "VeeTrust", targets: ["VeeTrust"]),
         .library(name: "VeeCatalog", targets: ["VeeCatalog"]),
         .library(name: "VeeUI", targets: ["VeeUI"]),
+        .library(name: "VeeWidgetShared", targets: ["VeeWidgetShared"]),
         .library(name: "VeeApp", targets: ["VeeApp"]),
         .executable(name: "vee", targets: ["vee"]),
     ],
@@ -32,7 +33,11 @@ let package = Package(
         .target(name: "VeeTrust", dependencies: ["VeeCore"]),
         .target(name: "VeeCatalog"),
         .target(name: "VeeUI", dependencies: ["VeeCore", "VeePluginFormat", "VeePreferences", "VeeTrust", "VeeCatalog"]),
-        .target(name: "VeeApp", dependencies: ["VeeCore", "VeePluginFormat", "VeeRuntime", "VeeMenu", "VeePreferences", "VeeTrust", "VeeCatalog", "VeeUI"]),
+        // Tiny Foundation-only module shared between the app and the WidgetKit /
+        // Control Center extension via an App Group container. Kept dependency-free
+        // so the extension links almost nothing.
+        .target(name: "VeeWidgetShared"),
+        .target(name: "VeeApp", dependencies: ["VeeCore", "VeePluginFormat", "VeeRuntime", "VeeMenu", "VeePreferences", "VeeTrust", "VeeCatalog", "VeeUI", "VeeWidgetShared"]),
         .executableTarget(name: "vee", dependencies: ["VeeApp"]),
         .testTarget(name: "VeeCoreTests", dependencies: ["VeeCore"]),
         .testTarget(name: "VeePluginFormatTests", dependencies: ["VeePluginFormat"]),
@@ -41,6 +46,7 @@ let package = Package(
         .testTarget(name: "VeePreferencesTests", dependencies: ["VeePreferences"]),
         .testTarget(name: "VeeTrustTests", dependencies: ["VeeTrust"]),
         .testTarget(name: "VeeCatalogTests", dependencies: ["VeeCatalog"]),
+        .testTarget(name: "VeeWidgetSharedTests", dependencies: ["VeeWidgetShared"]),
         .testTarget(name: "VeeAppTests", dependencies: ["VeeApp"]),
     ]
 )

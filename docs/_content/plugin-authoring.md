@@ -97,6 +97,8 @@ Append `| key=value key2=value2 …` to any line to attach parameters. Quote val
 | `shortcut` | Run a macOS Shortcut by name when the item is clicked (e.g. `shortcut="Start Meeting"`). |
 | `webview`, `webvieww`, `webviewh` | Open a URL in a standalone WebView window (never inside the menu), with optional width/height. |
 | `sparkline` | A comma-separated list of numbers (e.g. `sparkline=1,2,3,4,5`). Clicking the item opens a native Liquid Glass popover that renders the series as an inline Swift Charts sparkline — rich UI without a WebView. |
+| `toggle` | `toggle=on` / `toggle=off` (also `true`/`false`/`1`/`0`). Clicking opens a Liquid Glass popover with a switch; flipping it re-invokes the item's `shell=`/`bash=` with the new value. |
+| `slider` | `slider=min,max,value` (e.g. `slider=0,100,40`). Clicking opens a Liquid Glass popover with a slider; releasing it re-invokes the item's `shell=`/`bash=` with the chosen value. |
 
 Unknown parameters are preserved rather than dropped, so the format can evolve without breaking existing plugins.
 
@@ -114,10 +116,38 @@ line/area sparkline on a macOS 26 Liquid Glass background. This is Vee's answer 
 Charts and AppKit, so there is no embedded browser or cross-platform runtime.
 Malformed values are skipped; an empty list is ignored.
 
-> **Proposal, subject to change.** The `sparkline=` syntax (and the popover
-> surface it opts into) is an early proposal. A future release will add
-> interactive toggle/slider items inside the popover that re-invoke the plugin
-> with a parameter; the exact convention may still evolve.
+### Interactive controls (`toggle=` / `slider=`)
+
+Attach `toggle=` or `slider=` to a dropdown item to open an **interactive**
+Liquid Glass popover — a live switch or slider, again drawn natively with SwiftUI
+and AppKit (no WebView, no embedded runtime):
+
+```
+Wi-Fi | toggle=on shell=/usr/local/bin/wifi.sh
+Volume | slider=0,100,40 shell=/usr/local/bin/volume.sh
+```
+
+When you change the control, Vee re-invokes the item's `shell=`/`bash=` command
+with the new value provided two ways, so you can read whichever is convenient:
+
+- the `VEE_CONTROL_VALUE` environment variable, and
+- the value appended as the command's final argument.
+
+Toggles pass `1`/`0`; sliders pass the numeric value (integers without a trailing
+`.0`). Add `refresh=true` to re-render the menu bar after the command runs.
+
+```bash
+#!/bin/bash
+# volume.sh — called with the new slider value
+osascript -e "set volume output volume $VEE_CONTROL_VALUE"
+```
+
+A slider needs three numbers (`min,max,value`) with `min < max`; the value is
+clamped into range. Malformed controls are ignored.
+
+> **Proposal, subject to change.** The `sparkline=`, `toggle=`, and `slider=`
+> syntax (and the popover surface they opt into) are an early proposal; the exact
+> convention may still evolve.
 
 ## Metadata headers
 
@@ -216,6 +246,7 @@ Every plugin run inherits your shell environment plus these variables:
 - `VEE` — `1`.
 - `VEE_VERSION` — the app version.
 - `VEE_PLUGIN_PATH` — the absolute path of this plugin.
+- `VEE_CONTROL_VALUE` — set only on a re-invocation triggered by an interactive `toggle=`/`slider=` item, carrying the committed value.
 
 Any values from the plugin's declared `<xbar.var>` [preferences](preferences.md) are also injected as environment variables (they take precedence over the above).
 

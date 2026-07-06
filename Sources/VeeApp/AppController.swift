@@ -6,6 +6,10 @@ import VeePreferences
 import VeeTrust
 import VeeCatalog
 import VeeUI
+import VeeWidgetShared
+#if canImport(WidgetKit)
+import WidgetKit
+#endif
 
 /// The application delegate. Owns the always-present Vee menu and one coordinator
 /// per enabled plugin, watches the plugins directory, and drives the plugin
@@ -26,6 +30,19 @@ public final class AppController: NSObject, NSApplicationDelegate {
     private let log = VeeLog.make("app-controller")
 
     private var directory: String = PluginsDirectory.resolve()
+
+    /// Latest published title per plugin, mirrored to the shared snapshot file
+    /// so the WidgetKit widget can render it. Flushed (coalesced) on change.
+    private var snapshotItems: [String: PluginSnapshot] = [:]
+    private var snapshotFlushScheduled = false
+    /// The id→title map last written, so an unchanged flush is a no-op (a plugin
+    /// re-running with the same output must not churn the file or a reload).
+    private var lastPublishedTitles: [String: String] = [:]
+    /// Throttle state for `WidgetCenter.reloadAllTimelines()` — WidgetKit meters
+    /// reloads against a per-app budget, so a fast/streaming plugin must not
+    /// drive one reload per tick.
+    private var lastWidgetReload: Date = .distantPast
+    private var widgetReloadPending = false
 
     /// The running controller, so App Intents (Shortcuts/Spotlight) can drive it.
     public static weak var shared: AppController?
@@ -77,6 +94,11 @@ public final class AppController: NSObject, NSApplicationDelegate {
         // Finder/Dock launch finds Homebrew/pyenv/asdf/nvm binaries just like a
         // Terminal launch would. The Vee menu is already up; plugins appear once
         // this returns (a short, timed-out shell call).
+        // Refresh immediately when the Control Center control fires while Vee is
+        // already running. (A cold start needs no flag: the control launches Vee
+        // via openAppWhenRun, and Vee refreshes every plugin on launch.)
+        registerControlRefreshObserver()
+
         Task { @MainActor in
             self.baseEnvironment = await ShellPathResolver.resolvedEnvironment()
             self.runtime = PluginRuntime(executor: PluginExecutor(runner: SystemProcessRunner(), baseEnvironment: self.baseEnvironment))
@@ -195,9 +217,101 @@ public final class AppController: NSObject, NSApplicationDelegate {
 
         for plugin in plugins {
             let coordinator = PluginCoordinator(plugin: plugin, pluginsDirectory: directory, runtime: runtime, baseEnvironment: baseEnvironment)
-            coordinators[plugin.id.rawValue] = coordinator
+            let id = plugin.id.rawValue
+            let name = plugin.filename.name
+            coordinator.onPublish = { [weak self] title in
+                self?.publishToWidget(id: id, name: name, title: title)
+            }
+            coordinators[id] = coordinator
             coordinator.start()
         }
+        // Drop widget entries for plugins that are no longer loaded.
+        flushWidgetSnapshot()
+    }
+
+    // MARK: - Widget snapshot
+
+    /// Minimum spacing between `reloadAllTimelines()` calls. WidgetKit meters
+    /// background reloads against a per-app daily budget; a fast (e.g. `5s`) or
+    /// streaming plugin would otherwise blow through it in minutes and leave the
+    /// widget frozen. The widget's own 30-min timeline policy is the in-budget
+    /// baseline; these pushes just make changes appear sooner.
+    private static let widgetReloadMinInterval: TimeInterval = 300 // 5 minutes
+
+    /// Records a plugin's current title and schedules a coalesced flush to the
+    /// shared snapshot file so the WidgetKit widget can render it.
+    private func publishToWidget(id: String, name: String, title: String) {
+        snapshotItems[id] = PluginSnapshot(id: id, name: name, title: title, updated: Date())
+        guard !snapshotFlushScheduled else { return }
+        snapshotFlushScheduled = true
+        Task { @MainActor in
+            // Coalesce bursts (many plugins refreshing at once) into one write.
+            try? await Task.sleep(nanoseconds: 300_000_000)
+            self.snapshotFlushScheduled = false
+            self.flushWidgetSnapshot()
+        }
+    }
+
+    /// Writes the current snapshot (only currently-loaded plugins, name-sorted)
+    /// to the shared file, and asks WidgetKit to reload — but only when the
+    /// *content* actually changed, and never more often than the reload floor.
+    private func flushWidgetSnapshot() {
+        snapshotItems = snapshotItems.filter { coordinators[$0.key] != nil }
+        let plugins = snapshotItems.values.sorted { $0.name.lowercased() < $1.name.lowercased() }
+        // Skip identical content: a plugin re-running with the same title must
+        // not rewrite the file or spend a widget reload.
+        let titles = Dictionary(plugins.map { ($0.id, $0.title) }, uniquingKeysWith: { a, _ in a })
+        guard titles != lastPublishedTitles else { return }
+        lastPublishedTitles = titles
+
+        VeeWidgetSharing.shared.write(WidgetSnapshot(plugins: Array(plugins), generated: Date()))
+        requestWidgetReload()
+    }
+
+    /// Asks WidgetKit to reload, throttled to `widgetReloadMinInterval`. If a
+    /// reload happened recently, one trailing reload is scheduled at the end of
+    /// the window so the latest change still lands.
+    private func requestWidgetReload() {
+        #if canImport(WidgetKit)
+        let now = Date()
+        let elapsed = now.timeIntervalSince(lastWidgetReload)
+        if elapsed >= Self.widgetReloadMinInterval {
+            lastWidgetReload = now
+            WidgetCenter.shared.reloadAllTimelines()
+        } else if !widgetReloadPending {
+            widgetReloadPending = true
+            let delay = Self.widgetReloadMinInterval - elapsed
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+                self.widgetReloadPending = false
+                self.lastWidgetReload = Date()
+                WidgetCenter.shared.reloadAllTimelines()
+            }
+        }
+        #endif
+    }
+
+    // MARK: - Control Center refresh
+
+    /// Observes the Darwin notification the control posts, so a refresh fires
+    /// immediately when Vee is already running.
+    private func registerControlRefreshObserver() {
+        let center = CFNotificationCenterGetDarwinNotifyCenter()
+        let observer = Unmanaged.passUnretained(self).toOpaque()
+        CFNotificationCenterAddObserver(
+            center,
+            observer,
+            { _, _, _, _, _ in
+                Task { @MainActor in AppController.shared?.controlRefreshFired() }
+            },
+            VeeWidgetSharing.refreshRequestNotification as CFString,
+            nil,
+            .deliverImmediately
+        )
+    }
+
+    func controlRefreshFired() {
+        refreshAll()
     }
 
     // MARK: - Global actions

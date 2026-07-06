@@ -118,6 +118,24 @@ enum LineParser {
                 // Skip malformed entries; an empty result stays `nil`.
                 let series = value.split(separator: ",").compactMap { Double($0.trimmingCharacters(in: .whitespaces)) }
                 p.sparkline = series.isEmpty ? nil : series
+            case "toggle":
+                // Vee-native: an on/off switch. Accepts on/off as well as the
+                // usual truthy tokens. Empty value is malformed → nil.
+                if !value.isEmpty {
+                    let on = bool(value) || value.lowercased() == "on"
+                    p.control = .toggle(on: on)
+                }
+            case "slider":
+                // Vee-native: `min,max,value`. Requires three Doubles with
+                // min < max; the value is clamped into range. Anything else
+                // stays `nil` and is reported.
+                let nums = value.split(separator: ",").compactMap { Double($0.trimmingCharacters(in: .whitespaces)) }
+                if nums.count == 3, nums[0] < nums[1] {
+                    let clamped = Swift.min(Swift.max(nums[2], nums[0]), nums[1])
+                    p.control = .slider(min: nums[0], max: nums[1], value: clamped)
+                } else if !value.isEmpty {
+                    diagnostics.append(.init(severity: .warning, message: "slider= expects 'min,max,value' with min < max"))
+                }
             default:
                 if key.hasPrefix("param"), let n = Int(key.dropFirst(5)) {
                     positional[n] = value

@@ -34,6 +34,19 @@ public struct SwiftBarParams: Equatable, Sendable {
     public init() {}
 }
 
+/// A Vee-native interactive control attached to a menu item (`toggle=`/
+/// `slider=`). When present, the item opens a Liquid Glass `NSPopover` with a
+/// live control instead of firing immediately; committing a new value
+/// re-invokes the item's `shell=`/`bash=` command with that value (see
+/// `AppActionDispatcher`).
+public enum PluginControl: Equatable, Sendable {
+    /// An on/off switch. `on` is the current state.
+    case toggle(on: Bool)
+    /// A continuous slider bounded by `min...max` at the current `value`
+    /// (clamped into range at parse time; `min < max` guaranteed).
+    case slider(min: Double, max: Double, value: Double)
+}
+
 /// Strongly-typed representation of a menu line's `|`-delimited parameters.
 /// Unknown keys are preserved in `unknown` (and reported as diagnostics) rather
 /// than silently dropped, so the format can evolve without data loss.
@@ -69,6 +82,11 @@ public struct LineParams: Equatable, Sendable {
     /// Swift Charts sparkline — rich UI without a WebView. Malformed entries are
     /// skipped; an empty/all-malformed list parses to `nil`.
     public var sparkline: [Double]?
+
+    /// An interactive control (`toggle=on` / `slider=min,max,value`). When
+    /// non-nil, the item opens a native Liquid Glass popover whose control
+    /// re-invokes the item's `shell=`/`bash=` command with the chosen value.
+    public var control: PluginControl?
 
     // Forward-compatibility: keys we didn't recognise.
     public var unknown: [String: String]
