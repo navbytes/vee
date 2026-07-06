@@ -40,6 +40,23 @@ public enum MenuBuilder {
         menuItem.isEnabled = !(item.params.disabled ?? false)
         if item.params.swiftbar.checked == true { menuItem.state = .on }
 
+        // `progress=`: render an inline capsule gauge as a custom row view. It's
+        // decorative (no click action), so return before wiring submenu/action.
+        if let progress = item.params.progress {
+            let view = ProgressMenuItemView(
+                title: menuItem.attributedTitle ?? NSAttributedString(string: item.text),
+                fraction: progress.fraction,
+                fillColor: item.params.color.flatMap(ColorResolver.nsColor(for:)) ?? .controlAccentColor,
+                trackColor: progress.trackColor.flatMap(ColorResolver.nsColor(for:))
+                    ?? NSColor.tertiaryLabelColor.withAlphaComponent(0.25),
+                barWidth: progress.width.map { CGFloat($0) } ?? 120,
+                barHeight: progress.height.map { CGFloat($0) } ?? 6
+            )
+            view.toolTip = item.params.swiftbar.tooltip
+            menuItem.view = view
+            return menuItem
+        }
+
         if isAlternate {
             menuItem.isAlternate = true
             menuItem.keyEquivalentModifierMask = .option

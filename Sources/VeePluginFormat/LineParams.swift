@@ -47,6 +47,28 @@ public enum PluginControl: Equatable, Sendable {
     case slider(min: Double, max: Double, value: Double)
 }
 
+/// A Vee-native inline progress gauge (`progress=`). Rendered as a real capsule
+/// bar drawn in the menu row via a custom `NSMenuItem.view` — not block glyphs.
+/// The fill uses the item's `color=`; `trackColor`/`width`/`height` are optional
+/// overrides.
+public struct ProgressParams: Equatable, Sendable {
+    /// Completion, always clamped to `0...1` at parse time.
+    public var fraction: Double
+    /// Background track color (`trackcolor=`). Defaults applied at render time.
+    public var trackColor: VeeColor?
+    /// Bar width in points (`progressw=`). Default applied at render time.
+    public var width: Double?
+    /// Bar height in points (`progressh=`). Default applied at render time.
+    public var height: Double?
+
+    public init(fraction: Double, trackColor: VeeColor? = nil, width: Double? = nil, height: Double? = nil) {
+        self.fraction = fraction
+        self.trackColor = trackColor
+        self.width = width
+        self.height = height
+    }
+}
+
 /// Strongly-typed representation of a menu line's `|`-delimited parameters.
 /// Unknown keys are preserved in `unknown` (and reported as diagnostics) rather
 /// than silently dropped, so the format can evolve without data loss.
@@ -87,6 +109,10 @@ public struct LineParams: Equatable, Sendable {
     /// non-nil, the item opens a native Liquid Glass popover whose control
     /// re-invokes the item's `shell=`/`bash=` command with the chosen value.
     public var control: PluginControl?
+
+    /// An inline progress gauge (`progress=0.72` or `progress=value,max`). When
+    /// non-nil, the item renders a real capsule bar in the menu row.
+    public var progress: ProgressParams?
 
     // Forward-compatibility: keys we didn't recognise.
     public var unknown: [String: String]
