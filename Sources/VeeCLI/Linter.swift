@@ -18,6 +18,12 @@ public enum Linter {
 
         var lines = rawOutput.components(separatedBy: "\n")
         if lines.last == "" { lines.removeLast() }
+        // Tolerate CRLF line endings (Windows-authored scripts), same fix as
+        // OutputParser.splitLines: strip exactly one trailing "\r" per line so
+        // `---\r` still matches the separator check below. `.whitespaces`
+        // trimming doesn't catch "\r", and without this every line would stay
+        // (wrongly) classified as being above the separator.
+        lines = lines.map { $0.hasSuffix("\r") ? String($0.dropLast()) : $0 }
 
         // Track whether we're above or below the first top-level `---` so we can
         // reason about title lines (bare `|` only matters in a title's text).
