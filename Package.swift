@@ -46,7 +46,7 @@ let package = Package(
         // AppKit-free CLI logic (render/lint/new subcommands) so it builds
         // headless in CI. The `vee` executable dispatches to it.
         .target(name: "VeeCLI", dependencies: ["VeePluginFormat", "VeeRuntime", "VeeSearch"]),
-        .target(name: "VeeApp", dependencies: ["VeeCore", "VeePluginFormat", "VeeRuntime", "VeeMenu", "VeePreferences", "VeeTrust", "VeeCatalog", "VeeUI", "VeeWidgetShared"]),
+        .target(name: "VeeApp", dependencies: ["VeeCore", "VeePluginFormat", "VeeRuntime", "VeeMenu", "VeeSearch", "VeePreferences", "VeeTrust", "VeeCatalog", "VeeUI", "VeeWidgetShared"]),
         .executableTarget(name: "vee", dependencies: ["VeeApp", "VeeCLI"]),
         .testTarget(name: "VeeCoreTests", dependencies: ["VeeCore"]),
         .testTarget(name: "VeePluginFormatTests", dependencies: ["VeePluginFormat"]),
@@ -58,6 +58,6 @@ let package = Package(
         .testTarget(name: "VeeCatalogTests", dependencies: ["VeeCatalog"]),
         .testTarget(name: "VeeWidgetSharedTests", dependencies: ["VeeWidgetShared"]),
         .testTarget(name: "VeeCLITests", dependencies: ["VeeCLI"]),
-        .testTarget(name: "VeeAppTests", dependencies: ["VeeApp"]),
+        .testTarget(name: "VeeAppTests", dependencies: ["VeeApp", "VeeSearch"]),
     ]
 )
