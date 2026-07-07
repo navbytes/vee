@@ -1,7 +1,8 @@
 # Design: the widget surface contract
 
-Status: **proposed** (supersedes the "Follow-ups (Tier 3)" section of
-[`widgets.md`](widgets.md), which shipped the Tier-0/Tier-1 mirror). This document
+Status: **implemented** (single-card; timeline arrays deferred — see
+"Deferred" below). Supersedes the "Follow-ups (Tier 3)" section of
+[`widgets.md`](widgets.md), which shipped the Tier-0/Tier-1 mirror. This document
 specifies making widgets a *first-class output surface* of a plugin rather than a
 scrape of its menu-bar line.
 
@@ -293,12 +294,16 @@ on A; H last. Each pushes on its own so CI compiles it incrementally.
 - Focus filters (`SetFocusFilterIntent`), lock-screen accessory families, an
   `AppIntent`-configurable Control Center control for a chosen plugin.
 
-## Open questions
+## Open questions (resolved)
 
-1. `board` template on `small` — collapse to headline (proposed) or drop the
-   template for that family? Proposed: collapse.
-2. Should `both` plugins that never emit a card on `VEE_TARGET=widget` (misbehaving)
-   fall back to the scrape silently, or surface a Debug diagnostic? Proposed: both —
-   scrape + a diagnostic.
-3. SDK scope for the first PR — TS only, or all three at once? Proposed: TS in the
-   first PR, Python/Go immediate follow-up.
+1. `board` template on `small` — collapse to headline, or drop the template
+   for that family? **Resolved: collapse** (`WidgetExtension/WidgetCardView.swift`,
+   `BoardCardView`).
+2. Should `both`/`widget` plugins that never emit a card on `VEE_TARGET=widget`
+   (misbehaving) fall back to the scrape silently, or surface a Debug
+   diagnostic? **Resolved: both** — `PluginCoordinator.refreshWidget()` falls
+   back to the Tier-0 scrape and logs the `WidgetCardParser` diagnostic.
+3. SDK scope for the first PR — TS only, or all three at once? **Resolved: all
+   three** — porting the builder to Python and Go turned out straightforward,
+   so `plugins/python/vee.py` and `plugins/go/vee.go` shipped alongside the TS
+   SDK rather than as a follow-up.

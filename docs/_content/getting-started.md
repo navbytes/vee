@@ -104,6 +104,16 @@ how often widgets refresh, they suit slow-moving values (disk, battery, weather,
 build/sync status) rather than per-second counters — those stay best in the menu
 bar. The "updated N ago" caption reflects when the plugin last ran.
 
+By default a widget tile is a scrape of the menu-bar line — automatic, no
+changes needed. A plugin can opt into a **richer** tile instead: real data
+(a stat, gauge, trend, list, or KPI board) on its own refresh cadence, with
+up to two action buttons (refresh / open a link / run a Shortcut), via
+`<vee.surface>both</vee.surface>` and a JSON "card" printed when Vee invokes
+it with `VEE_TARGET=widget`. A plugin can also be **widget-only** —
+`<vee.surface>widget</vee.surface>` gives it no menu-bar presence at all, just
+a widget feed. See [Widgets](plugin-authoring.md#widgets) in the authoring
+reference for the full contract.
+
 ## Next steps
 
 - [Plugin authoring reference](plugin-authoring.md) — the full output format, params, metadata, SF Symbols, ANSI, Markdown, streaming, and cron.

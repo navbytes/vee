@@ -209,6 +209,68 @@ All three emit byte-identical protocol output (there's a `controls` example and 
 shared golden fixture proving it). See the underlying line-parameter grammar in
 the [plugin authoring reference](plugin-authoring.md#line-parameters).
 
+## Widget cards
+
+All three SDKs also build the rich [widget card](plugin-authoring.md#widgets)
+payload a plugin prints when invoked with `VEE_TARGET=widget` — a generic
+`widgetCard(...)`/`WidgetCard(...)` constructor, plus `Stat`/`Gauge`/`Trend`/
+`List`/`Board` convenience builders that preset the `template` field. Each
+returns/builds an object with the same `toString()`/`to_string()`/`String()`
++ `print()` shape as `Menu`.
+
+**TypeScript**
+
+```ts
+import { Stat } from "./src/vee.ts";
+
+Stat({
+  title: "Revenue",
+  symbol: "chart.line.uptrend.xyaxis",
+  tint: "green",
+  value: "$18.2k",
+  status: "ok",
+  items: [{ label: "Orders", value: "214", symbol: "bag", tint: "blue" }],
+  actions: [{ kind: "refresh", label: "Refresh" }],
+}).print();
+```
+
+**Python**
+
+```python
+from vee import Stat
+
+Stat(
+    title="Revenue",
+    symbol="chart.line.uptrend.xyaxis",
+    tint="green",
+    value="$18.2k",
+    status="ok",
+    items=[{"label": "Orders", "value": "214", "symbol": "bag", "tint": "blue"}],
+    actions=[{"kind": "refresh", "label": "Refresh"}],
+).print()
+```
+
+**Go**
+
+```go
+c := &vee.WidgetCard{
+	Template: vee.TemplateStat,
+	Title:    vee.Str("Revenue"),
+	Symbol:   vee.Str("chart.line.uptrend.xyaxis"),
+	Tint:     vee.Str("green"),
+	Value:    vee.Str("$18.2k"),
+	Status:   vee.StatusOK,
+	Items:    []vee.WidgetCardItem{{Label: "Orders", Value: vee.Str("214"), Symbol: vee.Str("bag"), Tint: vee.Str("blue")}},
+	Actions:  []vee.WidgetCardAction{{Kind: vee.ActionRefresh, Label: "Refresh"}},
+}
+c.Print()
+```
+
+All three emit byte-identical JSON for the same card (there's a `widget-card`
+example and a shared golden fixture proving it, also round-tripped through
+the Swift parser). See the full field/template/action reference in
+[Widgets](plugin-authoring.md#widgets).
+
 ## The no-build-step note (TypeScript)
 
 For TypeScript there is deliberately no compiler or bundler in the loop. Node 24+ strips the TypeScript types at load time and runs the file, so:
