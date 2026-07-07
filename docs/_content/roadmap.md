@@ -202,6 +202,14 @@ below exist yet in `Sources/`.
   - The control signals a running app via a Darwin notification and launches a
     closed one via `openAppWhenRun` (which refreshes all plugins on startup), so
     no shared request-flag is needed. _(1 commit.)_
+  - **Rebuilt into real dashboard tiles** (see `docs/design/widgets.md`). The
+    status widget is now `AppIntentConfiguration` (pick which plugins to show),
+    renders a single-plugin **hero** tile at the small size with the plugin's
+    color / SF Symbol / `progress=` gauge / `sparkline=` trend, and shows honest
+    freshness. The snapshot is versioned to **v2** carrying that presentation
+    (still decodes v1). A second **Vee Health** widget adds an aggregate roll-up
+    ("N OK · M failing") — the one view the menu bar can't give. Tier-3
+    interactivity (per-plugin refresh, deep-links, Focus filters) is a follow-up.
 - ⬜ **Focus filters** (`SetFocusFilterIntent`) to show/hide plugin groups per
   Focus mode. **→ Moved to Day 2** (post-launch backlog below) — needs a
   plugin-grouping model and a lightweight status-item hide, and isn't gating launch.

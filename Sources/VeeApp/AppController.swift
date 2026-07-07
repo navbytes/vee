@@ -38,9 +38,11 @@ public final class AppController: NSObject, NSApplicationDelegate {
     /// so the WidgetKit widget can render it. Flushed (coalesced) on change.
     private var snapshotItems: [String: PluginSnapshot] = [:]
     private var snapshotFlushScheduled = false
-    /// The id→title map last written, so an unchanged flush is a no-op (a plugin
-    /// re-running with the same output must not churn the file or a reload).
-    private var lastPublishedTitles: [String: String] = [:]
+    /// The content last written (with volatile timestamps normalized away), so an
+    /// unchanged flush is a no-op: a plugin re-running with identical output —
+    /// same title, color, gauge, error state — must not churn the file or spend a
+    /// widget reload.
+    private var lastPublishedSignature: [PluginSnapshot] = []
     /// Throttle state for `WidgetCenter.reloadAllTimelines()` — WidgetKit meters
     /// reloads against a per-app budget, so a fast/streaming plugin must not
     /// drive one reload per tick.
@@ -236,8 +238,9 @@ public final class AppController: NSObject, NSApplicationDelegate {
             let coordinator = PluginCoordinator(plugin: plugin, pluginsDirectory: directory, runtime: runtime, baseEnvironment: baseEnvironment)
             let id = plugin.id.rawValue
             let name = plugin.filename.name
-            coordinator.onPublish = { [weak self] title in
-                self?.publishToWidget(id: id, name: name, title: title)
+            let interval = plugin.filename.interval.timeInterval
+            coordinator.onPublish = { [weak self] publish in
+                self?.publishToWidget(id: id, name: name, interval: interval, publish: publish)
                 // Keep an open Plugin Manager's error badge live: push this run's
                 // error state (nil on success) into the row. Cheap — setError
                 // only mutates when the value actually changed.
@@ -259,10 +262,22 @@ public final class AppController: NSObject, NSApplicationDelegate {
     /// baseline; these pushes just make changes appear sooner.
     private static let widgetReloadMinInterval: TimeInterval = 300 // 5 minutes
 
-    /// Records a plugin's current title and schedules a coalesced flush to the
-    /// shared snapshot file so the WidgetKit widget can render it.
-    private func publishToWidget(id: String, name: String, title: String) {
-        snapshotItems[id] = PluginSnapshot(id: id, name: name, title: title, updated: Date())
+    /// Records a plugin's current widget state and schedules a coalesced flush to
+    /// the shared snapshot file so the WidgetKit widget can render it.
+    private func publishToWidget(id: String, name: String, interval: TimeInterval?, publish: WidgetPublish) {
+        snapshotItems[id] = PluginSnapshot(
+            id: id,
+            name: name,
+            title: publish.title,
+            updated: Date(),
+            color: publish.fields.color.map(WidgetSnapshotMapping.snapshotColor),
+            symbolName: publish.fields.symbolName,
+            symbolColors: WidgetSnapshotMapping.snapshotColors(publish.fields.symbolColors),
+            progress: publish.fields.progress,
+            sparkline: publish.fields.sparkline,
+            isError: publish.isError,
+            interval: interval
+        )
         guard !snapshotFlushScheduled else { return }
         snapshotFlushScheduled = true
         Task { @MainActor in
@@ -279,14 +294,30 @@ public final class AppController: NSObject, NSApplicationDelegate {
     private func flushWidgetSnapshot() {
         snapshotItems = snapshotItems.filter { coordinators[$0.key] != nil }
         let plugins = snapshotItems.values.sorted { $0.name.lowercased() < $1.name.lowercased() }
-        // Skip identical content: a plugin re-running with the same title must
-        // not rewrite the file or spend a widget reload.
-        let titles = Dictionary(plugins.map { ($0.id, $0.title) }, uniquingKeysWith: { a, _ in a })
-        guard titles != lastPublishedTitles else { return }
-        lastPublishedTitles = titles
+        // Skip identical content: a plugin re-running with the same output —
+        // title, color, gauge, error state — must not rewrite the file or spend a
+        // widget reload. Compare with the per-run `updated` timestamp normalized
+        // away so only meaningful changes count.
+        let signature = Self.contentSignature(plugins)
+        guard signature != lastPublishedSignature else { return }
+        lastPublishedSignature = signature
 
         VeeWidgetSharing.shared.write(WidgetSnapshot(plugins: Array(plugins), generated: Date()))
         requestWidgetReload()
+    }
+
+    /// The change-detection key for a set of snapshots: the same plugins with the
+    /// per-run `updated` timestamp zeroed, so re-running a plugin with identical
+    /// output compares equal (only a real content change triggers a write/reload).
+    private static func contentSignature(_ plugins: [PluginSnapshot]) -> [PluginSnapshot] {
+        plugins.map {
+            PluginSnapshot(
+                id: $0.id, name: $0.name, title: $0.title,
+                updated: Date(timeIntervalSince1970: 0),
+                color: $0.color, symbolName: $0.symbolName, symbolColors: $0.symbolColors,
+                progress: $0.progress, sparkline: $0.sparkline, isError: $0.isError, interval: $0.interval
+            )
+        }
     }
 
     /// Asks WidgetKit to reload, throttled to `widgetReloadMinInterval`. If a
