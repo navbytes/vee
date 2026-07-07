@@ -31,6 +31,31 @@ public struct TrustSetDiff<Element: Hashable & Comparable & Sendable>: Equatable
     }
 }
 
+/// A single element added to, or removed from, a plugin's trust footprint by an
+/// update. Carries the direction and a risk flag so the install gate can colour
+/// and weight each change rather than rendering an undifferentiated list.
+public struct TrustChange: Equatable, Sendable {
+    public enum Direction: Sendable, Equatable { case added, removed }
+
+    /// Whether this element appeared (`.added`) or disappeared (`.removed`).
+    public var direction: Direction
+    /// The dimension noun, e.g. `"capability"`, `"domain"`, `"filesystem write"`.
+    public var noun: String
+    /// The element itself, e.g. `"network"`, `"evil.tld"`, `"~"`.
+    public var item: String
+    /// True for additions that materially widen the plugin's reach (a new
+    /// capability, filesystem-write path, secret, or external binary), so the UI
+    /// can flag them more prominently than a benign change like a removed domain.
+    public var isElevated: Bool
+
+    public init(direction: Direction, noun: String, item: String, isElevated: Bool) {
+        self.direction = direction
+        self.noun = noun
+        self.item = item
+        self.isElevated = isElevated
+    }
+}
+
 /// A structured diff of a plugin's *trust footprint* — its declared and detected
 /// capabilities plus the network/filesystem/secret/exec details — between the
 /// currently-installed source and an incoming update.
@@ -83,18 +108,36 @@ public struct TrustDiff: Equatable, Sendable {
     /// e.g. `"adds filesystem write: ~"`, `"adds domain: evil.tld"`,
     /// `"removes exec: git"`. Ordered by dimension, additions before removals.
     public var summaryLines: [String] {
-        var lines: [String] = []
-        func emit(_ noun: String, added: [String], removed: [String]) {
-            for item in added { lines.append("adds \(noun): \(item)") }
-            for item in removed { lines.append("removes \(noun): \(item)") }
+        changes.map { change in
+            "\(change.direction == .added ? "adds" : "removes") \(change.noun): \(change.item)"
         }
-        emit("capability", added: capabilities.added.map(\.rawValue), removed: capabilities.removed.map(\.rawValue))
-        emit("domain", added: networkDomains.added, removed: networkDomains.removed)
-        emit("filesystem read", added: fsReadPaths.added, removed: fsReadPaths.removed)
-        emit("filesystem write", added: fsWritePaths.added, removed: fsWritePaths.removed)
-        emit("secret", added: secretsUsed.added, removed: secretsUsed.removed)
-        emit("exec", added: externalBinaries.added, removed: externalBinaries.removed)
-        return lines
+    }
+
+    /// One structured entry per element that was added or removed, ordered by
+    /// dimension (additions before removals within each). Unlike ``summaryLines``
+    /// this keeps the direction and an ``TrustChange/isElevated`` risk flag
+    /// separate so the UI can colour and weight each change instead of showing a
+    /// flat wall of text.
+    public var changes: [TrustChange] {
+        var result: [TrustChange] = []
+        func emit(_ noun: String, elevatedWhenAdded: Bool, added: [String], removed: [String]) {
+            for item in added {
+                result.append(TrustChange(direction: .added, noun: noun, item: item, isElevated: elevatedWhenAdded))
+            }
+            for item in removed {
+                result.append(TrustChange(direction: .removed, noun: noun, item: item, isElevated: false))
+            }
+        }
+        // Additions that materially widen what the plugin can reach are elevated;
+        // a new domain on an already-networked plugin, or a read path, is not.
+        emit("capability", elevatedWhenAdded: true,
+             added: capabilities.added.map(\.rawValue), removed: capabilities.removed.map(\.rawValue))
+        emit("domain", elevatedWhenAdded: false, added: networkDomains.added, removed: networkDomains.removed)
+        emit("filesystem read", elevatedWhenAdded: false, added: fsReadPaths.added, removed: fsReadPaths.removed)
+        emit("filesystem write", elevatedWhenAdded: true, added: fsWritePaths.added, removed: fsWritePaths.removed)
+        emit("secret", elevatedWhenAdded: true, added: secretsUsed.added, removed: secretsUsed.removed)
+        emit("exec", elevatedWhenAdded: true, added: externalBinaries.added, removed: externalBinaries.removed)
+        return result
     }
 
     /// Diffs the trust footprint of an installed plugin source against an

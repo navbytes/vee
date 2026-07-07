@@ -182,4 +182,42 @@ final class TrustDiffTests: XCTestCase {
         XCTAssertEqual(d.added, ["c"])
         XCTAssertEqual(d.removed, ["a"])
     }
+
+    func testStructuredChangesCarryDirectionAndRisk() {
+        let old = TrustDeclaration(capabilities: [.exec], externalBinaries: ["git"])
+        let new = TrustDeclaration(
+            capabilities: [.exec, .network],
+            networkDomains: ["evil.tld"],
+            externalBinaries: []
+        )
+        let changes = TrustDiff.between(old: old, new: new).changes
+
+        // An added capability materially widens reach → elevated.
+        let addedCap = changes.first { $0.noun == "capability" && $0.direction == .added }
+        XCTAssertEqual(addedCap?.item, "network")
+        XCTAssertEqual(addedCap?.isElevated, true)
+
+        // A new domain on an already-networked plugin is not elevated.
+        let addedDomain = changes.first { $0.noun == "domain" }
+        XCTAssertEqual(addedDomain?.direction, .added)
+        XCTAssertEqual(addedDomain?.isElevated, false)
+
+        // A removal is never elevated.
+        let removedExec = changes.first { $0.noun == "exec" }
+        XCTAssertEqual(removedExec?.direction, .removed)
+        XCTAssertEqual(removedExec?.isElevated, false)
+    }
+
+    func testStructuredChangesStayInSyncWithSummaryLines() {
+        let old = "# <vee.filesystem.write>~/x</vee.filesystem.write>"
+        let new = "# <vee.filesystem.write>~</vee.filesystem.write>\n# <vee.secrets>TOKEN</vee.secrets>"
+        let diff = TrustDiff.between(old: old, new: new)
+        // summaryLines is now derived from changes, so they must match 1:1.
+        let rebuilt = diff.changes.map {
+            "\($0.direction == .added ? "adds" : "removes") \($0.noun): \($0.item)"
+        }
+        XCTAssertEqual(rebuilt, diff.summaryLines)
+        // An added filesystem-write path is elevated.
+        XCTAssertEqual(diff.changes.first { $0.noun == "filesystem write" && $0.direction == .added }?.isElevated, true)
+    }
 }
