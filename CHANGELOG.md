@@ -17,6 +17,11 @@ All notable changes to Vee are documented here. The format is based on
   trust row, and the controls footer are untouched — the panel is an additional
   surface, not a replacement. Also available from the CLI: `vee search <plugin>
   [query…]`.
+- **Global search hotkey** (opt-in via `<vee.shortcut>cmd+shift+k</vee.shortcut>`):
+  a plugin can bind a system-wide hotkey that opens its search panel from
+  anywhere, without opening the menu first. Registered with Carbon
+  `RegisterEventHotKey` — no Accessibility permission and no third-party
+  dependency. Omit the tag for no hotkey.
 - The structured-JSON output format now supports the rich inline controls —
   `sparkline`, `toggle`, `slider`, and `progress` (plus `trackColor` /
   `progressWidth` / `progressHeight`) — as typed item fields, mapping to the same

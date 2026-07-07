@@ -108,7 +108,10 @@ public final class StatusItemController {
     }
 
     /// Flattens the current dropdown tree and opens the searchable filter panel,
-    /// routing activations through the same handler the menu uses.
+    /// routing activations through the same handler the menu uses. Public so a
+    /// global hotkey (`<vee.shortcut>`) can open it without the menu being open.
+    public func openSearchPanel() { presentSearch() }
+
     private func presentSearch() {
         MenuSearchPanel.shared.present(
             rows: MenuSearch.flatten(lastBody),

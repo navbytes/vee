@@ -52,6 +52,9 @@ public enum HeaderParser {
             case "hideswiftbar": meta.hideSwiftBar = boolValue(value)
             // Vee-native: opt into the searchable filter panel (`<vee.filter>`).
             case "filter": meta.filter = boolValue(value)
+            // Vee-native: a global hotkey that opens the search panel
+            // (`<vee.shortcut>`). Ignored when the combo can't be parsed.
+            case "shortcut": meta.shortcut = HotKeySpec.parse(value)
             case "var":
                 if let decl = parseVar(value) { meta.vars.append(decl) }
             default:

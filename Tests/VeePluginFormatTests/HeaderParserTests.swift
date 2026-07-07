@@ -104,6 +104,17 @@ final class HeaderParserTests: XCTestCase {
         XCTAssertFalse(absent.filter)
     }
 
+    func testVeeShortcutParsedAndIgnoredWhenInvalid() {
+        let ok = HeaderParser.parse(source: "# <vee.shortcut>cmd+shift+k</vee.shortcut>\n")
+        XCTAssertEqual(ok.shortcut?.keyCode, 0x28)
+        XCTAssertEqual(ok.shortcut?.display, "⇧⌘K")
+        // A bare key (no modifier) is rejected → no hotkey registered.
+        let bad = HeaderParser.parse(source: "# <vee.shortcut>k</vee.shortcut>\n")
+        XCTAssertNil(bad.shortcut)
+        let absent = HeaderParser.parse(source: "echo hi\n")
+        XCTAssertNil(absent.shortcut)
+    }
+
     func testNoHeaderYieldsEmptyMetadata() {
         let m = HeaderParser.parse(source: "echo hello\n")
         XCTAssertNil(m.title)
