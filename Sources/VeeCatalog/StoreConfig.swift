@@ -134,8 +134,10 @@ public extension StoreConfig {
         else { return nil }
 
         func url(_ key: String) -> URL? {
-            (d[key] as? String).flatMap(URL.init(string:))
+            guard let s = d[key] as? String else { return nil }
+            return URL(string: s)
         }
+        func string(_ key: String) -> String? { d[key] as? String }
 
         self.init(
             id: StoreID(idString),
@@ -146,15 +148,15 @@ public extension StoreConfig {
             isManaged: true,
             apiHost: url("apiHost"),
             rawHost: url("rawHost"),
-            owner: d["owner"] as? String,
-            repo: d["repo"] as? String,
-            ref: (d["ref"] as? String) ?? "main",
+            owner: string("owner"),
+            repo: string("repo"),
+            ref: string("ref") ?? "main",
             baseURL: url("baseURL"),
-            manifestPath: (d["manifestPath"] as? String) ?? "vee-catalog.json",
-            trustPolicy: (d["trustPolicy"] as? String).flatMap(StoreTrustPolicy.init(rawValue:)) ?? .internalReviewed,
-            authMode: (d["authMode"] as? String).flatMap(StoreAuthMode.init(rawValue:)) ?? .none,
+            manifestPath: string("manifestPath") ?? "vee-catalog.json",
+            trustPolicy: string("trustPolicy").flatMap { StoreTrustPolicy(rawValue: $0) } ?? .internalReviewed,
+            authMode: string("authMode").flatMap { StoreAuthMode(rawValue: $0) } ?? .none,
             requireSignature: (d["requireSignature"] as? Bool) ?? false,
-            pinnedSigningKey: d["pinnedSigningKey"] as? String
+            pinnedSigningKey: string("pinnedSigningKey")
         )
     }
 }

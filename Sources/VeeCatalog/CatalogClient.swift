@@ -76,11 +76,35 @@ public struct GitHubCatalogClient: CatalogFetching {
     }
 
     public func fetchIndex() async throws -> [CatalogEntry] {
+        // Prefer a curation manifest when the store publishes one; fall back to
+        // the Git-tree convention only when the manifest is absent (404). A
+        // present-but-malformed manifest surfaces as an error, not a silent
+        // downgrade to inference.
+        if let manifestEntries = try await manifestIndexIfPresent() {
+            return manifestEntries
+        }
         guard let treeURL = endpoints.treeURL, let repoBase = endpoints.rawBase else {
             throw CatalogError.unsupported
         }
         let data = try await boundedData(for: authorizedRequest(treeURL), cap: Self.treeCap)
         return try CatalogParser.parse(treeJSON: data, repoBase: repoBase, storeID: endpoints.config.id)
+    }
+
+    /// Fetches and parses the store's manifest, or `nil` if the store publishes
+    /// none (a 404), so the caller can fall back to the tree convention.
+    ///
+    /// The built-in public catalog is known to have no manifest, so it is never
+    /// probed — its load stays a single tree request, exactly as before.
+    private func manifestIndexIfPresent() async throws -> [CatalogEntry]? {
+        guard !endpoints.config.isBuiltIn else { return nil }
+        guard let manifestURL = endpoints.manifestURL, let rawBase = endpoints.rawBase else { return nil }
+        let data: Data
+        do {
+            data = try await boundedData(for: authorizedRequest(manifestURL), cap: Self.sourceCap)
+        } catch CatalogError.httpStatus(404) {
+            return nil
+        }
+        return try CatalogManifestParser.parse(data, storeID: endpoints.config.id, rawBase: rawBase)
     }
 
     public func fetchSource(_ entry: CatalogEntry) async throws -> String {
