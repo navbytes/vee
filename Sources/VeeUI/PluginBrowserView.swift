@@ -13,11 +13,14 @@ public struct InstallPrompt: Identifiable {
     public let warnings: [String]
     public let description: String?
     public let dependencies: [String]
+    /// Vee-native features the plugin opts into (search panel, global hotkey),
+    /// disclosed alongside its capabilities before install.
+    public let features: PluginFeatures
     /// For an update, how the incoming source's trust footprint differs from the
     /// installed one. `nil` for a fresh install (nothing to compare against).
     public let trustDiff: TrustDiff?
 
-    public init(entry: CatalogEntry, source: String, title: String, summary: TrustSummary, warnings: [String], description: String?, dependencies: [String], trustDiff: TrustDiff? = nil) {
+    public init(entry: CatalogEntry, source: String, title: String, summary: TrustSummary, warnings: [String], description: String?, dependencies: [String], features: PluginFeatures = PluginFeatures(), trustDiff: TrustDiff? = nil) {
         self.entry = entry
         self.source = source
         self.title = title
@@ -25,6 +28,7 @@ public struct InstallPrompt: Identifiable {
         self.warnings = warnings
         self.description = description
         self.dependencies = dependencies
+        self.features = features
         self.trustDiff = trustDiff
     }
 }
@@ -173,6 +177,7 @@ public final class PluginBrowserModel: ObservableObject {
                 warnings: warnings,
                 description: header.summary,
                 dependencies: header.dependencies,
+                features: PluginFeatures(header: header),
                 trustDiff: trustDiff
             )
         } catch {

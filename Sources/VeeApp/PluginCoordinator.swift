@@ -51,14 +51,16 @@ final class PluginCoordinator {
 
         let (aboutText, aboutURL) = Self.about(from: header)
 
+        let features = PluginFeatures(header: header)
         self.controller = StatusItemController(
             pluginName: plugin.filename.name,
             handler: AppActionDispatcher(runner: SystemProcessRunner(), baseEnvironment: baseEnvironment) { [weak self] in self?.refresh() },
-            hasSettings: !header.vars.isEmpty,
+            hasSettings: !header.vars.isEmpty || !features.isEmpty,
             trustSummary: trustSummary,
             refreshOnOpen: header.refreshOnOpen ?? false,
             hideLastUpdated: header.hideLastUpdated,
             filterEnabled: header.filter,
+            features: features,
             autosaveName: "com.vee.plugin.\(plugin.id.rawValue)",
             aboutText: aboutText,
             aboutURL: aboutURL,
@@ -101,7 +103,7 @@ final class PluginCoordinator {
     func showDebugConsole() { showDebug() }
 
     private func openSettings() {
-        let model = PluginSettingsModel(pluginName: plugin.filename.name, prefs: preferences) { [weak self] in
+        let model = PluginSettingsModel(pluginName: plugin.filename.name, prefs: preferences, features: PluginFeatures(header: header)) { [weak self] in
             self?.refresh()
         }
         SettingsWindowManager.shared.show(pluginID: plugin.id.rawValue, model: model)
