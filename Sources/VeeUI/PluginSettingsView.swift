@@ -7,15 +7,17 @@ import VeePreferences
 public final class PluginSettingsModel: ObservableObject {
     public let pluginName: String
     public let declarations: [VarDeclaration]
+    public let features: PluginFeatures
     @Published public var values: [String: String]
 
     private let prefs: PluginPreferences
     private let onSaved: () -> Void
 
-    public init(pluginName: String, prefs: PluginPreferences, onSaved: @escaping () -> Void) {
+    public init(pluginName: String, prefs: PluginPreferences, features: PluginFeatures = PluginFeatures(), onSaved: @escaping () -> Void) {
         self.pluginName = pluginName
         self.prefs = prefs
         self.declarations = prefs.declarations
+        self.features = features
         self.onSaved = onSaved
         var initial: [String: String] = [:]
         for declaration in prefs.declarations {
@@ -59,7 +61,7 @@ public struct PluginSettingsView: View {
     public var body: some View {
         NavigationStack {
             Group {
-                if model.declarations.isEmpty {
+                if model.declarations.isEmpty && model.features.isEmpty {
                     ContentUnavailableView(
                         "No preferences",
                         systemImage: "slider.horizontal.3",
@@ -67,12 +69,28 @@ public struct PluginSettingsView: View {
                     )
                 } else {
                     Form {
-                        Section {
-                            ForEach(model.declarations, id: \.name) { declaration in
-                                row(for: declaration)
+                        if !model.features.isEmpty {
+                            Section("Features") {
+                                ForEach(model.features.items, id: \.title) { item in
+                                    Label {
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            Text(item.title)
+                                            Text(item.detail).font(.caption).foregroundStyle(.secondary)
+                                        }
+                                    } icon: {
+                                        Image(systemName: item.symbol)
+                                    }
+                                }
                             }
-                        } footer: {
-                            Text("Saved for \(model.pluginName). Secret values are masked.")
+                        }
+                        if !model.declarations.isEmpty {
+                            Section {
+                                ForEach(model.declarations, id: \.name) { declaration in
+                                    row(for: declaration)
+                                }
+                            } footer: {
+                                Text("Saved for \(model.pluginName). Secret values are masked.")
+                            }
                         }
                     }
                     .formStyle(.grouped)

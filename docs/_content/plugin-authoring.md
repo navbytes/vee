@@ -211,7 +211,10 @@ needed**; if the combination is already taken system-wide, Vee logs it and moves
 on.
 
 Both tags are strictly opt-in — omit them and the plugin behaves exactly as
-before. You can also preview a plugin's search from the terminal without
+before. Whatever a plugin declares, Vee surfaces under its **Features** — in the
+menu's capabilities area and the plugin's Settings window, and on the install
+sheet — so a global hotkey a plugin grabs is always visible and never a
+surprise. You can also preview a plugin's search from the terminal without
 installing it: see [`vee search`](cli-and-urls.md#vee-search).
 
 ## Metadata headers

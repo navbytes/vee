@@ -1,4 +1,5 @@
 import SwiftUI
+import VeePluginFormat
 import VeeTrust
 
 /// The trust gate shown before installing a catalog plugin: plain-language
@@ -27,6 +28,8 @@ public struct InstallTrustSheet: View {
                     }
 
                     capabilitiesSection
+
+                    featuresSection
 
                     trustDiffSection
 
@@ -99,6 +102,34 @@ public struct InstallTrustSheet: View {
                                 if !badge.detail.isEmpty {
                                     Text(badge.detail).font(.caption).foregroundStyle(.secondary)
                                 }
+                            }
+                            Spacer()
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// The Vee-native features the plugin opts into (searchable menu, global
+    /// hotkey). Hidden when it declares none. A global hotkey grabs a system-wide
+    /// key, so it's disclosed here before install.
+    @ViewBuilder
+    private var featuresSection: some View {
+        if !prompt.features.isEmpty {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Features it adds")
+                    .font(.subheadline).fontWeight(.semibold)
+                VStack(alignment: .leading, spacing: 12) {
+                    ForEach(Array(prompt.features.items.enumerated()), id: \.offset) { _, feature in
+                        HStack(alignment: .top, spacing: 11) {
+                            Image(systemName: feature.symbol)
+                                .font(.body)
+                                .foregroundStyle(.secondary)
+                                .frame(width: 22)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(feature.title).font(.callout).fontWeight(.medium)
+                                Text(feature.detail).font(.caption).foregroundStyle(.secondary)
                             }
                             Spacer()
                         }

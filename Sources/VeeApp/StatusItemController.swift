@@ -54,6 +54,9 @@ public final class StatusItemController {
     private let handler: MenuActionHandling
     /// Whether this plugin opts into the searchable filter panel (`<vee.filter>`).
     private let filterEnabled: Bool
+    /// Declared Vee-native features (search panel, global hotkey) for the
+    /// capabilities area.
+    private let features: PluginFeatures
     /// The most recently rendered dropdown tree, frozen into the search panel on
     /// open so it reflects what the user currently sees.
     private var lastBody: [MenuNode] = []
@@ -75,10 +78,11 @@ public final class StatusItemController {
         return f
     }()
 
-    public init(pluginName: String, handler: MenuActionHandling, hasSettings: Bool = false, trustSummary: TrustSummary? = nil, refreshOnOpen: Bool = false, hideLastUpdated: Bool = false, filterEnabled: Bool = false, autosaveName: String? = nil, aboutText: String? = nil, aboutURL: URL? = nil, onRefresh: @escaping () -> Void, onSettings: @escaping () -> Void = {}, onReveal: @escaping () -> Void = {}, onEdit: @escaping () -> Void = {}, onDebug: @escaping () -> Void = {}) {
+    public init(pluginName: String, handler: MenuActionHandling, hasSettings: Bool = false, trustSummary: TrustSummary? = nil, refreshOnOpen: Bool = false, hideLastUpdated: Bool = false, filterEnabled: Bool = false, features: PluginFeatures = PluginFeatures(), autosaveName: String? = nil, aboutText: String? = nil, aboutURL: URL? = nil, onRefresh: @escaping () -> Void, onSettings: @escaping () -> Void = {}, onReveal: @escaping () -> Void = {}, onEdit: @escaping () -> Void = {}, onDebug: @escaping () -> Void = {}) {
         self.pluginName = pluginName
         self.handler = handler
         self.filterEnabled = filterEnabled
+        self.features = features
         self.hasSettings = hasSettings
         self.trustSummary = trustSummary
         self.aboutText = aboutText
@@ -277,6 +281,30 @@ public final class StatusItemController {
         return item
     }
 
+    /// A "Features" row mirroring the trust row: lists the Vee-native features
+    /// this plugin opts into (searchable menu, global hotkey). Only shown when the
+    /// plugin declares at least one, so classic plugins stay uncluttered.
+    private func buildFeaturesItem() -> NSMenuItem? {
+        guard !features.isEmpty else { return nil }
+        let item = NSMenuItem()
+        item.title = "Features"
+        item.image = NSImage(systemSymbolName: "sparkles", accessibilityDescription: nil)
+        item.image?.isTemplate = true
+
+        let submenu = NSMenu()
+        submenu.autoenablesItems = false
+        for feature in features.items {
+            let row = NSMenuItem(title: feature.title, action: nil, keyEquivalent: "")
+            row.isEnabled = false
+            row.image = NSImage(systemSymbolName: feature.symbol, accessibilityDescription: nil)
+            row.image?.isTemplate = true
+            row.toolTip = feature.detail
+            submenu.addItem(row)
+        }
+        item.submenu = submenu
+        return item
+    }
+
     private func title(for level: TrustLevel) -> String {
         switch level {
         case .declared: return "Capabilities declared"
@@ -316,6 +344,11 @@ public final class StatusItemController {
 
         if let trust = buildTrustItem() {
             menu.addItem(trust)
+            menu.addItem(.separator())
+        }
+
+        if let featuresItem = buildFeaturesItem() {
+            menu.addItem(featuresItem)
             menu.addItem(.separator())
         }
 
