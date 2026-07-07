@@ -240,6 +240,11 @@ Put `<xbar.*>` / `<swiftbar.*>` tags anywhere in the file (usually in a comment 
 | `<swiftbar.refreshOnOpen>` | Re-run the plugin each time its menu opens. |
 | `<swiftbar.environment>` | Inline environment variables, e.g. `[VAR1=a, VAR2=b]`. |
 | `<swiftbar.hideAbout>` | Hide the default "About" item. |
+| `<swiftbar.hideRunInTerminal>` | Hide the "Run in Terminal…" item. |
+| `<swiftbar.hideLastUpdated>` | Hide the "Updated…" timestamp item. |
+| `<swiftbar.hideDisablePlugin>` | Hide the "Disable Plugin" item. |
+| `<swiftbar.hideSwiftBar>` | Hide the app (Vee) submenu. |
+| `<swiftbar.persistentWebView>` | Keep a `webview=` window alive across refreshes instead of recreating it. |
 
 The `<swiftbar.*>` tags use the same names as their `<xbar.*>` counterparts where they overlap.
 

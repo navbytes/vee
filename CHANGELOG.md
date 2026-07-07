@@ -6,6 +6,39 @@ All notable changes to Vee are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed
+- **Crash on `length=-1`.** A negative `length=` reached `String.prefix(_:)`,
+  which traps — a plugin printing `foo|length=-1` crashed the whole menu-bar app
+  on every render. `length` is now clamped to `>= 0` at parse time.
+- **Misidentified missing command.** The "…" not-found hint parsed the wrong
+  colon-field of real bash output and named the script path instead of the tool;
+  it now anchors on the marker.
+- **Tab-separated params** were swallowed into the preceding value; a tab now
+  separates params like a space.
+- **Non-SGR ANSI escapes** (cursor move / erase, e.g. `ESC[K`) ate the text up to
+  the next `m`; they are now stripped per the CSI grammar without touching style.
+- **In-place plugin edits took effect only after a toggle/relaunch.** The reload
+  now keys on each plugin file's modification time, so editing a header (schedule,
+  hotkey, `runInBash`, trust) applies immediately.
+- **Process drain could hang/leak** when a grandchild kept stdout open after the
+  plugin exited; a drain-grace now force-completes the run and releases the reads.
+
+### Security
+- **`swiftbar://addplugin` now requires confirmation.** The deep link previously
+  fetched, wrote executable, and auto-ran a plugin with no gate — unattended code
+  execution any web page could trigger. It now shows the plugin's capability
+  footprint and requires an explicit Install click, streams the download with a
+  1 MB cap, rejects a non-2xx status, and fails closed on an unusable filename.
+- **`swiftbar://setephemeralplugin`** content injected via URL now has its
+  `shell=`/`bash=` actions stripped, removing a one-click arbitrary-exec vector.
+- The widget snapshot file is written owner-only (`0600`).
+
+### Changed
+- Widget snapshot timestamp-only writes are throttled (content changes still
+  write immediately), and the Discover catalog fetch is buffered instead of read
+  byte-by-byte — less disk/CPU churn. `refreshAll` staggers plugin spawns so
+  wake/launch doesn't start every subprocess at once.
+
 ### Added
 - **Widgets rebuilt into real dashboard tiles.** The WidgetKit widget is no
   longer a monospaced copy of the menu bar. It now (a) lets each instance

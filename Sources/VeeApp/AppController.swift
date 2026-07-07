@@ -24,7 +24,9 @@ public final class AppController: NSObject, NSApplicationDelegate {
     /// per-plugin error updates can be pushed into it. Nil when the window is closed.
     private weak var currentManagerModel: PluginManagerModel?
     private var ephemerals: [String: StatusItemController] = [:]
-    private var loadedPaths: Set<String> = []
+    /// Path → file-modification-time of the currently loaded plugins; a change
+    /// here (including an in-place edit) triggers a rebuild. See `reload()`.
+    private var loadedSignature: [String: TimeInterval] = [:]
     private var watcher: PluginDirectoryWatcher?
     private var wakeMonitor: WakeMonitor?
     private var mainMenu: MainMenuController?
@@ -317,11 +319,15 @@ public final class AppController: NSObject, NSApplicationDelegate {
 
     private func reload() {
         let plugins = enabledPlugins()
-        let paths = Set(plugins.map(\.path))
-        // Only rebuild when the effective set changes (avoids reload storms from
-        // in-directory writes; preserves timers/state otherwise).
-        if !coordinators.isEmpty, paths == loadedPaths { return }
-        loadedPaths = paths
+        let signature = Self.loadSignature(plugins)
+        // Rebuild when the effective set changes OR any plugin's file changes on
+        // disk (by modification time). Keying on the path set alone missed an
+        // in-place edit (same filename), so header-derived config — schedule,
+        // hotkey, runInBash, the trust footprint — silently kept its stale value
+        // until a toggle or relaunch. Still coalesced by the directory watcher's
+        // debounce, so this doesn't storm on rapid saves.
+        if !coordinators.isEmpty, signature == loadedSignature { return }
+        loadedSignature = signature
 
         coordinators.values.forEach { $0.stop() }
         coordinators.removeAll()
@@ -343,6 +349,17 @@ public final class AppController: NSObject, NSApplicationDelegate {
         }
         // Drop widget entries for plugins that are no longer loaded.
         flushWidgetSnapshot()
+    }
+
+    /// A change key for the loaded plugin set: each plugin's path plus its file
+    /// modification time, so an in-place edit (unchanged path) is detected.
+    private static func loadSignature(_ plugins: [DiscoveredPlugin]) -> [String: TimeInterval] {
+        var signature: [String: TimeInterval] = [:]
+        for plugin in plugins {
+            let attrs = try? FileManager.default.attributesOfItem(atPath: plugin.path)
+            signature[plugin.path] = (attrs?[.modificationDate] as? Date)?.timeIntervalSince1970 ?? 0
+        }
+        return signature
     }
 
     // MARK: - Widget snapshot
@@ -637,7 +654,7 @@ public final class AppController: NSObject, NSApplicationDelegate {
         prefs.pluginsDirectory = path
         directory = path
         PluginsDirectory.ensureExists(directory)
-        loadedPaths.removeAll()
+        loadedSignature.removeAll()
         reload()
         startWatching()
     }
@@ -654,10 +671,10 @@ public final class AppController: NSObject, NSApplicationDelegate {
 
     /// Moves a plugin's script to the Trash (recoverable) and reloads so its
     /// status item and coordinator are torn down. The manager has already removed
-    /// the row optimistically. `loadedPaths` is deliberately left untouched: it's
-    /// the change-detection baseline reload() compares against, so leaving the
-    /// now-deleted path in it guarantees reload() sees the diff and rebuilds
-    /// (removing it here would make reload() short-circuit and orphan the item).
+    /// the row optimistically. `loadedSignature` is deliberately left untouched:
+    /// it's the change-detection baseline reload() compares against, so the
+    /// now-deleted path dropping out of the fresh signature guarantees reload()
+    /// sees the diff and rebuilds (clearing it here would be redundant).
     private func deletePlugin(_ id: String) {
         guard let plugin = PluginDiscovery.enumerate(directory: directory).first(where: { $0.id.rawValue == id }) else { return }
         try? FileManager.default.trashItem(at: URL(fileURLWithPath: plugin.path), resultingItemURL: nil)
