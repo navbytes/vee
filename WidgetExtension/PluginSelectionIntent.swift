@@ -46,9 +46,12 @@ struct SelectPluginsIntent: WidgetConfigurationIntent {
     init() {}
     init(plugins: [PluginEntity]?) { self.plugins = plugins }
 
-    /// The selected ids, or `nil` when the user hasn't narrowed the set.
+    /// The selected ids, or `nil` only when the user hasn't configured the widget
+    /// at all (→ show all). A configured-but-currently-empty selection stays an
+    /// empty list, so a widget pinned to a plugin that later disappears shows the
+    /// empty state rather than silently reverting to showing every plugin.
     var selectedIDs: [String]? {
-        guard let plugins, !plugins.isEmpty else { return nil }
+        guard let plugins else { return nil }
         return plugins.map(\.id)
     }
 }

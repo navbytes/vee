@@ -67,6 +67,12 @@ Freshness uses a self-updating relative label (no extra reloads); `isStale`
 floors at 5 min so we never blame WidgetKit's own refresh budget. A sparkline is
 a dependency-free `Shape` (no Charts import) for predictable rendering.
 
+Freshness must reflect **"last ran", not "last content change"**, so the app
+*always* rewrites the snapshot file (keeping each plugin's `updated` current) and
+only spends a metered WidgetKit reload when the visible content actually changes.
+Otherwise a healthy plugin with steady output (a green status dot, a flat disk %)
+would freeze its `updated` and wrongly render as stale after a few minutes.
+
 ## Constraints honored
 
 - **Reload budget.** WidgetKit meters background reloads; the app keeps the 5-min

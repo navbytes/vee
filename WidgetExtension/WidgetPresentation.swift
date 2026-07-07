@@ -24,8 +24,10 @@ extension SnapshotColor {
         "red": .red, "green": .green, "blue": .blue, "yellow": .yellow, "orange": .orange,
         "purple": .purple, "pink": .pink, "teal": .teal, "cyan": .cyan, "mint": .mint,
         "indigo": .indigo, "brown": .brown, "gray": .gray, "grey": .gray,
+        "magenta": Color(.sRGB, red: 1, green: 0, blue: 1, opacity: 1),
         "black": .primary, "white": .primary, "clear": .clear,
         "labelcolor": .primary, "secondarylabelcolor": .secondary,
+        "linkcolor": .blue, "controlaccentcolor": .accentColor, "accentcolor": .accentColor,
         "systemred": .red, "systemgreen": .green, "systemblue": .blue, "systemorange": .orange,
         "systemyellow": .yellow, "systemgray": .gray, "systempurple": .purple,
         "systempink": .pink, "systemteal": .teal, "systemindigo": .indigo

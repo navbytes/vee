@@ -36,7 +36,7 @@ struct WidgetPublish: Equatable {
 enum WidgetSnapshotMapping {
     static func snapshotColor(_ color: VeeColor) -> SnapshotColor {
         switch color {
-        case .named(let name): return .named(name)
+        case .named(let name): return .named(name.lowercased())
         case .rgb(let r, let g, let b, let a): return .rgba(r: r, g: g, b: b, a: a)
         }
     }

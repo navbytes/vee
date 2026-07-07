@@ -289,26 +289,32 @@ public final class AppController: NSObject, NSApplicationDelegate {
     }
 
     /// Writes the current snapshot (only currently-loaded plugins, name-sorted)
-    /// to the shared file, and asks WidgetKit to reload — but only when the
-    /// *content* actually changed, and never more often than the reload floor.
+    /// to the shared file — always, so freshness timestamps stay honest — and asks
+    /// WidgetKit to reload only when the visible *content* changed (and never more
+    /// often than the reload floor).
     private func flushWidgetSnapshot() {
         snapshotItems = snapshotItems.filter { coordinators[$0.key] != nil }
         let plugins = snapshotItems.values.sorted { $0.name.lowercased() < $1.name.lowercased() }
-        // Skip identical content: a plugin re-running with the same output —
-        // title, color, gauge, error state — must not rewrite the file or spend a
-        // widget reload. Compare with the per-run `updated` timestamp normalized
-        // away so only meaningful changes count.
+        // Detect a visible-content change (title, color, gauge, error state) with
+        // the per-run `updated` timestamp normalized away, so a plugin re-running
+        // with identical output doesn't spend a widget reload.
         let signature = Self.contentSignature(plugins)
-        guard signature != lastPublishedSignature else { return }
+        let contentChanged = signature != lastPublishedSignature
         lastPublishedSignature = signature
 
+        // Always write, so the on-disk per-plugin `updated` (and `generated`)
+        // stay current: freshness must reflect "last ran", not "last content
+        // change", or a healthy plugin with steady output would wrongly render as
+        // stale after a few minutes. Only a *visible content* change is worth a
+        // metered WidgetKit reload — an unchanged re-run just refreshes timestamps.
         VeeWidgetSharing.shared.write(WidgetSnapshot(plugins: Array(plugins), generated: Date()))
-        requestWidgetReload()
+        if contentChanged { requestWidgetReload() }
     }
 
     /// The change-detection key for a set of snapshots: the same plugins with the
     /// per-run `updated` timestamp zeroed, so re-running a plugin with identical
-    /// output compares equal (only a real content change triggers a write/reload).
+    /// output compares equal (only a real content change triggers a widget reload;
+    /// the file itself is still rewritten to keep `updated` current).
     private static func contentSignature(_ plugins: [PluginSnapshot]) -> [PluginSnapshot] {
         plugins.map {
             PluginSnapshot(

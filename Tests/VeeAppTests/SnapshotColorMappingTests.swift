@@ -10,6 +10,12 @@ final class SnapshotColorMappingTests: XCTestCase {
         XCTAssertEqual(WidgetSnapshotMapping.snapshotColor(.named("green")), .named("green"))
     }
 
+    func testLowercasesNamedForSymmetryWithDecode() {
+        // SnapshotColor decodes named colors lowercased; the mapping must match so
+        // a directly-constructed color round-trips equal through the snapshot file.
+        XCTAssertEqual(WidgetSnapshotMapping.snapshotColor(.named("Red")), .named("red"))
+    }
+
     func testMapsRGBA() {
         XCTAssertEqual(
             WidgetSnapshotMapping.snapshotColor(.rgb(r: 10, g: 20, b: 30, a: 200)),
