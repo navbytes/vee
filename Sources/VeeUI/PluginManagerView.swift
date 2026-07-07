@@ -1,4 +1,5 @@
 import SwiftUI
+import VeePluginFormat
 
 /// One row in the plugin manager.
 public struct PluginManagerRow: Identifiable, Sendable {
@@ -8,14 +9,18 @@ public struct PluginManagerRow: Identifiable, Sendable {
     public var trust: String
     public var isEnabled: Bool
     public var hasSettings: Bool
+    /// The plugin's effective Vee-native features (search panel, active hotkey),
+    /// shown as small indicators.
+    public var features: PluginFeatures
 
-    public init(id: String, name: String, interval: String, trust: String, isEnabled: Bool, hasSettings: Bool) {
+    public init(id: String, name: String, interval: String, trust: String, isEnabled: Bool, hasSettings: Bool, features: PluginFeatures = PluginFeatures()) {
         self.id = id
         self.name = name
         self.interval = interval
         self.trust = trust
         self.isEnabled = isEnabled
         self.hasSettings = hasSettings
+        self.features = features
     }
 }
 
@@ -153,6 +158,15 @@ private struct ManagerRow: View {
                     }
                     if !row.trust.isEmpty {
                         TrustChip(symbol: trustSymbol, label: row.trust, tint: trustTint)
+                    }
+                    if row.features.searchPanel {
+                        Image(systemName: "magnifyingglass")
+                            .help("Searchable menu (⌘F)")
+                    }
+                    if let hotkey = row.features.hotkey {
+                        Label(hotkey, systemImage: "keyboard")
+                            .labelStyle(.titleAndIcon)
+                            .help("Global hotkey")
                     }
                 }
                 .font(.caption)

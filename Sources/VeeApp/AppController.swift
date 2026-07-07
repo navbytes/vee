@@ -463,14 +463,29 @@ public final class AppController: NSObject, NSApplicationDelegate {
             let source = (try? String(contentsOfFile: plugin.path, encoding: .utf8)) ?? ""
             let header = HeaderParser.parse(source: source)
             let level = TrustAnalyzer.analyze(TrustParser.parse(source: source)).level
-            let enabled = plugin.isExecutable && !prefs.isDisabled(plugin.id.rawValue)
+            let id = plugin.id.rawValue
+            let enabled = plugin.isExecutable && !prefs.isDisabled(id)
+            // Declared features gate Settings reachability (so a disabled hotkey
+            // stays re-enable-able); the indicators reflect the *effective* state.
+            let declaredFeatures = PluginFeatures(header: header)
+            let effectiveHotkey: String?
+            if case .use(let spec) = EffectiveHotkey.resolve(
+                declared: header.shortcut,
+                userDisabled: prefs.isHotkeyDisabled(id),
+                customBinding: prefs.hotkeyBinding(id)
+            ) {
+                effectiveHotkey = spec.display
+            } else {
+                effectiveHotkey = nil
+            }
             return PluginManagerRow(
-                id: plugin.id.rawValue,
+                id: id,
                 name: plugin.filename.name,
                 interval: describe(plugin.filename.interval),
                 trust: describe(level),
                 isEnabled: enabled,
-                hasSettings: !header.vars.isEmpty
+                hasSettings: !header.vars.isEmpty || !declaredFeatures.isEmpty,
+                features: PluginFeatures(searchPanel: header.filter, hotkey: effectiveHotkey)
             )
         }
     }
