@@ -30,7 +30,7 @@ final class MenuFlattenerTests: XCTestCase {
 
     func testNestedItemsCarryBreadcrumb() {
         let rows = MenuFlattener.flatten([
-            plain("agentmesh", submenu: [
+            plain("orders", submenu: [
                 plain("Epics", submenu: [
                     href("#123 Fix retry")
                 ]),
@@ -39,26 +39,26 @@ final class MenuFlattenerTests: XCTestCase {
         ])
         XCTAssertEqual(rows.count, 2)
         let fix = rows.first { $0.item.text == "#123 Fix retry" }
-        XCTAssertEqual(fix?.path, ["agentmesh", "Epics"])
-        XCTAssertEqual(fix?.breadcrumb, "agentmesh › Epics")
+        XCTAssertEqual(fix?.path, ["orders", "Epics"])
+        XCTAssertEqual(fix?.breadcrumb, "orders › Epics")
         let status = rows.first { $0.item.text == "Status" }
-        XCTAssertEqual(status?.path, ["agentmesh"])
+        XCTAssertEqual(status?.path, ["orders"])
     }
 
     /// Regression (spec bug #3): an item with BOTH an action and a submenu must
     /// surface its own action *and* recurse into children.
     func testClickableParentEmittedAndRecursed() {
         let rows = MenuFlattener.flatten([
-            href("agentmesh", "https://agentmesh.dev", submenu: [
+            href("orders", "https://orders.dev", submenu: [
                 href("Child")
             ])
         ])
         XCTAssertEqual(rows.count, 2)
-        let parent = rows.first { $0.item.text == "agentmesh" }
+        let parent = rows.first { $0.item.text == "orders" }
         XCTAssertEqual(parent?.path, [])                         // emitted at its own level
         XCTAssertNotNil(parent?.item.params.href)
         let child = rows.first { $0.item.text == "Child" }
-        XCTAssertEqual(child?.path, ["agentmesh"])               // breadcrumb still carries the group
+        XCTAssertEqual(child?.path, ["orders"])               // breadcrumb still carries the group
     }
 
     func testDisabledAndDropdownFalseExcluded() {

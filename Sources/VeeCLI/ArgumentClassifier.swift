@@ -19,7 +19,7 @@ public enum SubcommandClassification: Equatable, Sendable {
 
 public enum ArgumentClassifier {
     /// The subcommands the CLI understands.
-    public static let knownSubcommands: Set<String> = ["render", "lint", "new"]
+    public static let knownSubcommands: Set<String> = ["render", "lint", "new", "search"]
 
     /// Classifies `arguments`, which INCLUDE the executable name as element 0
     /// (i.e. pass `CommandLine.arguments` directly).

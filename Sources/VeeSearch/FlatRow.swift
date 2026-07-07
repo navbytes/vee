@@ -29,7 +29,7 @@ public struct FlatRow: Equatable, Sendable {
         self.haystack = haystack
     }
 
-    /// The breadcrumb string for display, e.g. `agentmesh › Epics`.
+    /// The breadcrumb string for display, e.g. `orders › Epics`.
     public var breadcrumb: String { path.joined(separator: " › ") }
 }
 

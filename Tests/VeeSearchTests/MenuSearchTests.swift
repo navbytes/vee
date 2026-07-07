@@ -63,16 +63,27 @@ final class MenuSearchTests: XCTestCase {
     }
 
     func testTitleMatchOutranksBreadcrumbOnlyMatch() {
-        let direct = row("agentmesh dashboard")           // matches in the title
-        let contextual = row("Fix retry", path: ["agentmesh"])  // matches only via breadcrumb
-        let result = MenuSearch.search("agentmesh", in: [contextual, direct])
-        XCTAssertEqual(result.map(\.item.text), ["agentmesh dashboard", "Fix retry"])
+        let direct = row("orders dashboard")           // matches in the title
+        let contextual = row("Fix retry", path: ["orders"])  // matches only via breadcrumb
+        let result = MenuSearch.search("orders", in: [contextual, direct])
+        XCTAssertEqual(result.map(\.item.text), ["orders dashboard", "Fix retry"])
     }
 
     func testBreadcrumbTokenSurfacesChildren() {
-        let child = row("#123 Fix retry", path: ["agentmesh", "Epics"])
+        let child = row("#123 Fix retry", path: ["orders", "Epics"])
         let result = MenuSearch.search("epics", in: [child, row("Unrelated")])
         XCTAssertEqual(result.map(\.item.text), ["#123 Fix retry"])
+    }
+
+    /// Regression: a short token must not scatter-match across breadcrumb words
+    /// as a loose subsequence. Only a *contiguous* ancestor substring (or a title
+    /// fuzzy match) counts — so `npm` finds the script, not `main`, whose folded
+    /// breadcrumb merely happens to contain n…p…m as a scattered subsequence.
+    func testBreadcrumbMatchRequiresContiguousSubstring() {
+        let scattered = row("main", path: ["Repositories", "orders", "Branches"])
+        let real = row("npm run dev", path: ["Scripts"])
+        let result = MenuSearch.search("npm", in: [scattered, real])
+        XCTAssertEqual(result.map(\.item.text), ["npm run dev"])
     }
 
     func testStableTieBreakByOriginalOrder() {
