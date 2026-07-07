@@ -9,6 +9,13 @@ import VeeCatalog
 public final class StoresSettingsModel: ObservableObject {
     @Published public private(set) var stores: [StoreConfig] = []
 
+    // Add-store "Test Connection" state, owned here (not in the sheet's @State)
+    // so the async work follows the same model-owns-async pattern the rest of
+    // the app uses.
+    @Published public var testing = false
+    @Published public var testMessage: String?
+    @Published public var testSucceeded = false
+
     private let registry: StoreRegistry
     private let makeTokenStore: (StoreID) -> StoreTokenStoring
     private let makeClient: (StoreConfig, StoreTokenProviding?) -> CatalogFetching
@@ -46,16 +53,28 @@ public final class StoresSettingsModel: ObservableObject {
         reload()
     }
 
-    /// Loads the store's index once to verify the location + token, returning the
-    /// plugin count or a human-readable failure.
-    public func testConnection(_ config: StoreConfig, token: String?) async -> Result<Int, String> {
+    /// Clears any previous test result (called when the Add sheet appears).
+    public func resetTest() {
+        testing = false
+        testMessage = nil
+        testSucceeded = false
+    }
+
+    /// Loads the store's index once to verify the location + token, publishing the
+    /// plugin count or a human-readable failure into `testMessage`.
+    public func runTest(_ config: StoreConfig, token: String?) async {
+        testing = true
+        testMessage = nil
         let provider: StoreTokenProviding? = (token?.isEmpty == false) ? StaticToken(token ?? "") : nil
         do {
-            let entries = try await makeClient(config, provider).fetchIndex()
-            return .success(entries.count)
+            let count = try await makeClient(config, provider).fetchIndex().count
+            testSucceeded = true
+            testMessage = "Connected — \(count) plugin\(count == 1 ? "" : "s") found."
         } catch {
-            return .failure(CatalogErrorPresenter.message(for: error))
+            testSucceeded = false
+            testMessage = CatalogErrorPresenter.message(for: error)
         }
+        testing = false
     }
 
     /// A one-shot token provider for a not-yet-saved store under test.
@@ -207,10 +226,6 @@ private struct AddStoreSheet: View {
     @State private var token = ""
     @State private var internalReviewed = true
     @State private var requireSignature = false
-
-    @State private var testing = false
-    @State private var testMessage: String?
-    @State private var testOK = false
     @State private var addError: String?
 
     var body: some View {
@@ -235,10 +250,10 @@ private struct AddStoreSheet: View {
                 } footer: {
                     Text("Tokens are stored in your Keychain and sent only to this store. Requiring signatures blocks unsigned plugins and can't be lowered by the store.")
                 }
-                if let testMessage {
+                if let testMessage = model.testMessage {
                     Section {
-                        Label(testMessage, systemImage: testOK ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
-                            .foregroundStyle(testOK ? Color.green : Color.red)
+                        Label(testMessage, systemImage: model.testSucceeded ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
+                            .foregroundStyle(model.testSucceeded ? Color.green : Color.red)
                     }
                 }
                 if let addError {
@@ -246,12 +261,15 @@ private struct AddStoreSheet: View {
                 }
             }
             .formStyle(.grouped)
+            .onAppear { model.resetTest() }
 
             Divider()
             HStack {
-                Button("Test Connection") { Task { await test() } }
-                    .disabled(!canBuild || testing)
-                if testing { ProgressView().controlSize(.small) }
+                Button("Test Connection") {
+                    if let config = buildConfig() { Task { await model.runTest(config, token: token) } }
+                }
+                .disabled(!canBuild || model.testing)
+                if model.testing { ProgressView().controlSize(.small) }
                 Spacer()
                 Button("Cancel") { isPresented = false }
                     .keyboardShortcut(.cancelAction)
@@ -348,23 +366,6 @@ private struct AddStoreSheet: View {
         guard !trimmed.isEmpty else { return nil }
         if trimmed.hasPrefix("file://") { return URL(string: trimmed) }
         return URL(fileURLWithPath: trimmed)
-    }
-
-    @MainActor
-    private func test() async {
-        guard let config = buildConfig() else { return }
-        testing = true
-        testMessage = nil
-        let result = await model.testConnection(config, token: token)
-        testing = false
-        switch result {
-        case .success(let count):
-            testOK = true
-            testMessage = "Connected — \(count) plugin\(count == 1 ? "" : "s") found."
-        case .failure(let message):
-            testOK = false
-            testMessage = message
-        }
     }
 
     private func addStore() {
