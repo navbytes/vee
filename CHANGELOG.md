@@ -122,6 +122,22 @@ All notable changes to Vee are documented here. The format is based on
   is versioned (v2) and still decodes a v1 snapshot. A second widget, **Vee
   Health**, surfaces the one thing the menu bar can't: an aggregate roll-up
   ("6 OK · 1 failing") with the failing plugins called out.
+- **Widget surface contract:** a plugin can now feed its widget tile *data*
+  instead of a scrape of its menu-bar line. `<vee.surface>both</vee.surface>`
+  runs the plugin a second time with `VEE_TARGET=widget` on its own cadence
+  (`<vee.widget.interval>`, floored at 5 minutes) and reads one JSON "card"
+  object from stdout — `stat`/`gauge`/`trend`/`list`/`board`, each a native
+  SwiftUI template rendered per widget family. `<vee.surface>widget</vee.surface>`
+  makes a plugin **widget-only**: no status item, no menu, feeding just the
+  widget. A card's `refresh`/`shortcut` action buttons run through a new
+  per-plugin request channel (the widget extension writes a small request
+  file and signals the app, generalizing the existing refresh-all control);
+  `href` actions open directly, scheme-filtered like menu `href=`. Every
+  plugin still has a widget representation with zero changes — the scrape
+  (now snapshot v3) is the default and the fallback when a `both`/`widget`
+  plugin doesn't emit a card. The TypeScript, Python, and Go SDKs all gained
+  `WidgetCard`/`Stat`/`Gauge`/`Trend`/`List`/`Board` builders, with a shared
+  golden fixture round-tripped through the Swift parser.
 - **Searchable filter panel** (opt-in via `<vee.filter>true</vee.filter>`): a
   plugin's menu gains a **Search…** row (⌘F) that opens a Spotlight-like panel
   filtering every item — including those nested in submenus — flattened into a

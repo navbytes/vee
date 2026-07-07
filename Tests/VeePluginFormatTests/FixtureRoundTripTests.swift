@@ -1,5 +1,6 @@
 import XCTest
 @testable import VeePluginFormat
+@testable import VeeWidgetShared
 
 /// Parses the golden fixtures produced by the TypeScript SDK (plugins/fixtures)
 /// and asserts they round-trip through the Swift parser. This ties the SDK's
@@ -83,5 +84,38 @@ final class FixtureRoundTripTests: XCTestCase {
 
         // sparkline=1,2,3,5,8,13
         XCTAssertEqual(items[3].params.sparkline, [1, 2, 3, 5, 8, 13])
+    }
+
+    /// Closes the SDK→parser loop for the widget surface contract: the TS
+    /// SDK's `widget-card` example emits widget-card.txt, and
+    /// `WidgetCardParser` must recover the exact card the SDK built it from.
+    func testWidgetCardFixtureParses() throws {
+        let url = fixturesDirectory().appendingPathComponent("widget-card.txt")
+        let source = try String(contentsOf: url, encoding: .utf8)
+        let (card, diagnostics) = WidgetCardParser.parse(source)
+        XCTAssertEqual(diagnostics, [])
+        let expected = WidgetCard(
+            template: .stat,
+            title: "Revenue",
+            symbol: "chart.line.uptrend.xyaxis",
+            tint: .named("green"),
+            value: "$18.2k",
+            caption: "today",
+            detail: "214 orders",
+            status: .ok,
+            progress: 0.72,
+            trend: [12.1, 13.4, 12.9, 15.0, 18.2],
+            items: [
+                WidgetCardItem(label: "Orders", value: "214", symbol: "bag", tint: .named("blue")),
+                WidgetCardItem(label: "Refunds", value: "3", symbol: "arrow.uturn.left", tint: .named("red"))
+            ],
+            actions: [
+                WidgetCardAction(kind: .refresh, label: "Refresh"),
+                WidgetCardAction(kind: .href, label: "Open", url: "https://dash.example.com")
+            ],
+            refreshAfter: 900,
+            staleAfter: 3600
+        )
+        XCTAssertEqual(card, expected)
     }
 }

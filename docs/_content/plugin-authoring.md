@@ -219,6 +219,153 @@ sheet — so a global hotkey a plugin grabs is always visible and never a
 surprise. You can also preview a plugin's search from the terminal without
 installing it: see [`vee search`](cli-and-urls.md#vee-search).
 
+## Widgets
+
+By default your plugin's widget tile is a **scrape** of its menu-bar line —
+whatever `color=`/`sfimage=` is on the title, plus a `progress=`/`sparkline=`
+if the first row has one. That's automatic; every plugin already has a widget
+representation with no changes.
+
+For a **rich** tile — real data laid out per widget size, not a caricature of
+the menu bar — opt a plugin into the widget surface contract:
+
+```
+# <vee.surface>both</vee.surface>
+# <vee.widget.interval>15m</vee.widget.interval>
+```
+
+- `<vee.surface>menu</vee.surface>` (or omit the tag) — unchanged: a normal
+  menu-bar plugin, scraped for its widget tile.
+- `<vee.surface>both</vee.surface>` — served in the menu as usual, **and**
+  invoked a second time on its own cadence to produce a rich widget card.
+- `<vee.surface>widget</vee.surface>` — **widget-only**: no status item, no
+  menu bar presence at all. The plugin exists only to feed a widget.
+
+`<vee.widget.interval>` sets the widget-mode cadence (same grammar as the
+filename interval: `ms`/`s`/`m`/`h`/`d`). It defaults to the plugin's filename
+interval, or 15 minutes for a widget-only plugin with no filename interval to
+inherit — and is always **floored at 5 minutes** regardless of what's
+requested, since WidgetKit's reload budget makes anything faster meaningless.
+It's independent of the menu interval, so `cpu.5s.sh` can feed a 5-second menu
+and a 15-minute widget from one file.
+
+### `VEE_TARGET`
+
+Every run gets a `VEE_TARGET` environment variable:
+
+- `VEE_TARGET=menu` — a normal run; print the usual xbar/SwiftBar text (or
+  [JSON](json-output.md)).
+- `VEE_TARGET=widget` — a widget-mode run; print **one JSON object** (the
+  "card", schema below) to stdout and nothing else.
+
+Branch on it like Scriptable's `config.runsInWidget`. If your plugin ignores
+`VEE_TARGET=widget` and prints menu text anyway, Vee falls back to scraping
+that text — graceful degradation, never a crash.
+
+### The card
+
+```json
+{
+  "vee_widget": 1,
+  "template": "stat",
+  "title": "Revenue",
+  "symbol": "chart.line.uptrend.xyaxis",
+  "tint": "green",
+  "value": "$18.2k",
+  "caption": "today",
+  "detail": "214 orders",
+  "status": "ok",
+
+  "progress": 0.72,
+  "trend": [12.1, 13.4, 12.9, 15.0, 18.2],
+
+  "items": [
+    { "label": "Orders",  "value": "214", "symbol": "bag",           "tint": "blue" },
+    { "label": "Refunds", "value": "3",   "symbol": "arrow.uturn.left", "tint": "red" }
+  ],
+
+  "actions": [
+    { "label": "Refresh", "kind": "refresh" },
+    { "label": "Open",    "kind": "href",     "url": "https://dash.example.com" }
+  ],
+
+  "refresh_after": 900,
+  "stale_after": 3600
+}
+```
+
+| Field | Type | Meaning |
+|---|---|---|
+| `vee_widget` | int | Payload schema version (currently `1`). |
+| `template` | enum | `stat` \| `gauge` \| `trend` \| `list` \| `board`. Unknown → `stat` + a Debug diagnostic. |
+| `title` | string? | Tile heading (the plugin/metric name). |
+| `symbol` | string? | SF Symbol name for the glyph. |
+| `tint` | color? | Named (`green`) or `#rrggbbaa`. |
+| `value` | string? | The headline value, already formatted by the plugin. |
+| `caption` | string? | Small secondary line (e.g. "today"). |
+| `detail` | string? | One more line of context. |
+| `status` | enum? | `ok` \| `warning` \| `error` — drives styling and the health roll-up. |
+| `progress` | double? | `0…1`, clamped; the `gauge` template's fill. |
+| `trend` | [double]? | The `trend` template's series. |
+| `items` | [Item]? | Rows for `list`/`board`: `{label, value?, symbol?, tint?}`. |
+| `actions` | [Action]? | Up to two rendered as buttons — see below. |
+| `refresh_after` | int? | Seconds; a hint for the next widget reload. |
+| `stale_after` | int? | Seconds; when the tile should show a stale treatment (else the interval-derived default). |
+
+Unknown top-level keys are ignored (forward-compatible); an invalid value
+(bad `progress`, a non-finite `trend` entry, an unsafe `href` URL) degrades to
+`nil`/dropped with a diagnostic, visible in the plugin's Debug console —
+never a crash.
+
+### Templates
+
+Five native SwiftUI templates, each adapting across the small/medium/large
+widget families — describe your data, Vee draws it:
+
+- **stat** — glyph, big `value` in `tint`, `title`/`caption`. The default.
+- **gauge** — stat + a native gauge from `progress`.
+- **trend** — stat + a sparkline from `trend`.
+- **list** — `title` header + `items` as rows, truncated per family (small
+  shows the headline `value`; medium ≤3 rows; large ≤8).
+- **board** — a compact grid of `items` as stat cells (a KPI board); small
+  collapses to the headline.
+
+### Actions
+
+Up to two `actions` render as buttons:
+
+- `refresh` — re-runs this plugin.
+- `href` — opens a URL (scheme-filtered like menu `href=`: `http`/`https`/
+  custom app deep links; never `file`/`javascript`/…).
+- `shortcut` — runs a named macOS Shortcut (`name`), like menu `shortcut=`.
+
+There is deliberately **no `shell` action** — a widget button must not run an
+arbitrary command without the menu's context.
+
+### Building the card with the SDK
+
+The [TypeScript, Python, and Go SDKs](sdk.md) all have `Stat`/`Gauge`/`Trend`/
+`List`/`Board` builders that emit this JSON for you:
+
+```ts
+import { Stat } from "./src/vee.ts";
+
+if (process.env.VEE_TARGET === "widget") {
+  Stat({
+    title: "Revenue",
+    symbol: "chart.line.uptrend.xyaxis",
+    tint: "green",
+    value: "$18.2k",
+    status: "ok",
+    actions: [{ kind: "refresh", label: "Refresh" }],
+  }).print();
+} else {
+  // ordinary menu-bar output
+}
+```
+
+See [Plugin SDKs](sdk.md#widget-cards) for the Python/Go equivalents.
+
 ## Metadata headers
 
 Put `<xbar.*>` / `<swiftbar.*>` tags anywhere in the file (usually in a comment block near the top). They are scanned regardless of the comment syntax, so they work in any language.
@@ -256,6 +403,8 @@ Vee adds a few tags of its own. All are opt-in — omit them for the classic beh
 |-----|---------|
 | `<vee.filter>` | `<vee.filter>true</vee.filter>` opts the dropdown into the [searchable filter panel](#searchable-filter-panel). |
 | `<vee.shortcut>` | `<vee.shortcut>cmd+shift+k</vee.shortcut>` binds a [global hotkey](#global-hotkey-veeshortcut) that opens the search panel from anywhere. |
+| `<vee.surface>` | `menu` (default) / `both` / `widget` — which output surface(s) the plugin serves. See [Widgets](#widgets). |
+| `<vee.widget.interval>` | `<vee.widget.interval>15m</vee.widget.interval>` — the widget-mode refresh cadence for a `both`/`widget` surface plugin. See [Widgets](#widgets). |
 | `<vee.capabilities>`, `<vee.network>`, `<vee.secrets>`, `<vee.filesystem.read>` / `<vee.filesystem.write>`, `<vee.exec>` | Declare the plugin's [trust footprint](trust-model.md). |
 
 ## SF Symbols

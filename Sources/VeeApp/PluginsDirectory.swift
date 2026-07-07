@@ -30,7 +30,7 @@ enum PluginsDirectory {
     }
 
     @MainActor
-    static func context(pluginPath: String, pluginsDirectory: String, declaredVariables: [String: String] = [:]) -> RuntimeEnvironmentContext {
+    static func context(pluginPath: String, pluginsDirectory: String, declaredVariables: [String: String] = [:], target: PluginTarget = .menu) -> RuntimeEnvironmentContext {
         let os = ProcessInfo.processInfo.operatingSystemVersion
         let dark = NSApp.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
         let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.1.0"
@@ -44,7 +44,8 @@ enum PluginsDirectory {
             isDarkMode: dark,
             osVersion: (os.majorVersion, os.minorVersion, os.patchVersion),
             appVersion: version,
-            declaredVariables: declaredVariables
+            declaredVariables: declaredVariables,
+            target: target
         )
     }
 }

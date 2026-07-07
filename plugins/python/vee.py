@@ -8,11 +8,12 @@ language and both produce byte-identical output for the same menu.
 
 from __future__ import annotations
 
+import json
 import re
 import sys
 from typing import Any
 
-__all__ = ["Menu", "Section"]
+__all__ = ["Menu", "Section", "WidgetCard", "widget_card", "Stat", "Gauge", "Trend", "List", "Board"]
 
 _NEEDS_QUOTE = re.compile(r"[\s|]")
 
@@ -164,3 +165,108 @@ class Menu:
 
     def print(self) -> None:
         sys.stdout.write(self.to_string() + "\n")
+
+
+# -----------------------------------------------------------------------------
+# Widget surface contract — the rich JSON payload a plugin prints to stdout
+# when invoked with VEE_TARGET=widget, instead of the xbar/SwiftBar text
+# protocol above. See docs/design/widget-surface-contract.md §4. Mirrors the
+# TypeScript SDK's WidgetCard field-for-field (same option names, same JSON
+# key order).
+
+# Option name -> emitted JSON key, in the exact order the TypeScript SDK
+# emits them.
+_CARD_KEYS: list[tuple[str, str]] = [
+    ("template", "template"),
+    ("title", "title"),
+    ("symbol", "symbol"),
+    ("tint", "tint"),
+    ("value", "value"),
+    ("caption", "caption"),
+    ("detail", "detail"),
+    ("status", "status"),
+    ("progress", "progress"),
+    ("trend", "trend"),
+    ("items", "items"),
+    ("actions", "actions"),
+    ("refreshAfter", "refresh_after"),
+    ("staleAfter", "stale_after"),
+]
+
+
+def _json_value(value: Any) -> str:
+    """Serializes ``value`` to compact JSON, formatting a whole-number float
+    without a trailing ``.0`` (matching ``_fmt`` / the TS and Go SDKs) —
+    Python's own ``json`` module keeps ``15.0``, which would break the
+    cross-language byte-identical fixture convention this SDK maintains.
+    """
+    if value is None:
+        return "null"
+    if isinstance(value, (bool, int, float)):
+        return _fmt(value)
+    if isinstance(value, str):
+        return json.dumps(value)
+    if isinstance(value, (list, tuple)):
+        return "[" + ",".join(_json_value(v) for v in value) + "]"
+    if isinstance(value, dict):
+        return "{" + ",".join(f"{json.dumps(str(k))}:{_json_value(v)}" for k, v in value.items()) + "}"
+    raise TypeError(f"unsupported widget card value: {value!r}")
+
+
+class WidgetCard:
+    """The ``VEE_TARGET=widget`` stdout payload (see the design doc §4).
+    Build one with the richest data available and call
+    ``str()``/``print()`` exactly once per run; each native template
+    (small/medium/large) takes what fits.
+
+    ``items``/``actions`` are plain dicts, e.g.
+    ``{"label": "Orders", "value": "214", "symbol": "bag", "tint": "blue"}``
+    — field order in the dict literal is preserved in the JSON output.
+    """
+
+    def __init__(self, **options: Any) -> None:
+        self._options = options
+
+    def to_string(self) -> str:
+        payload: dict[str, Any] = {"vee_widget": 1}
+        for name, key in _CARD_KEYS:
+            value = self._options.get(name)
+            if value is not None:
+                payload[key] = value
+        return _json_value(payload)
+
+    def __str__(self) -> str:  # so `str(card)` works like TS `toString()`
+        return self.to_string()
+
+    def print(self) -> None:
+        sys.stdout.write(self.to_string() + "\n")
+
+
+def widget_card(**options: Any) -> WidgetCard:
+    """Builds a widget card. Equivalent to ``WidgetCard(**options)``."""
+    return WidgetCard(**options)
+
+
+def Stat(**options: Any) -> WidgetCard:
+    """Glyph, big value in tint, title/caption. The default template."""
+    return WidgetCard(template="stat", **options)
+
+
+def Gauge(**options: Any) -> WidgetCard:
+    """Stat + a native gauge from ``progress``."""
+    return WidgetCard(template="gauge", **options)
+
+
+def Trend(**options: Any) -> WidgetCard:
+    """Stat + a sparkline from ``trend``."""
+    return WidgetCard(template="trend", **options)
+
+
+def List(**options: Any) -> WidgetCard:
+    """``title`` header + ``items`` as rows."""
+    return WidgetCard(template="list", **options)
+
+
+def Board(**options: Any) -> WidgetCard:
+    """A compact grid of ``items`` as stat cells (KPI board)."""
+    return WidgetCard(template="board", **options)

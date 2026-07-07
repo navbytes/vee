@@ -1,5 +1,14 @@
 import Foundation
 
+/// Which output surface a plugin run is producing for. Injected as `VEE_TARGET`
+/// so a plugin can branch on it (Scriptable's `config.runsInWidget` idiom) — see
+/// `docs/design/widget-surface-contract.md` §3. A plugin that ignores it and
+/// prints menu text in widget mode simply falls back to the Tier-0 scrape.
+public enum PluginTarget: String, Equatable, Sendable {
+    case menu
+    case widget
+}
+
 /// Context used to compute the environment variables injected into a plugin.
 public struct RuntimeEnvironmentContext: Sendable {
     public var pluginPath: String
@@ -11,8 +20,11 @@ public struct RuntimeEnvironmentContext: Sendable {
     public var appVersion: String
     /// Values from the plugin's declared `<xbar.var>` preferences.
     public var declaredVariables: [String: String]
+    /// Which surface this run is for — injected as `VEE_TARGET`. Defaults to
+    /// `.menu` so every existing call site (a normal run) is unaffected.
+    public var target: PluginTarget
 
-    public init(pluginPath: String, pluginsDirectory: String, cacheDirectory: String, dataDirectory: String, isDarkMode: Bool, osVersion: (major: Int, minor: Int, patch: Int), appVersion: String, declaredVariables: [String: String] = [:]) {
+    public init(pluginPath: String, pluginsDirectory: String, cacheDirectory: String, dataDirectory: String, isDarkMode: Bool, osVersion: (major: Int, minor: Int, patch: Int), appVersion: String, declaredVariables: [String: String] = [:], target: PluginTarget = .menu) {
         self.pluginPath = pluginPath
         self.pluginsDirectory = pluginsDirectory
         self.cacheDirectory = cacheDirectory
@@ -21,6 +33,7 @@ public struct RuntimeEnvironmentContext: Sendable {
         self.osVersion = osVersion
         self.appVersion = appVersion
         self.declaredVariables = declaredVariables
+        self.target = target
     }
 }
 
@@ -56,6 +69,9 @@ public enum EnvironmentBuilder {
         // post an actionable alert with `swiftbar://notify?plugin=$VEE_PLUGIN_ID`
         // and Vee resolves the Re-run / Silence / Open-log actions back to it.
         env["VEE_PLUGIN_ID"] = (ctx.pluginPath as NSString).lastPathComponent
+        // Widget surface contract: lets a plugin branch on which surface it's
+        // being invoked for (see docs/design/widget-surface-contract.md §3).
+        env["VEE_TARGET"] = ctx.target.rawValue
 
         // Declared preferences win over everything else.
         for (key, value) in ctx.declaredVariables { env[key] = value }

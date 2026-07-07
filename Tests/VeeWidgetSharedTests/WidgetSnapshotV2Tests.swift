@@ -11,9 +11,9 @@ final class WidgetSnapshotV2Tests: XCTestCase {
         return d
     }
 
-    func testCurrentVersionIsTwo() {
-        XCTAssertEqual(WidgetSnapshot.currentVersion, 2)
-    }
+    // `currentVersion` moved to 3 in WidgetSnapshotV3Tests.swift when the
+    // `card` field was added; this file otherwise still covers the v2
+    // (enriched-scrape) fields, which are unaffected by that bump.
 
     func testEnrichedSnapshotRoundTripsThroughStore() {
         let dir = FileManager.default.temporaryDirectory

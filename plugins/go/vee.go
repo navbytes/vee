@@ -7,6 +7,7 @@
 package vee
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"strconv"
@@ -228,4 +229,111 @@ func (m *Menu) String() string {
 // plugin calls.
 func (m *Menu) Print() {
 	fmt.Fprintln(os.Stdout, m.String())
+}
+
+// ---------------------------------------------------------------------------
+// Widget surface contract — the rich JSON payload a plugin prints to stdout
+// when invoked with VEE_TARGET=widget, instead of the xbar/SwiftBar text
+// protocol above. See docs/design/widget-surface-contract.md §4. Mirrors the
+// TypeScript SDK's WidgetCard field-for-field (same JSON keys, same order).
+
+// WidgetTemplate is the native template a card renders with.
+type WidgetTemplate string
+
+// The five native templates (see the design doc §5).
+const (
+	TemplateStat  WidgetTemplate = "stat"
+	TemplateGauge WidgetTemplate = "gauge"
+	TemplateTrend WidgetTemplate = "trend"
+	TemplateList  WidgetTemplate = "list"
+	TemplateBoard WidgetTemplate = "board"
+)
+
+// WidgetStatus is the health state a card reports.
+type WidgetStatus string
+
+// The three status values.
+const (
+	StatusOK      WidgetStatus = "ok"
+	StatusWarning WidgetStatus = "warning"
+	StatusError   WidgetStatus = "error"
+)
+
+// WidgetActionKind is what a card action button does when tapped.
+type WidgetActionKind string
+
+// The three action kinds. There is deliberately no "shell" — see the design
+// doc §6: a widget button must not run an arbitrary command.
+const (
+	ActionRefresh  WidgetActionKind = "refresh"
+	ActionHref     WidgetActionKind = "href"
+	ActionShortcut WidgetActionKind = "shortcut"
+)
+
+// WidgetCardItem is one row for the list/board templates.
+type WidgetCardItem struct {
+	Label  string  `json:"label"`
+	Value  *string `json:"value,omitempty"`
+	Symbol *string `json:"symbol,omitempty"`
+	Tint   *string `json:"tint,omitempty"`
+}
+
+// WidgetCardAction is one button; up to two are rendered.
+type WidgetCardAction struct {
+	Kind  WidgetActionKind `json:"kind"`
+	Label string           `json:"label"`
+	// URL is the destination for Kind == ActionHref. Scheme-filtered by Vee
+	// on parse.
+	URL *string `json:"url,omitempty"`
+	// Name is the Shortcut name to run, for Kind == ActionShortcut.
+	Name *string `json:"name,omitempty"`
+}
+
+// WidgetCard is the VEE_TARGET=widget stdout payload — a plugin builds one
+// with the richest data it has and calls String()/Print() exactly once per
+// run; each native template (small/medium/large) takes what fits.
+type WidgetCard struct {
+	Template WidgetTemplate `json:"template,omitempty"`
+	Title    *string        `json:"title,omitempty"`
+	// Symbol is an SF Symbol name for the glyph.
+	Symbol *string `json:"symbol,omitempty"`
+	Tint   *string `json:"tint,omitempty"`
+	// Value is the headline value, already formatted (e.g. "$18.2k").
+	Value   *string      `json:"value,omitempty"`
+	Caption *string      `json:"caption,omitempty"`
+	Detail  *string      `json:"detail,omitempty"`
+	Status  WidgetStatus `json:"status,omitempty"`
+	// Progress is 0…1; clamped by Vee if out of range.
+	Progress *float64  `json:"progress,omitempty"`
+	Trend    []float64 `json:"trend,omitempty"`
+	// Items are rows for the list/board templates.
+	Items []WidgetCardItem `json:"items,omitempty"`
+	// Actions: up to two are rendered as buttons; the templates decide which.
+	Actions []WidgetCardAction `json:"actions,omitempty"`
+	// RefreshAfter is seconds — a hint for the next widget reload.
+	RefreshAfter *float64 `json:"refresh_after,omitempty"`
+	// StaleAfter is seconds — when the tile should show a stale treatment.
+	StaleAfter *float64 `json:"stale_after,omitempty"`
+}
+
+// widgetCardEnvelope prefixes the schema-version field the parser reads for
+// forward-compat, then inlines WidgetCard's own fields (Go's encoding/json
+// promotes an embedded struct's fields into the same object).
+type widgetCardEnvelope struct {
+	VeeWidget int `json:"vee_widget"`
+	WidgetCard
+}
+
+// String renders the card as its JSON payload.
+func (c *WidgetCard) String() string {
+	data, err := json.Marshal(widgetCardEnvelope{VeeWidget: 1, WidgetCard: *c})
+	if err != nil {
+		return "{}"
+	}
+	return string(data)
+}
+
+// Print writes String() plus a trailing newline to stdout.
+func (c *WidgetCard) Print() {
+	fmt.Fprintln(os.Stdout, c.String())
 }

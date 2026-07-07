@@ -181,6 +181,37 @@ longer loaded before the next flush. `AppController` just calls
 `publish(id:name:interval:publish:)` per plugin and `setLoaded(ids:)` after a
 reload — it never touches the snapshot file or `WidgetCenter` directly.
 
+### The widget surface contract
+
+The channel above carries more than a scrape. Every plugin run gets a
+`VEE_TARGET` environment variable (`VeeRuntime/EnvironmentBuilder.swift`,
+`RuntimeEnvironmentContext.target`); for a plugin declaring
+`<vee.surface>both</vee.surface>`/`widget`, `PluginCoordinator` also runs a
+second `BackgroundRefreshScheduler` on the plugin's widget-mode cadence
+(`<vee.widget.interval>`, floored at 5 minutes) that invokes it with
+`VEE_TARGET=widget` and parses stdout as a single JSON "card" object
+(`VeePluginFormat/WidgetCardParser.swift` → `VeeWidgetShared.WidgetCard`,
+schema in
+[`docs/design/widget-surface-contract.md`](docs/design/widget-surface-contract.md)).
+A `widget`-surface plugin builds no `StatusItemController` at all — no menu
+bar presence. `PluginSnapshot.card` (snapshot v3) carries the card alongside
+the scraped fields, so a `both`/`widget` plugin that hasn't produced a valid
+card yet — or a `menu`-surface plugin, which never runs in widget mode —
+still falls back to the Tier-0 scrape.
+
+The extension renders `card` via `WidgetExtension/WidgetCardView.swift`,
+dispatching on `card.template` into one of five native SwiftUI views
+(stat/gauge/trend/list/board), each family-adaptive. A card's `refresh`/
+`shortcut` action buttons can't run in the sandboxed extension process, so
+they go through a **per-plugin request channel** generalizing the Darwin
+notification above: `VeeWidgetShared.WidgetActionRequest` + `…Store` let the
+extension's `AppIntent` write a small `{action, pluginID, actionIndex?}`
+request file (a narrowly-scoped read-write sandbox exception, unlike the
+read-only one for the snapshot) and signal the app, which reads, clears, and
+services it — `refresh` re-runs the plugin; `run` resolves `actionIndex`
+against the plugin's current card and runs its Shortcut. `href` actions skip
+this entirely: the extension opens them directly via `Link`/`widgetURL`.
+
 ## Where to add things
 
 | I want to…                              | Start in… |
@@ -192,6 +223,7 @@ reload — it never touches the snapshot file or `WidgetCenter` directly.
 | Add a catalog/Discover feature          | `VeeCatalog/…` + `VeeUI/PluginBrowser*` |
 | Add a trust signal                      | `VeeTrust/…` |
 | Add an App Intent / Shortcuts action    | `VeeApp/VeeAppIntents.swift` |
+| Change the widget card schema/templates | `VeeWidgetShared/WidgetCard.swift`, `VeePluginFormat/WidgetCardParser.swift`, `WidgetExtension/WidgetCardView.swift` |
 | Change search flattening / fuzzy ranking | `VeeSearch/…` (pure; mirrored by `vee search`) |
 | Touch the search panel or global hotkey | `VeeApp/MenuSearchPanel.swift`, `VeeApp/GlobalHotKeys.swift` |
 | Add a `vee` CLI subcommand              | `Sources/VeeCLI/…` (keep `Sources/vee` thin) |

@@ -112,12 +112,20 @@ public final class AppController: NSObject, NSApplicationDelegate {
         // already running. (A cold start needs no flag: the control launches Vee
         // via openAppWhenRun, and Vee refreshes every plugin on launch.)
         registerControlRefreshObserver()
+        // Per-plugin widget card actions (refresh/shortcut buttons) — see
+        // `widgetActionRequestFired()`.
+        registerWidgetActionObserver()
 
         Task { @MainActor in
             self.baseEnvironment = await ShellPathResolver.resolvedEnvironment()
             self.runtime = PluginRuntime(executor: PluginExecutor(runner: SystemProcessRunner(), baseEnvironment: self.baseEnvironment))
             self.reload()
             self.startWatching()
+            // Service a request written while the app was closed (the widget
+            // intent's openAppWhenRun just launched us for it) — the Darwin
+            // notify that accompanied it fired before any observer existed to
+            // hear it, so it must be picked up explicitly, once, here.
+            self.widgetActionRequestFired()
         }
 
         let monitor = WakeMonitor { [weak self] in self?.refreshAll() }
@@ -390,6 +398,65 @@ public final class AppController: NSObject, NSApplicationDelegate {
 
     func controlRefreshFired() {
         refreshAll()
+    }
+
+    // MARK: - Per-plugin widget actions
+
+    /// Observes the Darwin notification a widget card's action button posts
+    /// after writing a `WidgetActionRequest`, so it's serviced immediately
+    /// while Vee is already running. Generalizes `registerControlRefreshObserver`
+    /// (refresh-all) to a specific plugin id.
+    private func registerWidgetActionObserver() {
+        let center = CFNotificationCenterGetDarwinNotifyCenter()
+        let observer = Unmanaged.passUnretained(self).toOpaque()
+        CFNotificationCenterAddObserver(
+            center,
+            observer,
+            { _, _, _, _, _ in
+                Task { @MainActor in AppController.shared?.widgetActionRequestFired() }
+            },
+            VeeWidgetSharing.actionRequestNotification as CFString,
+            nil,
+            .deliverImmediately
+        )
+    }
+
+    /// Reads and clears the pending request (a no-op if none is pending —
+    /// this is also called unconditionally once at launch) and services it:
+    /// `.refresh` re-runs the plugin; `.run` resolves `actionIndex` against
+    /// the plugin's currently-published card and runs its shortcut.
+    func widgetActionRequestFired() {
+        guard let request = VeeWidgetSharing.actionRequestStore.readAndClear() else { return }
+        switch request.action {
+        case .refresh:
+            coordinators[request.pluginID]?.forceRefresh()
+        case .run:
+            runCardAction(for: request)
+        }
+    }
+
+    /// Resolves a `.run` request's `actionIndex` against the plugin's
+    /// currently-published card and runs it. Only a `.shortcut`-kind action
+    /// is ever posted as `.run` (see `WidgetActionRequest.Action`); anything
+    /// else here is ignored defensively.
+    private func runCardAction(for request: WidgetActionRequest) {
+        guard let index = request.actionIndex,
+              let card = VeeWidgetSharing.shared.read()?.plugins.first(where: { $0.id == request.pluginID })?.card,
+              let actions = card.actions, actions.indices.contains(index),
+              actions[index].kind == .shortcut,
+              let name = actions[index].name, !name.isEmpty
+        else { return }
+        runShortcut(named: name)
+    }
+
+    /// Runs a macOS Shortcut by name via the `shortcuts` CLI — the same
+    /// mechanism `AppActionDispatcher.runShortcut` uses for menu `shortcut=`,
+    /// duplicated in miniature here since this fires with no live
+    /// `PluginCoordinator`/dispatcher in hand (it's dispatched by plugin id
+    /// from a request file, not a menu click).
+    private func runShortcut(named name: String) {
+        let invocation = ProcessInvocation(launchPath: "/usr/bin/shortcuts", arguments: ["run", name], environment: baseEnvironment)
+        Task { _ = try? await SystemProcessRunner().run(invocation) }
     }
 
     // MARK: - Global actions

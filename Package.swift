@@ -28,7 +28,10 @@ let package = Package(
     ],
     targets: [
         .target(name: "VeeCore"),
-        .target(name: "VeePluginFormat", dependencies: ["VeeCore"]),
+        // Depends on VeeWidgetShared (Foundation-only, no cycle back) for the
+        // widget-mode payload parser, which shares the WidgetCard model with
+        // the app and the sandboxed widget extension.
+        .target(name: "VeePluginFormat", dependencies: ["VeeCore", "VeeWidgetShared"]),
         .target(name: "VeeRuntime", dependencies: ["VeeCore", "VeePluginFormat"]),
         .target(name: "VeeMenu", dependencies: ["VeeCore", "VeePluginFormat"]),
         // Pure, AppKit-free searchable-menu core: flatten a plugin's menu tree
@@ -49,7 +52,7 @@ let package = Package(
         .target(name: "VeeApp", dependencies: ["VeeCore", "VeePluginFormat", "VeeRuntime", "VeeMenu", "VeeSearch", "VeePreferences", "VeeTrust", "VeeCatalog", "VeeUI", "VeeWidgetShared"]),
         .executableTarget(name: "vee", dependencies: ["VeeApp", "VeeCLI"]),
         .testTarget(name: "VeeCoreTests", dependencies: ["VeeCore"]),
-        .testTarget(name: "VeePluginFormatTests", dependencies: ["VeePluginFormat"]),
+        .testTarget(name: "VeePluginFormatTests", dependencies: ["VeePluginFormat", "VeeWidgetShared", "VeeCore"]),
         .testTarget(name: "VeeRuntimeTests", dependencies: ["VeeRuntime"]),
         .testTarget(name: "VeeMenuTests", dependencies: ["VeeMenu"]),
         .testTarget(name: "VeeSearchTests", dependencies: ["VeeSearch"]),

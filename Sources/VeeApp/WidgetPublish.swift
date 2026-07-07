@@ -22,11 +22,17 @@ struct WidgetPublish: Equatable {
     var title: String
     var fields: WidgetTitleFields
     var isError: Bool
+    /// The plugin's rich widget-mode card, when it was invoked with
+    /// `VEE_TARGET=widget` and produced one. `nil` for a `.menu`-surface
+    /// plugin's ordinary publish, or a `.both`/`.widget` plugin that hasn't
+    /// produced a card yet (the renderer falls back to `fields`/Tier 0).
+    var card: WidgetCard?
 
-    init(title: String, fields: WidgetTitleFields = WidgetTitleFields(), isError: Bool = false) {
+    init(title: String, fields: WidgetTitleFields = WidgetTitleFields(), isError: Bool = false, card: WidgetCard? = nil) {
         self.title = title
         self.fields = fields
         self.isError = isError
+        self.card = card
     }
 }
 

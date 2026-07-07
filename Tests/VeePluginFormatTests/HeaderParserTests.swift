@@ -1,4 +1,5 @@
 import XCTest
+import VeeCore
 @testable import VeePluginFormat
 
 final class HeaderParserTests: XCTestCase {
@@ -113,6 +114,37 @@ final class HeaderParserTests: XCTestCase {
         XCTAssertNil(bad.shortcut)
         let absent = HeaderParser.parse(source: "echo hi\n")
         XCTAssertNil(absent.shortcut)
+    }
+
+    func testVeeSurfaceParsesEachValueCaseInsensitively() {
+        XCTAssertEqual(HeaderParser.parse(source: "# <vee.surface>menu</vee.surface>\n").surface, .menu)
+        XCTAssertEqual(HeaderParser.parse(source: "# <vee.surface>both</vee.surface>\n").surface, .both)
+        XCTAssertEqual(HeaderParser.parse(source: "# <vee.surface>widget</vee.surface>\n").surface, .widget)
+        XCTAssertEqual(HeaderParser.parse(source: "# <vee.surface>WIDGET</vee.surface>\n").surface, .widget)
+        XCTAssertEqual(HeaderParser.parse(source: "# <vee.surface>  Both  </vee.surface>\n").surface, .both)
+    }
+
+    func testVeeSurfaceUnknownValueFallsBackToMenu() {
+        XCTAssertEqual(HeaderParser.parse(source: "# <vee.surface>popover</vee.surface>\n").surface, .menu)
+    }
+
+    func testVeeSurfaceAbsentDefaultsToMenu() {
+        XCTAssertEqual(HeaderParser.parse(source: "echo hi\n").surface, .menu)
+    }
+
+    func testVeeWidgetIntervalParses() {
+        let m = HeaderParser.parse(source: "# <vee.widget.interval>15m</vee.widget.interval>\n")
+        XCTAssertEqual(m.widgetInterval, .minutes(15))
+    }
+
+    func testVeeWidgetIntervalAbsentIsNil() {
+        let m = HeaderParser.parse(source: "echo hi\n")
+        XCTAssertNil(m.widgetInterval)
+    }
+
+    func testVeeWidgetIntervalInvalidTokenIsNil() {
+        let m = HeaderParser.parse(source: "# <vee.widget.interval>not-a-duration</vee.widget.interval>\n")
+        XCTAssertNil(m.widgetInterval)
     }
 
     func testNoHeaderYieldsEmptyMetadata() {
