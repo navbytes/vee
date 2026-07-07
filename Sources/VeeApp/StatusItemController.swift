@@ -2,6 +2,7 @@ import AppKit
 import VeeCore
 import VeePluginFormat
 import VeeMenu
+import VeeSearch
 import VeeTrust
 
 /// A small `@objc` target for the per-plugin menu footer (Refresh / Quit).
@@ -13,14 +14,16 @@ private final class ControlsTarget: NSObject, NSMenuDelegate {
     let onReveal: () -> Void
     let onEdit: () -> Void
     let onDebug: () -> Void
+    let onSearch: () -> Void
     let refreshOnOpen: Bool
-    init(onRefresh: @escaping () -> Void, onSettings: @escaping () -> Void, onAbout: @escaping () -> Void, onReveal: @escaping () -> Void, onEdit: @escaping () -> Void, onDebug: @escaping () -> Void, refreshOnOpen: Bool) {
+    init(onRefresh: @escaping () -> Void, onSettings: @escaping () -> Void, onAbout: @escaping () -> Void, onReveal: @escaping () -> Void, onEdit: @escaping () -> Void, onDebug: @escaping () -> Void, onSearch: @escaping () -> Void, refreshOnOpen: Bool) {
         self.onRefresh = onRefresh
         self.onSettings = onSettings
         self.onAbout = onAbout
         self.onReveal = onReveal
         self.onEdit = onEdit
         self.onDebug = onDebug
+        self.onSearch = onSearch
         self.refreshOnOpen = refreshOnOpen
     }
     @objc func refresh() { onRefresh() }
@@ -29,6 +32,7 @@ private final class ControlsTarget: NSObject, NSMenuDelegate {
     @objc func reveal() { onReveal() }
     @objc func edit() { onEdit() }
     @objc func debug() { onDebug() }
+    @objc func search() { onSearch() }
     @objc func quit() { NSApp.terminate(nil) }
 
     // <swiftbar.refreshOnOpen>: re-run the plugin when its menu is opened.
@@ -45,6 +49,14 @@ public final class StatusItemController {
     private let pluginName: String
     private let actionTarget: MenuActionTarget
     private let controls: ControlsTarget
+    /// Kept so the search panel can dispatch a row through the same handler the
+    /// menu uses (the menu's action target already retains it strongly too).
+    private let handler: MenuActionHandling
+    /// Whether this plugin opts into the searchable filter panel (`<vee.filter>`).
+    private let filterEnabled: Bool
+    /// The most recently rendered dropdown tree, frozen into the search panel on
+    /// open so it reflects what the user currently sees.
+    private var lastBody: [MenuNode] = []
 
     private var frames: [NSAttributedString] = []
     private var frameIndex = 0
@@ -63,8 +75,10 @@ public final class StatusItemController {
         return f
     }()
 
-    public init(pluginName: String, handler: MenuActionHandling, hasSettings: Bool = false, trustSummary: TrustSummary? = nil, refreshOnOpen: Bool = false, hideLastUpdated: Bool = false, autosaveName: String? = nil, aboutText: String? = nil, aboutURL: URL? = nil, onRefresh: @escaping () -> Void, onSettings: @escaping () -> Void = {}, onReveal: @escaping () -> Void = {}, onEdit: @escaping () -> Void = {}, onDebug: @escaping () -> Void = {}) {
+    public init(pluginName: String, handler: MenuActionHandling, hasSettings: Bool = false, trustSummary: TrustSummary? = nil, refreshOnOpen: Bool = false, hideLastUpdated: Bool = false, filterEnabled: Bool = false, autosaveName: String? = nil, aboutText: String? = nil, aboutURL: URL? = nil, onRefresh: @escaping () -> Void, onSettings: @escaping () -> Void = {}, onReveal: @escaping () -> Void = {}, onEdit: @escaping () -> Void = {}, onDebug: @escaping () -> Void = {}) {
         self.pluginName = pluginName
+        self.handler = handler
+        self.filterEnabled = filterEnabled
         self.hasSettings = hasSettings
         self.trustSummary = trustSummary
         self.aboutText = aboutText
@@ -76,6 +90,10 @@ public final class StatusItemController {
         if let autosaveName { self.statusItem.autosaveName = autosaveName }
         self.actionTarget = MenuActionTarget(handler: handler)
         let name = pluginName
+        let presentSearch: () -> Void
+        // Deferred so the closure can capture the fully-initialized controller.
+        var searchPresenter: (() -> Void)?
+        presentSearch = { searchPresenter?() }
         self.controls = ControlsTarget(
             onRefresh: onRefresh,
             onSettings: onSettings,
@@ -83,7 +101,19 @@ public final class StatusItemController {
             onReveal: onReveal,
             onEdit: onEdit,
             onDebug: onDebug,
+            onSearch: presentSearch,
             refreshOnOpen: refreshOnOpen
+        )
+        searchPresenter = { [weak self] in self?.presentSearch() }
+    }
+
+    /// Flattens the current dropdown tree and opens the searchable filter panel,
+    /// routing activations through the same handler the menu uses.
+    private func presentSearch() {
+        MenuSearchPanel.shared.present(
+            rows: MenuSearch.flatten(lastBody),
+            pluginName: pluginName,
+            handler: handler
         )
     }
 
@@ -103,6 +133,7 @@ public final class StatusItemController {
     /// Renders a successful refresh.
     public func render(_ output: ParsedOutput) {
         lastUpdated = Date()
+        lastBody = output.body
         let presentation = TitleRenderer.presentation(for: output.titleLines)
         frames = presentation.frames
         frameIndex = 0
@@ -184,6 +215,19 @@ public final class StatusItemController {
 
     private func buildMenu(body: [MenuNode]) -> NSMenu {
         let menu = MenuBuilder.build(body, target: actionTarget)
+        // Opt-in searchable panel: a "Search…" row at the top opens a filterable,
+        // keyboard-driven view of every item — including those nested in
+        // submenus — without disturbing the native menu, its trust row, or the
+        // controls footer.
+        if filterEnabled {
+            let search = NSMenuItem(title: "Search…", action: #selector(ControlsTarget.search), keyEquivalent: "f")
+            search.target = controls
+            let glass = NSImage(systemSymbolName: "magnifyingglass", accessibilityDescription: "Search")
+            glass?.isTemplate = true
+            search.image = glass
+            menu.insertItem(search, at: 0)
+            menu.insertItem(.separator(), at: 1)
+        }
         appendControls(to: menu)
         menu.delegate = controls
         return menu

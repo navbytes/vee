@@ -7,6 +7,16 @@ All notable changes to Vee are documented here. The format is based on
 ## [Unreleased]
 
 ### Added
+- **Searchable filter panel** (opt-in via `<vee.filter>true</vee.filter>`): a
+  plugin's menu gains a **Search…** row (⌘F) that opens a Spotlight-like panel
+  filtering every item — including those nested in submenus — flattened into a
+  ranked list with breadcrumbs. Fuzzy matching (`gh` → `GitHub`), multi-token
+  AND, ↑/↓ + Return to activate, Esc to close. Activating a row dispatches
+  through the plugin's existing action, so href / shell / shortcut / refresh and
+  the toggle/slider/sparkline popovers all work unchanged. The native menu, its
+  trust row, and the controls footer are untouched — the panel is an additional
+  surface, not a replacement. Also available from the CLI: `vee search <plugin>
+  [query…]`.
 - The structured-JSON output format now supports the rich inline controls —
   `sparkline`, `toggle`, `slider`, and `progress` (plus `trackColor` /
   `progressWidth` / `progressHeight`) — as typed item fields, mapping to the same
