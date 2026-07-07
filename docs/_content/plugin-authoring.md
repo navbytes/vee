@@ -172,6 +172,48 @@ Disk | progress=0.88 color=#F5A623
 Progress rows are display-only (they don't fire a click action) and can't have a
 submenu.
 
+## Searchable filter panel
+
+Big menus — dozens of items across nested submenus — are slow to scan. Opt a
+plugin into a **searchable filter panel** and its dropdown gains a **Search…**
+row (⌘F) that opens a Spotlight-like popover: type to filter *every* item at once
+(including those nested inside submenus), flattened into a ranked list, each with
+a breadcrumb of its parent groups.
+
+```
+# <vee.filter>true</vee.filter>
+```
+
+- **Fuzzy matching** — `gh` finds `GitHub`; multiple words are ANDed together.
+- **Keyboard-driven** — ↑/↓ move the highlight, Return activates, Esc closes.
+- Activating a row runs its **normal action** — `href`, `shell`/`bash`,
+  `shortcut`, `refresh`, and the `toggle`/`slider`/`sparkline` popovers all work
+  exactly as they do from the menu.
+
+The panel is an *addition*, not a replacement: the native menu, its trust row,
+and Vee's own controls all stay exactly where they are.
+
+### Global hotkey (`<vee.shortcut>`)
+
+Bind a system-wide hotkey that opens the panel from anywhere — no need to open
+the menu first, and Vee doesn't have to be the active app:
+
+```
+# <vee.shortcut>cmd+shift+k</vee.shortcut>
+```
+
+Modifiers are `cmd`/`command`/`⌘`, `shift`/`⇧`, `opt`/`option`/`alt`/`⌥`, and
+`ctrl`/`control`/`⌃`; the key can be a letter, a digit, `F1`–`F12`, `space`,
+`return`, `tab`, `escape`, or an arrow. Order doesn't matter and it's
+case-insensitive (`⌘⇧K` works too), but at least one modifier is required. Vee
+registers it with the system hotkey API, so **no Accessibility permission is
+needed**; if the combination is already taken system-wide, Vee logs it and moves
+on.
+
+Both tags are strictly opt-in — omit them and the plugin behaves exactly as
+before. You can also preview a plugin's search from the terminal without
+installing it: see [`vee search`](cli-and-urls.md#vee-search).
+
 ## Metadata headers
 
 Put `<xbar.*>` / `<swiftbar.*>` tags anywhere in the file (usually in a comment block near the top). They are scanned regardless of the comment syntax, so they work in any language.
@@ -195,6 +237,16 @@ Put `<xbar.*>` / `<swiftbar.*>` tags anywhere in the file (usually in a comment 
 | `<swiftbar.hideAbout>` | Hide the default "About" item. |
 
 The `<swiftbar.*>` tags use the same names as their `<xbar.*>` counterparts where they overlap.
+
+### Vee-native tags (`<vee.*>`)
+
+Vee adds a few tags of its own. All are opt-in — omit them for the classic behavior.
+
+| Tag | Purpose |
+|-----|---------|
+| `<vee.filter>` | `<vee.filter>true</vee.filter>` opts the dropdown into the [searchable filter panel](#searchable-filter-panel). |
+| `<vee.shortcut>` | `<vee.shortcut>cmd+shift+k</vee.shortcut>` binds a [global hotkey](#global-hotkey-veeshortcut) that opens the search panel from anywhere. |
+| `<vee.capabilities>`, `<vee.network>`, `<vee.secrets>`, `<vee.filesystem.read>` / `<vee.filesystem.write>`, `<vee.exec>` | Declare the plugin's [trust footprint](trust-model.md). |
 
 ## SF Symbols
 

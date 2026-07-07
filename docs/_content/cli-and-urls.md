@@ -30,6 +30,7 @@ zero-install authoring loop that reuses Vee's real parser — no app, no GUI:
 |---------|--------------|
 | `vee render <plugin>` | Runs the plugin and prints the parsed menu tree plus any parse diagnostics. |
 | `vee lint <plugin>` | Runs the plugin and reports problems: unknown params, a bare `\|` in a title, unquoted values containing spaces, and the parser's own diagnostics. Exits non-zero if anything is flagged. |
+| `vee search <plugin> [query…]` | Runs the plugin, flattens its (nested) menu, and prints the items fuzzy-filtered and ranked by your query — each with its breadcrumb and the action it would fire. |
 | `vee new [flags]` | Scaffolds a new plugin file with the right filename, header tags, and a working body. |
 
 ### `vee render`
@@ -79,6 +80,24 @@ $ vee new --lang sh --interval 30s --name weather --trust network --out ~/plugin
 
 For `ts`/`py`, the generated body imports the corresponding [SDK](sdk.md) so a
 scaffold doubles as a starting point for typed authoring.
+
+### `vee search`
+
+Flattens a plugin's whole menu tree — including nested submenus — and prints the
+items fuzzy-filtered and ranked, so you can try the [searchable filter
+panel](plugin-authoring.md#searchable-filter-panel)'s matching from the terminal
+before installing anything. With no query it lists every activatable item.
+
+```sh
+$ vee search ./dev-dashboard.5m.sh retry
+2 of 45 item(s) match "retry":
+  #412 Fix retry backoff jitter  ⟨Repositories › orders › Pull Requests⟩  [href]
+  feature/retry-jitter  ⟨Repositories › orders › Branches⟩  [shell]
+```
+
+Query words are ANDed and matched fuzzily (`gh` finds `GitHub`); a match on a
+parent group's name still surfaces its children. Exits `1` when nothing matches
+and `2` on a missing path, so it slots into scripts and CI too.
 
 ## URL actions
 
