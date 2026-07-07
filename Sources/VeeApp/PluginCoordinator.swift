@@ -212,8 +212,9 @@ final class PluginCoordinator {
     /// SF Symbol, and a headline gauge/sparkline. Colors and the symbol come from
     /// the title line; a `progress=`/`sparkline=` may instead sit on the first
     /// dropdown item (the common "headline row is the gauge" idiom), so we fall
-    /// back to it. Pure so it is unit-testable.
-    static func widgetFields(from output: ParsedOutput) -> WidgetTitleFields {
+    /// back to it. Pure (no actor state) so it is `nonisolated` and unit-testable
+    /// from an ordinary, non-`@MainActor` test.
+    nonisolated static func widgetFields(from output: ParsedOutput) -> WidgetTitleFields {
         var fields = WidgetTitleFields()
         let title = output.titleLines.first
         let titleParams = title?.params
@@ -227,7 +228,7 @@ final class PluginCoordinator {
     }
 
     /// The params of the first real dropdown item (skipping separators).
-    private static func firstBodyItemParams(_ body: [MenuNode]) -> LineParams? {
+    nonisolated private static func firstBodyItemParams(_ body: [MenuNode]) -> LineParams? {
         for node in body {
             if case .item(let item) = node { return item.params }
         }
