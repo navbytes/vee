@@ -35,7 +35,10 @@ public enum RefreshInterval: Equatable, Sendable {
         guard !token.isEmpty else { return nil }
         // Split into leading digits and a trailing unit.
         let digits = token.prefix { $0.isNumber }
-        guard !digits.isEmpty, let value = Int(digits) else { return nil }
+        // A zero interval (`0s`, `0ms`, …) would arm a repeating timer that
+        // refires continuously and pegs a core; reject it here so callers fall
+        // back to the no-interval/manual path instead (see PluginFilename).
+        guard !digits.isEmpty, let value = Int(digits), value > 0 else { return nil }
         let unit = token.dropFirst(digits.count)
         switch unit {
         case "ms": return .milliseconds(value)

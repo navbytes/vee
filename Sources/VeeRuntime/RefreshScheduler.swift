@@ -47,7 +47,12 @@ public final class RefreshTimer: @unchecked Sendable {
             guard let self else { return }
             self.timer?.cancel()
             let t = DispatchSource.makeTimerSource(queue: self.queue)
-            t.schedule(deadline: .now() + interval, repeating: interval, leeway: .milliseconds(Int(leeway * 1000)))
+            // Defense in depth: a zero/near-zero interval (e.g. a malformed
+            // filename token that slipped past RefreshInterval's own floor)
+            // would otherwise arm a repeating timer that refires continuously
+            // and pegs a core.
+            let safeInterval = max(interval, 0.1)
+            t.schedule(deadline: .now() + safeInterval, repeating: safeInterval, leeway: .milliseconds(Int(leeway * 1000)))
             t.setEventHandler(handler: handler)
             self.timer = t
             t.resume()

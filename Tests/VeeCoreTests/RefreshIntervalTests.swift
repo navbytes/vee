@@ -25,6 +25,20 @@ final class RefreshIntervalTests: XCTestCase {
         XCTAssertNil(RefreshInterval.parse(token: "10 s"))    // space
     }
 
+    /// Regression: a `0` interval (e.g. `cpu.0s.sh`) would arm a repeating timer
+    /// with a ~zero period, continuously refiring and pegging a core. A zero
+    /// value must be rejected so the plugin falls back to the manual/no-interval
+    /// path (see PluginFilenameTests for the filename-level fallback).
+    func testRejectsZeroInterval() {
+        XCTAssertNil(RefreshInterval.parse(token: "0s"))
+        XCTAssertNil(RefreshInterval.parse(token: "0ms"))
+        XCTAssertNil(RefreshInterval.parse(token: "0m"))
+        XCTAssertNil(RefreshInterval.parse(token: "0h"))
+        XCTAssertNil(RefreshInterval.parse(token: "0d"))
+        // A genuinely positive interval still parses.
+        XCTAssertEqual(RefreshInterval.parse(token: "5s"), .seconds(5))
+    }
+
     func testTimeInterval() {
         XCTAssertEqual(RefreshInterval.milliseconds(500).timeInterval, 0.5)
         XCTAssertEqual(RefreshInterval.seconds(10).timeInterval, 10)

@@ -170,4 +170,27 @@ final class PluginDiscoveryTests: XCTestCase {
     func testMissingDirectory() {
         XCTAssertTrue(PluginDiscovery.enumerate(directory: "/no/such/dir/here").isEmpty)
     }
+
+    /// Regression: editor backup/autosave files (`plugin.sh~`, `#plugin.sh#`)
+    /// and stray editor-extension files used to pass every filter and execute
+    /// as plugins — stale code, possibly with old credentials, running
+    /// alongside the real plugin.
+    func testEditorBackupAndAutosaveFilesIgnored() throws {
+        let dir = try tempDir()
+        defer { try? FileManager.default.removeItem(atPath: dir) }
+        let fm = FileManager.default
+
+        fm.createFile(atPath: dir + "/cpu.5s.sh", contents: Data("real".utf8), attributes: [.posixPermissions: 0o755])
+        fm.createFile(atPath: dir + "/cpu.5s.sh~", contents: Data("backup".utf8))
+        fm.createFile(atPath: dir + "/#cpu.5s.sh#", contents: Data("autosave".utf8))
+        for ext in ["bak", "orig", "tmp", "swp", "swo", "rej"] {
+            fm.createFile(atPath: dir + "/notes.\(ext)", contents: Data("x".utf8))
+        }
+
+        let found = PluginDiscovery.enumerate(directory: dir)
+        XCTAssertEqual(
+            found.map { $0.filename.name }, ["cpu"],
+            "only the real plugin should be discovered; backups/autosaves/ignored extensions must be filtered"
+        )
+    }
 }

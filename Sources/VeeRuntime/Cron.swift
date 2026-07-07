@@ -119,7 +119,12 @@ public final class CronScheduler: @unchecked Sendable {
         guard let next = expressions.compactMap({ $0.nextFireDate(after: now) }).min() else { return }
         let delay = max(1, next.timeIntervalSince(now))
         let t = DispatchSource.makeTimerSource(queue: queue)
-        t.schedule(deadline: .now() + delay, leeway: .seconds(1))
+        // Wall-clock, not monotonic: `deadline:` pauses while the system sleeps,
+        // so a cron fire due mid-sleep would land hours late on wake instead of
+        // promptly — cron is wall-clock by definition. `wallDeadline:` fires
+        // immediately on wake once the deadline has passed, and scheduleNext()
+        // realigns to the next matching minute from there.
+        t.schedule(wallDeadline: .now() + delay, leeway: .seconds(1))
         t.setEventHandler { [weak self] in
             self?.onFire()
             self?.scheduleNext()
