@@ -8,11 +8,18 @@ public protocol StreamingProcessRunning: Sendable {
 
 /// Production streaming runner backed by `Process`.
 public struct SystemStreamingRunner: StreamingProcessRunning {
-    public init() {}
+    /// Grace period between SIGTERM and the SIGKILL escalation in `cancel()`.
+    /// Overridable so tests can exercise the escalation path without waiting
+    /// out the production duration on every run.
+    private let killGracePeriod: TimeInterval
+
+    public init(killGracePeriod: TimeInterval = 2.5) {
+        self.killGracePeriod = killGracePeriod
+    }
 
     public func lines(_ invocation: ProcessInvocation) -> AsyncThrowingStream<String, Error> {
         AsyncThrowingStream { continuation in
-            let proc = StreamingProc(invocation: invocation, continuation: continuation)
+            let proc = StreamingProc(invocation: invocation, continuation: continuation, killGracePeriod: killGracePeriod)
             continuation.onTermination = { _ in proc.cancel() }
             proc.start()
         }
@@ -24,6 +31,7 @@ public struct SystemStreamingRunner: StreamingProcessRunning {
 private final class StreamingProc: @unchecked Sendable {
     private let invocation: ProcessInvocation
     private let continuation: AsyncThrowingStream<String, Error>.Continuation
+    private let killGracePeriod: TimeInterval
 
     private let process = Process()
     private let outPipe = Pipe()
@@ -32,9 +40,10 @@ private final class StreamingProc: @unchecked Sendable {
     private var finished = false
     private var selfRetain: StreamingProc?
 
-    init(invocation: ProcessInvocation, continuation: AsyncThrowingStream<String, Error>.Continuation) {
+    init(invocation: ProcessInvocation, continuation: AsyncThrowingStream<String, Error>.Continuation, killGracePeriod: TimeInterval) {
         self.invocation = invocation
         self.continuation = continuation
+        self.killGracePeriod = killGracePeriod
     }
 
     func start() {
@@ -57,15 +66,24 @@ private final class StreamingProc: @unchecked Sendable {
         // Close the parent's write end so the read loop sees EOF at child exit.
         try? outPipe.fileHandleForWriting.close()
 
-        // Single dedicated reader: `availableData` blocks until data arrives or
-        // EOF (empty). This delivers every line — including the tail — without
-        // racing a termination handler, which was the source of a CI flake.
-        let handle = outPipe.fileHandleForReading
+        // Single dedicated reader. Raw read(2) rather than `availableData`: it
+        // lets a stalled read be unblocked by *closing* the handle from another
+        // thread (the read returns -1 and the loop ends) without
+        // `availableData`'s exception-on-error behavior — the escape hatch
+        // `cancel()`'s escalation relies on (mirrors SystemProcessRunner's
+        // boundedDrain, which documents the same hazard).
+        let fd = outPipe.fileHandleForReading.fileDescriptor
         DispatchQueue.global().async { [self] in
+            let bufferSize = 64 * 1024
+            var buffer = [UInt8](repeating: 0, count: bufferSize)
             while true {
-                let data = handle.availableData
-                if data.isEmpty { break } // EOF
-                ingest(data)
+                let n = read(fd, &buffer, bufferSize)
+                if n == 0 { break } // EOF
+                if n < 0 {
+                    if errno == EINTR { continue } // transient interrupt: retry
+                    break // closed / error: end the read loop
+                }
+                ingest(Data(buffer[0..<n]))
             }
             finish(error: nil)
         }
@@ -126,9 +144,33 @@ private final class StreamingProc: @unchecked Sendable {
     func cancel() {
         // Guard the Process access under the same lock the reader uses, so a
         // cancel racing the reader's natural EOF can't interleave on `process`.
-        lock.withLock {
-            if process.isRunning { process.terminate() }
+        // The pid is captured now (while we know the process was ours to
+        // signal) rather than re-read later, and never signalled unless it's
+        // strictly positive — `kill(0, …)` targets the whole process group and
+        // `kill(-1, …)` targets every process the caller can signal.
+        let pid: Int32? = lock.withLock {
+            guard process.isRunning else { return nil }
+            process.terminate() // SIGTERM
+            return process.processIdentifier
         }
+
+        // Always arm the escalation, even if the process had already exited by
+        // the time we checked above: a grandchild that separately inherited the
+        // write end of the pipe (e.g. the plugin backgrounded a helper before
+        // exiting normally) can keep the reader parked with no live process of
+        // ours left to signal. After the grace period, SIGKILL our specific
+        // child if it's somehow still running, then force-close the read end
+        // regardless — that's what actually unblocks the reader in the
+        // grandchild case, since killing our child doesn't touch it.
+        DispatchQueue.global().asyncAfter(deadline: .now() + killGracePeriod) { [weak self] in
+            guard let self else { return }
+            if let pid, pid > 0 {
+                let stillRunning: Bool = self.lock.withLock { self.process.isRunning }
+                if stillRunning { kill(pid, SIGKILL) }
+            }
+            try? self.outPipe.fileHandleForReading.close()
+        }
+
         finish(error: nil)
     }
 }
