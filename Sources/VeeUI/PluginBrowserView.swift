@@ -317,9 +317,9 @@ private struct PluginCard: View {
             }
         }
         .padding(12)
-        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(.background.secondary))
+        .background(RoundedRectangle(cornerRadius: Corner.card, style: .continuous).fill(.background.secondary))
         .overlay(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
+            RoundedRectangle(cornerRadius: Corner.card, style: .continuous)
                 .stroke(hovering ? Color.accentColor.opacity(0.5) : Color.primary.opacity(0.08), lineWidth: 1)
         )
         .shadow(color: .black.opacity(hovering ? 0.12 : 0), radius: 8, y: 3)

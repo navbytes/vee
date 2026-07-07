@@ -95,7 +95,7 @@ public struct PluginDebugView: View {
                 .padding(8)
             }
             .frame(maxHeight: .infinity)
-            .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(.background.secondary))
+            .background(RoundedRectangle(cornerRadius: Corner.surface, style: .continuous).fill(.background.secondary))
         }
     }
 }

@@ -25,7 +25,7 @@ public struct SparklineChartView: View {
         }
         .padding(14)
         .frame(minWidth: 220, minHeight: 120)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: Corner.popover, style: .continuous))
     }
 
     @ViewBuilder

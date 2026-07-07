@@ -41,7 +41,7 @@ public struct PluginControlView: View {
         }
         .padding(14)
         .frame(minWidth: 220)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: Corner.popover, style: .continuous))
     }
 
     @ViewBuilder
