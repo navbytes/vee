@@ -121,6 +121,44 @@ public struct StoreConfig: Identifiable, Codable, Sendable, Equatable {
     }
 }
 
+public extension StoreConfig {
+    /// Builds a managed store from an MDM-delivered dictionary (the entries of
+    /// the `vee.managedStores` defaults array). Returns `nil` if the required
+    /// `id`, `displayName`, and a valid `kind` are missing. The result is always
+    /// `isManaged: true` and force-enabled; secrets are never sourced here.
+    init?(managedDictionary d: [String: Any]) {
+        guard let idString = d["id"] as? String, !idString.isEmpty,
+              let name = d["displayName"] as? String,
+              let kindString = d["kind"] as? String,
+              let kind = StoreKind(rawValue: kindString)
+        else { return nil }
+
+        func url(_ key: String) -> URL? {
+            (d[key] as? String).flatMap(URL.init(string:))
+        }
+
+        self.init(
+            id: StoreID(idString),
+            displayName: name,
+            kind: kind,
+            isEnabled: true,
+            isBuiltIn: false,
+            isManaged: true,
+            apiHost: url("apiHost"),
+            rawHost: url("rawHost"),
+            owner: d["owner"] as? String,
+            repo: d["repo"] as? String,
+            ref: (d["ref"] as? String) ?? "main",
+            baseURL: url("baseURL"),
+            manifestPath: (d["manifestPath"] as? String) ?? "vee-catalog.json",
+            trustPolicy: (d["trustPolicy"] as? String).flatMap(StoreTrustPolicy.init(rawValue:)) ?? .internalReviewed,
+            authMode: (d["authMode"] as? String).flatMap(StoreAuthMode.init(rawValue:)) ?? .none,
+            requireSignature: (d["requireSignature"] as? Bool) ?? false,
+            pinnedSigningKey: d["pinnedSigningKey"] as? String
+        )
+    }
+}
+
 /// The stores Vee ships with.
 public enum BuiltInStores {
     /// The identifier of the built-in public xbar catalog.

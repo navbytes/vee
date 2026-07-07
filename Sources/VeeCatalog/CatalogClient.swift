@@ -63,8 +63,10 @@ public struct GitHubCatalogClient: CatalogFetching {
     }
 
     /// Sets `Accept` and, when the store uses token auth, an `Authorization`
-    /// bearer header sourced from the token provider.
-    private func authorized(_ url: URL) -> URLRequest {
+    /// bearer header sourced from the token provider. `internal` so it can be
+    /// unit-tested directly (URLSession doesn't reliably expose the header to a
+    /// stub `URLProtocol`).
+    func authorizedRequest(_ url: URL) -> URLRequest {
         var request = URLRequest(url: url)
         request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
         if endpoints.config.authMode == .token, let token = tokenProvider?.token(), !token.isEmpty {
@@ -77,12 +79,12 @@ public struct GitHubCatalogClient: CatalogFetching {
         guard let treeURL = endpoints.treeURL, let repoBase = endpoints.rawBase else {
             throw CatalogError.unsupported
         }
-        let data = try await boundedData(for: authorized(treeURL), cap: Self.treeCap)
+        let data = try await boundedData(for: authorizedRequest(treeURL), cap: Self.treeCap)
         return try CatalogParser.parse(treeJSON: data, repoBase: repoBase, storeID: endpoints.config.id)
     }
 
     public func fetchSource(_ entry: CatalogEntry) async throws -> String {
-        let data = try await boundedData(for: authorized(entry.rawURL), cap: Self.sourceCap)
+        let data = try await boundedData(for: authorizedRequest(entry.rawURL), cap: Self.sourceCap)
         return String(decoding: data, as: UTF8.self)
     }
 
@@ -111,7 +113,7 @@ public struct GitHubCatalogClient: CatalogFetching {
     ///   unauthenticated rate limit.
     public func fetchLastUpdated(_ entry: CatalogEntry) async throws -> Date? {
         guard let url = endpoints.commitsURL(path: entry.path) else { return nil }
-        let data = try await boundedData(for: authorized(url), cap: Self.commitsCap)
+        let data = try await boundedData(for: authorizedRequest(url), cap: Self.commitsCap)
         return CatalogParser.parseLastCommitDate(commitsJSON: data)
     }
 }
