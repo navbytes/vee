@@ -2,6 +2,7 @@ import AppKit
 import Foundation
 import UserNotifications
 import VeeCore
+import VeePluginFormat
 
 /// Tracks which plugin ids have been silenced for the current session, so a
 /// monitor-style plugin the user has muted stops posting further alerts until
@@ -174,7 +175,7 @@ private final class NotifierDelegate: NSObject, UNUserNotificationCenterDelegate
     func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse, withCompletionHandler completionHandler: @escaping () -> Void) {
         let userInfo = response.notification.request.content.userInfo
         let pluginID = userInfo[Notifier.pluginIDKey] as? String
-        let href = (userInfo[Self.hrefKey] as? String).flatMap { URL(string: $0) }
+        let href = (userInfo[Self.hrefKey] as? String).flatMap { URL(string: $0) }.flatMap { URLScheme.isSafeToOpen($0) ? $0 : nil }
         let action = NotificationRouter.route(actionIdentifier: response.actionIdentifier, pluginID: pluginID, href: href)
         // `action` is Sendable; capture no non-Sendable self in the hop.
         Task { @MainActor in Notifier.handle(action) }

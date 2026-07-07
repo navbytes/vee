@@ -36,7 +36,9 @@ public enum HeaderParser {
             case "desc": meta.summary = value
             case "image": meta.image = value
             case "dependencies": meta.dependencies = splitList(value)
-            case "abouturl": meta.aboutURL = URL(string: value)
+            // Plugin-declared; scheme-filtered like href= so the About dialog's
+            // "Open Website" can't open file://, javascript:, etc.
+            case "abouturl": meta.aboutURL = URL(string: value).flatMap { URLScheme.isSafeToOpen($0) ? $0 : nil }
             case "schedule": meta.schedule = value.split(separator: "|").map { $0.trimmingCharacters(in: .whitespaces) }
             case "runinbash": meta.runInBash = boolValue(value)
             case "refreshonopen": meta.refreshOnOpen = boolValue(value)
