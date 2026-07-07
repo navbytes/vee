@@ -9,9 +9,12 @@ public enum SymbolImageFactory {
     /// resolved images — is byte-identical across most refreshes. Cache the
     /// final, fully-configured image keyed by everything that affects its
     /// appearance; NSImage is safe to share across menu items and the status
-    /// bar button, and NSCache is thread-safe and evicts under memory pressure
-    /// on its own.
-    private static let cache: NSCache<NSString, NSImage> = {
+    /// bar button, and NSCache evicts under memory pressure on its own.
+    /// `nonisolated(unsafe)` because NSCache isn't Sendable but Apple documents
+    /// it as thread-safe (items can be added, removed, and queried from
+    /// different threads without locking) — precisely the external
+    /// synchronization the strict-concurrency opt-out exists for.
+    nonisolated(unsafe) private static let cache: NSCache<NSString, NSImage> = {
         let cache = NSCache<NSString, NSImage>()
         cache.countLimit = 256
         return cache
