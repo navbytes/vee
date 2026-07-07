@@ -96,6 +96,8 @@
 <p>Any language. A plugin is just an executable that prints to stdout — bash, Python, Ruby, Node, a compiled binary, anything. For TypeScript there is a zero-dependency SDK that runs <code>.ts</code> files directly on Node with no build step. See the <a href="sdk.html">SDK docs</a>.</p>
 <h3 id="can-plugins-talk-back-to-vee-refresh-notify">Can plugins talk back to Vee (refresh, notify)?</h3>
 <p>Yes — via the <code>vee://</code> and <code>swiftbar://</code> URL actions (refresh a plugin, refresh all, enable/disable/toggle, notify), or the simpler <code>refresh=true</code> line parameter for "re-run me." See <a href="cli-and-urls.html">CLI and URL actions</a>.</p>
+<h3 id="my-plugin-has-a-huge-menu-can-i-search-it">My plugin has a huge menu — can I search it?</h3>
+<p>Yes. Add <code>&lt;vee.filter&gt;true&lt;/vee.filter&gt;</code> to the plugin and its dropdown gains a <strong>Search…</strong> row (⌘F) that opens a Spotlight-like panel: type to fuzzy-filter every item at once, including those nested in submenus, each shown with a breadcrumb. Add <code>&lt;vee.shortcut&gt;cmd+shift+k&lt;/vee.shortcut&gt;</code> to open that panel with a global hotkey from anywhere. Both are opt-in. See <a href="plugin-authoring.html#searchable-filter-panel">Searchable filter panel</a>.</p>
 <h3 id="a-plugin-isn-t-showing-up-or-is-erroring-what-do-i-do">A plugin isn't showing up or is erroring — what do I do?</h3>
 <p>Check that it is executable (<code>chmod +x</code>), in the right folder, and that any interpreter or tool it needs is installed. See <a href="troubleshooting.html">Troubleshooting</a>.</p>
     </article>

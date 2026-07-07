@@ -93,6 +93,7 @@ Point Vee at your existing plugins folder (Plugin Manager → **Choose Folder**)
 - Filename refresh intervals (`ms`/`s`/`m`/`h`/`d`) and `<swiftbar.schedule>` cron
 - SF Symbols, ANSI color, inline Markdown, emoji shortcodes
 - Streaming plugins (`~~~`) with restart/backoff
+- Searchable filter panel (opt-in `<vee.filter>`): fuzzy-search a plugin's whole nested menu from a Spotlight-like popover, with an optional global hotkey (`<vee.shortcut>`)
 - Declared typed preferences → auto-generated forms; secrets in the Keychain
 - `<vee.*>` trust declarations → plain-language trust summary + badges
 - Discover: catalog browser with one-click, trust-gated install

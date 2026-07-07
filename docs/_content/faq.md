@@ -64,6 +64,10 @@ Any language. A plugin is just an executable that prints to stdout — bash, Pyt
 
 Yes — via the `vee://` and `swiftbar://` URL actions (refresh a plugin, refresh all, enable/disable/toggle, notify), or the simpler `refresh=true` line parameter for "re-run me." See [CLI and URL actions](cli-and-urls.md).
 
+### My plugin has a huge menu — can I search it?
+
+Yes. Add `<vee.filter>true</vee.filter>` to the plugin and its dropdown gains a **Search…** row (⌘F) that opens a Spotlight-like panel: type to fuzzy-filter every item at once, including those nested in submenus, each shown with a breadcrumb. Add `<vee.shortcut>cmd+shift+k</vee.shortcut>` to open that panel with a global hotkey from anywhere. Both are opt-in. See [Searchable filter panel](plugin-authoring.md#searchable-filter-panel).
+
 ### A plugin isn't showing up or is erroring — what do I do?
 
 Check that it is executable (`chmod +x`), in the right folder, and that any interpreter or tool it needs is installed. See [Troubleshooting](troubleshooting.md).

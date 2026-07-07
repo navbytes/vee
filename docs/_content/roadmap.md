@@ -326,9 +326,12 @@ and triaged against what already ships. Ordered roughly by value.
   badges ship; a "new version available" nudge is the missing sliver.
 - **Signed plugins** — provenance (source URL + content hash) already ships;
   cryptographic author signing is the next step up.
-- **Command-palette / fuzzy picker** — a Spotlight-style type-to-filter chooser
-  bound to a global hotkey. The largest new surface here and the most orthogonal
-  to the menu-bar model; parked deliberately.
+- **Command-palette / fuzzy picker** — ✅ **shipped** (per-plugin). A Spotlight-
+  style searchable filter panel opts in via `<vee.filter>`, flattens the whole
+  nested menu, and fuzzy-filters it; `<vee.shortcut>` binds an optional global
+  hotkey, and `vee search` exposes the same matching on the CLI (`VeeSearch/…`,
+  `VeeApp/MenuSearchPanel.swift`, `VeeApp/GlobalHotKeys.swift`). The remaining
+  slice — a single **cross-plugin** "search everything" panel — is still parked.
 
 ## Explicitly out of scope
 

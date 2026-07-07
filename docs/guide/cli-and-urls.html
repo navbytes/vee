@@ -77,6 +77,7 @@ swift run vee        # launch the menu-bar app for development</code></pre></div
 <tbody>
 <tr><td><code>vee render &lt;plugin&gt;</code></td><td>Runs the plugin and prints the parsed menu tree plus any parse diagnostics.</td></tr>
 <tr><td><code>vee lint &lt;plugin&gt;</code></td><td>Runs the plugin and reports problems: unknown params, a bare <code>|</code> in a title, unquoted values containing spaces, and the parser's own diagnostics. Exits non-zero if anything is flagged.</td></tr>
+<tr><td><code>vee search &lt;plugin&gt; [query…]</code></td><td>Runs the plugin, flattens its (nested) menu, and prints the items fuzzy-filtered and ranked by your query — each with its breadcrumb and the action it would fire.</td></tr>
 <tr><td><code>vee new [flags]</code></td><td>Scaffolds a new plugin file with the right filename, header tags, and a working body.</td></tr>
 </tbody>
 </table>
@@ -102,6 +103,13 @@ Lint findings:
 <div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">sh</span></div><pre><code>$ vee new --lang sh --interval 30s --name weather --trust network --out ~/plugins
 # writes ~/plugins/weather.30s.sh with &lt;xbar.*&gt; + &lt;vee.*&gt; headers and a working body</code></pre></div>
 <p>For <code>ts</code>/<code>py</code>, the generated body imports the corresponding <a href="sdk.html">SDK</a> so a scaffold doubles as a starting point for typed authoring.</p>
+<h3 id="vee-search"><code>vee search</code></h3>
+<p>Flattens a plugin's whole menu tree — including nested submenus — and prints the items fuzzy-filtered and ranked, so you can try the <a href="plugin-authoring.html#searchable-filter-panel">searchable filter panel</a>'s matching from the terminal before installing anything. With no query it lists every activatable item.</p>
+<div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">sh</span></div><pre><code>$ vee search ./dev-dashboard.5m.sh retry
+2 of 45 item(s) match "retry":
+  #412 Fix retry backoff jitter  ⟨Repositories › orders › Pull Requests⟩  [href]
+  feature/retry-jitter  ⟨Repositories › orders › Branches⟩  [shell]</code></pre></div>
+<p>Query words are ANDed and matched fuzzily (<code>gh</code> finds <code>GitHub</code>); a match on a parent group's name still surfaces its children. Exits <code>1</code> when nothing matches and <code>2</code> on a missing path, so it slots into scripts and CI too.</p>
 <h2 id="url-actions">URL actions</h2>
 <p>Vee registers two URL schemes: <code>vee://</code> and <code>swiftbar://</code>. The <code>swiftbar://</code> scheme is supported for compatibility, so plugins written for SwiftBar keep working. Both schemes accept the same actions.</p>
 <p>The <strong>action is the URL host</strong>, and parameters come from the query string. The plugin name is passed as <code>name</code> (or <code>path</code>).</p>
