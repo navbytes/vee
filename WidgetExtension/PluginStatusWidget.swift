@@ -87,6 +87,14 @@ struct PluginStatusView: View {
     var body: some View {
         if plugins.isEmpty {
             EmptyPluginsView()
+        } else if plugins.count == 1, let card = plugins[0].card {
+            // A widget dedicated to one rich-card plugin renders the native
+            // template full-tile (itself family-adaptive) instead of the
+            // Tier-0 scrape — see docs/design/widget-surface-contract.md §5.
+            // A multi-plugin selection always keeps the scraped hero/list
+            // below unchanged, even for plugins that have a card: a
+            // list/board template doesn't fit inside one row of a roundup.
+            WidgetCardView(pluginID: plugins[0].id, card: card, updated: plugins[0].updated, stale: plugins[0].isStale(asOf: Date()))
         } else if family == .systemSmall {
             HeroPluginView(plugin: plugins[0], extra: plugins.count - 1)
         } else {

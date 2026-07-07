@@ -47,6 +47,7 @@ public enum WidgetCardParser {
 
         let progress = clampProgress(raw.progress, diagnostics: &diagnostics)
         let trend = finiteTrend(raw.trend, diagnostics: &diagnostics)
+        let actions = sanitizedActions(raw.actions, diagnostics: &diagnostics)
 
         let card = WidgetCard(
             template: template,
@@ -60,7 +61,7 @@ public enum WidgetCardParser {
             progress: progress,
             trend: trend,
             items: raw.items,
-            actions: raw.actions,
+            actions: actions,
             refreshAfter: raw.refreshAfter,
             staleAfter: raw.staleAfter
         )
@@ -92,6 +93,23 @@ public enum WidgetCardParser {
             diagnostics.append(.init(severity: .warning, message: "trend contained non-finite values; dropped"))
         }
         return finite
+    }
+
+    /// Drops any `href` action whose `url` is missing, unparseable, or
+    /// scheme-unsafe — the same scheme filter menu `href=`/`<xbar.abouturl>`
+    /// use (`URLScheme.isSafeToOpen`), so a widget button can't be made to
+    /// open `file://`/`javascript:`/etc. `refresh`/`shortcut` actions are
+    /// untouched (they carry no URL to validate).
+    private static func sanitizedActions(_ raw: [WidgetCardAction]?, diagnostics: inout [ParseDiagnostic]) -> [WidgetCardAction]? {
+        guard let raw else { return nil }
+        return raw.compactMap { action in
+            guard action.kind == .href else { return action }
+            guard let urlString = action.url, let url = URL(string: urlString), URLScheme.isSafeToOpen(url) else {
+                diagnostics.append(.init(severity: .warning, message: "href action \"\(action.label)\" has a missing or unsafe url; dropped"))
+                return nil
+            }
+            return action
+        }
     }
 }
 

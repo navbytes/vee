@@ -171,6 +171,45 @@ final class WidgetCardParserTests: XCTestCase {
         XCTAssertEqual(hex?.tint, .rgba(r: 0xff, g: 0x00, b: 0x00, a: 0xaa))
     }
 
+    // MARK: - href action scheme filtering (matches menu href=/<xbar.abouturl>)
+
+    func testHrefActionWithSafeSchemeIsKept() {
+        let (card, diagnostics) = WidgetCardParser.parse(
+            #"{"template":"stat","actions":[{"kind":"href","label":"Open","url":"https://dash.example.com"}]}"#
+        )
+        XCTAssertEqual(card?.actions, [WidgetCardAction(kind: .href, label: "Open", url: "https://dash.example.com")])
+        XCTAssertEqual(diagnostics, [])
+    }
+
+    func testHrefActionWithUnsafeSchemeIsDropped() {
+        for hostile in ["file:///etc/passwd", "javascript:alert(1)", "data:text/html,x"] {
+            let (card, diagnostics) = WidgetCardParser.parse(
+                #"{"template":"stat","actions":[{"kind":"href","label":"Open","url":"\#(hostile)"}]}"#
+            )
+            XCTAssertEqual(card?.actions, [], hostile)
+            XCTAssertEqual(diagnostics.count, 1, hostile)
+        }
+    }
+
+    func testHrefActionWithMissingOrUnparseableURLIsDropped() {
+        let (missingURL, missingDiagnostics) = WidgetCardParser.parse(#"{"template":"stat","actions":[{"kind":"href","label":"Open"}]}"#)
+        XCTAssertEqual(missingURL?.actions, [])
+        XCTAssertEqual(missingDiagnostics.count, 1)
+    }
+
+    /// `refresh`/`shortcut` actions carry no URL, so they pass through
+    /// untouched regardless of the href scheme filter.
+    func testNonHrefActionsAreUnaffectedBySchemeFilter() {
+        let (card, diagnostics) = WidgetCardParser.parse(
+            #"{"template":"stat","actions":[{"kind":"refresh","label":"Refresh"},{"kind":"shortcut","label":"Deploy","name":"Deploy Prod"}]}"#
+        )
+        XCTAssertEqual(card?.actions, [
+            WidgetCardAction(kind: .refresh, label: "Refresh"),
+            WidgetCardAction(kind: .shortcut, label: "Deploy", name: "Deploy Prod")
+        ])
+        XCTAssertEqual(diagnostics, [])
+    }
+
     func testRefreshAndStaleAfterDecodeFromSnakeCase() {
         let (card, _) = WidgetCardParser.parse(#"{"template":"stat","refresh_after":900,"stale_after":3600}"#)
         XCTAssertEqual(card?.refreshAfter, 900)
