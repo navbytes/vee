@@ -213,4 +213,40 @@ final class WidgetSnapshotPublisherTests: XCTestCase {
         XCTAssertEqual(writeCount, 1, "identical card before the timestamp floor must not rewrite")
         XCTAssertEqual(reloads, 1, "identical card must not spend a second reload")
     }
+
+    /// A card's presentation (tint/symbol/progress/trend) is projected onto the
+    /// snapshot's scraped fields, so a `.both`/`.widget` plugin still renders in
+    /// the multi-plugin roundup path (which reads color/symbolName/progress/
+    /// sparkline, not the card) instead of looking bare.
+    func testCardPresentationPopulatesScrapedFields() async throws {
+        let coalesce: TimeInterval = 0.05
+        var writes: [WidgetSnapshot] = []
+        let publisher = WidgetSnapshotPublisher(
+            write: { writes.append($0) },
+            requestReload: {},
+            flushCoalesce: coalesce,
+            reloadFloor: 0.6,
+            timestampFloor: 0.5
+        )
+        publisher.setLoaded(ids: ["a"])
+        writes.removeAll()
+
+        let card = WidgetCard(
+            template: .trend,
+            symbol: "chart.line.uptrend.xyaxis",
+            tint: .named("green"),
+            value: "$18.2k",
+            progress: 0.72,
+            trend: [1, 2, 3, 5, 8]
+        )
+        // The scraped `fields` are empty here — the values must come from the card.
+        publisher.publish(id: "a", name: "A", interval: nil, publish: WidgetPublish(title: "$18.2k", card: card))
+        try await settle(coalesce)
+
+        let snapshot = try XCTUnwrap(writes.last?.plugins.first)
+        XCTAssertEqual(snapshot.color, .named("green"))
+        XCTAssertEqual(snapshot.symbolName, "chart.line.uptrend.xyaxis")
+        XCTAssertEqual(snapshot.progress, 0.72)
+        XCTAssertEqual(snapshot.sparkline, [1, 2, 3, 5, 8])
+    }
 }

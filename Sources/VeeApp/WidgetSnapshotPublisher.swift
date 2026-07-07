@@ -54,16 +54,21 @@ final class WidgetSnapshotPublisher {
     /// Records a plugin's current widget state and schedules a coalesced flush to
     /// the shared snapshot file so the WidgetKit widget can render it.
     func publish(id: String, name: String, interval: TimeInterval?, publish: WidgetPublish) {
+        // A rich card carries the same presentation the scraped `fields` do
+        // (tint/symbol/progress/trend), so prefer it — that way a `.both`/
+        // `.widget` plugin still renders in a multi-plugin roundup (which reads
+        // these scraped fields, not the card) instead of looking bare. The
+        // card's `tint` is already a `SnapshotColor`, so no re-mapping.
         snapshotItems[id] = PluginSnapshot(
             id: id,
             name: name,
             title: publish.title,
             updated: Date(),
-            color: publish.fields.color.map(WidgetSnapshotMapping.snapshotColor),
-            symbolName: publish.fields.symbolName,
+            color: publish.card?.tint ?? publish.fields.color.map(WidgetSnapshotMapping.snapshotColor),
+            symbolName: publish.card?.symbol ?? publish.fields.symbolName,
             symbolColors: WidgetSnapshotMapping.snapshotColors(publish.fields.symbolColors),
-            progress: publish.fields.progress,
-            sparkline: publish.fields.sparkline,
+            progress: publish.card?.progress ?? publish.fields.progress,
+            sparkline: publish.card?.trend ?? publish.fields.sparkline,
             isError: publish.isError,
             interval: interval,
             card: publish.card

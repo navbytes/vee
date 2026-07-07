@@ -340,11 +340,11 @@ final class PluginCoordinator {
             makeInvocation: { invocation },
             onUpdate: { [weak self] output in
                 self?.controller?.render(output)
-                self?.onPublish?(WidgetPublish(title: Self.publishableTitle(output), fields: Self.widgetFields(from: output)))
+                self?.publishScrape(WidgetPublish(title: Self.publishableTitle(output), fields: Self.widgetFields(from: output)))
             },
             onStopped: { [weak self] message in
                 self?.controller?.renderError(message)
-                self?.onPublish?(WidgetPublish(title: "⚠︎ stopped", isError: true))
+                self?.publishScrape(WidgetPublish(title: "⚠︎ stopped", isError: true))
             }
         )
         streaming = session
@@ -416,26 +416,39 @@ final class PluginCoordinator {
                     let detail = partial.isEmpty ? nil : String(partial.prefix(500))
                     self?.lastError = "Plugin timed out"
                     self?.controller?.renderError("Plugin timed out", detail: detail)
-                    self?.onPublish?(WidgetPublish(title: "⚠︎ timed out", isError: true))
+                    self?.publishScrape(WidgetPublish(title: "⚠︎ timed out", isError: true))
                 } else if result.outcome.exitCode != 0 && result.output.titleLines.isEmpty {
                     self?.lastError = Self.friendlyError(result.outcome)
                     self?.controller?.renderError(
                         Self.friendlyError(result.outcome),
                         detail: result.outcome.standardError.isEmpty ? nil : String(result.outcome.standardError.prefix(500))
                     )
-                    self?.onPublish?(WidgetPublish(title: "⚠︎ error", isError: true))
+                    self?.publishScrape(WidgetPublish(title: "⚠︎ error", isError: true))
                 } else {
                     self?.lastError = nil
                     self?.controller?.render(result.output)
-                    self?.onPublish?(WidgetPublish(title: Self.publishableTitle(result.output), fields: Self.widgetFields(from: result.output)))
+                    self?.publishScrape(WidgetPublish(title: Self.publishableTitle(result.output), fields: Self.widgetFields(from: result.output)))
                 }
             } catch {
                 guard self?.stopped != true else { return }
                 self?.lastError = "\(error)"
                 self?.controller?.renderError("\(error)")
-                self?.onPublish?(WidgetPublish(title: "⚠︎ error", isError: true))
+                self?.publishScrape(WidgetPublish(title: "⚠︎ error", isError: true))
             }
         }
+    }
+
+    /// Routes a Tier-0 scrape publish. The scrape only owns the widget
+    /// snapshot for a plain `.menu` plugin; for `.both`/`.widget`,
+    /// `refreshWidget()` owns it exclusively, so the frequent menu-mode scrape
+    /// must not clobber the rich card (a `.both` plugin's menu cadence — e.g.
+    /// 5s — fires far more often than its ≥5min widget cadence, so an ungated
+    /// scrape would overwrite the card within one tick and churn the reload
+    /// budget flip-flopping). Menu rendering (`controller?.render*`) is
+    /// unaffected — only the widget publish is gated.
+    private func publishScrape(_ publish: WidgetPublish) {
+        guard header.surface == .menu else { return }
+        onPublish?(publish)
     }
 
     // MARK: - Widget-mode cadence (`.both`/`.widget` surfaces)
