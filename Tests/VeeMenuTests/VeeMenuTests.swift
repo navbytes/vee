@@ -134,6 +134,22 @@ final class MenuBuilderTests: XCTestCase {
         let m = menu("T\n---\nDocs | webview=https://example.com")
         XCTAssertNotNil(m.items[0].target, "webview= item should be wired")
     }
+
+    /// Regression: the progress branch used to `return` before the submenu was
+    /// wired, so a gauge row with children silently lost its submenu in the
+    /// native menu (while the search panel still surfaced them).
+    func testProgressItemWithSubmenuKeepsSubmenu() {
+        let m = menu("T\n---\nBudget | progress=0.5\n--Detail")
+        XCTAssertNotNil(m.items[0].submenu, "progress row should keep its submenu")
+        XCTAssertEqual(m.items[0].submenu?.items.first?.title, "Detail")
+    }
+
+    /// Regression: same early-return bug — a progress row with its own href=
+    /// action must still be wired, matching a plain actionable item.
+    func testProgressItemWithHrefIsActionable() {
+        let m = menu("T\n---\nBudget | progress=0.5 href=https://example.com")
+        XCTAssertNotNil(m.items[0].target, "progress row with href should be wired")
+    }
 }
 
 final class SFSymbolConfigTests: XCTestCase {

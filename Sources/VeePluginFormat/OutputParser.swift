@@ -34,7 +34,12 @@ public enum OutputParser {
         var lines = s.components(separatedBy: "\n")
         // Drop a single trailing empty line produced by a final newline.
         if lines.last == "" { lines.removeLast() }
-        return lines
+        // Tolerate CRLF line endings (Windows-authored scripts): strip exactly
+        // one trailing "\r" per line so `---\r`/`--\r`/`~~~\r` still match their
+        // separators. `.whitespaces` trimming elsewhere doesn't catch "\r", and
+        // this is deliberately not a blanket trim — trailing spaces are
+        // significant for param parsing.
+        return lines.map { $0.hasSuffix("\r") ? String($0.dropLast()) : $0 }
     }
 
     /// Applies emojize (default on) then ANSI parsing (default on) to a line's

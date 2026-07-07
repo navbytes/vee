@@ -12,6 +12,10 @@ public final class PluginBrowserWindow {
 
     public func show(model: PluginBrowserModel) {
         if let window {
+            // Swap in the fresh model — otherwise a new store/changed plugins
+            // directory never takes effect after the first open, and installs
+            // would keep targeting the OLD directory.
+            (window.contentViewController as? NSHostingController<PluginBrowserView>)?.rootView = PluginBrowserView(model: model)
             window.makeKeyAndOrderFront(nil)
             NSApp.activate(ignoringOtherApps: true)
             return

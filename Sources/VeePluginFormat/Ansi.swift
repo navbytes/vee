@@ -76,7 +76,13 @@ enum Ansi {
     }
 
     private static func apply(_ code: String, to state: inout State) {
-        let parts = code.split(separator: ";").map { Int($0) ?? -1 }
+        // Per the SGR default-parameter rule, an omitted numeric parameter
+        // means 0 (reset): `\e[m` is a full reset and `\e[;31m` is
+        // reset-then-red — not a no-op — so an empty component must map to 0,
+        // not be dropped. `omittingEmptySubsequences: false` keeps those empty
+        // components (including the sole one when `code` itself is empty)
+        // instead of collapsing them away.
+        let parts = code.split(separator: ";", omittingEmptySubsequences: false).map { $0.isEmpty ? 0 : (Int($0) ?? -1) }
         var k = 0
         while k < parts.count {
             let c = parts[k]

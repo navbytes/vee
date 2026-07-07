@@ -24,6 +24,11 @@ public final class AppController: NSObject, NSApplicationDelegate {
     /// per-plugin error updates can be pushed into it. Nil when the window is closed.
     private weak var currentManagerModel: PluginManagerModel?
     private var ephemerals: [String: StatusItemController] = [:]
+    /// Per-key deadline task for an ephemeral item's `exitafter=`. Re-setting
+    /// an ephemeral item under the same name must cancel and replace the OLD
+    /// deadline — otherwise it still fires on the old schedule and removes the
+    /// REPLACED content early. See `showEphemeral`.
+    private var ephemeralExpiries: [String: Task<Void, Never>] = [:]
     /// Path → file-modification-time of the currently loaded plugins; a change
     /// here (including an in-place edit) triggers a rebuild. See `reload()`.
     private var loadedSignature: [String: TimeInterval] = [:]
@@ -36,23 +41,17 @@ public final class AppController: NSObject, NSApplicationDelegate {
 
     private var directory: String = PluginsDirectory.resolve()
 
-    /// Latest published title per plugin, mirrored to the shared snapshot file
-    /// so the WidgetKit widget can render it. Flushed (coalesced) on change.
-    private var snapshotItems: [String: PluginSnapshot] = [:]
-    private var snapshotFlushScheduled = false
-    /// The content last written (with volatile timestamps normalized away), so an
-    /// unchanged flush is a no-op: a plugin re-running with identical output —
-    /// same title, color, gauge, error state — must not churn the file or spend a
-    /// widget reload.
-    private var lastPublishedSignature: [PluginSnapshot] = []
-    /// Throttle state for `WidgetCenter.reloadAllTimelines()` — WidgetKit meters
-    /// reloads against a per-app budget, so a fast/streaming plugin must not
-    /// drive one reload per tick.
-    private var lastWidgetReload: Date = .distantPast
-    private var widgetReloadPending = false
-    /// When the snapshot file was last written, so timestamp-only refreshes (no
-    /// content change) don't churn the disk once per tick — see flushWidgetSnapshot.
-    private var lastSnapshotWrite: Date = .distantPast
+    /// Widget-snapshot publishing state/policy (coalesced writes, metered
+    /// WidgetKit reloads) — see `WidgetSnapshotPublisher`. Constructed here with
+    /// the production effects so the publisher itself stays WidgetKit-free.
+    private let widgetPublisher = WidgetSnapshotPublisher(
+        write: { VeeWidgetSharing.shared.write($0) },
+        requestReload: {
+            #if canImport(WidgetKit)
+            WidgetCenter.shared.reloadAllTimelines()
+            #endif
+        }
+    )
 
     /// The running controller, so App Intents (Shortcuts/Spotlight) can drive it.
     public static weak var shared: AppController?
@@ -277,11 +276,19 @@ public final class AppController: NSObject, NSApplicationDelegate {
         // status item must not be able to run arbitrary commands on click.
         // (`href=` is already scheme-filtered at parse.)
         controller.render(Self.strippingShellActions(OutputParser.parse(content)))
-        if let exitAfter, exitAfter > 0 {
-            Task { @MainActor in
+
+        // Cancel any previous deadline for this key unconditionally — even an
+        // update with no exitafter (meant to persist) must not be removed by a
+        // still-pending timer from an earlier call.
+        ephemeralExpiries[key]?.cancel()
+        ephemeralExpiries[key] = nil
+        if let exitAfter, exitAfter.isFinite, exitAfter > 0 {
+            ephemeralExpiries[key] = Task { @MainActor in
                 try? await Task.sleep(nanoseconds: UInt64(exitAfter * 1_000_000_000))
+                guard !Task.isCancelled else { return }
                 self.ephemerals[key]?.remove()
                 self.ephemerals[key] = nil
+                self.ephemeralExpiries[key] = nil
             }
         }
     }
@@ -338,7 +345,7 @@ public final class AppController: NSObject, NSApplicationDelegate {
             let name = plugin.filename.name
             let interval = plugin.filename.interval.timeInterval
             coordinator.onPublish = { [weak self] publish in
-                self?.publishToWidget(id: id, name: name, interval: interval, publish: publish)
+                self?.widgetPublisher.publish(id: id, name: name, interval: interval, publish: publish)
                 // Keep an open Plugin Manager's error badge live: push this run's
                 // error state (nil on success) into the row. Cheap — setError
                 // only mutates when the value actually changed.
@@ -348,7 +355,7 @@ public final class AppController: NSObject, NSApplicationDelegate {
             coordinator.start()
         }
         // Drop widget entries for plugins that are no longer loaded.
-        flushWidgetSnapshot()
+        widgetPublisher.setLoaded(ids: Set(coordinators.keys))
     }
 
     /// A change key for the loaded plugin set: each plugin's path plus its file
@@ -360,109 +367,6 @@ public final class AppController: NSObject, NSApplicationDelegate {
             signature[plugin.path] = (attrs?[.modificationDate] as? Date)?.timeIntervalSince1970 ?? 0
         }
         return signature
-    }
-
-    // MARK: - Widget snapshot
-
-    /// Minimum spacing between `reloadAllTimelines()` calls. WidgetKit meters
-    /// background reloads against a per-app daily budget; a fast (e.g. `5s`) or
-    /// streaming plugin would otherwise blow through it in minutes and leave the
-    /// widget frozen. The widget's own 30-min timeline policy is the in-budget
-    /// baseline; these pushes just make changes appear sooner.
-    private static let widgetReloadMinInterval: TimeInterval = 300 // 5 minutes
-
-    /// Records a plugin's current widget state and schedules a coalesced flush to
-    /// the shared snapshot file so the WidgetKit widget can render it.
-    private func publishToWidget(id: String, name: String, interval: TimeInterval?, publish: WidgetPublish) {
-        snapshotItems[id] = PluginSnapshot(
-            id: id,
-            name: name,
-            title: publish.title,
-            updated: Date(),
-            color: publish.fields.color.map(WidgetSnapshotMapping.snapshotColor),
-            symbolName: publish.fields.symbolName,
-            symbolColors: WidgetSnapshotMapping.snapshotColors(publish.fields.symbolColors),
-            progress: publish.fields.progress,
-            sparkline: publish.fields.sparkline,
-            isError: publish.isError,
-            interval: interval
-        )
-        guard !snapshotFlushScheduled else { return }
-        snapshotFlushScheduled = true
-        Task { @MainActor in
-            // Coalesce bursts (many plugins refreshing at once) into one write.
-            try? await Task.sleep(nanoseconds: 300_000_000)
-            self.snapshotFlushScheduled = false
-            self.flushWidgetSnapshot()
-        }
-    }
-
-    /// Writes the current snapshot (only currently-loaded plugins, name-sorted)
-    /// to the shared file — always, so freshness timestamps stay honest — and asks
-    /// WidgetKit to reload only when the visible *content* changed (and never more
-    /// often than the reload floor).
-    private func flushWidgetSnapshot() {
-        snapshotItems = snapshotItems.filter { coordinators[$0.key] != nil }
-        let plugins = snapshotItems.values.sorted { $0.name.lowercased() < $1.name.lowercased() }
-        // Detect a visible-content change (title, color, gauge, error state) with
-        // the per-run `updated` timestamp normalized away, so a plugin re-running
-        // with identical output doesn't spend a widget reload.
-        let signature = Self.contentSignature(plugins)
-        let contentChanged = signature != lastPublishedSignature
-        lastPublishedSignature = signature
-
-        // Write on a real content change immediately. Otherwise the write only
-        // refreshes the "last ran" timestamps, so throttle those to avoid churning
-        // the disk once per tick for a fast/streaming plugin — the freshness floor
-        // is minutes, so a ~minute-old timestamp is still honest. A content change
-        // additionally spends a (separately throttled) WidgetKit reload.
-        let now = Date()
-        guard contentChanged || now.timeIntervalSince(lastSnapshotWrite) >= Self.timestampWriteInterval else { return }
-        lastSnapshotWrite = now
-        VeeWidgetSharing.shared.write(WidgetSnapshot(plugins: Array(plugins), generated: now))
-        if contentChanged { requestWidgetReload() }
-    }
-
-    /// Minimum spacing between timestamp-only snapshot writes (a content change
-    /// always writes immediately). Well under the freshness/stale floor.
-    private static let timestampWriteInterval: TimeInterval = 60
-
-    /// The change-detection key for a set of snapshots: the same plugins with the
-    /// per-run `updated` timestamp zeroed, so re-running a plugin with identical
-    /// output compares equal (only a real content change triggers a widget reload;
-    /// the file itself is still rewritten to keep `updated` current).
-    private static func contentSignature(_ plugins: [PluginSnapshot]) -> [PluginSnapshot] {
-        plugins.map {
-            PluginSnapshot(
-                id: $0.id, name: $0.name, title: $0.title,
-                updated: Date(timeIntervalSince1970: 0),
-                color: $0.color, symbolName: $0.symbolName, symbolColors: $0.symbolColors,
-                progress: $0.progress, sparkline: $0.sparkline, isError: $0.isError, interval: $0.interval
-            )
-        }
-    }
-
-    /// Asks WidgetKit to reload, throttled to `widgetReloadMinInterval`. If a
-    /// reload happened recently, one trailing reload is scheduled at the end of
-    /// the window so the latest change still lands.
-    private func requestWidgetReload() {
-        #if canImport(WidgetKit)
-        let now = Date()
-        let elapsed = now.timeIntervalSince(lastWidgetReload)
-        if elapsed >= Self.widgetReloadMinInterval {
-            lastWidgetReload = now
-            WidgetCenter.shared.reloadAllTimelines()
-        } else if !widgetReloadPending {
-            widgetReloadPending = true
-            let delay = Self.widgetReloadMinInterval - elapsed
-            Task { @MainActor in
-                try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
-                self.widgetReloadPending = false
-                self.lastWidgetReload = Date()
-                WidgetCenter.shared.reloadAllTimelines()
-            }
-        }
-        #endif
     }
 
     // MARK: - Control Center refresh

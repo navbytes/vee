@@ -46,4 +46,17 @@ final class LinterTests: XCTestCase {
         let findings = Linter.lint(rawOutput: raw)
         XCTAssertTrue(findings.isEmpty, "\(findings)")
     }
+
+    /// Regression: a Windows-line-ending plugin's `---\r` must still be
+    /// recognized as the title/body separator (`.whitespaces` trimming
+    /// doesn't strip "\r"). Before the fix, `inBody` stayed permanently
+    /// false, so this body line's second top-level `|` — harmless below the
+    /// separator, since both `tooltip` and `bash` are well-formed — was
+    /// wrongly linted as a "stray '|' in title text", a check that's only
+    /// meant to apply above the separator.
+    func testCRLFSeparatorIsRecognized() {
+        let raw = "Title\r\n---\r\nWeird | tooltip=\"hi\" | bash=/bin/echo\r\n"
+        let findings = Linter.lint(rawOutput: raw)
+        XCTAssertTrue(findings.isEmpty, "\(findings)")
+    }
 }

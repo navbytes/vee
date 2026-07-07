@@ -23,19 +23,26 @@ public enum PluginDiscovery {
     /// files in the plugins folder don't get run.
     private static let ignoredExtensions: Set<String> = [
         "md", "markdown", "txt", "json", "plist", "log", "lock",
-        "png", "jpg", "jpeg", "gif", "svg", "pdf", "yml", "yaml"
+        "png", "jpg", "jpeg", "gif", "svg", "pdf", "yml", "yaml",
+        "bak", "orig", "tmp", "swp", "swo", "rej"
     ]
 
     /// Lists candidate plugins in `directory`, sorted by filename. Skips hidden
     /// files, `.vars.json` preference sidecars, subdirectories (a `disabled/`
-    /// subfolder is a common convention for parking plugins), and obvious
-    /// non-plugin document/data files.
+    /// subfolder is a common convention for parking plugins), editor backup/
+    /// autosave files, and obvious non-plugin document/data files.
     public static func enumerate(directory: String, fileManager: FileManager = .default) -> [DiscoveredPlugin] {
         guard let names = try? fileManager.contentsOfDirectory(atPath: directory) else { return [] }
 
         return names.sorted().compactMap { name -> DiscoveredPlugin? in
             if name.hasPrefix(".") { return nil }
             if name.hasSuffix(".vars.json") { return nil }
+            // Editor backup/autosave files (Emacs/vim `plugin.sh~`, Emacs
+            // `#plugin.sh#`) would otherwise pass every other filter and
+            // execute stale code — possibly with old credentials — alongside
+            // the real plugin.
+            if name.hasSuffix("~") { return nil }
+            if name.hasPrefix("#") && name.hasSuffix("#") { return nil }
 
             let path = (directory as NSString).appendingPathComponent(name)
             var isDir: ObjCBool = false

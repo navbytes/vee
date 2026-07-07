@@ -32,10 +32,12 @@ final class AppActionDispatcher: MenuActionHandling {
             }
         } else if let webview = params.swiftbar.webview {
             WebViewPresenter.shared.show(url: webview, width: params.swiftbar.webviewWidth, height: params.swiftbar.webviewHeight)
+            if params.refresh == true { onRefresh() }
         } else if let series = params.sparkline {
             PluginPopover.shared.show(series: series, title: item.text)
         } else if let url = params.href {
             NSWorkspace.shared.open(url)
+            if params.refresh == true { onRefresh() }
         } else if let shortcut = params.swiftbar.shortcut, !shortcut.isEmpty {
             runShortcut(named: shortcut, refreshAfter: params.refresh == true)
         } else if params.refresh == true {

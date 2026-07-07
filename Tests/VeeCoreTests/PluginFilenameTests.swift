@@ -41,4 +41,15 @@ final class PluginFilenameTests: XCTestCase {
     func testMillisecondsInterval() {
         XCTAssertEqual(PluginFilename("poll.250ms.sh").interval, .milliseconds(250))
     }
+
+    /// Regression: a `0` interval token fails to parse (RefreshInterval rejects
+    /// it to avoid arming a near-zero repeating timer), so the filename must
+    /// fall back to the manual/no-interval path — folding the token into the
+    /// name — rather than crashing or silently keeping an unsafe interval.
+    func testZeroIntervalTokenFallsBackToManual() {
+        let f = PluginFilename("cpu.0s.sh")
+        XCTAssertEqual(f.name, "cpu.0s")
+        XCTAssertEqual(f.interval, .manual)
+        XCTAssertEqual(f.ext, "sh")
+    }
 }

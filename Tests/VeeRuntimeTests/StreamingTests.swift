@@ -80,4 +80,105 @@ final class StreamingRunnerIntegrationTests: XCTestCase {
         }
         XCTAssertEqual(lines, ["a", "b", "~~~", "c"])
     }
+
+    /// Regression: a Windows-line-ending streaming plugin emits `~~~\r\n`. The
+    /// trailing "\r" must be stripped at the line-split boundary so the
+    /// separator still matches — and so StreamAccumulator, fed these lines the
+    /// same way StreamingSession does, still resets the menu on each block.
+    func testCRLFStreamSeparatorIsRecognized() async throws {
+        let runner = SystemStreamingRunner()
+        let invocation = ProcessInvocation(
+            launchPath: "/bin/sh",
+            arguments: ["-c", "printf 'a\\r\\n~~~\\r\\nb\\r\\n'"]
+        )
+        var lines: [String] = []
+        for try await line in runner.lines(invocation) {
+            lines.append(line)
+        }
+        XCTAssertEqual(lines, ["a", "~~~", "b"], "the trailing \\r must not remain on any line")
+
+        var accumulator = StreamAccumulator()
+        var blocks: [String] = []
+        for line in lines {
+            if let block = accumulator.consume(line) { blocks.append(block) }
+        }
+        if let tail = accumulator.flush() { blocks.append(tail) }
+        XCTAssertEqual(blocks, ["a", "b"], "the CRLF separator must still reset the accumulator")
+    }
+}
+
+/// Thread-safe one-shot flag, set from the streaming Task's consumer loop and
+/// polled from the test's main flow.
+private final class ReadyFlag: @unchecked Sendable {
+    private let lock = NSLock()
+    private var ready = false
+    func markReady() { lock.lock(); ready = true; lock.unlock() }
+    var isReady: Bool { lock.lock(); defer { lock.unlock() }; return ready }
+}
+
+/// Regression: `cancel()` used to send only SIGTERM and never touch the read
+/// end. A child that ignores TERM (`trap "" TERM`) — or a grandchild that
+/// separately holds the write end of the pipe open — left the reader thread
+/// parked in its blocking read forever: a leaked GCD thread, both fds, the
+/// `StreamingProc`, and the process itself, on every reload of that plugin.
+/// `killGracePeriod` is injected small here so the escalation path is
+/// exercised quickly instead of waiting out the 2.5s production duration.
+final class StreamingCancelEscalationTests: XCTestCase {
+    private let gracePeriod: TimeInterval = 0.2
+
+    private func openFDCount() -> Int {
+        (try? FileManager.default.contentsOfDirectory(atPath: "/dev/fd").count) ?? -1
+    }
+
+    /// Starts a stream of a TERM-ignoring process, waits for it to print
+    /// "ready" (proving the trap is installed before we cancel), cancels the
+    /// consuming Task, and waits for the escalation to actually run — so by
+    /// the time this returns, the reader thread (and its fds) are settled.
+    private func runIgnoresTermCycle(_ runner: SystemStreamingRunner) async throws {
+        let invocation = ProcessInvocation(
+            launchPath: "/bin/sh",
+            arguments: ["-c", #"trap '' TERM; echo ready; while :; do sleep 0.05; done"#]
+        )
+        let flag = ReadyFlag()
+        let task = Task {
+            for try await line in runner.lines(invocation) where line == "ready" {
+                flag.markReady()
+            }
+        }
+
+        let readyDeadline = Date().addingTimeInterval(5)
+        while !flag.isReady, Date() < readyDeadline {
+            try await Task.sleep(nanoseconds: 5_000_000)
+        }
+        XCTAssertTrue(flag.isReady, "process never printed 'ready'")
+
+        task.cancel()
+        // Cancellation must actually complete (not hang forever) — a stuck
+        // await here would fail the test via its own timeout.
+        _ = try? await task.value
+
+        // Let the escalation (SIGKILL + forced fd close) actually finish
+        // before returning, so fd counts reflect steady state rather than a
+        // reader thread still mid-grace-period.
+        try await Task.sleep(nanoseconds: UInt64((gracePeriod + 0.3) * 1_000_000_000))
+    }
+
+    func testCancelCompletesForProcessIgnoringTerm() async throws {
+        let runner = SystemStreamingRunner(killGracePeriod: gracePeriod)
+        try await runIgnoresTermCycle(runner)
+    }
+
+    /// Leak proxy (mirrors ProcessRunnerIntegrationTests.
+    /// testFileDescriptorsStableAcrossManyRuns): repeated start/cancel cycles
+    /// against a TERM-ignoring process must not grow the open-fd count.
+    func testFileDescriptorsStableAcrossRepeatedCancelOfIgnoredTerm() async throws {
+        let runner = SystemStreamingRunner(killGracePeriod: gracePeriod)
+
+        // Warm up so lazily-created fds aren't counted as growth.
+        for _ in 0..<2 { try await runIgnoresTermCycle(runner) }
+        let before = openFDCount()
+        for _ in 0..<15 { try await runIgnoresTermCycle(runner) }
+        let after = openFDCount()
+        XCTAssertLessThanOrEqual(after - before, 5, "fd count grew from \(before) to \(after) — likely a pipe/thread leak")
+    }
 }
