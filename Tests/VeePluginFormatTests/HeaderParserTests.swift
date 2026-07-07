@@ -95,6 +95,15 @@ final class HeaderParserTests: XCTestCase {
         XCTAssertEqual(select.options, ["fast", "slow", "auto"])
     }
 
+    func testVeeFilterOptIn() {
+        let on = HeaderParser.parse(source: "# <vee.filter>true</vee.filter>\n")
+        XCTAssertTrue(on.filter)
+        let off = HeaderParser.parse(source: "# <vee.filter>false</vee.filter>\n")
+        XCTAssertFalse(off.filter)
+        let absent = HeaderParser.parse(source: "echo hi\n")
+        XCTAssertFalse(absent.filter)
+    }
+
     func testNoHeaderYieldsEmptyMetadata() {
         let m = HeaderParser.parse(source: "echo hello\n")
         XCTAssertNil(m.title)

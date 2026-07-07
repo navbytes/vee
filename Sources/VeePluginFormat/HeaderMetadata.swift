@@ -51,5 +51,11 @@ public struct HeaderMetadata: Equatable, Sendable {
 
     public var vars: [VarDeclaration] = []
 
+    // Vee-native options
+    /// `<vee.filter>true</vee.filter>`: opt this plugin's dropdown into the
+    /// searchable filter panel instead of a plain `NSMenu`. Advisory hint for the
+    /// app layer; parsing it here keeps the format one source of truth.
+    public var filter: Bool = false
+
     public init() {}
 }

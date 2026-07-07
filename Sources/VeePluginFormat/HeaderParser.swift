@@ -7,7 +7,7 @@ public enum HeaderParser {
     // Compile-time-constant pattern; cannot fail at runtime.
     // swiftlint:disable:next force_try
     private static let tag = try! NSRegularExpression(
-        pattern: "<(xbar|swiftbar)\\.([a-zA-Z.]+)>([\\s\\S]*?)</\\1\\.\\2>",
+        pattern: "<(xbar|swiftbar|vee)\\.([a-zA-Z.]+)>([\\s\\S]*?)</\\1\\.\\2>",
         options: []
     )
 
@@ -50,6 +50,8 @@ public enum HeaderParser {
             case "hidelastupdated": meta.hideLastUpdated = boolValue(value)
             case "hidedisableplugin": meta.hideDisablePlugin = boolValue(value)
             case "hideswiftbar": meta.hideSwiftBar = boolValue(value)
+            // Vee-native: opt into the searchable filter panel (`<vee.filter>`).
+            case "filter": meta.filter = boolValue(value)
             case "var":
                 if let decl = parseVar(value) { meta.vars.append(decl) }
             default:
