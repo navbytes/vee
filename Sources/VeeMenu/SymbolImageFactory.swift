@@ -4,18 +4,60 @@ import VeePluginFormat
 /// Resolves a menu line's image to an `NSImage`: SF Symbols (`sfimage`, with
 /// optional color/size), base64 `image`, or `templateImage`.
 public enum SymbolImageFactory {
+    /// Every render re-creates every row's image (SF Symbol configuration or a
+    /// base64 decode), even though a plugin's own output — and therefore its
+    /// resolved images — is byte-identical across most refreshes. Cache the
+    /// final, fully-configured image keyed by everything that affects its
+    /// appearance; NSImage is safe to share across menu items and the status
+    /// bar button, and NSCache is thread-safe and evicts under memory pressure
+    /// on its own.
+    private static let cache: NSCache<NSString, NSImage> = {
+        let cache = NSCache<NSString, NSImage>()
+        cache.countLimit = 256
+        return cache
+    }()
+
     public static func image(for params: LineParams) -> NSImage? {
         if let symbol = params.swiftbar.sfimage {
-            return sfSymbol(named: symbol, params: params.swiftbar)
-        }
-        if let base64 = params.templateImage, let image = decode(base64) {
-            image.isTemplate = true
+            let key = sfCacheKey(name: symbol, params: params.swiftbar)
+            if let cached = cache.object(forKey: key) { return cached }
+            guard let image = sfSymbol(named: symbol, params: params.swiftbar) else { return nil }
+            cache.setObject(image, forKey: key)
             return image
         }
-        if let base64 = params.image, let image = decode(base64) {
-            return image
+        if let base64 = params.templateImage {
+            let key = "tpl|\(base64)" as NSString
+            if let cached = cache.object(forKey: key) { return cached }
+            if let image = decode(base64) {
+                image.isTemplate = true
+                cache.setObject(image, forKey: key)
+                return image
+            }
+        }
+        if let base64 = params.image {
+            let key = "img|\(base64)" as NSString
+            if let cached = cache.object(forKey: key) { return cached }
+            if let image = decode(base64) {
+                cache.setObject(image, forKey: key)
+                return image
+            }
         }
         return nil
+    }
+
+    /// Captures every input `sfSymbol(named:params:)` reads, so two calls that
+    /// would render identically hit the same cache entry and two that wouldn't
+    /// never collide.
+    private static func sfCacheKey(name: String, params: SwiftBarParams) -> NSString {
+        let colors = (params.sfcolor ?? []).map(colorToken).joined(separator: ",")
+        return "sf|\(name)|\(params.sfsize ?? -1)|\(params.sfconfig ?? "")|\(colors)" as NSString
+    }
+
+    private static func colorToken(_ color: VeeColor) -> String {
+        switch color {
+        case .named(let name): return "n:\(name)"
+        case .rgb(let r, let g, let b, let a): return "r:\(r),\(g),\(b),\(a)"
+        }
     }
 
     private static func sfSymbol(named name: String, params: SwiftBarParams) -> NSImage? {

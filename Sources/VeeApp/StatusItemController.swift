@@ -70,6 +70,15 @@ public final class StatusItemController {
     private let aboutURL: URL?
     private let hideLastUpdated: Bool
     private var lastUpdated: Date?
+    /// The most recently rendered output. `render(_:)` skips rebuilding the
+    /// menu/title when a refresh produces byte-identical output — the common
+    /// case, since most plugins refresh far more often than their output
+    /// actually changes.
+    private var lastRendered: ParsedOutput?
+    /// The "Updated <time>" stamp row in the controls submenu, kept so an
+    /// identical-output render can advance the timestamp in place without
+    /// rebuilding the menu.
+    private weak var stampItem: NSMenuItem?
 
     private static let timeFormatter: DateFormatter = {
         let f = DateFormatter()
@@ -144,8 +153,15 @@ public final class StatusItemController {
         }
     }
 
-    /// Renders a successful refresh.
+    /// Renders a successful refresh. Byte-identical output skips rebuilding
+    /// the menu/title entirely — only the "Updated" stamp advances.
     public func render(_ output: ParsedOutput) {
+        guard output != lastRendered else {
+            lastUpdated = Date()
+            stampItem?.title = "Updated \(Self.timeFormatter.string(from: Date()))"
+            return
+        }
+        lastRendered = output
         lastUpdated = Date()
         lastBody = output.body
         let presentation = TitleRenderer.presentation(for: output.titleLines)
@@ -158,6 +174,10 @@ public final class StatusItemController {
 
     /// Renders an error surface (the launcher stays up; the plugin shows ⚠️).
     public func renderError(_ message: String, detail: String? = nil) {
+        // A recovering plugin whose new output happens to equal its
+        // pre-error output must still rebuild (the error surface replaced the
+        // menu the equality check would otherwise skip re-rendering).
+        lastRendered = nil
         cycleTimer?.invalidate()
         frames = []
         if let button = statusItem.button {
@@ -378,6 +398,7 @@ public final class StatusItemController {
             let stamp = NSMenuItem(title: "Updated \(Self.timeFormatter.string(from: lastUpdated))", action: nil, keyEquivalent: "")
             stamp.isEnabled = false
             menu.addItem(stamp)
+            stampItem = stamp
         }
 
         let refresh = NSMenuItem(title: "Refresh", action: #selector(ControlsTarget.refresh), keyEquivalent: "r")
