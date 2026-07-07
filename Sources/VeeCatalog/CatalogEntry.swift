@@ -29,6 +29,10 @@ public struct CatalogEntry: Identifiable, Sendable, Equatable {
     public var declaredSHA256: String?
     /// Base64 Ed25519 signature over the source's SHA-256 bytes, if signed.
     public var signature: String?
+    /// The manifest's advertised signing key (base64 Ed25519), carried so the
+    /// installer can verify a signature without re-reading the manifest. A
+    /// policy-pinned store key takes precedence over this.
+    public var manifestSigningKey: String?
     /// Minimum macOS version the plugin declares it needs (e.g. `26.0`).
     public var minMacOS: String?
     /// Whether the store marks this plugin deprecated.
@@ -48,6 +52,7 @@ public struct CatalogEntry: Identifiable, Sendable, Equatable {
         manifestSummary: String? = nil,
         declaredSHA256: String? = nil,
         signature: String? = nil,
+        manifestSigningKey: String? = nil,
         minMacOS: String? = nil,
         deprecated: Bool = false
     ) {
@@ -61,6 +66,7 @@ public struct CatalogEntry: Identifiable, Sendable, Equatable {
         self.manifestSummary = manifestSummary
         self.declaredSHA256 = declaredSHA256
         self.signature = signature
+        self.manifestSigningKey = manifestSigningKey
         self.minMacOS = minMacOS
         self.deprecated = deprecated
     }

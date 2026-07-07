@@ -105,6 +105,7 @@ public enum CatalogManifestParser {
                 manifestSummary: plugin.summary,
                 declaredSHA256: plugin.sha256,
                 signature: plugin.signature,
+                manifestSigningKey: manifest.signingKey,
                 minMacOS: plugin.minMacOS,
                 deprecated: plugin.deprecated ?? false
             )

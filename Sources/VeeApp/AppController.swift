@@ -364,8 +364,15 @@ public final class AppController: NSObject, NSApplicationDelegate {
     }
 
     private func openBrowser() {
+        // Discover spans every configured store — the built-in public catalog
+        // plus any user-added or MDM-managed enterprise stores.
+        let registry = StoreRegistry()
         let model = PluginBrowserModel(
-            fetcher: GitHubCatalogClient(),
+            stores: registry.stores(),
+            makeClient: { store in
+                let token: StoreTokenProviding? = store.authMode == .token ? KeychainStoreTokenStore(storeID: store.id) : nil
+                return CatalogClientFactory.make(for: store, tokenProvider: token)
+            },
             pluginsDirectory: directory,
             onInstalled: { [weak self] in self?.reload() }
         )
