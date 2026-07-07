@@ -223,6 +223,13 @@ private struct SearchRowView: View {
                 }
             }
             Spacer(minLength: 0)
+            // Surface the plugin's own "currently selected" marker (`checked=true`)
+            // so an active choice (e.g. the current context) is visible in the panel.
+            if row.item.params.swiftbar.checked == true {
+                Image(systemName: "checkmark")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(selected ? AnyShapeStyle(.white) : AnyShapeStyle(Color.accentColor))
+            }
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
