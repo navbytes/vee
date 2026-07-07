@@ -41,6 +41,7 @@ public final class PluginManagerModel: ObservableObject {
     public var onSettings: (String) -> Void
     public var onDebug: (String) -> Void
     public var onDelete: (String) -> Void
+    public var onDiscover: () -> Void
     public var onLaunchAtLogin: (Bool) -> Void
     public var onOpenFolder: () -> Void
     public var onChooseFolder: () -> Void
@@ -55,6 +56,7 @@ public final class PluginManagerModel: ObservableObject {
         onSettings: @escaping (String) -> Void,
         onDebug: @escaping (String) -> Void = { _ in },
         onDelete: @escaping (String) -> Void = { _ in },
+        onDiscover: @escaping () -> Void = {},
         onLaunchAtLogin: @escaping (Bool) -> Void,
         onOpenFolder: @escaping () -> Void,
         onChooseFolder: @escaping () -> Void,
@@ -68,6 +70,7 @@ public final class PluginManagerModel: ObservableObject {
         self.onSettings = onSettings
         self.onDebug = onDebug
         self.onDelete = onDelete
+        self.onDiscover = onDiscover
         self.onLaunchAtLogin = onLaunchAtLogin
         self.onOpenFolder = onOpenFolder
         self.onChooseFolder = onChooseFolder
@@ -111,6 +114,13 @@ public struct PluginManagerView: View {
                             Label("No plugins yet", systemImage: "puzzlepiece.extension")
                         } description: {
                             Text("Add scripts to your plugins folder, or install one from Discover.")
+                        } actions: {
+                            Button {
+                                model.onDiscover()
+                            } label: {
+                                Label("Browse Discover", systemImage: "square.grid.2x2")
+                            }
+                            .buttonStyle(.borderedProminent)
                         }
                     }
                 } else {

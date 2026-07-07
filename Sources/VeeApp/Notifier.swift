@@ -101,12 +101,26 @@ enum Notifier {
         Self.onOpenLog = onOpenLog
     }
 
-    static func requestAuthorization() {
+    /// Whether we've already asked the system for notification permission this
+    /// launch. The prompt is deferred until the first alert (see `post`).
+    private static var didRequestAuthorization = false
+
+    /// Registers the delegate and action categories so plugin-alert buttons work.
+    /// Does *not* prompt for permission — that's deferred to the first alert.
+    static func prepare() {
         guard isAvailable else { return }
         let center = UNUserNotificationCenter.current()
         center.delegate = delegate
         center.setNotificationCategories([pluginAlertCategory()])
-        center.requestAuthorization(options: [.alert, .sound]) { _, error in
+    }
+
+    /// Prompts for notification permission, once per launch. Called lazily the
+    /// first time a plugin posts an alert, so the system dialog appears in
+    /// context (a plugin needs to notify you) rather than at a cold launch.
+    static func requestAuthorization() {
+        guard isAvailable, !didRequestAuthorization else { return }
+        didRequestAuthorization = true
+        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound]) { _, error in
             if let error { Self.log.error("auth failed: \(error.localizedDescription, privacy: .public)") }
         }
     }
@@ -134,6 +148,8 @@ enum Notifier {
             Self.log.info("notification skipped (no bundle): \(title, privacy: .public)")
             return
         }
+        // Ask for permission the first time a plugin actually needs it.
+        requestAuthorization()
         let content = UNMutableNotificationContent()
         content.title = title.isEmpty ? "Vee" : title
         if !subtitle.isEmpty { content.subtitle = subtitle }

@@ -82,13 +82,18 @@ public final class AppController: NSObject, NSApplicationDelegate {
             onOpenFolder: { [weak self] in self?.openFolder() }
         )
 
-        Notifier.requestAuthorization()
+        // Register the notification delegate + action categories now, but defer
+        // the permission prompt until a plugin actually posts an alert, so the
+        // system dialog appears in context rather than at a cold launch.
+        Notifier.prepare()
         // Wire the plugin-alert action buttons to the live coordinators:
         // Re-run refreshes the plugin; Open-log opens its debug console.
         Notifier.configure(
             onRerun: { [weak self] id in self?.coordinators[id]?.forceRefresh() },
             onOpenLog: { [weak self] id in self?.coordinators[id]?.showDebugConsole() }
         )
+
+        presentFirstRunIfNeeded()
 
         // Resolve the user's real login-shell PATH before loading plugins, so a
         // Finder/Dock launch finds Homebrew/pyenv/asdf/nvm binaries just like a
@@ -339,6 +344,7 @@ public final class AppController: NSObject, NSApplicationDelegate {
             onSettings: { [weak self] id in self?.coordinators[id]?.showSettings() },
             onDebug: { [weak self] id in self?.coordinators[id]?.showDebugConsole() },
             onDelete: { [weak self] id in self?.deletePlugin(id) },
+            onDiscover: { [weak self] in self?.openBrowser() },
             onLaunchAtLogin: { enabled in LoginItemManager.setEnabled(enabled) },
             onOpenFolder: { [weak self] in self?.openFolder() },
             onChooseFolder: { [weak self] in self?.chooseFolder() },
@@ -354,6 +360,18 @@ public final class AppController: NSObject, NSApplicationDelegate {
             onInstalled: { [weak self] in self?.reload() }
         )
         PluginBrowserWindow.shared.show(model: model)
+    }
+
+    /// On the very first launch, a brand-new user sees only a menu-bar icon and
+    /// has to guess what to do. If their plugins folder is also empty, open
+    /// Discover once so there's an obvious next step. Existing SwiftBar/xbar
+    /// users (who already have plugins) are left undisturbed.
+    private func presentFirstRunIfNeeded() {
+        guard !prefs.hasCompletedFirstRun else { return }
+        prefs.hasCompletedFirstRun = true
+        if PluginDiscovery.enumerate(directory: directory).isEmpty {
+            openBrowser()
+        }
     }
 
     // MARK: - Preferences
