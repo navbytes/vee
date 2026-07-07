@@ -10,6 +10,10 @@
 #   vee search examples/dev-dashboard.5m.sh "retry"
 #   vee search examples/dev-dashboard.5m.sh "prod deploy"
 # <vee.filter>true</vee.filter>
+#
+# Optionally bind a global hotkey that opens the search panel from anywhere
+# (opt-in; omit the tag for no hotkey):
+# <vee.shortcut>cmd+shift+k</vee.shortcut>
 
 echo "🧰 Dev"
 echo "---"

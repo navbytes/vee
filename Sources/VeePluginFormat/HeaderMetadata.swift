@@ -57,5 +57,10 @@ public struct HeaderMetadata: Equatable, Sendable {
     /// app layer; parsing it here keeps the format one source of truth.
     public var filter: Bool = false
 
+    /// `<vee.shortcut>cmd+shift+k</vee.shortcut>`: a global hotkey that opens this
+    /// plugin's search panel from anywhere. `nil` (the default) means no hotkey —
+    /// the feature is strictly opt-in and only registered when the tag parses.
+    public var shortcut: HotKeySpec?
+
     public init() {}
 }

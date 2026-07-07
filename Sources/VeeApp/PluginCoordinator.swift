@@ -24,6 +24,7 @@ final class PluginCoordinator {
     private var background: BackgroundRefreshScheduler?
     private var cron: CronScheduler?
     private var streaming: StreamingSession?
+    private var hotKeyID: UInt32?
     private var isRefreshing = false
     private var lastResult: PluginRunResult?
     private var debugModel: PluginDebugModel?
@@ -107,6 +108,7 @@ final class PluginCoordinator {
     }
 
     func start() {
+        registerHotKeyIfDeclared()
         if header.streamable {
             startStreaming()
         } else if !header.schedule.isEmpty {
@@ -118,7 +120,21 @@ final class PluginCoordinator {
         }
     }
 
+    /// Registers the plugin's opt-in global search hotkey (`<vee.shortcut>`), if
+    /// declared. A failure (e.g. the combo is already taken) is logged, not fatal.
+    private func registerHotKeyIfDeclared() {
+        guard let spec = header.shortcut else { return }
+        hotKeyID = GlobalHotKeys.shared.register(spec) { [weak self] in
+            self?.controller.openSearchPanel()
+        }
+        if hotKeyID == nil {
+            VeeLog.make("hotkey").error("could not register \(spec.display, privacy: .public) for \(self.plugin.filename.name, privacy: .public) (already in use?)")
+        }
+    }
+
     func stop() {
+        if let hotKeyID { GlobalHotKeys.shared.unregister(hotKeyID) }
+        hotKeyID = nil
         timer?.stop()
         timer = nil
         background?.stop()
