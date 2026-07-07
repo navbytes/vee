@@ -34,10 +34,10 @@ final class PluginCoordinator {
     /// The Plugin Manager reads this to flag broken plugins.
     private(set) var lastError: String?
 
-    /// Called with the plugin's current menu-bar title text after each render
-    /// (or an error marker), so `AppController` can publish it to the widget
-    /// snapshot. Set by the owner after init.
-    var onPublish: ((String) -> Void)?
+    /// Called with the plugin's current widget state after each render (or an
+    /// error marker), so `AppController` can publish it to the widget snapshot.
+    /// Set by the owner after init.
+    var onPublish: ((WidgetPublish) -> Void)?
 
     init(plugin: DiscoveredPlugin, pluginsDirectory: String, runtime: PluginRuntime, baseEnvironment: [String: String] = ProcessInfo.processInfo.environment) {
         self.plugin = plugin
@@ -208,6 +208,33 @@ final class PluginCoordinator {
         (output.titleLines.first?.text ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
+    /// The presentation the widget snapshot carries alongside the title: color,
+    /// SF Symbol, and a headline gauge/sparkline. Colors and the symbol come from
+    /// the title line; a `progress=`/`sparkline=` may instead sit on the first
+    /// dropdown item (the common "headline row is the gauge" idiom), so we fall
+    /// back to it. Pure (no actor state) so it is `nonisolated` and unit-testable
+    /// from an ordinary, non-`@MainActor` test.
+    nonisolated static func widgetFields(from output: ParsedOutput) -> WidgetTitleFields {
+        var fields = WidgetTitleFields()
+        let title = output.titleLines.first
+        let titleParams = title?.params
+        fields.color = titleParams?.color ?? title?.ansiRuns.first?.foreground
+        fields.symbolName = titleParams?.swiftbar.sfimage
+        fields.symbolColors = titleParams?.swiftbar.sfcolor
+        let firstItemParams = firstBodyItemParams(output.body)
+        fields.progress = titleParams?.progress?.fraction ?? firstItemParams?.progress?.fraction
+        fields.sparkline = titleParams?.sparkline ?? firstItemParams?.sparkline
+        return fields
+    }
+
+    /// The params of the first real dropdown item (skipping separators).
+    nonisolated private static func firstBodyItemParams(_ body: [MenuNode]) -> LineParams? {
+        for node in body {
+            if case .item(let item) = node { return item.params }
+        }
+        return nil
+    }
+
     /// A human-friendly one-line error for a failed run — detects a missing
     /// command (the most common cause) rather than dumping raw stderr.
     static func friendlyError(_ outcome: ProcessOutcome) -> String {
@@ -262,11 +289,11 @@ final class PluginCoordinator {
             makeInvocation: { invocation },
             onUpdate: { [weak self] output in
                 self?.controller.render(output)
-                self?.onPublish?(Self.publishableTitle(output))
+                self?.onPublish?(WidgetPublish(title: Self.publishableTitle(output), fields: Self.widgetFields(from: output)))
             },
             onStopped: { [weak self] message in
                 self?.controller.renderError(message)
-                self?.onPublish?("⚠︎ stopped")
+                self?.onPublish?(WidgetPublish(title: "⚠︎ stopped", isError: true))
             }
         )
         streaming = session
@@ -319,23 +346,23 @@ final class PluginCoordinator {
                     let detail = partial.isEmpty ? nil : String(partial.prefix(500))
                     self?.lastError = "Plugin timed out"
                     self?.controller.renderError("Plugin timed out", detail: detail)
-                    self?.onPublish?("⚠︎ timed out")
+                    self?.onPublish?(WidgetPublish(title: "⚠︎ timed out", isError: true))
                 } else if result.outcome.exitCode != 0 && result.output.titleLines.isEmpty {
                     self?.lastError = Self.friendlyError(result.outcome)
                     self?.controller.renderError(
                         Self.friendlyError(result.outcome),
                         detail: result.outcome.standardError.isEmpty ? nil : String(result.outcome.standardError.prefix(500))
                     )
-                    self?.onPublish?("⚠︎ error")
+                    self?.onPublish?(WidgetPublish(title: "⚠︎ error", isError: true))
                 } else {
                     self?.lastError = nil
                     self?.controller.render(result.output)
-                    self?.onPublish?(Self.publishableTitle(result.output))
+                    self?.onPublish?(WidgetPublish(title: Self.publishableTitle(result.output), fields: Self.widgetFields(from: result.output)))
                 }
             } catch {
                 self?.lastError = "\(error)"
                 self?.controller.renderError("\(error)")
-                self?.onPublish?("⚠︎ error")
+                self?.onPublish?(WidgetPublish(title: "⚠︎ error", isError: true))
             }
         }
     }

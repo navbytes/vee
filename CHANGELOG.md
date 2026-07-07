@@ -7,6 +7,18 @@ All notable changes to Vee are documented here. The format is based on
 ## [Unreleased]
 
 ### Added
+- **Widgets rebuilt into real dashboard tiles.** The WidgetKit widget is no
+  longer a monospaced copy of the menu bar. It now (a) lets each instance
+  **choose which plugins to show** (an `AppIntentConfiguration` picker; empty =
+  all), (b) renders a **single-plugin "hero" tile** at the small size — SF
+  Symbol in its color, the big value, and the plugin's `progress=` gauge or
+  `sparkline=` trend drawn natively — and enriched rows at medium/large, and (c)
+  shows **honest freshness** ("2 min ago"). To feed this, the snapshot the app
+  publishes gained the presentation it already computed (color, SF Symbol,
+  progress fraction, sparkline series, error flag, refresh interval); the format
+  is versioned (v2) and still decodes a v1 snapshot. A second widget, **Vee
+  Health**, surfaces the one thing the menu bar can't: an aggregate roll-up
+  ("6 OK · 1 failing") with the failing plugins called out.
 - **Searchable filter panel** (opt-in via `<vee.filter>true</vee.filter>`): a
   plugin's menu gains a **Search…** row (⌘F) that opens a Spotlight-like panel
   filtering every item — including those nested in submenus — flattened into a
