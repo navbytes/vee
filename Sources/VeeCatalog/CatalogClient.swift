@@ -19,12 +19,24 @@ public protocol CatalogFetching: Sendable {
 public enum CatalogError: Error, Equatable, Sendable {
     case httpStatus(Int)
     case responseTooLarge(limit: Int)
+    /// The operation isn't available for this store kind (e.g. a Git-tree index
+    /// on a manifest-only static host).
+    case unsupported
 }
 
-/// Live client backed by the GitHub API + raw content host.
-public struct GitHubCatalogClient: CatalogFetching {
-    private static let treeURL = URL(string: "https://api.github.com/repos/matryer/xbar-plugins/git/trees/main?recursive=1")!
+/// Supplies a store's bearer token, sourced from the Keychain in production.
+/// Kept as a protocol so `VeeCatalog` never links `Security` and tests inject a
+/// fake. The token is an app credential — it is never placed in a plugin's
+/// environment.
+public protocol StoreTokenProviding: Sendable {
+    /// The current token for the store, or `nil` if none is stored.
+    func token() -> String?
+}
 
+/// Live client backed by a GitHub (or GitHub Enterprise) repo: the Git-Trees
+/// index API + a raw-content host. Configured by a ``StoreConfig`` so the same
+/// client serves the public xbar catalog and an enterprise's internal repo.
+public struct GitHubCatalogClient: CatalogFetching {
     // Response caps: the recursive tree JSON is a few MB; a single plugin source
     // and a one-commit response are small. Generous ceilings that still bound a
     // hostile/compromised upstream (or a redirect target) instead of buffering
@@ -33,21 +45,70 @@ public struct GitHubCatalogClient: CatalogFetching {
     private static let sourceCap = 8 * 1024 * 1024
     private static let commitsCap = 4 * 1024 * 1024
 
+    private let endpoints: StoreEndpoints
+    private let tokenProvider: StoreTokenProviding?
     private let session: URLSession
 
+    /// The public xbar catalog — the original behavior. Kept so existing call
+    /// sites (`GitHubCatalogClient()`) are unchanged.
     public init(session: URLSession = .shared) {
+        self.init(config: BuiltInStores.xbar, tokenProvider: nil, session: session)
+    }
+
+    /// A client for an arbitrary configured store.
+    public init(config: StoreConfig, tokenProvider: StoreTokenProviding? = nil, session: URLSession = .shared) {
+        self.endpoints = StoreEndpoints(config)
+        self.tokenProvider = tokenProvider
         self.session = session
     }
 
-    public func fetchIndex() async throws -> [CatalogEntry] {
-        var request = URLRequest(url: Self.treeURL)
+    /// Sets `Accept` and, when the store uses token auth, an `Authorization`
+    /// bearer header sourced from the token provider. `internal` so it can be
+    /// unit-tested directly (URLSession doesn't reliably expose the header to a
+    /// stub `URLProtocol`).
+    func authorizedRequest(_ url: URL) -> URLRequest {
+        var request = URLRequest(url: url)
         request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
-        let data = try await boundedData(for: request, cap: Self.treeCap)
-        return try CatalogParser.parse(treeJSON: data)
+        if endpoints.config.authMode == .token, let token = tokenProvider?.token(), !token.isEmpty {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
+        return request
+    }
+
+    public func fetchIndex() async throws -> [CatalogEntry] {
+        // Prefer a curation manifest when the store publishes one; fall back to
+        // the Git-tree convention only when the manifest is absent (404). A
+        // present-but-malformed manifest surfaces as an error, not a silent
+        // downgrade to inference.
+        if let manifestEntries = try await manifestIndexIfPresent() {
+            return manifestEntries
+        }
+        guard let treeURL = endpoints.treeURL, let repoBase = endpoints.rawBase else {
+            throw CatalogError.unsupported
+        }
+        let data = try await boundedData(for: authorizedRequest(treeURL), cap: Self.treeCap)
+        return try CatalogParser.parse(treeJSON: data, repoBase: repoBase, storeID: endpoints.config.id)
+    }
+
+    /// Fetches and parses the store's manifest, or `nil` if the store publishes
+    /// none (a 404), so the caller can fall back to the tree convention.
+    ///
+    /// The built-in public catalog is known to have no manifest, so it is never
+    /// probed — its load stays a single tree request, exactly as before.
+    private func manifestIndexIfPresent() async throws -> [CatalogEntry]? {
+        guard !endpoints.config.isBuiltIn else { return nil }
+        guard let manifestURL = endpoints.manifestURL, let rawBase = endpoints.rawBase else { return nil }
+        let data: Data
+        do {
+            data = try await boundedData(for: authorizedRequest(manifestURL), cap: Self.sourceCap)
+        } catch CatalogError.httpStatus(404) {
+            return nil
+        }
+        return try CatalogManifestParser.parse(data, storeID: endpoints.config.id, rawBase: rawBase)
     }
 
     public func fetchSource(_ entry: CatalogEntry) async throws -> String {
-        let data = try await boundedData(for: URLRequest(url: entry.rawURL), cap: Self.sourceCap)
+        let data = try await boundedData(for: authorizedRequest(entry.rawURL), cap: Self.sourceCap)
         return String(decoding: data, as: UTF8.self)
     }
 
@@ -75,12 +136,8 @@ public struct GitHubCatalogClient: CatalogFetching {
     ///   plugin is shown, never eagerly for the whole catalog, to stay under the
     ///   unauthenticated rate limit.
     public func fetchLastUpdated(_ entry: CatalogEntry) async throws -> Date? {
-        guard let encodedPath = entry.path.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
-              let url = URL(string: "https://api.github.com/repos/matryer/xbar-plugins/commits?path=\(encodedPath)&per_page=1")
-        else { return nil }
-        var request = URLRequest(url: url)
-        request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
-        let data = try await boundedData(for: request, cap: Self.commitsCap)
+        guard let url = endpoints.commitsURL(path: entry.path) else { return nil }
+        let data = try await boundedData(for: authorizedRequest(url), cap: Self.commitsCap)
         return CatalogParser.parseLastCommitDate(commitsJSON: data)
     }
 }

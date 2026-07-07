@@ -3,7 +3,9 @@ import Foundation
 /// Parses the GitHub Git-Trees API response for `matryer/xbar-plugins` into
 /// catalog entries. Pure and testable (no network).
 public enum CatalogParser {
-    private static let repoBase = "https://raw.githubusercontent.com/matryer/xbar-plugins/main/"
+    /// The public xbar catalog's raw-content base. Used as the default so callers
+    /// that don't pass a store's `repoBase` keep the original behavior.
+    public static let defaultRepoBase = "https://raw.githubusercontent.com/matryer/xbar-plugins/main/"
 
     /// Top-level entries that are repo scaffolding, not plugin categories.
     private static let ignoredTopLevel: Set<String> = [
@@ -23,7 +25,20 @@ public enum CatalogParser {
         }
     }
 
-    public static func parse(treeJSON data: Data) throws -> [CatalogEntry] {
+    /// Parses a Git-Trees response into catalog entries.
+    ///
+    /// - Parameters:
+    ///   - data: The Git-Trees API JSON.
+    ///   - repoBase: The raw-content base (with trailing slash) to build source
+    ///     URLs from. Defaults to the public xbar catalog so existing callers are
+    ///     unchanged; a custom store passes `StoreEndpoints(config).rawBase`.
+    ///   - storeID: Which store these entries belong to. Defaults to the built-in
+    ///     xbar catalog.
+    public static func parse(
+        treeJSON data: Data,
+        repoBase: String = CatalogParser.defaultRepoBase,
+        storeID: StoreID = BuiltInStores.xbarID
+    ) throws -> [CatalogEntry] {
         let tree = try JSONDecoder().decode(Tree.self, from: data)
         return tree.tree.compactMap { node -> CatalogEntry? in
             guard node.type == "blob" else { return nil }
@@ -37,9 +52,10 @@ public enum CatalogParser {
             guard !filename.hasPrefix(".") else { return nil }
             let ext = (filename as NSString).pathExtension.lowercased()
             guard !ignoredExtensions.contains(ext) else { return nil }
-            guard let rawURL = URL(string: repoBase + node.path.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed)!) else { return nil }
+            guard let encoded = node.path.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed),
+                  let rawURL = URL(string: repoBase + encoded) else { return nil }
 
-            return CatalogEntry(path: node.path, category: category, filename: filename, rawURL: rawURL)
+            return CatalogEntry(storeID: storeID, path: node.path, category: category, filename: filename, rawURL: rawURL)
         }
         .sorted { $0.path < $1.path }
     }

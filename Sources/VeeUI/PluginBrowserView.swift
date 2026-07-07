@@ -49,6 +49,8 @@ public final class PluginBrowserModel: ObservableObject {
     @Published public var search: String = ""
     /// Selected category; empty string means "All".
     @Published public var selectedCategory: String = ""
+    /// Selected store; `nil` means "All stores".
+    @Published public var selectedStoreID: StoreID?
     @Published public var isLoading = false
     /// A fatal catalog-index load failure — shown full-screen with a Retry, since
     /// there's nothing else to display. Install/fetch problems use ``notice``.
@@ -60,43 +62,65 @@ public final class PluginBrowserModel: ObservableObject {
     /// Lazily-fetched metadata, keyed by catalog path.
     @Published public var headers: [String: HeaderMetadata] = [:]
     @Published public var trustLevels: [String: TrustLevel] = [:]
-    /// Lazily-fetched last-updated dates, keyed by catalog path.
+    /// Lazily-fetched last-updated dates, keyed by catalog entry id.
     @Published public var lastUpdated: [String: Date] = [:]
-    /// Paths whose last-updated fetch has been started, so we only make the
+    /// Entry ids whose last-updated fetch has been started, so we only make the
     /// (one-call-per-plugin) commits-API request once.
     private var lastUpdatedRequested: Set<String> = []
 
-    private let fetcher: CatalogFetching
+    /// The configured stores (in Discover order) and a client per store.
+    private let stores: [StoreConfig]
+    private let clients: [StoreID: CatalogFetching]
     private let pluginsDirectory: String
     private let provenanceStore: ProvenanceStore
     private let onInstalled: () -> Void
 
-    public init(fetcher: CatalogFetching, pluginsDirectory: String, onInstalled: @escaping () -> Void) {
-        self.fetcher = fetcher
+    /// Multi-store initializer: builds a client per store via `makeClient`.
+    public init(stores: [StoreConfig], makeClient: (StoreConfig) -> CatalogFetching, pluginsDirectory: String, onInstalled: @escaping () -> Void) {
+        self.stores = stores
+        var map: [StoreID: CatalogFetching] = [:]
+        for store in stores { map[store.id] = makeClient(store) }
+        self.clients = map
         self.pluginsDirectory = pluginsDirectory
         self.provenanceStore = ProvenanceStore(directory: pluginsDirectory)
         self.onInstalled = onInstalled
     }
 
-    // Display helpers — fall back to the filename until the header loads.
+    /// Single-store convenience (the public catalog), preserved for existing
+    /// call sites and tests.
+    public convenience init(fetcher: CatalogFetching, pluginsDirectory: String, onInstalled: @escaping () -> Void) {
+        self.init(stores: [BuiltInStores.xbar], makeClient: { _ in fetcher }, pluginsDirectory: pluginsDirectory, onInstalled: onInstalled)
+    }
+
+    /// The client and config for an entry's store.
+    private func client(for entry: CatalogEntry) -> CatalogFetching? { clients[entry.storeID] }
+    private func store(for entry: CatalogEntry) -> StoreConfig? { stores.first { $0.id == entry.storeID } }
+
+    // Display helpers — fall back to the filename until the header loads. A
+    // manifest may supply a title/summary directly, so prefer that.
     func title(for entry: CatalogEntry) -> String {
-        let t = headers[entry.path]?.title
-        return (t?.isEmpty == false ? t! : nil) ?? entry.filename
+        let header = headers[entry.id]?.title
+        let manifest = entry.manifestTitle
+        return [header, manifest].compactMap { $0?.isEmpty == false ? $0 : nil }.first ?? entry.filename
     }
-    func summary(for entry: CatalogEntry) -> String? { headers[entry.path]?.summary }
-    func author(for entry: CatalogEntry) -> String? { headers[entry.path]?.author }
-    func trustLevel(for entry: CatalogEntry) -> TrustLevel? { trustLevels[entry.path] }
+    func summary(for entry: CatalogEntry) -> String? { headers[entry.id]?.summary ?? entry.manifestSummary }
+    func author(for entry: CatalogEntry) -> String? { headers[entry.id]?.author }
+    func trustLevel(for entry: CatalogEntry) -> TrustLevel? { trustLevels[entry.id] }
     func freshness(for entry: CatalogEntry, now: Date = Date()) -> PluginFreshness? {
-        PluginFreshness.classify(lastUpdated: lastUpdated[entry.path], now: now)
+        PluginFreshness.classify(lastUpdated: lastUpdated[entry.id] ?? entry.lastUpdated, now: now)
     }
+    /// The display name of the store an entry came from (for its card chip).
+    func storeName(for entry: CatalogEntry) -> String? { store(for: entry)?.displayName }
+    /// Whether more than one store is configured (drives the store chip/section).
+    var hasMultipleStores: Bool { stores.count > 1 }
 
     /// Fetches and parses an entry's header + trust once, for display in its card.
     func loadHeader(for entry: CatalogEntry) async {
-        guard headers[entry.path] == nil else { return }
-        headers[entry.path] = HeaderMetadata() // mark in-flight so we fetch once
-        guard let source = try? await fetcher.fetchSource(entry) else { return }
-        headers[entry.path] = HeaderParser.parse(source: source)
-        trustLevels[entry.path] = TrustAnalyzer.analyze(TrustParser.parse(source: source)).level
+        guard headers[entry.id] == nil else { return }
+        headers[entry.id] = HeaderMetadata() // mark in-flight so we fetch once
+        guard let source = try? await client(for: entry)?.fetchSource(entry) else { return }
+        headers[entry.id] = HeaderParser.parse(source: source)
+        trustLevels[entry.id] = TrustAnalyzer.analyze(TrustParser.parse(source: source)).level
     }
 
     /// Lazily fetches an entry's last-updated date once, for its freshness
@@ -104,30 +128,45 @@ public final class PluginBrowserModel: ObservableObject {
     /// single time per card and only when the card appears — never eagerly for
     /// the whole grid. Failures leave the date `nil` so the badge is hidden.
     func loadLastUpdated(for entry: CatalogEntry) async {
-        guard lastUpdatedRequested.insert(entry.path).inserted else { return }
-        guard let date = try? await fetcher.fetchLastUpdated(entry) else { return }
-        lastUpdated[entry.path] = date
+        guard lastUpdatedRequested.insert(entry.id).inserted else { return }
+        guard let date = try? await client(for: entry)?.fetchLastUpdated(entry) else { return }
+        lastUpdated[entry.id] = date
     }
 
+    /// Loads every enabled store and merges their entries. A store that fails is
+    /// skipped; the full-screen error only shows when *nothing* loaded.
     public func load() async {
         isLoading = true
         errorMessage = nil
-        do {
-            entries = try await fetcher.fetchIndex()
-        } catch {
-            errorMessage = CatalogErrorPresenter.message(for: error)
+        var merged: [CatalogEntry] = []
+        var firstError: Error?
+        for store in stores where store.isEnabled {
+            guard let client = clients[store.id] else { continue }
+            do {
+                merged += try await client.fetchIndex()
+            } catch {
+                if firstError == nil { firstError = error }
+            }
+        }
+        entries = merged.sorted { $0.path < $1.path }
+        if entries.isEmpty, let firstError {
+            errorMessage = CatalogErrorPresenter.message(for: firstError)
         }
         isLoading = false
     }
 
-    /// A github.com page for the plugin's source, so a user can read it before
-    /// installing (the catalog is `matryer/xbar-plugins`, `main` branch).
+    /// A page where a user can read the plugin's source before installing. For a
+    /// GitHub store this is the `blob` page; otherwise it's the raw source URL.
     func sourceURL(for entry: CatalogEntry) -> URL? {
         let encoded = entry.path
             .split(separator: "/")
             .map { $0.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? String($0) }
             .joined(separator: "/")
-        return URL(string: "https://github.com/matryer/xbar-plugins/blob/main/\(encoded)")
+        guard let store = store(for: entry), store.kind == .github,
+              let owner = store.owner, let repo = store.repo else {
+            return entry.rawURL
+        }
+        return URL(string: "https://github.com/\(owner)/\(repo)/blob/\(store.ref)/\(encoded)") ?? entry.rawURL
     }
 
     func dismissNotice() { notice = nil }
@@ -138,16 +177,30 @@ public final class PluginBrowserModel: ObservableObject {
         search = ""
     }
 
-    /// Categories with plugin counts, sorted by name.
+    /// Entries in the selected store scope (all stores when `selectedStoreID` is nil).
+    private var storeScopedEntries: [CatalogEntry] {
+        guard let selectedStoreID else { return entries }
+        return entries.filter { $0.storeID == selectedStoreID }
+    }
+
+    /// Categories (within the store scope) with plugin counts, sorted by name.
     var categoriesWithCounts: [(name: String, count: Int)] {
-        Dictionary(grouping: entries, by: \.category)
+        Dictionary(grouping: storeScopedEntries, by: \.category)
             .map { (name: $0.key, count: $0.value.count) }
             .sorted { $0.name < $1.name }
     }
 
-    /// Entries matching the selected category and search text.
+    /// The configured stores with their loaded plugin counts, in Discover order.
+    /// Only shown when more than one store is configured.
+    var storesWithCounts: [(store: StoreConfig, count: Int)] {
+        guard stores.count > 1 else { return [] }
+        let counts = Dictionary(grouping: entries, by: \.storeID).mapValues(\.count)
+        return stores.map { (store: $0, count: counts[$0.id] ?? 0) }
+    }
+
+    /// Entries matching the selected store, category, and search text.
     var visibleEntries: [CatalogEntry] {
-        var result = entries
+        var result = storeScopedEntries
         if !selectedCategory.isEmpty {
             result = result.filter { $0.category == selectedCategory }
         }
@@ -156,8 +209,8 @@ public final class PluginBrowserModel: ObservableObject {
             result = result.filter {
                 $0.filename.lowercased().contains(q)
                     || $0.category.lowercased().contains(q)
-                    || (headers[$0.path]?.title?.lowercased().contains(q) ?? false)
-                    || (headers[$0.path]?.summary?.lowercased().contains(q) ?? false)
+                    || (title(for: $0).lowercased().contains(q))
+                    || (summary(for: $0)?.lowercased().contains(q) ?? false)
             }
         }
         return result
@@ -187,23 +240,33 @@ public final class PluginBrowserModel: ObservableObject {
         return try? String(contentsOfFile: path, encoding: .utf8)
     }
 
-    /// Fetch the source and open the trust gate.
+    /// Fetch the source, verify store integrity, and open the trust gate.
     func requestInstall(_ entry: CatalogEntry) async {
+        guard let client = client(for: entry) else { return }
         do {
-            let source = try await fetcher.fetchSource(entry)
+            let source = try await client.fetchSource(entry)
+            // Verify the store's integrity guarantees (pinned hash / signature)
+            // before anything else. A failure blocks the install with a banner.
+            if let store = store(for: entry) {
+                let verdict = StoreIntegrity.verify(source: source, entry: entry, store: store, manifestSigningKey: entry.manifestSigningKey)
+                guard verdict.passes else {
+                    notice = CatalogNotice(kind: .failure, message: "\(entry.filename): \(Self.integrityMessage(verdict))")
+                    return
+                }
+            }
             let declaration = TrustParser.parse(source: source)
             let summary = TrustAnalyzer.analyze(declaration)
             let warnings = summary.warnings + TrustAnalyzer.installWarnings(declaration: declaration, source: source)
             let header = HeaderParser.parse(source: source)
-            headers[entry.path] = header
-            trustLevels[entry.path] = summary.level
+            headers[entry.id] = header
+            trustLevels[entry.id] = summary.level
             // When updating an installed plugin, diff the incoming source's
             // trust footprint against the one on disk so silent changes surface.
             let trustDiff = installedSource(for: entry).map { TrustDiff.between(old: $0, new: source) }
             prompt = InstallPrompt(
                 entry: entry,
                 source: source,
-                title: (header.title?.isEmpty == false ? header.title! : entry.filename),
+                title: title(for: entry),
                 summary: summary,
                 warnings: warnings,
                 description: header.summary,
@@ -234,6 +297,16 @@ public final class PluginBrowserModel: ObservableObject {
             notice = CatalogNotice(kind: .failure, message: "Install failed: \(error.localizedDescription)")
         }
         self.prompt = nil
+    }
+
+    /// A plain-language reason an integrity check blocked an install.
+    private static func integrityMessage(_ verdict: StoreIntegrity.Verdict) -> String {
+        switch verdict {
+        case .ok: return ""
+        case .hashMismatch: return "source doesn't match the catalog's pinned hash"
+        case .signatureInvalid: return "the signature didn't verify"
+        case .signatureMissing: return "this store requires a signed plugin"
+        }
     }
 }
 
@@ -279,6 +352,14 @@ public struct PluginBrowserView: View {
             Label("All Plugins", systemImage: "square.grid.2x2.fill")
                 .badge(model.entries.count)
                 .tag("")
+            if !model.storesWithCounts.isEmpty {
+                Section("Stores") {
+                    storeRow(name: "All Stores", symbol: "square.stack.3d.up.fill", count: model.entries.count, id: nil)
+                    ForEach(model.storesWithCounts, id: \.store.id) { item in
+                        storeRow(name: item.store.displayName, symbol: "shippingbox.fill", count: item.count, id: item.store.id)
+                    }
+                }
+            }
             Section("Categories") {
                 ForEach(model.categoriesWithCounts, id: \.name) { cat in
                     Label(cat.name, systemImage: CategoryStyle.symbol(for: cat.name))
@@ -289,6 +370,25 @@ public struct PluginBrowserView: View {
         }
         .navigationSplitViewColumnWidth(min: 200, ideal: 220, max: 280)
         .navigationTitle("Discover")
+    }
+
+    /// A store scope row (selecting one filters the grid to that store). Uses a
+    /// button rather than list selection, which is bound to the category.
+    @ViewBuilder
+    private func storeRow(name: String, symbol: String, count: Int, id: StoreID?) -> some View {
+        Button {
+            model.selectedStoreID = id
+            model.selectedCategory = ""
+        } label: {
+            HStack {
+                Label(name, systemImage: symbol)
+                Spacer()
+                Text("\(count)").font(.caption).foregroundStyle(.secondary)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(model.selectedStoreID == id ? Color.accentColor : Color.primary)
     }
 
     @ViewBuilder
@@ -379,6 +479,13 @@ private struct PluginCard: View {
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(model.title(for: entry)).font(.headline).lineLimit(1)
+                if model.hasMultipleStores, let storeName = model.storeName(for: entry) {
+                    Text(storeName)
+                        .font(.caption2.weight(.medium))
+                        .padding(.horizontal, 6).padding(.vertical, 1)
+                        .background(.quaternary, in: Capsule())
+                        .lineLimit(1)
+                }
                 if let author = model.author(for: entry) {
                     Text("by \(author)").font(.caption).foregroundStyle(.secondary).lineLimit(1)
                 }

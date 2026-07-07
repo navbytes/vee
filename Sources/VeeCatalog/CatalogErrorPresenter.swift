@@ -18,12 +18,16 @@ public enum CatalogErrorPresenter {
         }
         if let catalogError = error as? CatalogError {
             switch catalogError {
+            case .httpStatus(401):
+                return "This store needs a valid access token. Check the token in the Stores settings."
             case .httpStatus(403), .httpStatus(429):
                 return "GitHub's rate limit was hit. Wait a few minutes and try again."
             case .httpStatus(let code):
                 return "The catalog server returned an error (HTTP \(code))."
             case .responseTooLarge:
                 return "The catalog response was unexpectedly large and was rejected."
+            case .unsupported:
+                return "This store doesn't support that operation."
             }
         }
         return "Couldn't load the catalog: \(error.localizedDescription)"
