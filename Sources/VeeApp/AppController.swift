@@ -439,7 +439,9 @@ public final class AppController: NSObject, NSApplicationDelegate {
         let groups = VariableAggregator.aggregate(plugins: aggregatablePlugins(), reader: HeaderVariableReader())
         let variables = VariablesEditorModel(groups: groups, onSaved: { [weak self] in self?.refreshAll() })
 
-        PreferencesWindow.shared.show(general: general, variables: variables)
+        let stores = StoresSettingsModel()
+
+        PreferencesWindow.shared.show(general: general, variables: variables, stores: stores)
     }
 
     /// Every installed plugin, described for the pure variable aggregator.

@@ -7,16 +7,20 @@ import SwiftUI
 public struct PreferencesView: View {
     @ObservedObject private var general: GeneralSettingsModel
     @ObservedObject private var variables: VariablesEditorModel
+    @ObservedObject private var stores: StoresSettingsModel
 
-    public init(general: GeneralSettingsModel, variables: VariablesEditorModel) {
+    public init(general: GeneralSettingsModel, variables: VariablesEditorModel, stores: StoresSettingsModel) {
         self.general = general
         self.variables = variables
+        self.stores = stores
     }
 
     public var body: some View {
         TabView {
             GeneralSettingsTab(model: general)
                 .tabItem { Label("General", systemImage: "gearshape") }
+            StoresSettingsTab(model: stores)
+                .tabItem { Label("Stores", systemImage: "shippingbox") }
             VariablesEditorView(model: variables)
                 .tabItem { Label("Variables", systemImage: "curlybraces") }
         }
@@ -35,8 +39,8 @@ public final class PreferencesWindow {
 
     public init() {}
 
-    public func show(general: GeneralSettingsModel, variables: VariablesEditorModel) {
-        let view = PreferencesView(general: general, variables: variables)
+    public func show(general: GeneralSettingsModel, variables: VariablesEditorModel, stores: StoresSettingsModel) {
+        let view = PreferencesView(general: general, variables: variables, stores: stores)
         if let window {
             (window.contentViewController as? NSHostingController<PreferencesView>)?.rootView = view
             window.makeKeyAndOrderFront(nil)
