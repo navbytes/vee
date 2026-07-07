@@ -80,7 +80,11 @@ private final class StreamingProc: @unchecked Sendable {
         lock.withLock {
             partial.append(data)
             while let nl = partial.firstIndex(of: 0x0A) {
-                let lineData = partial[partial.startIndex..<nl]
+                // Tolerate CRLF line endings: strip exactly one trailing "\r" so
+                // a Windows-authored streaming plugin's `~~~\r` still matches
+                // StreamAccumulator's separator.
+                let lineEnd = (nl > partial.startIndex && partial[nl - 1] == 0x0D) ? nl - 1 : nl
+                let lineData = partial[partial.startIndex..<lineEnd]
                 linesToYield.append(String(decoding: lineData, as: UTF8.self))
                 partial.removeSubrange(partial.startIndex...nl)
             }

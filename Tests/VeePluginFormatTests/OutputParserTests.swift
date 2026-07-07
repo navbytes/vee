@@ -133,4 +133,17 @@ final class OutputParserTests: XCTestCase {
         let out = OutputParser.parse("Title\n---\nA\n\n\nB")
         XCTAssertEqual(out.body.items.map(\.text), ["A", "B"])
     }
+
+    /// Regression: a Windows-line-ending plugin's `---\r`/`--\r` must still be
+    /// recognized as the title/body separator and submenu depth marker — a
+    /// bare `.whitespaces` trim doesn't strip "\r", so without stripping it at
+    /// the line-split boundary the whole output would render as title lines.
+    func testCRLFLineEndingsParseCorrectly() {
+        let src = "Title\r\n---\r\nBuild | color=red\r\n--Sub\r\n"
+        let out = OutputParser.parse(src)
+        XCTAssertEqual(out.titleLines.map(\.text), ["Title"])
+        XCTAssertEqual(out.body.items.map(\.text), ["Build"])
+        XCTAssertEqual(out.body.items[0].params.color, .named("red"))
+        XCTAssertEqual(out.body.items[0].submenu.items.map(\.text), ["Sub"])
+    }
 }

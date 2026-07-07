@@ -45,4 +45,24 @@ final class AnsiEdgeCaseTests: XCTestCase {
         XCTAssertEqual(runs.count, 1)
         XCTAssertEqual(runs.first?.range, 0..<4)
     }
+
+    /// Regression: `git`/`grep --color` emit a bare `\e[m` as a reset. Splitting
+    /// its (empty) parameter list used to yield no codes at all, leaving the
+    /// style state unchanged and bleeding color to the end of the line.
+    func testEmptySGRIsAFullReset() {
+        let (plain, runs) = Ansi.parse("\u{1B}[31mred\u{1B}[m rest")
+        XCTAssertEqual(plain, "red rest")
+        XCTAssertEqual(runs.count, 1)
+        XCTAssertEqual(runs.first?.range, 0..<3, "only \"red\" should be styled; \"rest\" is after the reset")
+    }
+
+    /// Per the SGR default-parameter rule, an empty component before a `;`
+    /// defaults to 0, so `\e[;31m` is reset-then-red, not "31" misread as a
+    /// single non-numeric/invalid code.
+    func testLeadingEmptyParameterAppliesResetThenNextCode() {
+        let (plain, runs) = Ansi.parse("\u{1B}[;31mred")
+        XCTAssertEqual(plain, "red")
+        XCTAssertEqual(runs.count, 1)
+        XCTAssertEqual(runs.first?.foreground, .named("red"))
+    }
 }

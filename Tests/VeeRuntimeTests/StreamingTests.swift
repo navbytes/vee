@@ -80,4 +80,29 @@ final class StreamingRunnerIntegrationTests: XCTestCase {
         }
         XCTAssertEqual(lines, ["a", "b", "~~~", "c"])
     }
+
+    /// Regression: a Windows-line-ending streaming plugin emits `~~~\r\n`. The
+    /// trailing "\r" must be stripped at the line-split boundary so the
+    /// separator still matches — and so StreamAccumulator, fed these lines the
+    /// same way StreamingSession does, still resets the menu on each block.
+    func testCRLFStreamSeparatorIsRecognized() async throws {
+        let runner = SystemStreamingRunner()
+        let invocation = ProcessInvocation(
+            launchPath: "/bin/sh",
+            arguments: ["-c", "printf 'a\\r\\n~~~\\r\\nb\\r\\n'"]
+        )
+        var lines: [String] = []
+        for try await line in runner.lines(invocation) {
+            lines.append(line)
+        }
+        XCTAssertEqual(lines, ["a", "~~~", "b"], "the trailing \\r must not remain on any line")
+
+        var accumulator = StreamAccumulator()
+        var blocks: [String] = []
+        for line in lines {
+            if let block = accumulator.consume(line) { blocks.append(block) }
+        }
+        if let tail = accumulator.flush() { blocks.append(tail) }
+        XCTAssertEqual(blocks, ["a", "b"], "the CRLF separator must still reset the accumulator")
+    }
 }
