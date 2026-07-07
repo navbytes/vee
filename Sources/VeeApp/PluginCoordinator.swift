@@ -122,6 +122,17 @@ final class PluginCoordinator {
 
     func forceRefresh() { refresh() }
 
+    /// Re-runs the plugin on its *widget* surface (`VEE_TARGET=widget`) and
+    /// republishes the card — what a card's `refresh` action button needs.
+    /// Distinct from `forceRefresh()` (the menu surface): for a `.both`/`.widget`
+    /// plugin the card is produced only by `refreshWidget()`, and the menu-mode
+    /// `refresh()` publishes nothing for it (`publishScrape` is `.menu`-gated),
+    /// so routing the button through `forceRefresh()` would leave the card stale
+    /// until the next widget-cadence tick. Only ever invoked for plugins that
+    /// have a card (i.e. `.both`/`.widget`); a `.menu` plugin never renders an
+    /// action button.
+    func forceRefreshWidget() { refreshWidget() }
+
     func showSettings() { openSettings() }
 
     /// Opens this plugin's debug console (wired to the notification "Open Log" action).

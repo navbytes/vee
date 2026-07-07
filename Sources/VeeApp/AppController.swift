@@ -423,13 +423,17 @@ public final class AppController: NSObject, NSApplicationDelegate {
 
     /// Reads and clears the pending request (a no-op if none is pending —
     /// this is also called unconditionally once at launch) and services it:
-    /// `.refresh` re-runs the plugin; `.run` resolves `actionIndex` against
+    /// `.refresh` re-runs the plugin *on its widget surface* (so the card the
+    /// button lives on actually updates); `.run` resolves `actionIndex` against
     /// the plugin's currently-published card and runs its shortcut.
     func widgetActionRequestFired() {
         guard let request = VeeWidgetSharing.actionRequestStore.readAndClear() else { return }
         switch request.action {
         case .refresh:
-            coordinators[request.pluginID]?.forceRefresh()
+            // Widget surface, not menu: the card is produced only by the
+            // widget-mode run, and the menu-mode refresh publishes nothing for a
+            // `.both`/`.widget` plugin (see `PluginCoordinator.forceRefreshWidget`).
+            coordinators[request.pluginID]?.forceRefreshWidget()
         case .run:
             runCardAction(for: request)
         }
