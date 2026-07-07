@@ -19,6 +19,10 @@ Vee runs plugins — any executable, in any language — on a schedule and rende
 | **Discover** — browse the catalog with trust chips and install in one click. | **Trust at install** — see a plugin's footprint in plain language before it runs. |
 | ![The Plugin Manager showing plugin rows with trust badges and trailing on/off switches, plus a General settings section](docs/assets/screenshots/manager.png) | ![An auto-generated plugin settings form built from declared preferences, including a masked secret field](docs/assets/screenshots/settings.png) |
 | **Plugin Manager** — enable, disable, and review every plugin's trust badges. | **Plugin settings** — typed forms from `<xbar.var>`; secrets masked in the Keychain. |
+| ![A Vee plugin's native Liquid Glass dropdown showing a Macintosh HD row with an inline progress capsule gauge, an Open Disk Utility action, and a submenu](docs/assets/screenshots/menu-dropdown.png) | ![Vee's menu-bar status items showing live disk usage and a clock, each with an SF Symbol](docs/assets/screenshots/menu-bar.png) |
+| **Native dropdown** — a Liquid Glass menu with an inline `progress=` gauge on live data. | **In the menu bar** — each plugin renders its own native status item. |
+
+<sup>The bottom row is a real capture of the shipped build running on macOS 26.</sup>
 
 ## Why Vee
 
