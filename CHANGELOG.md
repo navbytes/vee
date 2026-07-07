@@ -22,6 +22,62 @@ All notable changes to Vee are documented here. The format is based on
   hotkey, `runInBash`, trust) applies immediately.
 - **Process drain could hang/leak** when a grandchild kept stdout open after the
   plugin exited; a drain-grace now force-completes the run and releases the reads.
+- **Scheduling drift and a runaway timer are fixed.** Cron used the monotonic
+  clock, so a fire due during sleep landed hours late on wake instead of
+  firing promptly — it's now wall-clock. A `0s`/`0ms` interval filename (e.g.
+  `cpu.0s.sh`) armed a near-zero-period repeating timer that pegged a CPU
+  core; it's now rejected at parse (falling back to manual refresh) and
+  floored as a backstop.
+- **Some in-place plugin edits and a replaced plugins folder went
+  undetected.** The directory watcher only fired on entry add/remove/rename,
+  so an edit that didn't touch the directory listing (as some editors'
+  atomic-save does) could go unnoticed; a periodic poll now catches it too.
+  If the plugins folder itself was deleted and recreated, the watcher went
+  silently inert until relaunch — it now detects and reopens automatically.
+- **Editor backup and autosave files no longer run as plugins.**
+  `plugin.sh~`, `#plugin.sh#`, and files ending `.bak`/`.orig`/`.tmp`/`.swp`/
+  `.swo`/`.rej` are now skipped, so a stale (possibly credential-bearing)
+  copy can't execute alongside the real plugin.
+- **Windows-line-ending output parses correctly.** A `---`/`--`/`~~~`
+  separator followed by `\r` used to be missed entirely, rendering the whole
+  output as title lines; CRLF is now tolerated at the line-split boundary in
+  the parser, the streaming path, and `vee lint`. A bare `ESC[m` (the reset
+  `git`/`grep --color` emit) now actually resets styling instead of bleeding
+  color to the end of the line.
+- **Refreshing a streaming plugin no longer clobbers it with a spurious
+  timeout error.** "Refresh All", wake, Shortcuts, and the menu's own Refresh
+  used to spawn a duplicate one-shot run of a streaming plugin — which never
+  exits — so it always timed out and replaced the live stream with an error;
+  a refresh now restarts the stream instead.
+- **Replacing an ephemeral menu (`setephemeralplugin`) now renews its
+  expiry.** Updating the same ephemeral item used to leave the old deadline
+  running, so it could vanish earlier than the new `exitafter` promised, or
+  (with no `exitafter` at all) still expire on the old schedule.
+- **`href=` items now honor `refresh=true`, and `progress=` rows keep their
+  submenu and action.** Both previously matched xbar/SwiftBar's behavior only
+  partially — a `href` click with `refresh=true` didn't trigger a refresh,
+  and a `progress=` gauge with a submenu or its own action silently lost it
+  in the native menu.
+- **Several Discover browser bugs are fixed.** Reopening the browser used to
+  keep showing the model it was built with — installs could even target the
+  wrong store or directory; it now reflects a newly added store or changed
+  plugins folder, and gained a Refresh toolbar button (⌘R) to re-fetch the
+  catalog on demand. The freshness badge, which read a differently-keyed
+  cache than the one the fetch wrote to, renders again too.
+- **The per-plugin debug console works again after a plugin reload.** A
+  closed debug window's tracking entry was never cleared, so a reload could
+  leave "Run again" bound to a deallocated coordinator.
+- **A typed hotkey combo is now saved when clicking Save**, not only when
+  committed with Return.
+- **Plugins are now reliably killed instead of leaking.** A plugin that
+  timed out while it had backgrounded a helper (`sleep 900 &`, a stray
+  `curl`) used to leave that helper running forever, since only the direct
+  child was ever signaled — every plugin now runs as the leader of its own
+  process group, so a timeout's SIGTERM/SIGKILL reaches everything it
+  spawned. Stopping a streaming plugin now escalates to SIGKILL and
+  force-closes its pipe if the script ignores SIGTERM (or a grandchild is
+  still holding the pipe open), instead of leaking a thread and both fds on
+  every reload.
 
 ### Security
 - **`swiftbar://addplugin` now requires confirmation.** The deep link previously
@@ -32,12 +88,26 @@ All notable changes to Vee are documented here. The format is based on
 - **`swiftbar://setephemeralplugin`** content injected via URL now has its
   `shell=`/`bash=` actions stripped, removing a one-click arbitrary-exec vector.
 - The widget snapshot file is written owner-only (`0600`).
+- **A remotely-triggerable crash via `exitafter` is fixed.**
+  `swiftbar://setephemeralplugin?...&exitafter=1e40` (or `inf`) — a link any
+  web page can open — reached a `Double`-to-`UInt64` conversion that traps on
+  overflow, crashing the whole app. The value is now rejected when
+  non-finite and clamped to a 24-hour ceiling.
+- **The install trust sheet now names the actual store a plugin comes
+  from**, instead of always claiming `matryer/xbar-plugins` — false
+  provenance on a security-relevant surface for enterprise and
+  user-configured stores.
 
 ### Changed
 - Widget snapshot timestamp-only writes are throttled (content changes still
   write immediately), and the Discover catalog fetch is buffered instead of read
   byte-by-byte — less disk/CPU churn. `refreshAll` staggers plugin spawns so
   wake/launch doesn't start every subprocess at once.
+- **Identical plugin output no longer rebuilds the menu.** When a refresh
+  produces byte-for-byte the same output as last time — the common case —
+  Vee skips rebuilding the `NSMenu` and just updates the "Updated `<time>`"
+  stamp in place; resolved SF Symbol/image renders are also cached, so
+  repeated refreshes don't redecode them.
 
 ### Added
 - **Widgets rebuilt into real dashboard tiles.** The WidgetKit widget is no

@@ -111,8 +111,12 @@ and not letting a runaway plugin live forever:
   independent signals arrive (stdout drained, stderr drained, process exited),
   coordinated under an `NSLock` with a `pending` counter. No trailing output is
   lost and no double-resume can occur.
-- **A timeout escalates SIGTERM → SIGKILL** after a grace period, so a wedged
-  plugin is always reaped.
+- **A timeout escalates SIGTERM → SIGKILL** after a grace period. Each plugin
+  is spawned (`posix_spawn`) as the leader of its own process group, so a
+  timeout's signals go to the whole group (`killpg`) and reach every
+  descendant it backgrounded (`sleep 900 &`, a stray `curl`), not just the
+  direct child. This reaping is timeout-only by design — a plugin that exits
+  normally but leaves a detached helper running may intend that as a daemon.
 - **A `selfRetain` keeps the run object alive** exactly for the run's duration
   and is cleared on resume, so nothing leaks and nothing is collected early.
 
@@ -169,6 +173,13 @@ it via a read-only `temporary-exception.files.home-relative-path` entitlement,
 resolving the real home through `getpwuid` to escape the sandbox container
 redirect. The shared model + store is `VeeWidgetShared`, kept Foundation-only so
 the extension links almost nothing.
+
+On the app side, `VeeApp/WidgetSnapshotPublisher.swift` owns the write/reload
+policy: it coalesces rapid successive publishes into one write, floors how
+often it asks WidgetKit to reload timelines, and prunes plugins that are no
+longer loaded before the next flush. `AppController` just calls
+`publish(id:name:interval:publish:)` per plugin and `setLoaded(ids:)` after a
+reload — it never touches the snapshot file or `WidgetCenter` directly.
 
 ## Where to add things
 
