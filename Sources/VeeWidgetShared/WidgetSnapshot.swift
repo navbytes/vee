@@ -38,6 +38,15 @@ public struct PluginSnapshot: Codable, Equatable, Identifiable, Sendable {
     /// flag genuinely stale data without guessing.
     public let interval: TimeInterval?
 
+    // MARK: v3 — the rich widget-surface card
+
+    /// The plugin's widget-mode payload, when it declares `<vee.surface>both
+    /// </vee.surface>`/`widget` and emits a card on `VEE_TARGET=widget`.
+    /// `nil` for a v1/v2 snapshot, or a `.menu`-surface plugin, or a `both`/
+    /// `widget` plugin that hasn't produced a card yet — in every case the
+    /// renderer falls back to the scraped fields above (Tier 0).
+    public let card: WidgetCard?
+
     public init(
         id: String,
         name: String,
@@ -49,7 +58,8 @@ public struct PluginSnapshot: Codable, Equatable, Identifiable, Sendable {
         progress: Double? = nil,
         sparkline: [Double]? = nil,
         isError: Bool? = nil,
-        interval: TimeInterval? = nil
+        interval: TimeInterval? = nil,
+        card: WidgetCard? = nil
     ) {
         self.id = id
         self.name = name
@@ -62,24 +72,30 @@ public struct PluginSnapshot: Codable, Equatable, Identifiable, Sendable {
         self.sparkline = sparkline
         self.isError = isError
         self.interval = interval
+        self.card = card
     }
 
-    /// Whether this plugin is in an error state (`isError == true`). A v1
-    /// snapshot with no error field reads as healthy.
-    public var failed: Bool { isError == true }
+    /// Whether this plugin is in an error state (`isError == true`, or a
+    /// plugin-reported `card.status == .error`). A v1/v2 snapshot with
+    /// neither field reads as healthy.
+    public var failed: Bool { isError == true || card?.status == .error }
 
     /// Below this age a plugin is never considered stale, even for a fast
     /// interval — WidgetKit meters reloads to roughly this cadence, so flagging
     /// "stale" sooner would just blame the widget's own refresh budget.
     public static let staleFloor: TimeInterval = 300
 
-    /// Whether the data is old enough to warrant a "stale" treatment. Uses the
-    /// plugin's own interval (two missed cycles), floored at `staleFloor`. An
-    /// unknown interval is never flagged — we can't tell.
+    /// Whether the data is old enough to warrant a "stale" treatment. Prefers
+    /// the card's own `staleAfter` (the plugin's explicit judgment) when
+    /// present; otherwise falls back to the interval-derived default (two
+    /// missed cycles, floored at `staleFloor`). An unknown interval and no
+    /// card `staleAfter` is never flagged — we can't tell.
     public func isStale(asOf now: Date) -> Bool {
+        let age = now.timeIntervalSince(updated)
+        if let staleAfter = card?.staleAfter { return age > staleAfter }
         guard let interval else { return false }
         let threshold = max(interval * 2, Self.staleFloor)
-        return now.timeIntervalSince(updated) > threshold
+        return age > threshold
     }
 }
 
@@ -87,7 +103,7 @@ public struct PluginSnapshot: Codable, Equatable, Identifiable, Sendable {
 /// support directory so the widget/control extension (a separate process) can
 /// read it. Versioned so the format can evolve without crashing an old widget.
 public struct WidgetSnapshot: Codable, Equatable, Sendable {
-    public static let currentVersion = 2
+    public static let currentVersion = 3
 
     public var version: Int
     public var plugins: [PluginSnapshot]
