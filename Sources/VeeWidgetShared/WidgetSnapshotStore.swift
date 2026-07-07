@@ -18,7 +18,15 @@ public enum VeeWidgetSharing {
     /// plugin on launch.)
     public static let refreshRequestNotification = "com.vee.control.refreshAllRequested"
 
+    /// Darwin notification the widget extension posts after writing a
+    /// per-plugin `WidgetActionRequest` (a card's refresh/shortcut button),
+    /// so an already-running app services it immediately. A closed app is
+    /// launched by the intent's `openAppWhenRun`, which then services the
+    /// pending request itself at startup (see `WidgetActionRequestStore`).
+    public static let actionRequestNotification = "com.vee.widget.actionRequested"
+
     static let snapshotFileName = "widget-snapshot.json"
+    static let actionRequestFileName = "widget-action-request.json"
 
     /// The real `~/Library/Application Support/Vee` directory, resolved through
     /// the password database (`getpwuid`) rather than `FileManager`. A sandboxed
@@ -40,6 +48,12 @@ public enum VeeWidgetSharing {
     /// app creates the directory on first write).
     public static var shared: WidgetSnapshotStore {
         WidgetSnapshotStore(directory: supportDirectory())
+    }
+
+    /// The per-plugin action-request store backed by the shared support
+    /// directory.
+    public static var actionRequestStore: WidgetActionRequestStore {
+        WidgetActionRequestStore(directory: supportDirectory())
     }
 }
 

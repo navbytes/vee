@@ -16,5 +16,16 @@
 	<array>
 		<string>/Library/Application Support/Vee/</string>
 	</array>
+	<!--
+	  The per-plugin widget-card action channel (refresh/shortcut buttons —
+	  see WidgetActionRequest) needs the extension's AppIntent to WRITE one
+	  small request file the app then reads and clears. Scoped to that exact
+	  file only (not the directory) so this stays the narrowest possible
+	  grant beyond the read-only exception above.
+	-->
+	<key>com.apple.security.temporary-exception.files.home-relative-path.read-write</key>
+	<array>
+		<string>/Library/Application Support/Vee/widget-action-request.json</string>
+	</array>
 </dict>
 </plist>
