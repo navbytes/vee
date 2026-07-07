@@ -68,6 +68,10 @@ Yes — via the `vee://` and `swiftbar://` URL actions (refresh a plugin, refres
 
 Yes. Add `<vee.filter>true</vee.filter>` to the plugin and its dropdown gains a **Search…** row (⌘F) that opens a Spotlight-like panel: type to fuzzy-filter every item at once, including those nested in submenus, each shown with a breadcrumb. Add `<vee.shortcut>cmd+shift+k</vee.shortcut>` to open that panel with a global hotkey from anywhere. Both are opt-in. See [Searchable filter panel](plugin-authoring.md#searchable-filter-panel).
 
+### Can I put a plugin's output on my desktop?
+
+Yes. Vee ships desktop **widgets** (Notification Center / desktop). The **Vee Plugins** widget shows a plugin as a dashboard tile — value, color, SF Symbol, and a `progress=` gauge or `sparkline=` trend — and you pick which plugins it shows via **Edit Widget**. A **Vee Health** widget summarizes all plugins ("N OK · M failing"), and a **Refresh Vee** Control Center control re-runs everything. Because the system meters widget refreshes, they suit slow-moving values; per-second counters stay best in the menu bar. See [Getting started → Widgets](getting-started.md#widgets-on-your-desktop--notification-center).
+
 ### A plugin isn't showing up or is erroring — what do I do?
 
 Check that it is executable (`chmod +x`), in the right folder, and that any interpreter or tool it needs is installed. See [Troubleshooting](troubleshooting.md).

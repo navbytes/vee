@@ -42,18 +42,27 @@ enum Ansi {
 
         while i < chars.count {
             if chars[i] == "\u{1B}", i + 1 < chars.count, chars[i + 1] == "[" {
+                // A CSI sequence is `ESC [` , parameter/intermediate bytes
+                // (0x20–0x3F), then a single final byte (0x40–0x7E). Only `m`
+                // (SGR) carries styling; any other final byte (cursor move, erase,
+                // …) must be stripped without disturbing the current style state
+                // or being mis-scanned as SGR parameters up to the next `m`.
                 var j = i + 2
                 var code = ""
-                while j < chars.count, chars[j] != "m" {
+                while j < chars.count, let v = chars[j].unicodeScalars.first?.value, (0x20...0x3F).contains(v) {
                     code.append(chars[j]); j += 1
                 }
-                if j < chars.count {
-                    closeRun(at: plain.count)
-                    apply(code, to: &state)
-                    runStart = plain.count
+                if j < chars.count, let fv = chars[j].unicodeScalars.first?.value, (0x40...0x7E).contains(fv) {
+                    if chars[j] == "m" {
+                        closeRun(at: plain.count)
+                        apply(code, to: &state)
+                        runStart = plain.count
+                    }
+                    // Non-SGR final byte: strip the sequence, keep style state.
                     i = j + 1
                     continue
                 }
+                // Malformed / unterminated CSI: fall through and treat ESC as literal.
             }
             plain.append(chars[i]); i += 1
         }

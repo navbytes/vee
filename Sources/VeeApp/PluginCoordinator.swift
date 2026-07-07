@@ -245,15 +245,34 @@ final class PluginCoordinator {
         return firstLine.isEmpty ? "Exited with code \(outcome.exitCode)" : "Exited \(outcome.exitCode): \(firstLine)"
     }
 
-    /// Extracts the missing command/binary from common shell error lines.
+    /// Extracts the missing command/binary from common shell error lines. Real
+    /// bash output is `"<script>: line N: <cmd>: command not found"`, so the
+    /// command is the last colon-field *before* the marker — not the first field
+    /// (which is the script path).
     static func missingCommand(inStderr stderr: String) -> String? {
+        func lastField(before marker: Range<String.Index>, in line: String) -> String? {
+            line[line.startIndex..<marker.lowerBound]
+                .split(separator: ":")
+                .map { $0.trimmingCharacters(in: .whitespaces) }
+                .last(where: { !$0.isEmpty })
+        }
+        func firstField(after marker: Range<String.Index>, in line: String) -> String? {
+            line[marker.upperBound...]
+                .split(separator: ":")
+                .map { $0.trimmingCharacters(in: .whitespaces) }
+                .first(where: { !$0.isEmpty })
+        }
+
         for raw in stderr.split(separator: "\n") {
             let line = String(raw)
-            if line.contains("command not found"), let name = line.split(separator: ":").first {
-                return String(name).trimmingCharacters(in: .whitespaces)
+            if let marker = line.range(of: "command not found") {
+                // bash: "… : jq: command not found". zsh: "command not found: jq".
+                if let cmd = lastField(before: marker, in: line) { return cmd }
+                if let cmd = firstField(after: marker, in: line) { return cmd }
             }
-            if line.contains("No such file or directory"), let path = line.split(separator: ":").first {
-                return (String(path) as NSString).lastPathComponent
+            if let marker = line.range(of: "No such file or directory"),
+               let path = lastField(before: marker, in: line) {
+                return (path as NSString).lastPathComponent
             }
         }
         return nil

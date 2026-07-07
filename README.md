@@ -99,6 +99,7 @@ Point Vee at your existing plugins folder (Plugin Manager → **Choose Folder**)
 - Discover: catalog browser with one-click, trust-gated install — over the public catalog or your own [custom/enterprise store](docs/_content/enterprise-store.md) (a GitHub repo, GitHub Enterprise, static host, or air-gapped mirror)
 - Plugin Manager: enable/disable, per-plugin settings, reveal in Finder, choose folder, launch-at-login, refresh all
 - `vee://` and `swiftbar://` URL actions
+- Desktop **widgets** (Notification Center): a configurable per-plugin status tile with gauges/sparklines, a **Vee Health** roll-up, and a Control Center **Refresh Vee** control
 - Zero-dependency typed SDKs (TypeScript, Python, Go) with golden-fixture drift guards
 
 ## Documentation

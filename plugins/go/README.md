@@ -18,6 +18,7 @@ plugins/go/
 ├─ vee.go                  # the SDK: Menu, Section, Options
 ├─ examples/cpu/cpu.go     # example plugin exposing Build() -> string
 ├─ examples/cpu/cpu_test.go# drift guard for the example
+├─ examples/controls/      # rich controls: sparkline / toggle / slider / progress
 └─ fixtures/*.txt          # golden output (shared byte-for-byte with the TS/Python SDKs)
 ```
 
@@ -60,7 +61,9 @@ Build it to a binary and drop it in your plugins folder as `cpu.5s`
   `vee.Int`, `vee.Bool` set them concisely. Fields match the TS SDK's
   `ItemOptions`: Color, Size, Font, Length, Href, Shell (+ Params), Terminal,
   Refresh, Alternate, Disabled, Checked, Key, Tooltip, SFImage, MD, Badge,
-  Symbolize.
+  Symbolize, and the rich controls Sparkline, Toggle, Slider, Progress (+
+  TrackColor, ProgressW, ProgressH). See the
+  [SDK guide](../../docs/_content/sdk.md) for the rich-param details.
 
 ## Tests
 

@@ -28,7 +28,8 @@ enum LineParser {
         let chars = Array(string)
         var i = 0
 
-        func skipSpaces() { while i < chars.count, chars[i] == " " || chars[i] == "\t" { i += 1 } }
+        func isSeparator(_ c: Character) -> Bool { c == " " || c == "\t" }
+        func skipSpaces() { while i < chars.count, isSeparator(chars[i]) { i += 1 } }
 
         while true {
             skipSpaces()
@@ -36,7 +37,7 @@ enum LineParser {
 
             // Read key up to '='.
             var key = ""
-            while i < chars.count, chars[i] != "=", chars[i] != " " {
+            while i < chars.count, chars[i] != "=", !isSeparator(chars[i]) {
                 key.append(chars[i]); i += 1
             }
             guard i < chars.count, chars[i] == "=" else {
@@ -44,7 +45,7 @@ enum LineParser {
                     diagnostics.append(.init(severity: .warning, message: "parameter '\(key)' has no value"))
                 }
                 // Skip stray token.
-                while i < chars.count, chars[i] != " " { i += 1 }
+                while i < chars.count, !isSeparator(chars[i]) { i += 1 }
                 continue
             }
             i += 1 // consume '='
@@ -61,7 +62,7 @@ enum LineParser {
                     value.append(chars[i]); i += 1
                 }
             } else {
-                while i < chars.count, chars[i] != " " {
+                while i < chars.count, !isSeparator(chars[i]) {
                     value.append(chars[i]); i += 1
                 }
             }
@@ -99,7 +100,9 @@ enum LineParser {
             case "color": p.color = VeeColor.parse(value)
             case "font": p.font = value
             case "size": p.size = finite(value)
-            case "length": p.length = Int(value)
+            // Clamp to >= 0: a negative length would reach `String.prefix(_:)`
+            // downstream, which traps (crashing the app) on a negative argument.
+            case "length": p.length = Int(value).map { Swift.max(0, $0) }
             case "trim": p.trim = bool(value)
             case "ansi": p.ansi = bool(value)
             case "emojize": p.emojize = bool(value)

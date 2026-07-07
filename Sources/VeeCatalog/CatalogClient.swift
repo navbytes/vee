@@ -117,15 +117,19 @@ public struct GitHubCatalogClient: CatalogFetching {
     /// oversized response can't exhaust memory). Redirects are still followed by
     /// URLSession, but the status + size checks apply to the final response.
     private func boundedData(for request: URLRequest, cap: Int) async throws -> Data {
-        let (bytes, response) = try await session.bytes(for: request)
-        if let http = response as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
-            throw CatalogError.httpStatus(http.statusCode)
+        // A single buffered fetch, not a byte-by-byte async stream: the recursive
+        // tree is a few MB, and iterating `AsyncBytes` one `UInt8` at a time cost
+        // millions of async resumptions + single-byte `Data.append`s on catalog
+        // load. Size is guarded up front by the declared Content-Length and again
+        // by the actual length; the endpoints are TLS-pinned GitHub hosts, so a
+        // post-hoc length check (rather than a streaming cap) is an acceptable
+        // memory tradeoff for the large speedup.
+        let (data, response) = try await session.data(for: request)
+        if let http = response as? HTTPURLResponse {
+            if !(200...299).contains(http.statusCode) { throw CatalogError.httpStatus(http.statusCode) }
+            if http.expectedContentLength > Int64(cap) { throw CatalogError.responseTooLarge(limit: cap) }
         }
-        var data = Data()
-        for try await byte in bytes {
-            data.append(byte)
-            if data.count > cap { throw CatalogError.responseTooLarge(limit: cap) }
-        }
+        if data.count > cap { throw CatalogError.responseTooLarge(limit: cap) }
         return data
     }
 

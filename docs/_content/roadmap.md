@@ -266,22 +266,18 @@ footprint visible.
     "Plugin SDK (Python)").
   - ✅ **Go SDK** — `plugins/go/` (`vee.go` Menu/Section builders, `go test`
     drift guard against the shared fixture; CI job "Plugin SDK (Go)").
-- ⬜ **SDK builders for the rich params.** Extend all three SDKs (TS/Python/Go)
-  with typed builders for `sparkline=`/`toggle=`/`slider=`/`progress=`, with
-  quoting/escaping handled internally so the whole class of "tooltip has spaces
-  but isn't quoted" bugs is impossible to write. Golden-fixture drift guards
-  extended to cover them. _(1 commit.)_
-- ⬜ **`vee` CLI: `render`, `lint`, `new`.** The `vee` binary exists as the app
-  entry point but has no subcommands. Add a zero-install authoring loop:
-  `vee render ./plugin.js` prints the parsed menu tree + every `ParseDiagnostic`;
-  `vee lint` flags unknown params, a title with a bare `|`, an unquoted `tooltip=`
-  with spaces, etc.; `vee new` scaffolds a plugin (language/SDK, interval, trust
-  tags). Reuses the existing `VeePluginFormat` parser — no new rendering. _(1–2
-  commits.)_
-- ⬜ **Promote & document JSON output.** `VeePluginFormat/JSONOutputParser.swift`
-  already decodes a structured-JSON alternative to the text protocol; document it
-  as first-class (typed items, no escaping games) and add an SDK example. Mostly
-  docs + a small polish pass. _(1 commit.)_
+- ✅ **SDK builders for the rich params.** All three SDKs (TS/Python/Go) ship
+  typed builders for `sparkline=`/`toggle=`/`slider=`/`progress=` (+ `trackColor`/
+  `progressW`/`progressH`), quoting/escaping handled internally, covered by the
+  shared golden-fixture drift guard.
+- ✅ **`vee` CLI: `render`, `lint`, `new`** (and `search`). The `vee` binary now
+  ships these subcommands: `vee render ./plugin.js` prints the parsed menu tree +
+  every `ParseDiagnostic`; `vee lint` flags unknown params / a bare `|` / an
+  unquoted `tooltip=`; `vee new` scaffolds a plugin; `vee search` filters a
+  plugin's menu. Reuses the `VeePluginFormat` parser.
+- ✅ **Promote & document JSON output.** `VeePluginFormat/JSONOutputParser.swift`
+  decodes a structured-JSON alternative to the text protocol, documented as
+  first-class in `docs/_content/json-output.md`.
 
 ## Decision note — React Native / Flutter
 

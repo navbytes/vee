@@ -50,4 +50,13 @@ final class WidgetSnapshotStoreTests: XCTestCase {
     func testEmptySnapshotHasNoPlugins() {
         XCTAssertTrue(WidgetSnapshot.empty().plugins.isEmpty)
     }
+
+    func testWriteRestrictsFileToOwnerOnly() {
+        let (store, dir) = makeTempStore()
+        defer { try? FileManager.default.removeItem(at: dir) }
+        store.write(WidgetSnapshot(plugins: [], generated: Date(timeIntervalSince1970: 1)))
+        let fileURL = dir.appendingPathComponent("widget-snapshot.json")
+        let mode = (try? FileManager.default.attributesOfItem(atPath: fileURL.path)[.posixPermissions] as? Int) ?? nil
+        XCTAssertEqual(mode, 0o600)
+    }
 }

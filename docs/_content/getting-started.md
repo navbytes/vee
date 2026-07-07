@@ -82,6 +82,28 @@ The `.5s` in the filename tells Vee to re-run it every 5 seconds. Vee detects th
 - **Enable / disable** any plugin in the **Plugin Manager** — a disabled plugin stays on disk but is not run or shown.
 - Plugins can also trigger a refresh themselves via URL actions — see [CLI and URL actions](cli-and-urls.md).
 
+## Widgets (on your desktop / Notification Center)
+
+Vee ships two WidgetKit widgets and a Control Center control, in addition to the
+menu bar:
+
+- **Vee Plugins** — a status tile for your plugins. Long-press the widget →
+  **Edit Widget** to choose *which* plugins it shows (leave it empty to show all).
+  At the small size it renders one plugin as a dashboard tile — its SF Symbol,
+  its value in the plugin's color, and a live gauge (`progress=`) or trend chart
+  (`sparkline=`) when the plugin publishes one — with a freshness caption. The
+  medium/large sizes show an enriched row per plugin.
+- **Vee Health** — an at-a-glance roll-up: "All healthy" or "N failing", with the
+  failing plugins called out. It's the one view the menu bar can't give you.
+- **Refresh Vee** (Control Center) — re-runs every plugin; launches Vee first if
+  it isn't running.
+
+Add them from the desktop (right-click → **Edit Widgets**) or Notification
+Center. Widgets update when a plugin's output changes; because the system meters
+how often widgets refresh, they suit slow-moving values (disk, battery, weather,
+build/sync status) rather than per-second counters — those stay best in the menu
+bar. The "updated N ago" caption reflects when the plugin last ran.
+
 ## Next steps
 
 - [Plugin authoring reference](plugin-authoring.md) — the full output format, params, metadata, SF Symbols, ANSI, Markdown, streaming, and cron.

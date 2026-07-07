@@ -20,6 +20,7 @@ each one is heavily commented and self-contained.
 | `hello-world.10s.sh`          | 10s      | The absolute basics of the format — title, dropdown, params. No capabilities. |
 | `disk-usage.30m.sh`           | 30m      | Reading system state via `df`, color-coding, an SF Symbol, and a `<vee.exec>` declaration. |
 | `github-notifications.5m.sh`  | 5m       | Network access, a secret token via `<xbar.var>` + the Keychain, links, and honest `<vee.network>` / `<vee.secrets>` declarations. Degrades gracefully with no token. |
+| `dev-dashboard.5m.sh`         | 5m       | The searchable filter panel (`<vee.filter>`) and a global search hotkey (`<vee.shortcut>`) over a large multi-section menu — the showcase used by `vee search`. |
 
 ## Running an example
 

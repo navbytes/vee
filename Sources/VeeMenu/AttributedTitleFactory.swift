@@ -17,7 +17,9 @@ public enum AttributedTitleFactory {
         // Apply `length` truncation up front (on the visible text).
         var display = text
         var runs = ansiRuns
-        if let length = params.length, display.count > length {
+        // `length` is clamped to >= 0 at parse time; the extra guard keeps
+        // `String.prefix(_:)` from ever seeing a negative argument (which traps).
+        if let length = params.length, length >= 0, display.count > length {
             display = String(display.prefix(length)) + "…"
             runs = runs.compactMap { clamp($0, to: length) }
         }
