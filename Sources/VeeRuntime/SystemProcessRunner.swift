@@ -11,6 +11,11 @@ import VeeCore
 /// - the run resumes exactly once, after both reads finish *and* the process
 ///   terminates, so no trailing output is lost.
 /// - a timeout terminates the child (SIGTERM, then SIGKILL after a grace period).
+/// - if a grandchild inherits stdout and keeps the pipe open after the child
+///   exits (so the drains never see EOF), the run still completes: a short
+///   drain-grace force-resumes and closes the read ends. (Reaping such orphaned
+///   grandchildren themselves would require launching each plugin in its own
+///   process group — a larger change tracked separately.)
 public struct SystemProcessRunner: ProcessRunning {
     public init() {}
 
@@ -32,11 +37,22 @@ extension ProcessRun {
 
     static func boundedDrain(_ handle: FileHandle, cap: Int) -> Data {
         var accumulated = Data()
+        let bufferSize = 64 * 1024
+        var buffer = [UInt8](repeating: 0, count: bufferSize)
+        let fd = handle.fileDescriptor
+        // Raw `read(2)` rather than `availableData`: it lets a stalled drain be
+        // unblocked by *closing* the handle from another thread (the read returns
+        // -1 and the loop ends) without `availableData`'s exception-on-error
+        // behavior — the escape hatch `forceResumeIfStalled` relies on.
         while true {
-            let chunk = handle.availableData
-            if chunk.isEmpty { break } // EOF
+            let n = read(fd, &buffer, bufferSize)
+            if n == 0 { break }                       // EOF
+            if n < 0 {
+                if errno == EINTR { continue }        // transient interrupt: retry
+                break                                 // closed / error: end drain
+            }
             if accumulated.count < cap {
-                accumulated.append(chunk.prefix(cap - accumulated.count))
+                accumulated.append(contentsOf: buffer[0..<Swift.min(n, cap - accumulated.count)])
             }
         }
         return accumulated
@@ -63,6 +79,12 @@ private final class ProcessRun: @unchecked Sendable {
     private var pending = 3 // stdout read, stderr read, termination
     private var resumed = false
     private var timeoutItem: DispatchWorkItem?
+
+    /// After the child exits, its pipes should reach EOF at once. If a grandchild
+    /// inherited stdout (`daemon &`, a backgrounded `curl`), EOF may never arrive
+    /// and the drain reads would block forever — hanging the awaiting refresh and
+    /// leaking the read threads/fds. This bounds that wait.
+    private static let drainGracePeriod: TimeInterval = 3
     /// Keeps this instance alive for the duration of the run (nothing else holds
     /// a strong reference once `start()` returns). Cleared when we resume.
     private var selfRetain: ProcessRun?
@@ -84,6 +106,7 @@ private final class ProcessRun: @unchecked Sendable {
         process.standardError = errPipe
         process.terminationHandler = { [weak self] proc in
             self?.complete { $0.exitCode = proc.terminationStatus }
+            self?.armDrainGrace()
         }
 
         do {
@@ -126,6 +149,40 @@ private final class ProcessRun: @unchecked Sendable {
             guard let self, self.process.isRunning else { return }
             kill(self.process.processIdentifier, SIGKILL)
         }
+    }
+
+    /// Once the child has exited, give its drains a short grace to reach EOF; if
+    /// they haven't (a grandchild is still holding the pipe open), force-complete
+    /// with whatever was captured and close the read ends so the parked drain
+    /// threads unblock — turning a permanent hang/leak into a bounded one.
+    private func armDrainGrace() {
+        DispatchQueue.global().asyncAfter(deadline: .now() + Self.drainGracePeriod) { [weak self] in
+            self?.forceResumeIfStalled()
+        }
+    }
+
+    private func forceResumeIfStalled() {
+        var outcome: ProcessOutcome?
+        lock.lock()
+        if !resumed {
+            resumed = true
+            outcome = ProcessOutcome(
+                standardOutput: String(decoding: outData, as: UTF8.self),
+                standardError: String(decoding: errData, as: UTF8.self),
+                exitCode: exitCode,
+                timedOut: timedOut)
+        }
+        let item = timeoutItem
+        lock.unlock()
+
+        guard let outcome else { return } // already resumed normally — no-op
+        item?.cancel()
+        // Closing the read ends makes the parked raw `read()` return, so the drain
+        // threads exit instead of leaking for the life of the grandchild.
+        try? outPipe.fileHandleForReading.close()
+        try? errPipe.fileHandleForReading.close()
+        continuation.resume(returning: outcome)
+        selfRetain = nil
     }
 
     /// Applies one completion signal under the lock and resumes once all three

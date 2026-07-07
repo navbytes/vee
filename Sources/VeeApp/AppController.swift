@@ -48,6 +48,9 @@ public final class AppController: NSObject, NSApplicationDelegate {
     /// drive one reload per tick.
     private var lastWidgetReload: Date = .distantPast
     private var widgetReloadPending = false
+    /// When the snapshot file was last written, so timestamp-only refreshes (no
+    /// content change) don't churn the disk once per tick — see flushWidgetSnapshot.
+    private var lastSnapshotWrite: Date = .distantPast
 
     /// The running controller, so App Intents (Shortcuts/Spotlight) can drive it.
     public static weak var shared: AppController?
@@ -163,6 +166,11 @@ public final class AppController: NSObject, NSApplicationDelegate {
         ephemerals.values.forEach { $0.remove() }
         wakeMonitor?.stop()
         watcher?.stop()
+        // Symmetry with registerControlRefreshObserver: drop the Darwin observer.
+        CFNotificationCenterRemoveEveryObserver(
+            CFNotificationCenterGetDarwinNotifyCenter(),
+            Unmanaged.passUnretained(self).toOpaque()
+        )
     }
 
     /// Largest plugin source Vee will fetch for a `swiftbar://addplugin` install
@@ -279,14 +287,14 @@ public final class AppController: NSObject, NSApplicationDelegate {
     /// Returns a copy of a parsed output with every `shell=`/`bash=` action
     /// removed (title lines, items, submenus, and alternates). Used to defang
     /// menu content injected through the `setephemeralplugin` deep link.
-    static func strippingShellActions(_ output: ParsedOutput) -> ParsedOutput {
+    nonisolated static func strippingShellActions(_ output: ParsedOutput) -> ParsedOutput {
         var out = output
         out.titleLines = out.titleLines.map { var line = $0; line.params.shell = nil; return line }
         out.body = out.body.map(stripShell)
         return out
     }
 
-    private static func stripShell(_ node: MenuNode) -> MenuNode {
+    nonisolated private static func stripShell(_ node: MenuNode) -> MenuNode {
         switch node {
         case .separator:
             return .separator
@@ -386,14 +394,21 @@ public final class AppController: NSObject, NSApplicationDelegate {
         let contentChanged = signature != lastPublishedSignature
         lastPublishedSignature = signature
 
-        // Always write, so the on-disk per-plugin `updated` (and `generated`)
-        // stay current: freshness must reflect "last ran", not "last content
-        // change", or a healthy plugin with steady output would wrongly render as
-        // stale after a few minutes. Only a *visible content* change is worth a
-        // metered WidgetKit reload — an unchanged re-run just refreshes timestamps.
-        VeeWidgetSharing.shared.write(WidgetSnapshot(plugins: Array(plugins), generated: Date()))
+        // Write on a real content change immediately. Otherwise the write only
+        // refreshes the "last ran" timestamps, so throttle those to avoid churning
+        // the disk once per tick for a fast/streaming plugin — the freshness floor
+        // is minutes, so a ~minute-old timestamp is still honest. A content change
+        // additionally spends a (separately throttled) WidgetKit reload.
+        let now = Date()
+        guard contentChanged || now.timeIntervalSince(lastSnapshotWrite) >= Self.timestampWriteInterval else { return }
+        lastSnapshotWrite = now
+        VeeWidgetSharing.shared.write(WidgetSnapshot(plugins: Array(plugins), generated: now))
         if contentChanged { requestWidgetReload() }
     }
+
+    /// Minimum spacing between timestamp-only snapshot writes (a content change
+    /// always writes immediately). Well under the freshness/stale floor.
+    private static let timestampWriteInterval: TimeInterval = 60
 
     /// The change-detection key for a set of snapshots: the same plugins with the
     /// per-run `updated` timestamp zeroed, so re-running a plugin with identical
@@ -458,7 +473,26 @@ public final class AppController: NSObject, NSApplicationDelegate {
 
     // MARK: - Global actions
 
-    private func refreshAll() { coordinators.values.forEach { $0.forceRefresh() } }
+    /// Spacing between staggered plugin refreshes in a fan-out.
+    private static let refreshStaggerStep: TimeInterval = 0.05
+
+    /// Re-runs every plugin, but staggered: firing on wake/launch/control with
+    /// many plugins would otherwise spawn N subprocesses at once — a CPU/thread
+    /// spike at the worst moment. Each start is offset by a small step (capped so
+    /// the spread stays bounded for large plugin sets).
+    private func refreshAll() {
+        for (index, coordinator) in coordinators.values.enumerated() {
+            let delay = Swift.min(Double(index) * Self.refreshStaggerStep, 5.0)
+            if delay == 0 {
+                coordinator.forceRefresh()
+            } else {
+                Task { @MainActor in
+                    try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+                    coordinator.forceRefresh()
+                }
+            }
+        }
+    }
 
     private func openFolder() { NSWorkspace.shared.open(URL(fileURLWithPath: directory)) }
 
