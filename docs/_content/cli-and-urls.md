@@ -125,10 +125,18 @@ The same URLs work with the `swiftbar://` scheme, e.g. `swiftbar://refreshplugin
 - `title` — the notification title.
 - `subtitle` — an optional subtitle.
 - `body` — the notification body text.
-- `href` — an optional URL to open when the notification is clicked.
+- `href` — an optional URL to open when the notification is clicked. Scheme-filtered like every other Vee URL (`file:`/`javascript:` are ignored; `http(s)` and app deep links such as `vee://` are allowed).
+- `plugin` — the originating plugin's id. When present, the alert becomes **actionable** — it gains **Re-run**, **Silence** (mute this plugin's alerts for the session), and **Open Log** buttons — and repeated alerts from the same plugin coalesce instead of stacking. Pass your own id with the injected `$VEE_PLUGIN_ID` variable.
 
 ```
 vee://notify?title=Backup&subtitle=Nightly&body=Completed%20successfully&href=https://example.com
+```
+
+An **actionable** alert from a monitor plugin, tagged with its id so Re-run /
+Silence / Open Log resolve back to it:
+
+```bash
+open "vee://notify?plugin=$VEE_PLUGIN_ID&title=Build%20failed&body=exit%201"
 ```
 
 Remember to URL-encode parameter values that contain spaces or special characters.

@@ -1,4 +1,5 @@
 import XCTest
+import UserNotifications
 @testable import VeeApp
 
 final class NotificationRoutingTests: XCTestCase {
@@ -64,6 +65,16 @@ final class NotificationRoutingTests: XCTestCase {
         // No href and no custom action => nothing to do.
         XCTAssertEqual(
             NotificationRouter.route(actionIdentifier: "com.apple.UNNotificationDefaultActionIdentifier", pluginID: nil, href: nil),
+            .none
+        )
+    }
+
+    /// Regression: swiping a banner away must NOT open its href — only an
+    /// explicit tap does.
+    func testDismissDoesNotOpenHref() {
+        let url = URL(string: "https://example.com")!
+        XCTAssertEqual(
+            NotificationRouter.route(actionIdentifier: UNNotificationDismissActionIdentifier, pluginID: "cpu.5s.sh", href: url),
             .none
         )
     }

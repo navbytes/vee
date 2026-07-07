@@ -121,9 +121,12 @@ Lint findings:
 <li><code>title</code> — the notification title.</li>
 <li><code>subtitle</code> — an optional subtitle.</li>
 <li><code>body</code> — the notification body text.</li>
-<li><code>href</code> — an optional URL to open when the notification is clicked.</li>
+<li><code>href</code> — an optional URL to open when the notification is clicked. Scheme-filtered like every other Vee URL (<code>file:</code>/<code>javascript:</code> are ignored; <code>http(s)</code> and app deep links such as <code>vee://</code> are allowed).</li>
+<li><code>plugin</code> — the originating plugin's id. When present, the alert becomes <strong>actionable</strong> — it gains <strong>Re-run</strong>, <strong>Silence</strong> (mute this plugin's alerts for the session), and <strong>Open Log</strong> buttons — and repeated alerts from the same plugin coalesce instead of stacking. Pass your own id with the injected <code>$VEE_PLUGIN_ID</code> variable.</li>
 </ul>
 <div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">text</span></div><pre><code>vee://notify?title=Backup&amp;subtitle=Nightly&amp;body=Completed%20successfully&amp;href=https://example.com</code></pre></div>
+<p>An <strong>actionable</strong> alert from a monitor plugin, tagged with its id so Re-run / Silence / Open Log resolve back to it:</p>
+<div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">bash</span></div><pre><code>open "vee://notify?plugin=$VEE_PLUGIN_ID&amp;title=Build%20failed&amp;body=exit%201"</code></pre></div>
 <p>Remember to URL-encode parameter values that contain spaces or special characters.</p>
 <h2 id="triggering-actions-from-a-plugin">Triggering actions from a plugin</h2>
 <p>Because these are ordinary URLs, a plugin triggers them the same way it opens any link — either as an <code>href</code> on a menu item, or by opening the URL from the script.</p>

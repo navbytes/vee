@@ -30,6 +30,24 @@ final class URLActionRouterTests: XCTestCase {
         XCTAssertEqual(parse("swiftbar://notify?body=Only"), .notify(title: "", subtitle: "", body: "Only", href: nil, pluginID: nil))
     }
 
+    /// A notification's click-through href is scheme-filtered like everywhere
+    /// else: a `file:`/`javascript:` href is dropped, a custom app scheme kept.
+    func testNotifyDropsUnsafeHref() {
+        XCTAssertEqual(
+            parse("swiftbar://notify?body=x&href=file:///etc/passwd"),
+            .notify(title: "", subtitle: "", body: "x", href: nil, pluginID: nil)
+        )
+        XCTAssertEqual(
+            parse("swiftbar://notify?body=x&href=javascript:alert(1)"),
+            .notify(title: "", subtitle: "", body: "x", href: nil, pluginID: nil)
+        )
+        // A vee:// deep link is a safe, useful href (e.g. refresh another plugin).
+        XCTAssertEqual(
+            parse("swiftbar://notify?body=x&href=vee://refreshplugin?name=cpu"),
+            .notify(title: "", subtitle: "", body: "x", href: URL(string: "vee://refreshplugin?name=cpu"), pluginID: nil)
+        )
+    }
+
     func testNotifyCarriesPluginID() {
         XCTAssertEqual(
             parse("swiftbar://notify?plugin=cpu.5s.sh&body=High"),
