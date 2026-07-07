@@ -45,7 +45,12 @@ public enum URLActionRouter {
             return .setEphemeralPlugin(
                 name: name,
                 content: param("content") ?? "",
-                exitAfter: param("exitafter").flatMap(Double.init).map { TimeInterval($0) }
+                // `exitafter` reaches a `UInt64(seconds * 1e9)` conversion at
+                // the use site, which traps on overflow — any web page can
+                // open this URL with e.g. `exitafter=1e40`. Reject non-finite
+                // values (`inf`/`nan`) and clamp to a 24h ceiling; a deep link
+                // that wants longer isn't really an ephemeral status item.
+                exitAfter: param("exitafter").flatMap(Double.init).flatMap { $0.isFinite ? min(max($0, 0), 86_400) : nil }
             )
         case "notify":
             // `plugin=` names the originating plugin (SwiftBar-compatible); when

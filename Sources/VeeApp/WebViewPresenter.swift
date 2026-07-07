@@ -33,12 +33,18 @@ final class WebViewPresenter {
         NSApp.activate(ignoringOtherApps: true)
         windows.append(window)
 
-        NotificationCenter.default.addObserver(
+        // Captured so the close handler can unregister itself — a discarded
+        // block-observer token leaves the registration (and everything it
+        // captured) alive forever, accumulating one dead observer per window
+        // ever opened. `removeObserver` breaks the resulting self-reference.
+        var token: NSObjectProtocol?
+        token = NotificationCenter.default.addObserver(
             forName: NSWindow.willCloseNotification, object: window, queue: .main
         ) { [weak self, weak window] _ in
             MainActor.assumeIsolated {
                 guard let window else { return }
                 self?.windows.removeAll { $0 === window }
+                if let token { NotificationCenter.default.removeObserver(token) }
             }
         }
     }

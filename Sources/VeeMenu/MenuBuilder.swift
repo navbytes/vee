@@ -40,8 +40,11 @@ public enum MenuBuilder {
         menuItem.isEnabled = !(item.params.disabled ?? false)
         if item.params.swiftbar.checked == true { menuItem.state = .on }
 
-        // `progress=`: render an inline capsule gauge as a custom row view. It's
-        // decorative (no click action), so return before wiring submenu/action.
+        // `progress=`: render an inline capsule gauge as a custom row view. The
+        // view itself is decorative (no click handling — see
+        // ProgressMenuItemView), but the row can still carry a submenu or its
+        // own action (href=/shell=/…), same as any other item, so fall through
+        // to the same submenu/action wiring below instead of returning early.
         if let progress = item.params.progress {
             let view = ProgressMenuItemView(
                 title: menuItem.attributedTitle ?? NSAttributedString(string: item.text),
@@ -54,7 +57,6 @@ public enum MenuBuilder {
             )
             view.toolTip = item.params.swiftbar.tooltip
             menuItem.view = view
-            return menuItem
         }
 
         if isAlternate {

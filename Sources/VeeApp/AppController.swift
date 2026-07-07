@@ -24,6 +24,11 @@ public final class AppController: NSObject, NSApplicationDelegate {
     /// per-plugin error updates can be pushed into it. Nil when the window is closed.
     private weak var currentManagerModel: PluginManagerModel?
     private var ephemerals: [String: StatusItemController] = [:]
+    /// Per-key deadline task for an ephemeral item's `exitafter=`. Re-setting
+    /// an ephemeral item under the same name must cancel and replace the OLD
+    /// deadline — otherwise it still fires on the old schedule and removes the
+    /// REPLACED content early. See `showEphemeral`.
+    private var ephemeralExpiries: [String: Task<Void, Never>] = [:]
     /// Path → file-modification-time of the currently loaded plugins; a change
     /// here (including an in-place edit) triggers a rebuild. See `reload()`.
     private var loadedSignature: [String: TimeInterval] = [:]
@@ -271,11 +276,19 @@ public final class AppController: NSObject, NSApplicationDelegate {
         // status item must not be able to run arbitrary commands on click.
         // (`href=` is already scheme-filtered at parse.)
         controller.render(Self.strippingShellActions(OutputParser.parse(content)))
-        if let exitAfter, exitAfter > 0 {
-            Task { @MainActor in
+
+        // Cancel any previous deadline for this key unconditionally — even an
+        // update with no exitafter (meant to persist) must not be removed by a
+        // still-pending timer from an earlier call.
+        ephemeralExpiries[key]?.cancel()
+        ephemeralExpiries[key] = nil
+        if let exitAfter, exitAfter.isFinite, exitAfter > 0 {
+            ephemeralExpiries[key] = Task { @MainActor in
                 try? await Task.sleep(nanoseconds: UInt64(exitAfter * 1_000_000_000))
+                guard !Task.isCancelled else { return }
                 self.ephemerals[key]?.remove()
                 self.ephemerals[key] = nil
+                self.ephemeralExpiries[key] = nil
             }
         }
     }

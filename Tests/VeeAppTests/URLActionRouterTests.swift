@@ -80,6 +80,34 @@ final class URLActionRouterTests: XCTestCase {
         )
     }
 
+    /// Regression: `exitafter` reaches a `UInt64(seconds * 1e9)` conversion at
+    /// the use site, which traps on overflow — any web page can open this URL
+    /// with an astronomically large literal. Non-finite values must be
+    /// rejected and the result clamped to a 24h ceiling.
+    func testExitAfterClampedAndSanitized() {
+        XCTAssertEqual(
+            parse("swiftbar://setephemeralplugin?content=x&exitafter=1e40"),
+            .setEphemeralPlugin(name: "", content: "x", exitAfter: 86_400),
+            "an astronomically large value must clamp to the 24h ceiling, not overflow at the use site"
+        )
+        XCTAssertEqual(
+            parse("swiftbar://setephemeralplugin?content=x&exitafter=inf"),
+            .setEphemeralPlugin(name: "", content: "x", exitAfter: nil)
+        )
+        XCTAssertEqual(
+            parse("swiftbar://setephemeralplugin?content=x&exitafter=nan"),
+            .setEphemeralPlugin(name: "", content: "x", exitAfter: nil)
+        )
+        XCTAssertEqual(
+            parse("swiftbar://setephemeralplugin?content=x&exitafter=-5"),
+            .setEphemeralPlugin(name: "", content: "x", exitAfter: 0)
+        )
+        XCTAssertEqual(
+            parse("swiftbar://setephemeralplugin?content=x&exitafter=30"),
+            .setEphemeralPlugin(name: "", content: "x", exitAfter: 30)
+        )
+    }
+
     func testUnknownAndWrongScheme() {
         XCTAssertEqual(parse("https://example.com"), .unknown)
         XCTAssertEqual(parse("swiftbar://bogusaction"), .unknown)

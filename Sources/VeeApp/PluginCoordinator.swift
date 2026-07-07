@@ -27,6 +27,9 @@ final class PluginCoordinator {
     private var hotKeyID: UInt32?
     private var hotkeyStatus: HotkeyStatus = .none
     private var isRefreshing = false
+    /// Set by `stop()`. A queued timer/cron/hotkey `refresh()` that fires after
+    /// `stop()` must not spawn a subprocess or render into a removed status item.
+    private var stopped = false
     private var lastResult: PluginRunResult?
     private var debugModel: PluginDebugModel?
 
@@ -188,6 +191,7 @@ final class PluginCoordinator {
     }
 
     func stop() {
+        stopped = true
         if let hotKeyID { GlobalHotKeys.shared.unregister(hotKeyID) }
         hotKeyID = nil
         timer?.stop()
@@ -341,6 +345,22 @@ final class PluginCoordinator {
     }
 
     private func refresh() {
+        // An already-queued timer/cron/hotkey refresh must not run after stop()
+        // — the status item is gone, so there's nothing to render into.
+        guard !stopped else { return }
+
+        // A streaming script never exits, so running it through the one-shot
+        // path below would spawn a duplicate 30s instance that eventually times
+        // out and clobbers the live streaming menu with an error. Restart the
+        // stream instead. This is silent — StreamingSession.stop() only cancels
+        // the run loop's task; it does not invoke onStopped (which would flash
+        // an error render).
+        if header.streamable {
+            streaming?.stop()
+            startStreaming()
+            return
+        }
+
         guard !isRefreshing else { return }
         isRefreshing = true
 
@@ -356,6 +376,9 @@ final class PluginCoordinator {
                 let result = try await runtime.refresh(pluginPath: path, context: context, header: header, runInBash: runInBash, timeout: 30)
                 self?.lastResult = result
                 self?.updateDebugModel()
+                // stop() may have run while this refresh was in flight — a
+                // now-removed status item must not be rendered/published into.
+                guard self?.stopped != true else { return }
                 if result.outcome.timedOut {
                     // Surface whatever the plugin printed before it was killed, so
                     // a hang is debuggable from the menu instead of a dead end.
@@ -379,6 +402,7 @@ final class PluginCoordinator {
                     self?.onPublish?(WidgetPublish(title: Self.publishableTitle(result.output), fields: Self.widgetFields(from: result.output)))
                 }
             } catch {
+                guard self?.stopped != true else { return }
                 self?.lastError = "\(error)"
                 self?.controller.renderError("\(error)")
                 self?.onPublish?(WidgetPublish(title: "⚠︎ error", isError: true))
