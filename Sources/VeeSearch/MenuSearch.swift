@@ -9,6 +9,11 @@ public enum MenuSearch {
     /// an ancestor (breadcrumb) title, so direct hits outrank contextual ones.
     static let titleMatchBonus = 40
 
+    /// Base score for a breadcrumb-only (contextual) match, before the earlier-
+    /// is-better position penalty. Kept below `titleMatchBonus` so a direct title
+    /// hit always outranks a contextual one.
+    static let breadcrumbBase = 20
+
     /// Flattens a `ParsedOutput.body` into activatable rows (breadcrumb-aware).
     public static func flatten(_ nodes: [MenuNode]) -> [FlatRow] {
         MenuFlattener.flatten(nodes)
@@ -50,15 +55,19 @@ public enum MenuSearch {
         return total
     }
 
-    /// A token prefers to match the item text (with a bonus); failing that it may
-    /// match the fuller haystack (item text + ancestors) so a breadcrumb hit still
-    /// surfaces the row, but ranks below a direct title hit.
+    /// A token prefers a fuzzy match on the item text (so abbreviations like `gh`
+    /// find `GitHub`). Failing that, it may match the ancestor breadcrumb — but
+    /// there the match must be a **contiguous substring**, not a loose
+    /// subsequence, so a short query doesn't scatter across ancestor words and
+    /// drag in irrelevant rows (e.g. `npm` matching `mai·n … re·p·o … ·m·esh`).
+    /// Breadcrumb hits score below any title hit.
     private static func tokenScore(_ token: String, row: FlatRow) -> Int? {
         if let s = FuzzyScorer.score(query: token, in: row.title) {
             return s + titleMatchBonus
         }
-        if let s = FuzzyScorer.score(query: token, in: row.haystack) {
-            return s
+        if let range = row.haystack.range(of: token) {
+            let offset = row.haystack.distance(from: row.haystack.startIndex, to: range.lowerBound)
+            return max(1, breadcrumbBase - offset)
         }
         return nil
     }

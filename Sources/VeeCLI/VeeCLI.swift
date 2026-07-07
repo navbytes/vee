@@ -1,6 +1,7 @@
 import Foundation
 import VeePluginFormat
 import VeeRuntime
+import VeeSearch
 
 /// Entry point for Vee's zero-install authoring subcommands: `render`, `lint`,
 /// and `new`. All logic is AppKit-free and I/O is injected (buffers + a
@@ -42,6 +43,8 @@ public enum VeeCLI {
                 return await runLint(rest, runner: runner, out: &out, err: &err)
             case "new":
                 return runNew(rest, out: &out, err: &err)
+            case "search":
+                return await runSearch(rest, runner: runner, out: &out, err: &err)
             default:
                 err += "vee: unknown subcommand '\(name)'\n\n"
                 err += Usage.text
@@ -157,6 +160,67 @@ public enum VeeCLI {
             out += format(f) + "\n"
         }
         return 1
+    }
+
+    // MARK: - search
+
+    /// `vee search <path> [query…]` — run a plugin, flatten its (nested) menu into
+    /// activatable rows, and print them fuzzy-filtered + ranked by the query, each
+    /// with its breadcrumb and the action Enter would fire. With no query it lists
+    /// every activatable item (the panel's idle state). Exercises `VeeSearch`
+    /// end-to-end before the interactive panel exists.
+    static func runSearch(
+        _ args: [String],
+        runner: ProcessRunning,
+        out: inout String,
+        err: inout String
+    ) async -> Int32 {
+        let positional = args.filter { !$0.hasPrefix("-") }
+        guard let path = positional.first else {
+            err += "vee search: missing <path>\n\nUsage: vee search <path> [query…]\n"
+            return 2
+        }
+        let query = positional.dropFirst().joined(separator: " ")
+
+        let outcome: ProcessOutcome
+        do {
+            outcome = try await runPlugin(path: path, runner: runner)
+        } catch {
+            err += "vee search: could not run '\(path)': \(error)\n"
+            return 1
+        }
+
+        let parsed = OutputParser.parseAuto(outcome.standardOutput)
+        let rows = MenuSearch.flatten(parsed.body)
+        let results = MenuSearch.search(query, in: rows)
+
+        if query.isEmpty {
+            out += "\(rows.count) activatable item(s):\n"
+        } else {
+            out += "\(results.count) of \(rows.count) item(s) match \"\(query)\":\n"
+        }
+        for row in results {
+            var line = "  \(row.item.text)"
+            if !row.breadcrumb.isEmpty { line += "  ⟨\(row.breadcrumb)⟩" }
+            line += "  [\(actionLabel(row.item))]"
+            out += line + "\n"
+        }
+        if results.isEmpty { out += "  (no matches)\n" }
+        return results.isEmpty && !query.isEmpty ? 1 : 0
+    }
+
+    /// The action `AppActionDispatcher.perform` would take for this item, in its
+    /// dispatch order — a hint for the search output.
+    private static func actionLabel(_ item: MenuItem) -> String {
+        let p = item.params
+        if p.control != nil { return "control" }
+        if p.shell != nil { return "shell" }
+        if p.swiftbar.webview != nil { return "webview" }
+        if p.sparkline != nil { return "sparkline" }
+        if p.href != nil { return "href" }
+        if let s = p.swiftbar.shortcut, !s.isEmpty { return "shortcut" }
+        if p.refresh == true { return "refresh" }
+        return "—"
     }
 
     // MARK: - new
@@ -284,9 +348,10 @@ enum Usage {
     vee — a native macOS menu-bar script runner (xbar successor).
 
     Usage:
-      vee render <path>    Run a plugin and print its parsed menu tree.
-      vee lint <path>      Run a plugin and report format/authoring problems.
-      vee new [flags]      Scaffold a new plugin.
+      vee render <path>        Run a plugin and print its parsed menu tree.
+      vee lint <path>          Run a plugin and report format/authoring problems.
+      vee search <path> [q…]   Run a plugin and fuzzy-search its (nested) items.
+      vee new [flags]          Scaffold a new plugin.
 
     new flags:
       --lang ts|py|sh      Source language (default: sh).

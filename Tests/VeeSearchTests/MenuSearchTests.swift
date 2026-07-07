@@ -75,6 +75,17 @@ final class MenuSearchTests: XCTestCase {
         XCTAssertEqual(result.map(\.item.text), ["#123 Fix retry"])
     }
 
+    /// Regression: a short token must not scatter-match across breadcrumb words
+    /// as a loose subsequence. Only a *contiguous* ancestor substring (or a title
+    /// fuzzy match) counts — so `npm` finds the script, not `main`, whose folded
+    /// breadcrumb merely happens to contain n…p…m as a scattered subsequence.
+    func testBreadcrumbMatchRequiresContiguousSubstring() {
+        let scattered = row("main", path: ["Repositories", "orders", "Branches"])
+        let real = row("npm run dev", path: ["Scripts"])
+        let result = MenuSearch.search("npm", in: [scattered, real])
+        XCTAssertEqual(result.map(\.item.text), ["npm run dev"])
+    }
+
     func testStableTieBreakByOriginalOrder() {
         // Identical text ⇒ identical score ⇒ original order preserved.
         let all = [row("Deploy A"), row("Deploy B"), row("Deploy C")]

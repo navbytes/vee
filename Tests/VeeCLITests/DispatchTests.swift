@@ -59,6 +59,44 @@ final class DispatchTests: XCTestCase {
         XCTAssertTrue(out.contains("No lint findings"), out)
     }
 
+    // MARK: - search
+
+    func testSearchFiltersFlattenedNestedItems() async {
+        let fake = FakeRunner(stdout: "Title\n---\nParent\n--Open Issue | href=https://x\n--Close Issue | href=https://y\n")
+        var out = "", err = ""
+        let code = await VeeCLI.run(["search", "/tmp/p.sh", "open"], runner: fake, out: &out, err: &err)
+        XCTAssertEqual(code, 0)
+        XCTAssertTrue(out.contains("Open Issue"), out)
+        XCTAssertFalse(out.contains("Close Issue"), out)
+        XCTAssertTrue(out.contains("Parent"), out)          // breadcrumb rendered
+        XCTAssertTrue(out.contains("[href]"), out)          // action label rendered
+    }
+
+    func testSearchNoQueryListsAllActivatableItems() async {
+        let fake = FakeRunner(stdout: "Title\n---\nInfo line\nGo | href=https://x\nRefresh | refresh=true\n")
+        var out = "", err = ""
+        let code = await VeeCLI.run(["search", "/tmp/p.sh"], runner: fake, out: &out, err: &err)
+        XCTAssertEqual(code, 0)
+        XCTAssertTrue(out.contains("2 activatable item(s)"), out)  // "Info line" is not activatable
+        XCTAssertFalse(out.contains("Info line"), out)
+    }
+
+    func testSearchNoMatchExitsOne() async {
+        let fake = FakeRunner(stdout: "Title\n---\nGo | href=https://x\n")
+        var out = "", err = ""
+        let code = await VeeCLI.run(["search", "/tmp/p.sh", "zzzz"], runner: fake, out: &out, err: &err)
+        XCTAssertEqual(code, 1)
+        XCTAssertTrue(out.contains("(no matches)"), out)
+    }
+
+    func testSearchMissingPathExitsTwo() async {
+        let fake = FakeRunner(stdout: "")
+        var out = "", err = ""
+        let code = await VeeCLI.run(["search"], runner: fake, out: &out, err: &err)
+        XCTAssertEqual(code, 2)
+        XCTAssertTrue(err.contains("missing <path>"), err)
+    }
+
     func testUnknownSubcommandExitsTwo() async {
         let fake = FakeRunner(stdout: "")
         var out = "", err = ""
