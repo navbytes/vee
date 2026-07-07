@@ -50,6 +50,28 @@ final class AppPreferencesTests: XCTestCase {
         prefs.setDisabled(false, id: "p1")
         XCTAssertFalse(prefs.isDisabled("p1"))
     }
+
+    func testHotkeyDisabledRoundTrip() {
+        let prefs = AppPreferences(defaults: UserDefaults(suiteName: "vee-test-" + UUID().uuidString)!)
+        XCTAssertFalse(prefs.isHotkeyDisabled("p1"))
+        prefs.setHotkeyDisabled(true, id: "p1")
+        XCTAssertTrue(prefs.isHotkeyDisabled("p1"))
+        XCTAssertFalse(prefs.isHotkeyDisabled("p2"))   // isolated per plugin
+        prefs.setHotkeyDisabled(false, id: "p1")
+        XCTAssertFalse(prefs.isHotkeyDisabled("p1"))
+    }
+
+    func testHotkeyCustomBindingRoundTrip() {
+        let prefs = AppPreferences(defaults: UserDefaults(suiteName: "vee-test-" + UUID().uuidString)!)
+        XCTAssertNil(prefs.hotkeyBinding("p1"))
+        prefs.setHotkeyBinding("cmd+shift+j", id: "p1")
+        XCTAssertEqual(prefs.hotkeyBinding("p1"), "cmd+shift+j")
+        // Clearing (nil or empty) removes it.
+        prefs.setHotkeyBinding(nil, id: "p1")
+        XCTAssertNil(prefs.hotkeyBinding("p1"))
+        prefs.setHotkeyBinding("", id: "p1")
+        XCTAssertNil(prefs.hotkeyBinding("p1"))
+    }
 }
 
 final class VariableAggregatorTests: XCTestCase {

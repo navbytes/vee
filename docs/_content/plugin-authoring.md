@@ -208,7 +208,9 @@ Modifiers are `cmd`/`command`/`⌘`, `shift`/`⇧`, `opt`/`option`/`alt`/`⌥`, 
 case-insensitive (`⌘⇧K` works too), but at least one modifier is required. Vee
 registers it with the system hotkey API, so **no Accessibility permission is
 needed**; if the combination is already taken system-wide, Vee logs it and moves
-on.
+on. The user stays in control: a plugin's hotkey can be **turned off or rebound**
+from the plugin's Settings, where its live status (active / in-use / invalid) is
+shown.
 
 Both tags are strictly opt-in — omit them and the plugin behaves exactly as
 before. Whatever a plugin declares, Vee surfaces under its **Features** — in the

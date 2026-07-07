@@ -25,6 +25,7 @@ final class PluginCoordinator {
     private var cron: CronScheduler?
     private var streaming: StreamingSession?
     private var hotKeyID: UInt32?
+    private var hotkeyStatus: HotkeyStatus = .none
     private var isRefreshing = false
     private var lastResult: PluginRunResult?
     private var debugModel: PluginDebugModel?
@@ -103,14 +104,23 @@ final class PluginCoordinator {
     func showDebugConsole() { showDebug() }
 
     private func openSettings() {
-        let model = PluginSettingsModel(pluginName: plugin.filename.name, prefs: preferences, features: PluginFeatures(header: header)) { [weak self] in
-            self?.refresh()
-        }
+        let id = plugin.id.rawValue
+        let model = PluginSettingsModel(
+            pluginName: plugin.filename.name,
+            prefs: preferences,
+            features: PluginFeatures(header: header),
+            hotkeyControllable: hotkeyControllable,
+            hotkeyEnabled: !AppPreferences.shared.isHotkeyDisabled(id),
+            hotkeyCombo: AppPreferences.shared.hotkeyBinding(id) ?? header.shortcut?.display ?? "",
+            hotkeyStatus: hotkeyStatus,
+            onApplyHotkey: { [weak self] enabled, combo in self?.applyHotkey(enabled: enabled, combo: combo) ?? .none },
+            onSaved: { [weak self] in self?.refresh() }
+        )
         SettingsWindowManager.shared.show(pluginID: plugin.id.rawValue, model: model)
     }
 
     func start() {
-        registerHotKeyIfDeclared()
+        registerHotKey()
         if header.streamable {
             startStreaming()
         } else if !header.schedule.isEmpty {
@@ -122,16 +132,55 @@ final class PluginCoordinator {
         }
     }
 
-    /// Registers the plugin's opt-in global search hotkey (`<vee.shortcut>`), if
-    /// declared. A failure (e.g. the combo is already taken) is logged, not fatal.
-    private func registerHotKeyIfDeclared() {
-        guard let spec = header.shortcut else { return }
-        hotKeyID = GlobalHotKeys.shared.register(spec) { [weak self] in
-            self?.controller.openSearchPanel()
+    /// Whether the plugin declares a hotkey — i.e. whether it's user-controllable.
+    private var hotkeyControllable: Bool { header.shortcut != nil }
+
+    /// The hotkey to actually register, honoring the user's per-plugin override:
+    /// off → nil; a custom binding (parsed) → that; otherwise the declared one.
+    /// Returns `.some(nil)` intent as distinct states via `hotkeyStatus`.
+    private func registerHotKey() {
+        if let hotKeyID { GlobalHotKeys.shared.unregister(hotKeyID); self.hotKeyID = nil }
+
+        let id = plugin.id.rawValue
+        switch EffectiveHotkey.resolve(
+            declared: header.shortcut,
+            userDisabled: AppPreferences.shared.isHotkeyDisabled(id),
+            customBinding: AppPreferences.shared.hotkeyBinding(id)
+        ) {
+        case .none:
+            hotkeyStatus = .none
+        case .disabled:
+            hotkeyStatus = .disabled
+        case .invalid:
+            hotkeyStatus = .invalid
+        case .use(let spec):
+            hotKeyID = GlobalHotKeys.shared.register(spec) { [weak self] in self?.controller.openSearchPanel() }
+            hotkeyStatus = hotKeyID != nil ? .active(spec.display) : .unavailable(spec.display)
+            if hotKeyID == nil {
+                VeeLog.make("hotkey").error("hotkey \(spec.display, privacy: .public) unavailable for \(self.plugin.filename.name, privacy: .public) (already in use)")
+            }
         }
-        if hotKeyID == nil {
-            VeeLog.make("hotkey").error("could not register \(spec.display, privacy: .public) for \(self.plugin.filename.name, privacy: .public) (already in use?)")
-        }
+        updateHotkeyFeature()
+    }
+
+    /// Persists a hotkey change from Settings, re-registers live, and returns the
+    /// new status for immediate feedback. `enabled=false` turns it off; a `combo`
+    /// differing from the declared binding is stored as a custom override.
+    private func applyHotkey(enabled: Bool, combo: String) -> HotkeyStatus {
+        let id = plugin.id.rawValue
+        AppPreferences.shared.setHotkeyDisabled(!enabled, id: id)
+        let declared = header.shortcut?.display
+        let trimmed = combo.trimmingCharacters(in: .whitespaces)
+        AppPreferences.shared.setHotkeyBinding((trimmed.isEmpty || trimmed == declared) ? nil : trimmed, id: id)
+        registerHotKey()
+        return hotkeyStatus
+    }
+
+    /// Reflects the *effective* hotkey (only shown when actually active) in the
+    /// menu's Features row, so disabling it removes it from the capabilities view.
+    private func updateHotkeyFeature() {
+        let activeDisplay: String? = { if case .active(let d) = hotkeyStatus { return d } else { return nil } }()
+        controller.setFeatures(PluginFeatures(searchPanel: header.filter, hotkey: activeDisplay))
     }
 
     func stop() {
