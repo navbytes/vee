@@ -17,6 +17,15 @@
 	  (it can do so freely, being un-sandboxed). The sandboxed extension reads
 	  that file via a temporary-exception entitlement — no App Group, which a
 	  non-sandboxed writer cannot use. See VeeWidgetShared.
+
+	  NOTE: monitor-plugin alerts request the .timeSensitive interruption level,
+	  which only breaks through a Focus with the
+	  com.apple.developer.usernotifications.time-sensitive entitlement. That
+	  entitlement is intentionally NOT declared here: it is a restricted capability
+	  that requires a provisioning profile, which breaks this project's profile-
+	  less ad-hoc/Developer-ID signing (`xcodebuild` fails with "requires a
+	  provisioning profile"). Add it only alongside a matching profile. Without it,
+	  the system gracefully downgrades the alert to .active.
 	-->
 </dict>
 </plist>
