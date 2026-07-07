@@ -96,7 +96,7 @@ Point Vee at your existing plugins folder (Plugin Manager → **Choose Folder**)
 - Searchable filter panel (opt-in `<vee.filter>`): fuzzy-search a plugin's whole nested menu from a Spotlight-like popover, with an optional global hotkey (`<vee.shortcut>`)
 - Declared typed preferences → auto-generated forms; secrets in the Keychain
 - `<vee.*>` trust declarations → plain-language trust summary + badges
-- Discover: catalog browser with one-click, trust-gated install
+- Discover: catalog browser with one-click, trust-gated install — over the public catalog or your own [custom/enterprise store](docs/_content/enterprise-store.md) (a GitHub repo, GitHub Enterprise, static host, or air-gapped mirror)
 - Plugin Manager: enable/disable, per-plugin settings, reveal in Finder, choose folder, launch-at-login, refresh all
 - `vee://` and `swiftbar://` URL actions
 - Zero-dependency typed SDKs (TypeScript, Python, Go) with golden-fixture drift guards
@@ -107,6 +107,7 @@ Point Vee at your existing plugins folder (Plugin Manager → **Choose Folder**)
 - [Migrating from SwiftBar/xbar](docs/_content/migrating-from-swiftbar.md)
 - [Plugin authoring reference](docs/_content/plugin-authoring.md)
 - [Trust model](docs/_content/trust-model.md)
+- [Custom plugin stores (enterprise)](docs/_content/enterprise-store.md)
 - [Preferences](docs/_content/preferences.md)
 - [Plugin SDKs (TypeScript, Python, Go)](docs/_content/sdk.md)
 - [JSON output format](docs/_content/json-output.md)
