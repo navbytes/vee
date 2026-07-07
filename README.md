@@ -152,6 +152,7 @@ Sources/
 ├─ VeePluginFormat/ # the xbar/SwiftBar output + header parser (pure)
 ├─ VeeRuntime/      # discovery, execution (leak-free), scheduling, streaming
 ├─ VeeMenu/         # ParsedOutput → NSMenu (colors, ANSI, SF Symbols, actions)
+├─ VeeSearch/       # pure flatten + fuzzy-filter/rank of a plugin's menu tree
 ├─ VeePreferences/  # <xbar.var> stores + Keychain secrets
 ├─ VeeTrust/        # <vee.*> capability declarations → trust summaries
 ├─ VeeCatalog/      # xbar-plugins catalog client + installer

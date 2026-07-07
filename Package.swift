@@ -16,6 +16,7 @@ let package = Package(
         .library(name: "VeePluginFormat", targets: ["VeePluginFormat"]),
         .library(name: "VeeRuntime", targets: ["VeeRuntime"]),
         .library(name: "VeeMenu", targets: ["VeeMenu"]),
+        .library(name: "VeeSearch", targets: ["VeeSearch"]),
         .library(name: "VeePreferences", targets: ["VeePreferences"]),
         .library(name: "VeeTrust", targets: ["VeeTrust"]),
         .library(name: "VeeCatalog", targets: ["VeeCatalog"]),
@@ -30,6 +31,10 @@ let package = Package(
         .target(name: "VeePluginFormat", dependencies: ["VeeCore"]),
         .target(name: "VeeRuntime", dependencies: ["VeeCore", "VeePluginFormat"]),
         .target(name: "VeeMenu", dependencies: ["VeeCore", "VeePluginFormat"]),
+        // Pure, AppKit-free searchable-menu core: flatten a plugin's menu tree
+        // into activatable rows and fuzzy-filter/rank them. Consumed by the app's
+        // (future) search panel; kept independent so it is fully unit-testable.
+        .target(name: "VeeSearch", dependencies: ["VeePluginFormat"]),
         .target(name: "VeePreferences", dependencies: ["VeeCore", "VeePluginFormat"]),
         .target(name: "VeeTrust", dependencies: ["VeeCore"]),
         .target(name: "VeeCatalog", dependencies: ["VeeCore"]),
@@ -47,6 +52,7 @@ let package = Package(
         .testTarget(name: "VeePluginFormatTests", dependencies: ["VeePluginFormat"]),
         .testTarget(name: "VeeRuntimeTests", dependencies: ["VeeRuntime"]),
         .testTarget(name: "VeeMenuTests", dependencies: ["VeeMenu"]),
+        .testTarget(name: "VeeSearchTests", dependencies: ["VeeSearch"]),
         .testTarget(name: "VeePreferencesTests", dependencies: ["VeePreferences"]),
         .testTarget(name: "VeeTrustTests", dependencies: ["VeeTrust"]),
         .testTarget(name: "VeeCatalogTests", dependencies: ["VeeCatalog"]),
