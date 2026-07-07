@@ -94,7 +94,7 @@ final class StoreRegistryTests: XCTestCase {
         defaults.set(dicts, forKey: "vee.managedStores")
     }
 
-    func testManagedStoreIsForceEnabledAndReadOnly() {
+    func testManagedStoreIsForceEnabledAndReadOnly() throws {
         installManaged([[
             "id": "acme-mdm", "displayName": "Acme MDM", "kind": "githubEnterprise",
             "apiHost": "https://ghe.acme.corp/api/v3", "rawHost": "https://ghe.acme.corp/raw",
