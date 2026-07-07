@@ -11,9 +11,17 @@ public final class AppPreferences: @unchecked Sendable {
     private let directoryKey = "vee.pluginsDirectory"
     private let hotkeyOffKey = "vee.hotkeyDisabledPluginIDs"
     private let hotkeyCustomKey = "vee.hotkeyCustomBindings"
+    private let firstRunDoneKey = "vee.hasCompletedFirstRun"
 
     public init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
+    }
+
+    /// Whether the app has completed its first-run onboarding. Used to open
+    /// Discover once for a brand-new user with an empty plugins folder.
+    public var hasCompletedFirstRun: Bool {
+        get { defaults.bool(forKey: firstRunDoneKey) }
+        set { defaults.set(newValue, forKey: firstRunDoneKey) }
     }
 
     /// A user-chosen plugins directory (e.g. an existing SwiftBar folder), or

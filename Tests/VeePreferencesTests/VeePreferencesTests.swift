@@ -51,6 +51,13 @@ final class AppPreferencesTests: XCTestCase {
         XCTAssertFalse(prefs.isDisabled("p1"))
     }
 
+    func testFirstRunFlagDefaultsFalseThenPersists() {
+        let prefs = AppPreferences(defaults: UserDefaults(suiteName: "vee-test-" + UUID().uuidString)!)
+        XCTAssertFalse(prefs.hasCompletedFirstRun)
+        prefs.hasCompletedFirstRun = true
+        XCTAssertTrue(prefs.hasCompletedFirstRun)
+    }
+
     func testHotkeyDisabledRoundTrip() {
         let prefs = AppPreferences(defaults: UserDefaults(suiteName: "vee-test-" + UUID().uuidString)!)
         XCTAssertFalse(prefs.isHotkeyDisabled("p1"))
