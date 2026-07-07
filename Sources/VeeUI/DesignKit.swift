@@ -192,6 +192,7 @@ public struct RevealableSecureField: View {
             }
             .buttonStyle(.borderless)
             .help(revealed ? "Hide" : "Show")
+            .accessibilityLabel(revealed ? "Hide value" : "Show value")
         }
     }
 }

@@ -166,11 +166,15 @@ public final class StatusItemController {
             button.image = image
             button.imagePosition = .imageOnly
             button.attributedTitle = NSAttributedString(string: "")
+            button.setAccessibilityLabel("\(pluginName): error — \(message)")
         }
         let menu = NSMenu()
         menu.autoenablesItems = false
         let error = NSMenuItem(title: message, action: nil, keyEquivalent: "")
         error.isEnabled = false
+        // Disabled rows can be passed over by VoiceOver; an explicit label keeps
+        // the error message and its output readable.
+        error.setAccessibilityLabel("Error: \(message)")
         menu.addItem(error)
 
         if let detail, !detail.isEmpty {
@@ -179,6 +183,7 @@ public final class StatusItemController {
             for line in detail.split(separator: "\n").prefix(12) {
                 let row = NSMenuItem(title: String(line), action: nil, keyEquivalent: "")
                 row.isEnabled = false
+                row.setAccessibilityLabel(String(line))
                 submenu.addItem(row)
             }
             details.submenu = submenu
@@ -208,6 +213,15 @@ public final class StatusItemController {
             button.attributedTitle = frames[0]
             button.imagePosition = image == nil ? .noImage : .imageLeading
         }
+        updateAccessibilityLabel(currentText: frames.first?.string ?? "")
+    }
+
+    /// Give VoiceOver a spoken label for the status item. An icon-only plugin
+    /// (image, no title) is otherwise announced only by the icon's generic
+    /// description; here we always speak the plugin name plus its live value.
+    private func updateAccessibilityLabel(currentText: String) {
+        let text = currentText.trimmingCharacters(in: .whitespacesAndNewlines)
+        statusItem.button?.setAccessibilityLabel(text.isEmpty ? pluginName : "\(pluginName): \(text)")
     }
 
     private func startCyclingIfNeeded() {
@@ -225,6 +239,7 @@ public final class StatusItemController {
         guard !frames.isEmpty else { return }
         frameIndex = (frameIndex + 1) % frames.count
         statusItem.button?.attributedTitle = frames[frameIndex]
+        updateAccessibilityLabel(currentText: frames[frameIndex].string)
     }
 
     private func buildMenu(body: [MenuNode]) -> NSMenu {
