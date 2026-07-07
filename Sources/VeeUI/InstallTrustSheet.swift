@@ -177,7 +177,7 @@ public struct InstallTrustSheet: View {
                 .padding(11)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(
-                    RoundedRectangle(cornerRadius: 9, style: .continuous)
+                    RoundedRectangle(cornerRadius: Corner.callout, style: .continuous)
                         .fill(Color.orange.opacity(0.10))
                 )
             }
@@ -232,6 +232,6 @@ public struct InstallTrustSheet: View {
         }
         .padding(11)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 9, style: .continuous).fill(tint.opacity(0.12)))
+        .background(RoundedRectangle(cornerRadius: Corner.callout, style: .continuous).fill(tint.opacity(0.12)))
     }
 }

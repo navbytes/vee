@@ -118,6 +118,23 @@ public extension Capability {
     }
 }
 
+// MARK: - Layout tokens
+
+/// Shared corner radii, so cards, callouts, and popovers stay visually
+/// consistent instead of each view reaching for its own literal. Values match
+/// what the views already used — this is a single source of truth, not a
+/// restyle.
+public enum Corner {
+    /// Inset content surfaces, e.g. a debug output block.
+    public static let surface: CGFloat = 8
+    /// Tinted callout / warning boxes.
+    public static let callout: CGFloat = 9
+    /// Plugin cards in Discover.
+    public static let card: CGFloat = 12
+    /// Floating popovers (sparkline, control panels).
+    public static let popover: CGFloat = 14
+}
+
 // MARK: - Reusable views
 
 /// A small capsule showing an SF Symbol + short label in a tint.
