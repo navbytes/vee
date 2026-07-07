@@ -337,6 +337,8 @@ public final class AppController: NSObject, NSApplicationDelegate {
             onToggleEnabled: { [weak self] id, enabled in self?.setEnabled(enabled, id: id) },
             onReveal: { [weak self] id in self?.reveal(id) },
             onSettings: { [weak self] id in self?.coordinators[id]?.showSettings() },
+            onDebug: { [weak self] id in self?.coordinators[id]?.showDebugConsole() },
+            onDelete: { [weak self] id in self?.deletePlugin(id) },
             onLaunchAtLogin: { enabled in LoginItemManager.setEnabled(enabled) },
             onOpenFolder: { [weak self] in self?.openFolder() },
             onChooseFolder: { [weak self] in self?.chooseFolder() },
@@ -458,6 +460,18 @@ public final class AppController: NSObject, NSApplicationDelegate {
         NSWorkspace.shared.selectFile(plugin.path, inFileViewerRootedAtPath: directory)
     }
 
+    /// Moves a plugin's script to the Trash (recoverable) and reloads so its
+    /// status item and coordinator are torn down. The manager has already removed
+    /// the row optimistically. `loadedPaths` is deliberately left untouched: it's
+    /// the change-detection baseline reload() compares against, so leaving the
+    /// now-deleted path in it guarantees reload() sees the diff and rebuilds
+    /// (removing it here would make reload() short-circuit and orphan the item).
+    private func deletePlugin(_ id: String) {
+        guard let plugin = PluginDiscovery.enumerate(directory: directory).first(where: { $0.id.rawValue == id }) else { return }
+        try? FileManager.default.trashItem(at: URL(fileURLWithPath: plugin.path), resultingItemURL: nil)
+        reload()
+    }
+
     private func managerRows() -> [PluginManagerRow] {
         PluginDiscovery.enumerate(directory: directory).map { plugin in
             let source = (try? String(contentsOfFile: plugin.path, encoding: .utf8)) ?? ""
@@ -485,7 +499,8 @@ public final class AppController: NSObject, NSApplicationDelegate {
                 trust: describe(level),
                 isEnabled: enabled,
                 hasSettings: !header.vars.isEmpty || !declaredFeatures.isEmpty,
-                features: PluginFeatures(searchPanel: header.filter, hotkey: effectiveHotkey)
+                features: PluginFeatures(searchPanel: header.filter, hotkey: effectiveHotkey),
+                lastError: coordinators[id]?.lastError
             )
         }
     }

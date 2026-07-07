@@ -12,8 +12,11 @@ public struct PluginManagerRow: Identifiable, Sendable {
     /// The plugin's effective Vee-native features (search panel, active hotkey),
     /// shown as small indicators.
     public var features: PluginFeatures
+    /// The last run's error message, if it failed. Surfaced as a badge that
+    /// opens the debug console; `nil` when the plugin is healthy or disabled.
+    public var lastError: String?
 
-    public init(id: String, name: String, interval: String, trust: String, isEnabled: Bool, hasSettings: Bool, features: PluginFeatures = PluginFeatures()) {
+    public init(id: String, name: String, interval: String, trust: String, isEnabled: Bool, hasSettings: Bool, features: PluginFeatures = PluginFeatures(), lastError: String? = nil) {
         self.id = id
         self.name = name
         self.interval = interval
@@ -21,6 +24,7 @@ public struct PluginManagerRow: Identifiable, Sendable {
         self.isEnabled = isEnabled
         self.hasSettings = hasSettings
         self.features = features
+        self.lastError = lastError
     }
 }
 
@@ -35,6 +39,8 @@ public final class PluginManagerModel: ObservableObject {
     public var onToggleEnabled: (String, Bool) -> Void
     public var onReveal: (String) -> Void
     public var onSettings: (String) -> Void
+    public var onDebug: (String) -> Void
+    public var onDelete: (String) -> Void
     public var onLaunchAtLogin: (Bool) -> Void
     public var onOpenFolder: () -> Void
     public var onChooseFolder: () -> Void
@@ -47,6 +53,8 @@ public final class PluginManagerModel: ObservableObject {
         onToggleEnabled: @escaping (String, Bool) -> Void,
         onReveal: @escaping (String) -> Void,
         onSettings: @escaping (String) -> Void,
+        onDebug: @escaping (String) -> Void = { _ in },
+        onDelete: @escaping (String) -> Void = { _ in },
         onLaunchAtLogin: @escaping (Bool) -> Void,
         onOpenFolder: @escaping () -> Void,
         onChooseFolder: @escaping () -> Void,
@@ -58,10 +66,19 @@ public final class PluginManagerModel: ObservableObject {
         self.onToggleEnabled = onToggleEnabled
         self.onReveal = onReveal
         self.onSettings = onSettings
+        self.onDebug = onDebug
+        self.onDelete = onDelete
         self.onLaunchAtLogin = onLaunchAtLogin
         self.onOpenFolder = onOpenFolder
         self.onChooseFolder = onChooseFolder
         self.onRefreshAll = onRefreshAll
+    }
+
+    /// Removes the row from the list immediately for responsive feedback, then
+    /// asks the app to move the plugin file to the Trash.
+    func delete(_ id: String) {
+        rows.removeAll { $0.id == id }
+        onDelete(id)
     }
 
     func enabledBinding(_ id: String) -> Binding<Bool> {
@@ -144,6 +161,7 @@ private struct ManagerRow: View {
     @ObservedObject var model: PluginManagerModel
     let row: PluginManagerRow
     @State private var hovering = false
+    @State private var confirmingDelete = false
 
     var body: some View {
         HStack(spacing: 11) {
@@ -170,6 +188,14 @@ private struct ManagerRow: View {
                             .help("Global hotkey")
                             .accessibilityLabel("Global hotkey \(hotkey)")
                     }
+                    if let error = row.lastError {
+                        Button { model.onDebug(row.id) } label: {
+                            TrustChip(symbol: "exclamationmark.triangle.fill", label: "Error", tint: .red)
+                        }
+                        .buttonStyle(.plain)
+                        .help(error)
+                        .accessibilityLabel("Last run failed: \(error). Open debug console.")
+                    }
                 }
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -181,7 +207,12 @@ private struct ManagerRow: View {
                 if row.hasSettings {
                     Button { model.onSettings(row.id) } label: { Label("Settings…", systemImage: "slider.horizontal.3") }
                 }
+                Button { model.onDebug(row.id) } label: { Label("Debug…", systemImage: "ladybug") }
                 Button { model.onReveal(row.id) } label: { Label("Reveal in Finder", systemImage: "folder") }
+                Divider()
+                Button(role: .destructive) { confirmingDelete = true } label: {
+                    Label("Delete…", systemImage: "trash")
+                }
             } label: {
                 Image(systemName: "ellipsis")
                     .foregroundStyle(.secondary)
@@ -204,6 +235,12 @@ private struct ManagerRow: View {
         }
         .padding(.vertical, 3)
         .onHover { hovering = $0 }
+        .confirmationDialog("Delete “\(row.name)”?", isPresented: $confirmingDelete, titleVisibility: .visible) {
+            Button("Move to Trash", role: .destructive) { model.delete(row.id) }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("The plugin script will be moved to the Trash. You can restore it from there.")
+        }
     }
 
     private var trustTint: Color {
