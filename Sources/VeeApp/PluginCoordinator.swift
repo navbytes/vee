@@ -30,6 +30,10 @@ final class PluginCoordinator {
     private var lastResult: PluginRunResult?
     private var debugModel: PluginDebugModel?
 
+    /// The most recent run's error message, or `nil` if the last run succeeded.
+    /// The Plugin Manager reads this to flag broken plugins.
+    private(set) var lastError: String?
+
     /// Called with the plugin's current menu-bar title text after each render
     /// (or an error marker), so `AppController` can publish it to the widget
     /// snapshot. Set by the owner after init.
@@ -307,19 +311,23 @@ final class PluginCoordinator {
                 self?.lastResult = result
                 self?.updateDebugModel()
                 if result.outcome.timedOut {
+                    self?.lastError = "Plugin timed out"
                     self?.controller.renderError("Plugin timed out", detail: nil)
                     self?.onPublish?("⚠︎ timed out")
                 } else if result.outcome.exitCode != 0 && result.output.titleLines.isEmpty {
+                    self?.lastError = Self.friendlyError(result.outcome)
                     self?.controller.renderError(
                         Self.friendlyError(result.outcome),
                         detail: result.outcome.standardError.isEmpty ? nil : String(result.outcome.standardError.prefix(500))
                     )
                     self?.onPublish?("⚠︎ error")
                 } else {
+                    self?.lastError = nil
                     self?.controller.render(result.output)
                     self?.onPublish?(Self.publishableTitle(result.output))
                 }
             } catch {
+                self?.lastError = "\(error)"
                 self?.controller.renderError("\(error)")
                 self?.onPublish?("⚠︎ error")
             }
