@@ -54,9 +54,9 @@ public final class StatusItemController {
     private let handler: MenuActionHandling
     /// Whether this plugin opts into the searchable filter panel (`<vee.filter>`).
     private let filterEnabled: Bool
-    /// Declared Vee-native features (search panel, global hotkey) for the
-    /// capabilities area.
-    private let features: PluginFeatures
+    /// Effective Vee-native features (search panel, active global hotkey) for the
+    /// capabilities area. Updated live when the user toggles the hotkey.
+    private var features: PluginFeatures
     /// The most recently rendered dropdown tree, frozen into the search panel on
     /// open so it reflects what the user currently sees.
     private var lastBody: [MenuNode] = []
@@ -115,6 +115,13 @@ public final class StatusItemController {
     /// routing activations through the same handler the menu uses. Public so a
     /// global hotkey (`<vee.shortcut>`) can open it without the menu being open.
     public func openSearchPanel() { presentSearch() }
+
+    /// Updates the Features shown in the capabilities area and rebuilds the open
+    /// menu so a live hotkey change (enable/disable) is reflected immediately.
+    public func setFeatures(_ features: PluginFeatures) {
+        self.features = features
+        if statusItem.menu != nil { statusItem.menu = buildMenu(body: lastBody) }
+    }
 
     private func presentSearch() {
         MenuSearchPanel.shared.present(

@@ -10,14 +10,36 @@ public final class PluginSettingsModel: ObservableObject {
     public let features: PluginFeatures
     @Published public var values: [String: String]
 
+    /// Whether the plugin declares a global hotkey the user can control.
+    public let hotkeyControllable: Bool
+    @Published public var hotkeyEnabled: Bool
+    @Published public var hotkeyCombo: String
+    @Published public var hotkeyStatus: HotkeyStatus
+
     private let prefs: PluginPreferences
     private let onSaved: () -> Void
+    private let onApplyHotkey: (Bool, String) -> HotkeyStatus
 
-    public init(pluginName: String, prefs: PluginPreferences, features: PluginFeatures = PluginFeatures(), onSaved: @escaping () -> Void) {
+    public init(
+        pluginName: String,
+        prefs: PluginPreferences,
+        features: PluginFeatures = PluginFeatures(),
+        hotkeyControllable: Bool = false,
+        hotkeyEnabled: Bool = true,
+        hotkeyCombo: String = "",
+        hotkeyStatus: HotkeyStatus = .none,
+        onApplyHotkey: @escaping (Bool, String) -> HotkeyStatus = { _, _ in .none },
+        onSaved: @escaping () -> Void
+    ) {
         self.pluginName = pluginName
         self.prefs = prefs
         self.declarations = prefs.declarations
         self.features = features
+        self.hotkeyControllable = hotkeyControllable
+        self.hotkeyEnabled = hotkeyEnabled
+        self.hotkeyCombo = hotkeyCombo
+        self.hotkeyStatus = hotkeyStatus
+        self.onApplyHotkey = onApplyHotkey
         self.onSaved = onSaved
         var initial: [String: String] = [:]
         for declaration in prefs.declarations {
@@ -46,6 +68,13 @@ public final class PluginSettingsModel: ObservableObject {
         }
         onSaved()
     }
+
+    /// Applies the current hotkey enable/combo state immediately (a hotkey is a
+    /// live system resource, so it commits on change rather than on Save) and
+    /// reflects the resulting status.
+    func applyHotkey() {
+        hotkeyStatus = onApplyHotkey(hotkeyEnabled, hotkeyCombo)
+    }
 }
 
 /// An auto-generated settings form: one control per declared `<xbar.var>`.
@@ -71,15 +100,15 @@ public struct PluginSettingsView: View {
                     Form {
                         if !model.features.isEmpty {
                             Section("Features") {
-                                ForEach(model.features.items, id: \.title) { item in
-                                    Label {
-                                        VStack(alignment: .leading, spacing: 2) {
-                                            Text(item.title)
-                                            Text(item.detail).font(.caption).foregroundStyle(.secondary)
-                                        }
-                                    } icon: {
-                                        Image(systemName: item.symbol)
-                                    }
+                                if model.features.searchPanel {
+                                    featureRow(
+                                        symbol: "magnifyingglass",
+                                        title: "Searchable menu",
+                                        detail: "Filter this plugin's items from a search panel (⌘F)."
+                                    )
+                                }
+                                if model.hotkeyControllable {
+                                    hotkeyControl
                                 }
                             }
                         }
@@ -117,5 +146,57 @@ public struct PluginSettingsView: View {
             stringValue: model.stringBinding(declaration),
             boolValue: model.boolBinding(declaration)
         )
+    }
+
+    @ViewBuilder
+    private func featureRow(symbol: String, title: String, detail: String) -> some View {
+        Label {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                Text(detail).font(.caption).foregroundStyle(.secondary)
+            }
+        } icon: {
+            Image(systemName: symbol)
+        }
+    }
+
+    /// The interactive global-hotkey control: enable/disable, rebind by typing a
+    /// combination, and a live status line (active / already-in-use / invalid).
+    @ViewBuilder
+    private var hotkeyControl: some View {
+        Toggle(isOn: $model.hotkeyEnabled) {
+            Label {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Global hotkey")
+                    Text("Opens the search panel from anywhere.").font(.caption).foregroundStyle(.secondary)
+                }
+            } icon: {
+                Image(systemName: "keyboard")
+            }
+        }
+        .onChange(of: model.hotkeyEnabled) { _, _ in model.applyHotkey() }
+
+        if model.hotkeyEnabled {
+            TextField("Shortcut", text: $model.hotkeyCombo, prompt: Text("e.g. cmd+shift+k"))
+                .onSubmit { model.applyHotkey() }
+            hotkeyStatusLabel
+        }
+    }
+
+    @ViewBuilder
+    private var hotkeyStatusLabel: some View {
+        switch model.hotkeyStatus {
+        case .active(let display):
+            Label("Active — \(display)", systemImage: "checkmark.circle.fill")
+                .font(.caption).foregroundStyle(.green)
+        case .unavailable(let display):
+            Label("\(display) is already in use — try another", systemImage: "exclamationmark.triangle.fill")
+                .font(.caption).foregroundStyle(.orange)
+        case .invalid:
+            Label("Not a valid shortcut", systemImage: "exclamationmark.triangle.fill")
+                .font(.caption).foregroundStyle(.red)
+        case .disabled, .none:
+            EmptyView()
+        }
     }
 }

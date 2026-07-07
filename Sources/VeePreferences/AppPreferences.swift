@@ -9,6 +9,8 @@ public final class AppPreferences: @unchecked Sendable {
     private let defaults: UserDefaults
     private let disabledKey = "vee.disabledPluginIDs"
     private let directoryKey = "vee.pluginsDirectory"
+    private let hotkeyOffKey = "vee.hotkeyDisabledPluginIDs"
+    private let hotkeyCustomKey = "vee.hotkeyCustomBindings"
 
     public init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
@@ -33,5 +35,30 @@ public final class AppPreferences: @unchecked Sendable {
         var ids = disabledIDs()
         if disabled { ids.insert(id) } else { ids.remove(id) }
         defaults.set(Array(ids), forKey: disabledKey)
+    }
+
+    // MARK: - Per-plugin global-hotkey override
+
+    /// Whether the user has turned off this plugin's declared search hotkey.
+    public func isHotkeyDisabled(_ id: String) -> Bool {
+        Set(defaults.stringArray(forKey: hotkeyOffKey) ?? []).contains(id)
+    }
+
+    public func setHotkeyDisabled(_ disabled: Bool, id: String) {
+        var ids = Set(defaults.stringArray(forKey: hotkeyOffKey) ?? [])
+        if disabled { ids.insert(id) } else { ids.remove(id) }
+        defaults.set(Array(ids), forKey: hotkeyOffKey)
+    }
+
+    /// A user-chosen replacement combination (e.g. `"cmd+shift+j"`) for this
+    /// plugin's hotkey, or `nil` to use the plugin's declared one.
+    public func hotkeyBinding(_ id: String) -> String? {
+        (defaults.dictionary(forKey: hotkeyCustomKey) as? [String: String])?[id]
+    }
+
+    public func setHotkeyBinding(_ binding: String?, id: String) {
+        var map = (defaults.dictionary(forKey: hotkeyCustomKey) as? [String: String]) ?? [:]
+        if let binding, !binding.isEmpty { map[id] = binding } else { map.removeValue(forKey: id) }
+        defaults.set(map, forKey: hotkeyCustomKey)
     }
 }
