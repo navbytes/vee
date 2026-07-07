@@ -65,7 +65,8 @@ final class WidgetSnapshotPublisher {
             progress: publish.fields.progress,
             sparkline: publish.fields.sparkline,
             isError: publish.isError,
-            interval: interval
+            interval: interval,
+            card: publish.card
         )
         guard !snapshotFlushScheduled else { return }
         snapshotFlushScheduled = true
@@ -114,14 +115,17 @@ final class WidgetSnapshotPublisher {
     /// The change-detection key for a set of snapshots: the same plugins with the
     /// per-run `updated` timestamp zeroed, so re-running a plugin with identical
     /// output compares equal (only a real content change triggers a reload; the
-    /// file itself is still rewritten to keep `updated` current).
+    /// file itself is still rewritten to keep `updated` current). Includes
+    /// `card`, so a changed card spends a (throttled) reload and an unchanged
+    /// one doesn't — the same policy as the scraped fields.
     private static func contentSignature(_ plugins: [PluginSnapshot]) -> [PluginSnapshot] {
         plugins.map {
             PluginSnapshot(
                 id: $0.id, name: $0.name, title: $0.title,
                 updated: Date(timeIntervalSince1970: 0),
                 color: $0.color, symbolName: $0.symbolName, symbolColors: $0.symbolColors,
-                progress: $0.progress, sparkline: $0.sparkline, isError: $0.isError, interval: $0.interval
+                progress: $0.progress, sparkline: $0.sparkline, isError: $0.isError, interval: $0.interval,
+                card: $0.card
             )
         }
     }

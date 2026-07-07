@@ -50,6 +50,22 @@ final class EnvironmentBuilderTests: XCTestCase {
         XCTAssertEqual(merged["PATH"], "/usr/bin")        // inherited
         XCTAssertEqual(merged["XBARDarkMode"], "true")    // injected wins
     }
+
+    /// Widget surface contract: every run gets VEE_TARGET, defaulting to
+    /// "menu" so an ordinary (today's-behavior) run is unaffected.
+    func testTargetDefaultsToMenu() {
+        let env = EnvironmentBuilder.injected(makeContext(pluginPath: "/plugins/x.5s.sh"))
+        XCTAssertEqual(env["VEE_TARGET"], "menu")
+    }
+
+    /// A widget-mode context injects VEE_TARGET=widget, so a plugin can branch
+    /// on it (Scriptable's `config.runsInWidget` idiom).
+    func testTargetWidgetInjectsWidgetTarget() {
+        var context = makeContext(pluginPath: "/plugins/x.5s.sh")
+        context.target = .widget
+        let env = EnvironmentBuilder.injected(context)
+        XCTAssertEqual(env["VEE_TARGET"], "widget")
+    }
 }
 
 final class PluginExecutorTests: XCTestCase {

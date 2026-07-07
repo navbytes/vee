@@ -132,4 +132,85 @@ final class WidgetSnapshotPublisherTests: XCTestCase {
         publisher.setLoaded(ids: ["a"])
         XCTAssertEqual(writes.last?.plugins.map(\.id), ["a"], "unloaded plugin must be omitted from the next flush")
     }
+
+    // MARK: - Wave D: card threading
+
+    func testPublishedCardAppearsInWrittenSnapshot() async throws {
+        let coalesce: TimeInterval = 0.05
+        var writes: [WidgetSnapshot] = []
+        let publisher = WidgetSnapshotPublisher(
+            write: { writes.append($0) },
+            requestReload: {},
+            flushCoalesce: coalesce,
+            reloadFloor: 0.6,
+            timestampFloor: 0.5
+        )
+        publisher.setLoaded(ids: ["a"])
+        writes.removeAll()
+
+        let card = WidgetCard(template: .gauge, title: "Disk", value: "72%", progress: 0.72)
+        publisher.publish(id: "a", name: "A", interval: nil, publish: WidgetPublish(title: "72%", card: card))
+        try await settle(coalesce)
+
+        XCTAssertEqual(writes.last?.plugins.first?.card, card)
+    }
+
+    func testChangedCardWritesAndReloadsAgain() async throws {
+        let coalesce: TimeInterval = 0.05
+        var writeCount = 0
+        var reloads = 0
+        let publisher = WidgetSnapshotPublisher(
+            write: { _ in writeCount += 1 },
+            requestReload: { reloads += 1 },
+            flushCoalesce: coalesce,
+            reloadFloor: 0.6,
+            timestampFloor: 0.5
+        )
+        publisher.setLoaded(ids: ["a"])
+        writeCount = 0
+
+        publisher.publish(id: "a", name: "A", interval: nil, publish: WidgetPublish(title: "72%", card: WidgetCard(value: "72%", progress: 0.72)))
+        try await settle(coalesce)
+        XCTAssertEqual(writeCount, 1)
+        XCTAssertEqual(reloads, 1)
+
+        // Same title, but a changed card (different progress) must still count
+        // as a content change: write immediately, spend a (throttled) reload.
+        publisher.publish(id: "a", name: "A", interval: nil, publish: WidgetPublish(title: "72%", card: WidgetCard(value: "72%", progress: 0.9)))
+        try await settle(coalesce)
+        XCTAssertEqual(writeCount, 2, "a changed card must write immediately once coalesced")
+
+        let deadline = Date().addingTimeInterval(3.0)
+        while reloads < 2, Date() < deadline {
+            try await Task.sleep(nanoseconds: 20_000_000)
+        }
+        XCTAssertEqual(reloads, 2, "a changed card should eventually spend a trailing reload")
+    }
+
+    func testIdenticalCardRepublishSkipsWriteAndReloadBeforeFloors() async throws {
+        let coalesce: TimeInterval = 0.05
+        var writeCount = 0
+        var reloads = 0
+        let publisher = WidgetSnapshotPublisher(
+            write: { _ in writeCount += 1 },
+            requestReload: { reloads += 1 },
+            flushCoalesce: coalesce,
+            reloadFloor: 5.0,
+            timestampFloor: 5.0
+        )
+        publisher.setLoaded(ids: ["a"])
+        writeCount = 0
+
+        let card = WidgetCard(value: "72%", progress: 0.72)
+        publisher.publish(id: "a", name: "A", interval: nil, publish: WidgetPublish(title: "72%", card: card))
+        try await settle(coalesce)
+        XCTAssertEqual(writeCount, 1)
+        XCTAssertEqual(reloads, 1)
+
+        // Re-publishing an identical card must neither rewrite nor reload.
+        publisher.publish(id: "a", name: "A", interval: nil, publish: WidgetPublish(title: "72%", card: card))
+        try await settle(coalesce)
+        XCTAssertEqual(writeCount, 1, "identical card before the timestamp floor must not rewrite")
+        XCTAssertEqual(reloads, 1, "identical card must not spend a second reload")
+    }
 }

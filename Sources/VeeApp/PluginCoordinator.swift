@@ -6,6 +6,7 @@ import VeeRuntime
 import VeePreferences
 import VeeTrust
 import VeeUI
+import VeeWidgetShared
 
 /// Drives one plugin end-to-end: parses its header, renders it into a status
 /// item, runs it on a schedule, and refreshes on demand.
@@ -19,7 +20,10 @@ final class PluginCoordinator {
     private let runInBash: Bool
     private let preferences: PluginPreferences
 
-    private var controller: StatusItemController!
+    /// `nil` for a `.widget`-surface plugin: "no NSStatusItem, no menu; invoked
+    /// only in widget mode" (see `docs/design/widget-surface-contract.md` §1).
+    /// Every other call site null-guards through this.
+    private var controller: StatusItemController?
     private var timer: RefreshTimer?
     private var background: BackgroundRefreshScheduler?
     private var cron: CronScheduler?
@@ -27,6 +31,12 @@ final class PluginCoordinator {
     private var hotKeyID: UInt32?
     private var hotkeyStatus: HotkeyStatus = .none
     private var isRefreshing = false
+    /// The second, independent scheduler for `.both`/`.widget` plugins — see
+    /// `start()`. Always `BackgroundRefreshScheduler` since the widget cadence
+    /// is floored at 5 minutes regardless of source, squarely in that
+    /// scheduler's energy-batched range.
+    private var widgetBackground: BackgroundRefreshScheduler?
+    private var isRefreshingWidget = false
     /// Set by `stop()`. A queued timer/cron/hotkey `refresh()` that fires after
     /// `stop()` must not spawn a subprocess or render into a removed status item.
     private var stopped = false
@@ -60,24 +70,31 @@ final class PluginCoordinator {
         let (aboutText, aboutURL) = Self.about(from: header)
 
         let features = PluginFeatures(header: header)
-        self.controller = StatusItemController(
-            pluginName: plugin.filename.name,
-            handler: AppActionDispatcher(runner: SystemProcessRunner(), baseEnvironment: baseEnvironment) { [weak self] in self?.refresh() },
-            hasSettings: !header.vars.isEmpty || !features.isEmpty,
-            trustSummary: trustSummary,
-            refreshOnOpen: header.refreshOnOpen ?? false,
-            hideLastUpdated: header.hideLastUpdated,
-            filterEnabled: header.filter,
-            features: features,
-            autosaveName: "com.vee.plugin.\(plugin.id.rawValue)",
-            aboutText: aboutText,
-            aboutURL: aboutURL,
-            onRefresh: { [weak self] in self?.refresh() },
-            onSettings: { [weak self] in self?.openSettings() },
-            onReveal: { [weak self] in self?.revealInFinder() },
-            onEdit: { [weak self] in self?.openInEditor() },
-            onDebug: { [weak self] in self?.showDebug() }
-        )
+        // A `.widget`-surface plugin has no menu presence at all — see
+        // `docs/design/widget-surface-contract.md` §1. `.menu`/`.both` (the
+        // default) get a status item exactly as before.
+        if header.surface == .widget {
+            self.controller = nil
+        } else {
+            self.controller = StatusItemController(
+                pluginName: plugin.filename.name,
+                handler: AppActionDispatcher(runner: SystemProcessRunner(), baseEnvironment: baseEnvironment) { [weak self] in self?.refresh() },
+                hasSettings: !header.vars.isEmpty || !features.isEmpty,
+                trustSummary: trustSummary,
+                refreshOnOpen: header.refreshOnOpen ?? false,
+                hideLastUpdated: header.hideLastUpdated,
+                filterEnabled: header.filter,
+                features: features,
+                autosaveName: "com.vee.plugin.\(plugin.id.rawValue)",
+                aboutText: aboutText,
+                aboutURL: aboutURL,
+                onRefresh: { [weak self] in self?.refresh() },
+                onSettings: { [weak self] in self?.openSettings() },
+                onReveal: { [weak self] in self?.revealInFinder() },
+                onEdit: { [weak self] in self?.openInEditor() },
+                onDebug: { [weak self] in self?.showDebug() }
+            )
+        }
     }
 
     private func revealInFinder() {
@@ -128,14 +145,23 @@ final class PluginCoordinator {
 
     func start() {
         registerHotKey()
-        if header.streamable {
-            startStreaming()
-        } else if !header.schedule.isEmpty {
-            refresh()
-            startCron()
-        } else {
-            refresh()
-            scheduleTimer()
+        // `.widget` has no menu presence — skip the menu-mode run/schedule
+        // entirely; only the widget-mode cadence below applies to it.
+        if header.surface != .widget {
+            if header.streamable {
+                startStreaming()
+            } else if !header.schedule.isEmpty {
+                refresh()
+                startCron()
+            } else {
+                refresh()
+                scheduleTimer()
+            }
+        }
+        // `.both`/`.widget` also (or only) run on their own widget-mode cadence.
+        if header.surface == .both || header.surface == .widget {
+            refreshWidget()
+            scheduleWidgetTimer()
         }
     }
 
@@ -161,7 +187,7 @@ final class PluginCoordinator {
         case .invalid:
             hotkeyStatus = .invalid
         case .use(let spec):
-            hotKeyID = GlobalHotKeys.shared.register(spec) { [weak self] in self?.controller.openSearchPanel() }
+            hotKeyID = GlobalHotKeys.shared.register(spec) { [weak self] in self?.controller?.openSearchPanel() }
             hotkeyStatus = hotKeyID != nil ? .active(spec.display) : .unavailable(spec.display)
             if hotKeyID == nil {
                 VeeLog.make("hotkey").error("hotkey \(spec.display, privacy: .public) unavailable for \(self.plugin.filename.name, privacy: .public) (already in use)")
@@ -187,7 +213,7 @@ final class PluginCoordinator {
     /// menu's Features row, so disabling it removes it from the capabilities view.
     private func updateHotkeyFeature() {
         let activeDisplay: String? = { if case .active(let d) = hotkeyStatus { return d } else { return nil } }()
-        controller.setFeatures(PluginFeatures(searchPanel: header.filter, hotkey: activeDisplay))
+        controller?.setFeatures(PluginFeatures(searchPanel: header.filter, hotkey: activeDisplay))
     }
 
     func stop() {
@@ -202,7 +228,9 @@ final class PluginCoordinator {
         cron = nil
         streaming?.stop()
         streaming = nil
-        controller.remove()
+        widgetBackground?.stop()
+        widgetBackground = nil
+        controller?.remove()
     }
 
     /// The plugin's current menu-bar text for the widget snapshot: the first
@@ -311,11 +339,11 @@ final class PluginCoordinator {
             runner: SystemStreamingRunner(),
             makeInvocation: { invocation },
             onUpdate: { [weak self] output in
-                self?.controller.render(output)
+                self?.controller?.render(output)
                 self?.onPublish?(WidgetPublish(title: Self.publishableTitle(output), fields: Self.widgetFields(from: output)))
             },
             onStopped: { [weak self] message in
-                self?.controller.renderError(message)
+                self?.controller?.renderError(message)
                 self?.onPublish?(WidgetPublish(title: "⚠︎ stopped", isError: true))
             }
         )
@@ -387,24 +415,94 @@ final class PluginCoordinator {
                         : result.outcome.standardError
                     let detail = partial.isEmpty ? nil : String(partial.prefix(500))
                     self?.lastError = "Plugin timed out"
-                    self?.controller.renderError("Plugin timed out", detail: detail)
+                    self?.controller?.renderError("Plugin timed out", detail: detail)
                     self?.onPublish?(WidgetPublish(title: "⚠︎ timed out", isError: true))
                 } else if result.outcome.exitCode != 0 && result.output.titleLines.isEmpty {
                     self?.lastError = Self.friendlyError(result.outcome)
-                    self?.controller.renderError(
+                    self?.controller?.renderError(
                         Self.friendlyError(result.outcome),
                         detail: result.outcome.standardError.isEmpty ? nil : String(result.outcome.standardError.prefix(500))
                     )
                     self?.onPublish?(WidgetPublish(title: "⚠︎ error", isError: true))
                 } else {
                     self?.lastError = nil
-                    self?.controller.render(result.output)
+                    self?.controller?.render(result.output)
                     self?.onPublish?(WidgetPublish(title: Self.publishableTitle(result.output), fields: Self.widgetFields(from: result.output)))
                 }
             } catch {
                 guard self?.stopped != true else { return }
                 self?.lastError = "\(error)"
-                self?.controller.renderError("\(error)")
+                self?.controller?.renderError("\(error)")
+                self?.onPublish?(WidgetPublish(title: "⚠︎ error", isError: true))
+            }
+        }
+    }
+
+    // MARK: - Widget-mode cadence (`.both`/`.widget` surfaces)
+
+    /// The widget-mode refresh cadence: the plugin's explicit
+    /// `<vee.widget.interval>`, else its filename interval, else a 15-minute
+    /// default (a widget-only plugin has no filename interval to inherit) —
+    /// always floored at 5 minutes regardless of source (WidgetKit's reload
+    /// budget makes anything faster meaningless).
+    private var widgetRefreshInterval: TimeInterval {
+        let requested = header.widgetInterval?.timeInterval ?? plugin.filename.interval.timeInterval ?? 900
+        return max(requested, 300)
+    }
+
+    private func scheduleWidgetTimer() {
+        let scheduler = BackgroundRefreshScheduler(
+            identifier: "com.vee.refresh.widget.\(plugin.id.rawValue)",
+            interval: widgetRefreshInterval
+        ) { [weak self] in
+            Task { @MainActor in self?.refreshWidget() }
+        }
+        scheduler.start()
+        self.widgetBackground = scheduler
+    }
+
+    /// Runs the plugin with `VEE_TARGET=widget`, parses stdout as a card, and
+    /// publishes it. A plugin that ignores the target and prints menu text
+    /// instead degrades gracefully to the Tier-0 scrape of that text (same
+    /// `publishableTitle`/`widgetFields` the `.menu` path uses).
+    private func refreshWidget() {
+        guard !stopped else { return }
+        guard !isRefreshingWidget else { return }
+        isRefreshingWidget = true
+
+        let context = PluginsDirectory.context(
+            pluginPath: plugin.path, pluginsDirectory: pluginsDirectory,
+            declaredVariables: mergedDeclaredVariables(), target: .widget
+        )
+        let runtime = self.runtime
+        let path = plugin.path
+        let header = self.header
+        let runInBash = self.runInBash
+
+        Task { @MainActor [weak self] in
+            defer { self?.isRefreshingWidget = false }
+            do {
+                let result = try await runtime.refresh(pluginPath: path, context: context, header: header, runInBash: runInBash, timeout: 30)
+                guard self?.stopped != true else { return }
+                if result.outcome.timedOut {
+                    self?.onPublish?(WidgetPublish(title: "⚠︎ timed out", isError: true))
+                    return
+                }
+                let (card, diagnostics) = WidgetCardParser.parse(result.outcome.standardOutput)
+                if let card {
+                    self?.onPublish?(WidgetPublish(title: card.value ?? card.title ?? "", isError: card.status == .error, card: card))
+                } else {
+                    // Misbehaving `.both`/`.widget` plugin that never emits a
+                    // card: fall back to the Tier-0 scrape (open question #2 in
+                    // the design doc) and log the diagnostic rather than
+                    // silently dropping it.
+                    if !diagnostics.isEmpty {
+                        VeeLog.make("widget").warning("\(self?.plugin.filename.name ?? "?", privacy: .public) widget-mode output: \(diagnostics.map(\.message).joined(separator: "; "), privacy: .public)")
+                    }
+                    self?.onPublish?(WidgetPublish(title: Self.publishableTitle(result.output), fields: Self.widgetFields(from: result.output)))
+                }
+            } catch {
+                guard self?.stopped != true else { return }
                 self?.onPublish?(WidgetPublish(title: "⚠︎ error", isError: true))
             }
         }
