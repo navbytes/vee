@@ -46,12 +46,18 @@ final class WidgetSnapshotPublisherTests: XCTestCase {
         let coalesce: TimeInterval = 0.05
         var writeCount = 0
         var reloads = 0
+        // Floors far wider than this test's total runtime — deliberately. The
+        // test only asserts what must NOT happen before a floor elapses and
+        // never waits one out, so wide floors add no runtime; a floor near the
+        // test's own elapsed time (two settles plus XCTest overhead on a
+        // loaded CI runner) could legitimately pass mid-test and turn a
+        // correct timestamp-floor write into a spurious failure.
         let publisher = WidgetSnapshotPublisher(
             write: { _ in writeCount += 1 },
             requestReload: { reloads += 1 },
             flushCoalesce: coalesce,
-            reloadFloor: 0.6,
-            timestampFloor: 0.5
+            reloadFloor: 5.0,
+            timestampFloor: 5.0
         )
         publisher.setLoaded(ids: ["a"])
         writeCount = 0 // drop the empty seed write from setLoaded's own flush
