@@ -38,6 +38,9 @@ final class EnvironmentBuilderTests: XCTestCase {
         XCTAssertEqual(env["SWIFTBAR_PLUGIN_PATH"], "/plugins/x.5s.sh")
         XCTAssertEqual(env["OS_VERSION_MAJOR"], "26")
         XCTAssertEqual(env["VEE"], "1")
+        XCTAssertEqual(env["VEE_PLUGIN_PATH"], "/plugins/x.5s.sh")
+        // The plugin id (filename) — used for `swiftbar://notify?plugin=…`.
+        XCTAssertEqual(env["VEE_PLUGIN_ID"], "x.5s.sh")
         XCTAssertEqual(env["API_TOKEN"], "secret") // declared var injected
     }
 

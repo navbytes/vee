@@ -52,6 +52,10 @@ public enum EnvironmentBuilder {
         env["VEE"] = "1"
         env["VEE_VERSION"] = ctx.appVersion
         env["VEE_PLUGIN_PATH"] = ctx.pluginPath
+        // The plugin's id (its filename) — matches `PluginID`, so a plugin can
+        // post an actionable alert with `swiftbar://notify?plugin=$VEE_PLUGIN_ID`
+        // and Vee resolves the Re-run / Silence / Open-log actions back to it.
+        env["VEE_PLUGIN_ID"] = (ctx.pluginPath as NSString).lastPathComponent
 
         // Declared preferences win over everything else.
         for (key, value) in ctx.declaredVariables { env[key] = value }

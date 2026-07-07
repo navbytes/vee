@@ -51,9 +51,14 @@ enum NotificationRouter {
         case openLogAction:
             if let pluginID { return .openLog(pluginID: pluginID) }
             return .none
+        case UNNotificationDismissActionIdentifier:
+            // Swiping the banner away must never open the href — only an explicit
+            // tap does. (Delivered only if the category opts into it, but routed
+            // correctly regardless.)
+            return .none
         default:
-            // Default tap (UNNotificationDefaultActionIdentifier) or dismissal:
-            // open the click-through URL when present, matching SwiftBar.
+            // The default tap (UNNotificationDefaultActionIdentifier) opens the
+            // click-through URL when present, matching SwiftBar.
             if let href { return .openHref(href) }
             return .none
         }
@@ -136,12 +141,19 @@ enum Notifier {
         // Carry the click-through URL so the delegate can open it on tap.
         if let href { content.userInfo[NotifierDelegate.hrefKey] = href.absoluteString }
         // Plugin-originated alerts become actionable and time-sensitive.
+        // NOTE: `.timeSensitive` only breaks through Focus when the app is signed
+        // with the `com.apple.developer.usernotifications.time-sensitive`
+        // entitlement; without it the system gracefully downgrades to `.active`.
         if let pluginID {
             content.categoryIdentifier = NotificationRouter.categoryID
             content.userInfo[pluginIDKey] = pluginID
             content.interruptionLevel = .timeSensitive
         }
-        let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
+        // Coalesce a monitor's repeated alerts: reuse the plugin id as the request
+        // identifier so the newest replaces the prior one instead of stacking up
+        // dozens of banners. Non-plugin notifications stay unique.
+        let identifier = pluginID ?? UUID().uuidString
+        let request = UNNotificationRequest(identifier: identifier, content: content, trigger: nil)
         UNUserNotificationCenter.current().add(request) { error in
             if let error { Self.log.error("post failed: \(error.localizedDescription, privacy: .public)") }
         }
@@ -182,8 +194,10 @@ private final class NotifierDelegate: NSObject, UNUserNotificationCenterDelegate
         completionHandler()
     }
 
-    // Still show banners while Vee is frontmost (e.g. a manager window is open).
+    // Still show banners while Vee is frontmost (e.g. a manager window is open),
+    // and add to Notification Center (`.list`) so a foreground alert isn't lost
+    // the moment its banner auto-dismisses.
     func userNotificationCenter(_ center: UNUserNotificationCenter, willPresent notification: UNNotification, withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void) {
-        completionHandler([.banner, .sound])
+        completionHandler([.banner, .list, .sound])
     }
 }

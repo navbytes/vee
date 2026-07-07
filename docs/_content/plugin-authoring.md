@@ -326,6 +326,7 @@ Every plugin run inherits your shell environment plus these variables:
 - `VEE` — `1`.
 - `VEE_VERSION` — the app version.
 - `VEE_PLUGIN_PATH` — the absolute path of this plugin.
+- `VEE_PLUGIN_ID` — this plugin's id (its filename); pass it as `plugin=` to `swiftbar://notify` for an actionable alert (see [URL actions](cli-and-urls.md#the-notify-action)).
 - `VEE_CONTROL_VALUE` — set only on a re-invocation triggered by an interactive `toggle=`/`slider=` item, carrying the committed value.
 
 Any values from the plugin's declared `<xbar.var>` [preferences](preferences.md) are also injected as environment variables (they take precedence over the above).
