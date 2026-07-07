@@ -33,6 +33,14 @@ public struct InstallPrompt: Identifiable {
     }
 }
 
+/// A transient banner shown over the Discover grid after an install attempt.
+public struct CatalogNotice: Identifiable, Equatable, Sendable {
+    public enum Kind: Sendable { case success, failure }
+    public let id = UUID()
+    public let kind: Kind
+    public let message: String
+}
+
 /// Backs the plugin browser: fetches the catalog, filters it, and runs the
 /// trust-at-install gate before writing a plugin to disk.
 @MainActor
@@ -42,7 +50,12 @@ public final class PluginBrowserModel: ObservableObject {
     /// Selected category; empty string means "All".
     @Published public var selectedCategory: String = ""
     @Published public var isLoading = false
+    /// A fatal catalog-index load failure — shown full-screen with a Retry, since
+    /// there's nothing else to display. Install/fetch problems use ``notice``.
     @Published public var errorMessage: String?
+    /// A transient banner over the grid: install success, or an install/fetch
+    /// failure that shouldn't blow away the whole catalog.
+    @Published public var notice: CatalogNotice?
     @Published public var prompt: InstallPrompt?
     /// Lazily-fetched metadata, keyed by catalog path.
     @Published public var headers: [String: HeaderMetadata] = [:]
@@ -102,9 +115,27 @@ public final class PluginBrowserModel: ObservableObject {
         do {
             entries = try await fetcher.fetchIndex()
         } catch {
-            errorMessage = "Couldn't load the catalog: \(error.localizedDescription)"
+            errorMessage = CatalogErrorPresenter.message(for: error)
         }
         isLoading = false
+    }
+
+    /// A github.com page for the plugin's source, so a user can read it before
+    /// installing (the catalog is `matryer/xbar-plugins`, `main` branch).
+    func sourceURL(for entry: CatalogEntry) -> URL? {
+        let encoded = entry.path
+            .split(separator: "/")
+            .map { $0.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? String($0) }
+            .joined(separator: "/")
+        return URL(string: "https://github.com/matryer/xbar-plugins/blob/main/\(encoded)")
+    }
+
+    func dismissNotice() { notice = nil }
+
+    /// Clears the active category and search text (the empty-state "show all").
+    func clearFilters() {
+        selectedCategory = ""
+        search = ""
     }
 
     /// Categories with plugin counts, sorted by name.
@@ -181,22 +212,26 @@ public final class PluginBrowserModel: ObservableObject {
                 trustDiff: trustDiff
             )
         } catch {
-            errorMessage = "Couldn't fetch \(entry.filename): \(error.localizedDescription)"
+            // An install/fetch failure is transient — surface it as a banner, not
+            // the full-screen catalog-load error (which would hide the grid).
+            notice = CatalogNotice(kind: .failure, message: "Couldn't fetch \(entry.filename): \(CatalogErrorPresenter.message(for: error))")
         }
     }
 
     func confirmInstall() {
         guard let prompt else { return }
+        let filename = prompt.entry.filename
         do {
-            try PluginInstaller.install(filename: prompt.entry.filename, source: prompt.source, into: pluginsDirectory)
+            try PluginInstaller.install(filename: filename, source: prompt.source, into: pluginsDirectory)
             // Record where this came from + its content hash so a later silent
             // change is detectable. Provenance is advisory — a write failure must
             // not block the install itself.
-            let provenance = PluginProvenance(filename: prompt.entry.filename, sourceURL: prompt.entry.rawURL, source: prompt.source)
+            let provenance = PluginProvenance(filename: filename, sourceURL: prompt.entry.rawURL, source: prompt.source)
             try? provenanceStore.record(provenance)
+            notice = CatalogNotice(kind: .success, message: "Installed \(filename)")
             onInstalled()
         } catch {
-            errorMessage = "Install failed: \(error.localizedDescription)"
+            notice = CatalogNotice(kind: .failure, message: "Install failed: \(error.localizedDescription)")
         }
         self.prompt = nil
     }
@@ -220,6 +255,20 @@ public struct PluginBrowserView: View {
         .frame(minWidth: 760, minHeight: 500)
         .searchable(text: $model.search, placement: .toolbar, prompt: "Search plugins")
         .task { if model.entries.isEmpty { await model.load() } }
+        .overlay(alignment: .top) {
+            if let notice = model.notice {
+                NoticeBanner(notice: notice) { model.dismissNotice() }
+                    .padding(.top, 8)
+                    // Auto-dismiss after a few seconds; re-arms whenever the
+                    // notice changes (a newer install replaces an older banner).
+                    .task(id: notice.id) {
+                        try? await Task.sleep(for: .seconds(3))
+                        model.dismissNotice()
+                    }
+                    .transition(.move(edge: .top).combined(with: .opacity))
+            }
+        }
+        .animation(.easeInOut(duration: 0.2), value: model.notice)
         .sheet(item: $model.prompt) { prompt in
             InstallTrustSheet(prompt: prompt, onCancel: { model.prompt = nil }, onInstall: { model.confirmInstall() })
         }
@@ -255,7 +304,20 @@ public struct PluginBrowserView: View {
                 Button("Retry") { Task { await model.load() } }.buttonStyle(.borderedProminent)
             }
         } else if model.visibleEntries.isEmpty {
-            ContentUnavailableView.search
+            ContentUnavailableView {
+                Label("No matching plugins", systemImage: "magnifyingglass")
+            } description: {
+                if !model.search.isEmpty {
+                    Text("Nothing matches “\(model.search)”. Try a shorter or different term, or browse a category.")
+                } else {
+                    Text("This category has no plugins yet.")
+                }
+            } actions: {
+                if !model.search.isEmpty || !model.selectedCategory.isEmpty {
+                    Button("Show All Plugins") { model.clearFilters() }
+                        .buttonStyle(.borderedProminent)
+                }
+            }
         } else {
             ScrollView {
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 300, maximum: 460), spacing: 12)], spacing: 12) {
@@ -269,6 +331,39 @@ public struct PluginBrowserView: View {
             .navigationTitle(model.visibleTitle)
             .navigationSubtitle("\(model.visibleEntries.count) plugins")
         }
+    }
+}
+
+/// A transient success/failure banner shown over the Discover grid after an
+/// install, with a manual dismiss in addition to the auto-timeout.
+private struct NoticeBanner: View {
+    let notice: CatalogNotice
+    let onDismiss: () -> Void
+
+    private var tint: Color { notice.kind == .success ? .green : .red }
+    private var symbol: String { notice.kind == .success ? "checkmark.circle.fill" : "exclamationmark.triangle.fill" }
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: symbol).foregroundStyle(tint)
+            Text(notice.message).font(.callout).lineLimit(2)
+            Button {
+                onDismiss()
+            } label: {
+                Image(systemName: "xmark").font(.caption.weight(.semibold)).foregroundStyle(.secondary)
+            }
+            .buttonStyle(.borderless)
+            .accessibilityLabel("Dismiss")
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 9)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: Corner.callout, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: Corner.callout, style: .continuous)
+                .stroke(tint.opacity(0.35), lineWidth: 1)
+        )
+        .shadow(color: .black.opacity(0.12), radius: 6, y: 2)
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -313,6 +408,12 @@ private struct PluginCard: View {
                     Button("Install") { Task { await model.requestInstall(entry) } }
                         .buttonStyle(.borderedProminent)
                         .controlSize(.small)
+                }
+                if let url = model.sourceURL(for: entry) {
+                    Link(destination: url) {
+                        Text("View source").font(.caption2)
+                    }
+                    .help("Open this plugin's source on GitHub")
                 }
             }
         }
