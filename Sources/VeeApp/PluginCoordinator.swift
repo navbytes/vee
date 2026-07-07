@@ -311,8 +311,14 @@ final class PluginCoordinator {
                 self?.lastResult = result
                 self?.updateDebugModel()
                 if result.outcome.timedOut {
+                    // Surface whatever the plugin printed before it was killed, so
+                    // a hang is debuggable from the menu instead of a dead end.
+                    let partial = result.outcome.standardError.isEmpty
+                        ? result.outcome.standardOutput
+                        : result.outcome.standardError
+                    let detail = partial.isEmpty ? nil : String(partial.prefix(500))
                     self?.lastError = "Plugin timed out"
-                    self?.controller.renderError("Plugin timed out", detail: nil)
+                    self?.controller.renderError("Plugin timed out", detail: detail)
                     self?.onPublish?("⚠︎ timed out")
                 } else if result.outcome.exitCode != 0 && result.output.titleLines.isEmpty {
                     self?.lastError = Self.friendlyError(result.outcome)
