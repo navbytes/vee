@@ -13,12 +13,14 @@ All notable changes to Vee are documented here. The format is based on
   controls as the text protocol.
 
 ### Security
-- **URL scheme validation.** Plugin-supplied `href=` / `webview=` and
-  `swiftbar://addplugin?src=` are now scheme-filtered: `href` blocks
+- **URL scheme validation.** Plugin-supplied `href=` / `webview=`, the
+  `<xbar.abouturl>` header, the `notify?href=` action, and
+  `swiftbar://addplugin?src=` are now scheme-filtered: `href`/about-URL block
   `file`/`javascript`/`data`/`vbscript`/`blob` (custom app deep links still
   work), while `webview` and remote fetches are restricted to `http`/`https` —
-  so a menu click can't open a local file, load local content into an in-app
-  WebView, or install a plugin read from `file://`.
+  so a menu click, the About dialog, or a notification can't open a local file,
+  load local content into an in-app WebView, or install a plugin read from
+  `file://`.
 - **Catalog network hardening.** Discover's fetches reject a non-2xx HTTP status
   (an error body is no longer parsed as catalog data) and stream with a per-
   endpoint byte cap, so a compromised/redirected upstream can't exhaust memory.

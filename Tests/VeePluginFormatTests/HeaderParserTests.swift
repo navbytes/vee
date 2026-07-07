@@ -24,6 +24,17 @@ final class HeaderParserTests: XCTestCase {
         XCTAssertEqual(m.aboutURL, URL(string: "https://example.com"))
     }
 
+    /// Regression: a plugin's declared About URL is scheme-filtered, so the
+    /// About dialog's "Open Website" can't open file:// / javascript:.
+    func testAboutURLRejectsUnsafeSchemes() {
+        for hostile in ["file:///etc/passwd", "javascript:alert(1)"] {
+            let m = HeaderParser.parse(source: "# <xbar.abouturl>\(hostile)</xbar.abouturl>\n")
+            XCTAssertNil(m.aboutURL, "\(hostile) should be dropped")
+        }
+        let ok = HeaderParser.parse(source: "# <xbar.abouturl>https://example.com</xbar.abouturl>\n")
+        XCTAssertEqual(ok.aboutURL?.absoluteString, "https://example.com")
+    }
+
     func testSwiftBarOptions() {
         let src = """
         # <swiftbar.type>streamable</swiftbar.type>
