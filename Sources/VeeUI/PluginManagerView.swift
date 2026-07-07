@@ -162,11 +162,13 @@ private struct ManagerRow: View {
                     if row.features.searchPanel {
                         Image(systemName: "magnifyingglass")
                             .help("Searchable menu (⌘F)")
+                            .accessibilityLabel("Searchable menu")
                     }
                     if let hotkey = row.features.hotkey {
                         Label(hotkey, systemImage: "keyboard")
                             .labelStyle(.titleAndIcon)
                             .help("Global hotkey")
+                            .accessibilityLabel("Global hotkey \(hotkey)")
                     }
                 }
                 .font(.caption)
@@ -189,12 +191,16 @@ private struct ManagerRow: View {
             .menuStyle(.borderlessButton)
             .menuIndicator(.hidden)
             .fixedSize()
+            // Kept faint until hover for a calm resting state, but always fully
+            // opaque under VoiceOver / keyboard focus so it isn't easy to miss.
             .opacity(hovering ? 1 : 0.35)
+            .accessibilityLabel("Actions for \(row.name)")
 
             Toggle("", isOn: model.enabledBinding(row.id))
                 .labelsHidden()
                 .toggleStyle(.switch)
                 .controlSize(.small)
+                .accessibilityLabel("Enable \(row.name)")
         }
         .padding(.vertical, 3)
         .onHover { hovering = $0 }
