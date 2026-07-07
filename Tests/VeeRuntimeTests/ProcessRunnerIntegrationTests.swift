@@ -1,4 +1,5 @@
 import XCTest
+import Darwin
 import VeeCore
 @testable import VeeRuntime
 
@@ -91,5 +92,92 @@ final class ProcessRunnerIntegrationTests: XCTestCase {
         for _ in 0..<200 { _ = try await runner.run(ProcessInvocation(launchPath: "/bin/echo", arguments: ["x"])) }
         let after = openFDCount()
         XCTAssertLessThanOrEqual(after - before, 5, "fd count grew from \(before) to \(after) — likely a pipe/source leak")
+    }
+
+    /// Regression: a plugin that backgrounds a helper (`sleep 900 &`, a stray
+    /// `curl`) used to leave it running forever after a timeout, because the
+    /// old Foundation-`Process` runner only ever signaled the direct child.
+    /// Every plugin is now spawned as the leader of its own process group, so
+    /// a timeout's SIGTERM/SIGKILL reaches the whole group via `killpg`.
+    func testTimeoutReapsBackgroundedGrandchildren() async throws {
+        let out = try await runner.run(ProcessInvocation(
+            launchPath: "/bin/sh",
+            arguments: ["-c", "sleep 300 & echo $!; sleep 300"],
+            timeout: 0.5
+        ))
+        XCTAssertTrue(out.timedOut)
+
+        let trimmed = out.standardOutput.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let grandchildPid = Int32(trimmed), grandchildPid > 0 else {
+            return XCTFail("could not parse a positive grandchild pid from stdout: \(out.standardOutput)")
+        }
+
+        // Poll rather than sleep-and-check-once: the SIGKILL escalation is
+        // 2s after the timeout, and CI scheduling can add its own delay.
+        let deadline = Date().addingTimeInterval(8)
+        var reaped = false
+        while Date() < deadline {
+            if kill(grandchildPid, 0) == -1, errno == ESRCH {
+                reaped = true
+                break
+            }
+            try await Task.sleep(nanoseconds: 100_000_000) // 0.1s
+        }
+
+        if !reaped {
+            // Courtesy cleanup: only ever the pid we parsed above (already
+            // guarded > 0), only ever this one signal.
+            kill(grandchildPid, SIGKILL)
+            XCTFail("backgrounded grandchild pid \(grandchildPid) was still alive 8s after the timeout")
+        }
+    }
+
+    /// `posix_spawn_file_actions_addchdir_np` must land the child in exactly
+    /// the requested directory. Resolve symlinks on both sides — `/tmp` is
+    /// itself a symlink to `/private/tmp` on macOS.
+    func testWorkingDirectoryHonored() async throws {
+        let dir = NSTemporaryDirectory() + "vee-proc-" + UUID().uuidString
+        try FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(atPath: dir) }
+
+        let out = try await runner.run(ProcessInvocation(
+            launchPath: "/bin/sh",
+            arguments: ["-c", "pwd"],
+            workingDirectory: dir
+        ))
+        let reported = out.standardOutput.trimmingCharacters(in: .whitespacesAndNewlines)
+        let expected = URL(fileURLWithPath: dir).resolvingSymlinksInPath().path
+        let actual = URL(fileURLWithPath: reported).resolvingSymlinksInPath().path
+        XCTAssertEqual(actual, expected)
+    }
+
+    /// `posix_spawn`/`execve` must still honor a `#!` shebang line when the
+    /// script itself is the launch path — this is kernel exec behavior, not
+    /// something Foundation's `Process` did for us, so it's worth locking in.
+    func testShebangScriptRuns() async throws {
+        let dir = NSTemporaryDirectory() + "vee-proc-" + UUID().uuidString
+        try FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(atPath: dir) }
+        let scriptPath = dir + "/shebang-test.sh"
+        try "#!/bin/sh\necho shebang-ok\n".write(toFile: scriptPath, atomically: true, encoding: .utf8)
+        try FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: scriptPath)
+
+        let out = try await runner.run(ProcessInvocation(launchPath: scriptPath))
+        XCTAssertEqual(out.standardOutput, "shebang-ok\n")
+        XCTAssertEqual(out.exitCode, 0)
+    }
+
+    /// Regression: a menu-bar app has no terminal to give a plugin, but
+    /// Foundation's `Process` inherited whatever stdin Vee itself had. Stdin
+    /// is now explicitly `/dev/null`, so a plugin that reads stdin (`cat`)
+    /// sees immediate EOF instead of hanging until the timeout.
+    func testStdinIsDevNull() async throws {
+        let out = try await runner.run(ProcessInvocation(
+            launchPath: "/bin/sh",
+            arguments: ["-c", "cat; echo done"],
+            timeout: 5
+        ))
+        XCTAssertEqual(out.standardOutput, "done\n")
+        XCTAssertFalse(out.timedOut)
     }
 }
