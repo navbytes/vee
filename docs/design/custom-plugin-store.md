@@ -255,10 +255,17 @@ public final class StoreRegistry: @unchecked Sendable {
     public func stores() -> [StoreConfig]          // managed ⊕ user ⊕ built-in xbar
     public func add(_ store: StoreConfig) throws    // user store
     public func remove(_ id: StoreID) throws        // rejects built-in/managed
-    public func setEnabled(_ enabled: Bool, id: StoreID)
+    public func setEnabled(_ enabled: Bool, id: StoreID) // rejects managed (force-enabled)
     public func update(_ store: StoreConfig) throws // rejects managed
 }
 ```
+
+**Managed stores are force-enabled.** A store delivered via `vee.managedStores`
+is always on: `setEnabled` rejects it, and the UI shows a static "On" state
+rather than a toggle. IT decides it is available; the user can neither disable
+nor remove it. (User-added stores remain fully user-controlled — add, disable,
+remove — which is the intended default; a lock-down "allowlist only" policy is
+explicitly **not** in scope for now.)
 
 Persistence: user stores as JSON under a new `AppPreferences` key
 `vee.customStores`. **Managed** stores come from the MDM-forced defaults key
@@ -393,7 +400,8 @@ and a new pure `StoreIntegrity` enum in `VeeCatalog` (unit-testable without I/O)
   connection** button that calls `fetchIndex()` and reports count/error via
   `CatalogErrorPresenter`.
 - Built-in xbar store: present, toggle-able (unless managed-disabled), not
-  removable. Managed stores: locked rows.
+  removable. Managed stores: locked rows shown **force-enabled** (a static "On"
+  state, no toggle, no remove) — never a live switch the user can flip off.
 
 ### 9.2 Discover becomes multi-store
 
