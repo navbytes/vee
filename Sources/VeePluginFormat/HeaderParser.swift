@@ -1,4 +1,5 @@
 import Foundation
+import VeeCore
 
 /// Extracts `<xbar.*>` / `<swiftbar.*>` metadata from a plugin's source. The
 /// tags live inside language-specific comments, but they can be scanned
@@ -55,6 +56,15 @@ public enum HeaderParser {
             // Vee-native: a global hotkey that opens the search panel
             // (`<vee.shortcut>`). Ignored when the combo can't be parsed.
             case "shortcut": meta.shortcut = HotKeySpec.parse(value)
+            // Vee-native: which output surface(s) this plugin serves
+            // (`<vee.surface>`). Case-insensitive; an unrecognized value falls
+            // back to `.menu` (today's behavior), same graceful-degrade shape
+            // as every other tag here.
+            case "surface": meta.surface = HeaderMetadata.WidgetSurface(rawValue: value.lowercased()) ?? .menu
+            // Vee-native: the widget-mode refresh cadence
+            // (`<vee.widget.interval>`). Ignored when the token can't be
+            // parsed — the caller falls back to the filename interval.
+            case "widget.interval": meta.widgetInterval = RefreshInterval.parse(token: value)
             case "var":
                 if let decl = parseVar(value) { meta.vars.append(decl) }
             default:

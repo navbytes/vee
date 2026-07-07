@@ -1,4 +1,5 @@
 import Foundation
+import VeeCore
 
 /// A typed preference a plugin declares via `<xbar.var>` / `<swiftbar.var>`.
 /// Example: `<xbar.var>string(API_TOKEN=): Your API token</xbar.var>`
@@ -61,6 +62,27 @@ public struct HeaderMetadata: Equatable, Sendable {
     /// plugin's search panel from anywhere. `nil` (the default) means no hotkey —
     /// the feature is strictly opt-in and only registered when the tag parses.
     public var shortcut: HotKeySpec?
+
+    /// `<vee.surface>`: which output surface(s) this plugin serves. `.menu`
+    /// (the default, and what an absent/unrecognized tag maps to) is today's
+    /// behavior — a status item, with the widget as the Tier-0 scrape of it.
+    public enum WidgetSurface: String, Equatable, Sendable {
+        case menu
+        case both
+        case widget
+    }
+
+    /// Defaults to `.menu` — unchanged behavior for every plugin that doesn't
+    /// declare a surface.
+    public var surface: WidgetSurface = .menu
+
+    /// `<vee.widget.interval>15m</vee.widget.interval>`: the widget-mode
+    /// refresh cadence, parsed with the same grammar as the filename interval
+    /// token. `nil` means "no explicit interval" — the caller falls back to
+    /// the plugin's filename interval (see `RefreshInterval`/`PluginFilename`),
+    /// and floors the result at 5 minutes regardless of source (WidgetKit's
+    /// reload budget makes anything faster meaningless).
+    public var widgetInterval: RefreshInterval?
 
     public init() {}
 }

@@ -52,7 +52,7 @@ let package = Package(
         .target(name: "VeeApp", dependencies: ["VeeCore", "VeePluginFormat", "VeeRuntime", "VeeMenu", "VeeSearch", "VeePreferences", "VeeTrust", "VeeCatalog", "VeeUI", "VeeWidgetShared"]),
         .executableTarget(name: "vee", dependencies: ["VeeApp", "VeeCLI"]),
         .testTarget(name: "VeeCoreTests", dependencies: ["VeeCore"]),
-        .testTarget(name: "VeePluginFormatTests", dependencies: ["VeePluginFormat", "VeeWidgetShared"]),
+        .testTarget(name: "VeePluginFormatTests", dependencies: ["VeePluginFormat", "VeeWidgetShared", "VeeCore"]),
         .testTarget(name: "VeeRuntimeTests", dependencies: ["VeeRuntime"]),
         .testTarget(name: "VeeMenuTests", dependencies: ["VeeMenu"]),
         .testTarget(name: "VeeSearchTests", dependencies: ["VeeSearch"]),
