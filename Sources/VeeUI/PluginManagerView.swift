@@ -84,6 +84,14 @@ public final class PluginManagerModel: ObservableObject {
         onDelete(id)
     }
 
+    /// Updates one row's last-run error live while the window is open. Only
+    /// mutates when the value actually changed, so a healthy plugin publishing
+    /// its title on every tick doesn't churn the view.
+    public func setError(_ error: String?, id: String) {
+        guard let idx = rows.firstIndex(where: { $0.id == id }), rows[idx].lastError != error else { return }
+        rows[idx].lastError = error
+    }
+
     func enabledBinding(_ id: String) -> Binding<Bool> {
         Binding(
             get: { self.rows.first { $0.id == id }?.isEnabled ?? false },

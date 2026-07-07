@@ -20,6 +20,9 @@ public final class AppController: NSObject, NSApplicationDelegate {
     private var baseEnvironment = ProcessInfo.processInfo.environment
     private var runtime = PluginRuntime(executor: PluginExecutor(runner: SystemProcessRunner()))
     private var coordinators: [String: PluginCoordinator] = [:]
+    /// The Plugin Manager model while its window is open, held weakly so live
+    /// per-plugin error updates can be pushed into it. Nil when the window is closed.
+    private weak var currentManagerModel: PluginManagerModel?
     private var ephemerals: [String: StatusItemController] = [:]
     private var loadedPaths: Set<String> = []
     private var watcher: PluginDirectoryWatcher?
@@ -235,6 +238,10 @@ public final class AppController: NSObject, NSApplicationDelegate {
             let name = plugin.filename.name
             coordinator.onPublish = { [weak self] title in
                 self?.publishToWidget(id: id, name: name, title: title)
+                // Keep an open Plugin Manager's error badge live: push this run's
+                // error state (nil on success) into the row. Cheap — setError
+                // only mutates when the value actually changed.
+                self?.currentManagerModel?.setError(self?.coordinators[id]?.lastError, id: id)
             }
             coordinators[id] = coordinator
             coordinator.start()
@@ -350,6 +357,9 @@ public final class AppController: NSObject, NSApplicationDelegate {
             onChooseFolder: { [weak self] in self?.chooseFolder() },
             onRefreshAll: { [weak self] in self?.refreshAll() }
         )
+        // Held weakly so coordinators can push live error updates into the open
+        // window; the window retains the model, so this nils out once it closes.
+        currentManagerModel = model
         PluginManagerWindow.shared.show(model: model)
     }
 
