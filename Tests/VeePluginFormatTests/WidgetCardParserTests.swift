@@ -167,7 +167,9 @@ final class WidgetCardParserTests: XCTestCase {
         let (named, _) = WidgetCardParser.parse(#"{"template":"stat","tint":"green"}"#)
         XCTAssertEqual(named?.tint, .named("green"))
 
-        let (hex, _) = WidgetCardParser.parse(#"{"template":"stat","tint":"#ff0000aa"}"#)
+        // Two-# delimiter: the JSON contains `"#` (the quote before the hex
+        // color), which would close a single-# raw string early.
+        let (hex, _) = WidgetCardParser.parse(##"{"template":"stat","tint":"#ff0000aa"}"##)
         XCTAssertEqual(hex?.tint, .rgba(r: 0xff, g: 0x00, b: 0x00, a: 0xaa))
     }
 
