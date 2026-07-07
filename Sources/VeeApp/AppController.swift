@@ -165,7 +165,16 @@ public final class AppController: NSObject, NSApplicationDelegate {
         watcher?.stop()
     }
 
-    /// `swiftbar://addplugin?src=…`: download a plugin and install it.
+    /// Largest plugin source Vee will fetch for a `swiftbar://addplugin` install
+    /// — a plugin script is a few KB; anything past this is rejected so a hostile
+    /// `src` can't stream an unbounded body into memory.
+    private static let addPluginSourceCap = 1_000_000
+
+    /// `swiftbar://addplugin?src=…`: download a plugin and install it — but only
+    /// after an explicit trust confirmation. A deep link can be opened by any web
+    /// page or app, so installing + auto-running a fetched executable without
+    /// consent would be unattended code execution; this routes through the same
+    /// "see the footprint before it lands" gate the Discover install uses.
     private func installPlugin(from url: URL) {
         // Only fetch over real web schemes — never `file://` (which would read a
         // local file and install it as an executable) or other schemes.
@@ -173,23 +182,69 @@ public final class AppController: NSObject, NSApplicationDelegate {
             log.error("addplugin rejected non-web src scheme: \(url.scheme ?? "nil", privacy: .public)")
             return
         }
+        // Fail closed on a filename we can't sanitize, rather than installing
+        // under a fixed fallback name (which would *guarantee* the plugin runs on
+        // a default interval).
+        guard let filename = try? PluginInstaller.sanitizedFilename(url.lastPathComponent) else {
+            log.error("addplugin rejected unusable filename in src")
+            return
+        }
         let directory = self.directory
         Task { @MainActor in
             do {
-                let (data, _) = try await URLSession.shared.data(from: url)
-                let source = String(data: data, encoding: .utf8) ?? ""
-                guard !source.isEmpty else { return }
-                // `lastPathComponent` percent-decodes, so a crafted `src` can
-                // carry path separators here; PluginInstaller sanitizes, but fall
-                // back to a fixed name when the component is unusable.
-                let name = url.lastPathComponent
-                let filename = (try? PluginInstaller.sanitizedFilename(name)) ?? "plugin.1m.sh"
+                guard let source = try await Self.boundedSource(from: url, cap: Self.addPluginSourceCap),
+                      !source.isEmpty else {
+                    self.log.error("addplugin fetch empty, oversize, or non-2xx")
+                    return
+                }
+                guard self.confirmInstall(filename: filename, source: source, from: url) else {
+                    self.log.info("addplugin cancelled at trust gate")
+                    return
+                }
                 try PluginInstaller.install(filename: filename, source: source, into: directory)
                 self.reload()
             } catch {
                 self.log.error("addplugin failed: \(error.localizedDescription, privacy: .public)")
             }
         }
+    }
+
+    /// Streams a URL body with a hard byte cap, rejecting a non-2xx status or an
+    /// oversize response (returns `nil`) rather than buffering it whole.
+    private static func boundedSource(from url: URL, cap: Int) async throws -> String? {
+        let (bytes, response) = try await URLSession.shared.bytes(from: url)
+        if let http = response as? HTTPURLResponse, !(200...299).contains(http.statusCode) {
+            return nil
+        }
+        var data = Data()
+        for try await byte in bytes {
+            data.append(byte)
+            if data.count > cap { return nil }
+        }
+        return String(data: data, encoding: .utf8)
+    }
+
+    /// Shows the plugin's plain-language capability footprint and requires an
+    /// explicit click before an `addplugin` install writes anything to disk.
+    private func confirmInstall(filename: String, source: String, from url: URL) -> Bool {
+        let summary = TrustAnalyzer.analyze(TrustParser.parse(source: source))
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = "Install “\(filename)” from the web?"
+        var info = "From \(url.host ?? url.absoluteString)\n\nIt will run unsandboxed on a schedule once installed.\n\nWhat it can do:\n"
+        if summary.badges.isEmpty {
+            info += "• Nothing declared — its footprint is unknown."
+        } else {
+            info += summary.badges.map { "• \($0.capability.plainName): \($0.detail)" }.joined(separator: "\n")
+        }
+        if !summary.warnings.isEmpty {
+            info += "\n\n" + summary.warnings.map { "⚠︎ \($0)" }.joined(separator: "\n")
+        }
+        alert.informativeText = info
+        alert.addButton(withTitle: "Install")
+        alert.addButton(withTitle: "Cancel")
+        NSApp.activate(ignoringOtherApps: true)
+        return alert.runModal() == .alertFirstButtonReturn
     }
 
     /// `swiftbar://setephemeralplugin?name=…&content=…&exitafter=N`: show
@@ -207,13 +262,42 @@ public final class AppController: NSObject, NSApplicationDelegate {
             )
             ephemerals[key] = controller
         }
-        controller.render(OutputParser.parse(content))
+        // Ephemeral content arrives via a deep link that any web page/app can
+        // open, so strip executable (`shell=`/`bash=`) actions: a URL-injected
+        // status item must not be able to run arbitrary commands on click.
+        // (`href=` is already scheme-filtered at parse.)
+        controller.render(Self.strippingShellActions(OutputParser.parse(content)))
         if let exitAfter, exitAfter > 0 {
             Task { @MainActor in
                 try? await Task.sleep(nanoseconds: UInt64(exitAfter * 1_000_000_000))
                 self.ephemerals[key]?.remove()
                 self.ephemerals[key] = nil
             }
+        }
+    }
+
+    /// Returns a copy of a parsed output with every `shell=`/`bash=` action
+    /// removed (title lines, items, submenus, and alternates). Used to defang
+    /// menu content injected through the `setephemeralplugin` deep link.
+    static func strippingShellActions(_ output: ParsedOutput) -> ParsedOutput {
+        var out = output
+        out.titleLines = out.titleLines.map { var line = $0; line.params.shell = nil; return line }
+        out.body = out.body.map(stripShell)
+        return out
+    }
+
+    private static func stripShell(_ node: MenuNode) -> MenuNode {
+        switch node {
+        case .separator:
+            return .separator
+        case .item(var item):
+            item.params.shell = nil
+            if var alternate = item.alternate {
+                alternate.params.shell = nil
+                item.alternate = alternate
+            }
+            item.submenu = item.submenu.map(stripShell)
+            return .item(item)
         }
     }
 

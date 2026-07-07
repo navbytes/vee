@@ -64,6 +64,9 @@ public struct WidgetSnapshotStore: Sendable {
         guard let data = try? encoder.encode(snapshot) else { return }
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         try? data.write(to: fileURL, options: .atomic)
+        // Owner-only: a plugin may put status text in its title, so don't leave
+        // the snapshot world-readable by other local users.
+        try? FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: fileURL.path)
     }
 
     /// Reads the current snapshot, or `nil` if none has been written or it can't
