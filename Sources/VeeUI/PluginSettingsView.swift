@@ -118,7 +118,7 @@ public struct PluginSettingsView: View {
                                     row(for: declaration)
                                 }
                             } footer: {
-                                Text("Saved for \(model.pluginName). Secret values are masked.")
+                                Text("Secret values are masked and stored in your macOS Keychain. Saving refreshes \(model.pluginName).")
                             }
                         }
                     }

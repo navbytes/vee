@@ -33,6 +33,14 @@ public struct VarDeclarationField: View {
                     RevealableSecureField("Required", text: $stringValue)
                         .frame(maxWidth: 200)
                 }
+            } else if declaration.kind == .number {
+                // Keep the field to a valid decimal as the user types, so a
+                // numeric preference can't be saved with letters or symbols.
+                TextField(label, text: $stringValue)
+                    .onChange(of: stringValue) { _, newValue in
+                        let sanitized = NumericInput.sanitize(newValue)
+                        if sanitized != newValue { stringValue = sanitized }
+                    }
             } else {
                 TextField(label, text: $stringValue)
             }
@@ -122,6 +130,7 @@ public final class VariablesEditorModel: ObservableObject {
 /// fields masked. Supersedes xbar's per-plugin `xbar.var` GUI.
 public struct VariablesEditorView: View {
     @ObservedObject private var model: VariablesEditorModel
+    @State private var justSaved = false
 
     public init(model: VariablesEditorModel) {
         self.model = model
@@ -156,11 +165,28 @@ public struct VariablesEditorView: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                     Spacer()
-                    Button("Save") { model.save() }
+                    if justSaved {
+                        Label("Saved", systemImage: "checkmark.circle.fill")
+                            .font(.caption).foregroundStyle(.green)
+                            .transition(.opacity)
+                    }
+                    Button("Save") { save() }
                         .keyboardShortcut(.defaultAction)
                 }
                 .padding(12)
+                .animation(.easeInOut(duration: 0.2), value: justSaved)
             }
+        }
+    }
+
+    /// Persists edits and shows a brief "Saved" confirmation, so the fire-and-
+    /// forget Save button gives visible feedback that changes took effect.
+    private func save() {
+        model.save()
+        justSaved = true
+        Task {
+            try? await Task.sleep(for: .seconds(2))
+            justSaved = false
         }
     }
 }
