@@ -46,10 +46,14 @@ public final class StoresSettingsModel: ObservableObject {
         reload()
     }
 
-    /// Adds a user store, saving its token if one was provided.
+    /// Adds a user store, saving its token if one was provided. Gated on the
+    /// store's own auth mode — belt-and-braces alongside the view's own check,
+    /// so a stale token typed while a different Kind was selected (e.g. pasted
+    /// under GitHub, then Kind switched to Local before Add) never gets
+    /// persisted under a store that doesn't use one.
     public func add(_ config: StoreConfig, token: String?) throws {
         try registry.add(config)
-        if let token, !token.isEmpty { makeTokenStore(config.id).set(token) }
+        if config.authMode == .token, let token, !token.isEmpty { makeTokenStore(config.id).set(token) }
         reload()
     }
 
@@ -371,7 +375,11 @@ private struct AddStoreSheet: View {
     private func addStore() {
         guard let config = buildConfig() else { return }
         do {
-            try model.add(config, token: token)
+            // The token field is hidden (not cleared) once Kind is switched to
+            // Local, so a value pasted under an earlier GitHub/HTTP selection
+            // would otherwise still be sent — and end up keychained onto a
+            // store that has no business holding a credential.
+            try model.add(config, token: kind == .local ? nil : token)
             isPresented = false
         } catch {
             addError = "Couldn't add the store: \(error)"

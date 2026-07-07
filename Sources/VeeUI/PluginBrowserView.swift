@@ -9,6 +9,11 @@ public struct InstallPrompt: Identifiable {
     public let entry: CatalogEntry
     public let source: String
     public let title: String
+    /// The display name of the store this plugin comes from (e.g. "Public xbar
+    /// catalog", or an enterprise store's configured name) — shown on the trust
+    /// sheet so provenance isn't misattributed to the public catalog for a
+    /// plugin that actually came from a different store.
+    public let storeName: String
     public let summary: TrustSummary
     public let warnings: [String]
     public let description: String?
@@ -20,10 +25,11 @@ public struct InstallPrompt: Identifiable {
     /// installed one. `nil` for a fresh install (nothing to compare against).
     public let trustDiff: TrustDiff?
 
-    public init(entry: CatalogEntry, source: String, title: String, summary: TrustSummary, warnings: [String], description: String?, dependencies: [String], features: PluginFeatures = PluginFeatures(), trustDiff: TrustDiff? = nil) {
+    public init(entry: CatalogEntry, source: String, title: String, storeName: String, summary: TrustSummary, warnings: [String], description: String?, dependencies: [String], features: PluginFeatures = PluginFeatures(), trustDiff: TrustDiff? = nil) {
         self.entry = entry
         self.source = source
         self.title = title
+        self.storeName = storeName
         self.summary = summary
         self.warnings = warnings
         self.description = description
@@ -106,8 +112,16 @@ public final class PluginBrowserModel: ObservableObject {
     func summary(for entry: CatalogEntry) -> String? { headers[entry.id]?.summary ?? entry.manifestSummary }
     func author(for entry: CatalogEntry) -> String? { headers[entry.id]?.author }
     func trustLevel(for entry: CatalogEntry) -> TrustLevel? { trustLevels[entry.id] }
+    /// The effective last-updated date for an entry: the lazily-fetched date
+    /// (keyed by `entry.id`, matching how `loadLastUpdated` writes it) if
+    /// available, else the catalog-provided static field. Shared by
+    /// `freshness(for:)` and the freshness badge so they can never disagree
+    /// about which date is "the" date.
+    func lastUpdatedDate(for entry: CatalogEntry) -> Date? {
+        lastUpdated[entry.id] ?? entry.lastUpdated
+    }
     func freshness(for entry: CatalogEntry, now: Date = Date()) -> PluginFreshness? {
-        PluginFreshness.classify(lastUpdated: lastUpdated[entry.id] ?? entry.lastUpdated, now: now)
+        PluginFreshness.classify(lastUpdated: lastUpdatedDate(for: entry), now: now)
     }
     /// The display name of the store an entry came from (for its card chip).
     func storeName(for entry: CatalogEntry) -> String? { store(for: entry)?.displayName }
@@ -153,6 +167,18 @@ public final class PluginBrowserModel: ObservableObject {
             errorMessage = CatalogErrorPresenter.message(for: firstError)
         }
         isLoading = false
+    }
+
+    /// Re-fetches the catalog from scratch. `load()` only runs once (on first
+    /// appearance) and the per-entry caches (header, trust level, freshness)
+    /// would otherwise keep stale metadata even after a manual reload, so this
+    /// clears them before calling the unchanged `load()`.
+    public func refresh() async {
+        headers = [:]
+        trustLevels = [:]
+        lastUpdated = [:]
+        lastUpdatedRequested = []
+        await load()
     }
 
     /// A page where a user can read the plugin's source before installing. For a
@@ -267,6 +293,7 @@ public final class PluginBrowserModel: ObservableObject {
                 entry: entry,
                 source: source,
                 title: title(for: entry),
+                storeName: storeName(for: entry) ?? "Unknown store",
                 summary: summary,
                 warnings: warnings,
                 description: header.summary,
@@ -327,6 +354,19 @@ public struct PluginBrowserView: View {
         }
         .frame(minWidth: 760, minHeight: 500)
         .searchable(text: $model.search, placement: .toolbar, prompt: "Search plugins")
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button {
+                    Task { await model.refresh() }
+                } label: {
+                    Label("Refresh", systemImage: "arrow.clockwise")
+                }
+                .keyboardShortcut("r", modifiers: .command)
+                .disabled(model.isLoading)
+                .accessibilityLabel("Refresh catalog")
+                .help("Refresh the plugin list (⌘R)")
+            }
+        }
         .task { if model.entries.isEmpty { await model.load() } }
         .overlay(alignment: .top) {
             if let notice = model.notice {
@@ -334,8 +374,15 @@ public struct PluginBrowserView: View {
                     .padding(.top, 8)
                     // Auto-dismiss after a few seconds; re-arms whenever the
                     // notice changes (a newer install replaces an older banner).
+                    // `try?` would swallow the CancellationError from a notice
+                    // change cancelling this task and still dismiss the NEW
+                    // banner it raced with — only dismiss on a real timeout.
                     .task(id: notice.id) {
-                        try? await Task.sleep(for: .seconds(3))
+                        do {
+                            try await Task.sleep(for: .seconds(3))
+                        } catch {
+                            return
+                        }
                         model.dismissNotice()
                     }
                     .transition(.move(edge: .top).combined(with: .opacity))
@@ -495,7 +542,7 @@ private struct PluginCard: View {
                 if let level = model.trustLevel(for: entry), level != .undeclared {
                     TrustChip(symbol: level.symbol, label: level.label, tint: level.color).padding(.top, 1)
                 }
-                if let date = model.lastUpdated[entry.path], let freshness = model.freshness(for: entry) {
+                if let date = model.lastUpdatedDate(for: entry), let freshness = model.freshness(for: entry) {
                     FreshnessBadge(date: date, freshness: freshness).padding(.top, 1)
                 }
             }

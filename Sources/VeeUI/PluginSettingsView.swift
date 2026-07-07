@@ -66,6 +66,14 @@ public final class PluginSettingsModel: ObservableObject {
         for declaration in declarations {
             try? prefs.setValue(values[declaration.name] ?? declaration.defaultValue, for: declaration)
         }
+        // The typed hotkey combo only committed on `.onSubmit` (pressing Return
+        // in the text field) — clicking Save directly after typing silently
+        // dropped it. onApplyHotkey always derives the end state fresh from the
+        // current enabled/combo, so calling it here is idempotent even when the
+        // user never touched the hotkey control.
+        if hotkeyControllable {
+            applyHotkey()
+        }
         onSaved()
     }
 

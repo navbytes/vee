@@ -69,7 +69,7 @@ public struct InstallTrustSheet: View {
                 Text(prompt.title).font(.title3).fontWeight(.semibold)
                 Text("\(prompt.entry.filename) · \(prompt.entry.category)")
                     .font(.caption).foregroundStyle(.secondary)
-                Text("from matryer/xbar-plugins")
+                Text("from \(prompt.storeName)")
                     .font(.caption2).foregroundStyle(.tertiary)
             }
             Spacer()
