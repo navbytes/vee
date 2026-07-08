@@ -7,6 +7,13 @@ All notable changes to Vee are documented here. The format is based on
 ## [Unreleased]
 
 ### Fixed
+- **Search panel swallowed row actions meant for the previous app.** Presenting
+  the `⌘⇧`-style search panel force-activates Vee (needed so its search field
+  can become key), but nothing restored the app you were in before opening it.
+  A row's action — e.g. a clipboard plugin simulating `⌘V` — fired while Vee
+  was still frontmost, so it never reached the app you meant to paste into.
+  The panel now captures the frontmost app before activating itself and
+  restores it on every dismissal path (row pick, Esc, outside-click).
 - **Crash on `length=-1`.** A negative `length=` reached `String.prefix(_:)`,
   which traps — a plugin printing `foo|length=-1` crashed the whole menu-bar app
   on every render. `length` is now clamped to `>= 0` at parse time.
