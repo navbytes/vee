@@ -1,5 +1,4 @@
 import XCTest
-import AppKit
 @testable import VeeApp
 import VeeCore
 import VeeRuntime
@@ -46,10 +45,10 @@ final class WidgetActionRefreshTests: XCTestCase {
     /// Writes a widget-only plugin to a temp dir and returns (coordinator, runner, dir).
     @MainActor
     private func makeCoordinator() throws -> (PluginCoordinator, RecordingRunner, URL) {
-        // `PluginsDirectory.context` reads `NSApp.effectiveAppearance`; ensure a
-        // shared application exists so it isn't a nil implicit-unwrap in the
-        // headless test process.
-        _ = NSApplication.shared
+        // NB: deliberately does NOT touch `NSApplication.shared` — creating the
+        // shared app rebinds the MainActor executor to the main run loop for the
+        // whole test process, starving other suites' MainActor `Task.sleep`
+        // timers under CI load. `PluginsDirectory.context` is nil-safe on `NSApp`.
         let dir = FileManager.default.temporaryDirectory
             .appendingPathComponent("vee-refresh-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)

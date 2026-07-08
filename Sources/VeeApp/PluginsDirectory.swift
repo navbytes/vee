@@ -32,7 +32,11 @@ enum PluginsDirectory {
     @MainActor
     static func context(pluginPath: String, pluginsDirectory: String, declaredVariables: [String: String] = [:], target: PluginTarget = .menu) -> RuntimeEnvironmentContext {
         let os = ProcessInfo.processInfo.operatingSystemVersion
-        let dark = NSApp.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+        // `NSApp` is nil until the app finishes launching (and in unit tests) —
+        // in production this is only ever called from a running app, but guard
+        // the implicit unwrap so a nil `NSApp` degrades to light mode instead of
+        // crashing (and so this stays callable without a live NSApplication).
+        let dark = (NSApp?.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) ?? .aqua) == .darkAqua
         let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.1.0"
         ensureExists(cacheDirectory())
         ensureExists(dataDirectory())
