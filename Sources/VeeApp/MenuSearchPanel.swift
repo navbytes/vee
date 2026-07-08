@@ -30,6 +30,9 @@ final class MenuSearchPanel: NSObject {
     private weak var handler: MenuActionHandling?
     private var keyMonitor: Any?
     private var clickMonitor: Any?
+    /// Restored on dismiss so row actions (e.g. a clipboard plugin's simulated
+    /// ⌘V) land in the app the user invoked the panel from, not in Vee itself.
+    private var frontmostRestorer = FrontmostAppRestorer()
 
     private static let size = NSSize(width: 440, height: 380)
 
@@ -38,6 +41,9 @@ final class MenuSearchPanel: NSObject {
     func present(rows: [FlatRow], pluginName: String, handler: MenuActionHandling) {
         dismiss()
         self.handler = handler
+        // Capture BEFORE self-activating below — after that call, Vee itself
+        // would be frontmost and we'd have nothing to restore.
+        frontmostRestorer.capture(NSWorkspace.shared.frontmostApplication)
 
         let model = MenuSearchViewModel(rows: rows)
         self.model = model
@@ -91,6 +97,11 @@ final class MenuSearchPanel: NSObject {
         panel = nil
         model = nil
         handler = nil
+        // Hand focus back to whatever the user was in before the panel stole
+        // activation. Runs on every dismissal path — row selection, Esc, and
+        // outside-click alike — not just the row-activation path, so a
+        // cancelled search doesn't leave Vee sitting active either.
+        frontmostRestorer.restore()
     }
 
     // MARK: - Keyboard & outside-click
