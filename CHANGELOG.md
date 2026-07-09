@@ -7,6 +7,9 @@ All notable changes to Vee are documented here. The format is based on
 ## [Unreleased]
 
 ### Changed
+- **Discover loads with skeleton cards.** While the catalog fetches, Discover now
+  shows placeholder cards in the real grid instead of a centered spinner, so the
+  pane settles into place rather than flipping from spinner to full grid.
 - **Install trust sheet reads as a table.** The "What this plugin can do"
   permissions and the "Features it adds" rows are now grouped into an inset card
   with hairline row dividers, so each list scans as one block instead of floating
