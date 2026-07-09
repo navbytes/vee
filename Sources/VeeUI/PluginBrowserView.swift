@@ -542,6 +542,7 @@ private struct PluginCard: View {
                 if let level = model.trustLevel(for: entry), level != .undeclared {
                     TrustChip(symbol: level.symbol, label: level.label, tint: level.color).padding(.top, 1)
                 }
+                SurfaceBadge(surface: entry.manifestSurface).padding(.top, 1)
                 if let date = model.lastUpdatedDate(for: entry), let freshness = model.freshness(for: entry) {
                     FreshnessBadge(date: date, freshness: freshness).padding(.top, 1)
                 }
@@ -597,6 +598,26 @@ private struct ProvenanceBadge: View {
         case .modified:
             TrustChip(symbol: "exclamationmark.triangle.fill", label: "Modified", tint: .orange)
         case .unknown:
+            EmptyView()
+        }
+    }
+}
+
+/// A "Widget-only" / "Widget" chip when the store declares a plugin's surface
+/// (`vee-catalog.json`), so a widget-only plugin — one with no menu-bar
+/// presence — is visible *before* install. Hidden for a plain menu plugin or a
+/// store that declares nothing (the zero-config public catalog). Matches
+/// ``TrustChip``.
+private struct SurfaceBadge: View {
+    let surface: String?
+
+    var body: some View {
+        switch surface {
+        case "widget":
+            TrustChip(symbol: "square.grid.2x2.fill", label: "Widget-only", tint: .purple)
+        case "both":
+            TrustChip(symbol: "square.grid.2x2", label: "Widget", tint: .purple)
+        default:
             EmptyView()
         }
     }

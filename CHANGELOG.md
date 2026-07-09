@@ -6,6 +6,23 @@ All notable changes to Vee are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+- **Widget-only plugins are flagged in Discover and the Manager.** A plugin
+  with `<vee.surface>widget</vee.surface>` (no menu-bar item) now shows a
+  "Widget-only" badge in the Plugin Manager, and — when a custom store declares
+  a plugin's `surface` in its `vee-catalog.json` — in the Discover grid before
+  install, so a plugin with no menu-bar presence isn't a mystery.
+- **Composable widget layout tree.** A widget card can now carry a `layout` —
+  a bounded tree of native primitives (`vstack`/`hstack`/`zstack`/`grid`,
+  `text`/`image`/`gauge`/`sparkline`/`spacer`/`divider`) with per-element style
+  — as an escape hatch alongside the five preset templates, for widgets the
+  presets can't express (two columns, a date rail, activity rings, KPI grids).
+  It's *describe, don't draw*: no WebView, no freeform canvas. The tree is
+  sanitized and capped app-side on parse (depth ≤ 8, ≤ 64 nodes, clamped
+  numerics) so the sandboxed extension only renders. The TypeScript, Python,
+  and Go SDKs gain namespaced `Node.*` builders, with a `widget-layout` golden
+  fixture verified byte-identical across all three.
+
 ### Fixed
 - **Search panel swallowed row actions meant for the previous app.** Presenting
   the `⌘⇧`-style search panel force-activates Vee (needed so its search field
@@ -131,8 +148,9 @@ All notable changes to Vee are documented here. The format is based on
   ("6 OK · 1 failing") with the failing plugins called out.
 - **Widget surface contract:** a plugin can now feed its widget tile *data*
   instead of a scrape of its menu-bar line. `<vee.surface>both</vee.surface>`
-  runs the plugin a second time with `VEE_TARGET=widget` on its own cadence
-  (`<vee.widget.interval>`, floored at 5 minutes) and reads one JSON "card"
+  runs the plugin a second time with `VEE_TARGET=widget` on the plugin's
+  filename interval (small 10s floor; the always-running app pushes widget
+  reloads on data change, so no 5-minute cap), and reads one JSON "card"
   object from stdout — `stat`/`gauge`/`trend`/`list`/`board`, each a native
   SwiftUI template rendered per widget family. `<vee.surface>widget</vee.surface>`
   makes a plugin **widget-only**: no status item, no menu, feeding just the

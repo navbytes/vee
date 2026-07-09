@@ -33,7 +33,9 @@ struct PluginHealthProvider: TimelineProvider {
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<PluginHealthEntry>) -> Void) {
         let entry = PluginHealthEntry(date: Date(), snapshot: currentSnapshot())
-        completion(Timeline(entries: [entry], policy: .after(Date().addingTimeInterval(30 * 60))))
+        // Push-driven like the status widget: the always-running app reloads
+        // timelines on data change, so `.never` frees the passive reload budget.
+        completion(Timeline(entries: [entry], policy: .never))
     }
 }
 

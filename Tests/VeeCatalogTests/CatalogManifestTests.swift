@@ -38,6 +38,24 @@ final class CatalogManifestTests: XCTestCase {
         XCTAssertTrue(deploy.deprecated)
     }
 
+    func testParsesDeclaredSurface() throws {
+        let manifest = Data("""
+        {
+          "vee_catalog": 1,
+          "plugins": [
+            { "path": "Dash/revenue.15m.sh", "surface": "widget" },
+            { "path": "System/cpu.5s.sh", "surface": "both" },
+            { "path": "Net/ping.10s.sh" }
+          ]
+        }
+        """.utf8)
+        let entries = try CatalogManifestParser.parse(manifest, storeID: storeID, rawBase: rawBase)
+        XCTAssertEqual(entries.first { $0.filename == "revenue.15m.sh" }?.manifestSurface, "widget")
+        XCTAssertEqual(entries.first { $0.filename == "cpu.5s.sh" }?.manifestSurface, "both")
+        // Absent surface stays nil (zero-config convention).
+        XCTAssertNil(entries.first { $0.filename == "ping.10s.sh" }?.manifestSurface)
+    }
+
     func testUnknownVersionRejected() {
         let future = Data(#"{ "vee_catalog": 2, "plugins": [] }"#.utf8)
         XCTAssertThrowsError(try CatalogManifestParser.parse(future, storeID: storeID, rawBase: rawBase)) {

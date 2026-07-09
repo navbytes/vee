@@ -464,14 +464,23 @@ final class PluginCoordinator {
 
     // MARK: - Widget-mode cadence (`.both`/`.widget` surfaces)
 
-    /// The widget-mode refresh cadence: the plugin's explicit
-    /// `<vee.widget.interval>`, else its filename interval, else a 15-minute
-    /// default (a widget-only plugin has no filename interval to inherit) —
-    /// always floored at 5 minutes regardless of source (WidgetKit's reload
-    /// budget makes anything faster meaningless).
+    /// A small safety floor (10s) on the widget-mode re-run cadence — just
+    /// enough to stop a pathologically fast filename (e.g. `1s`) from pegging
+    /// the CPU in widget mode. It is *not* the old WidgetKit "reload budget"
+    /// floor: Vee is an always-running companion app that pushes reloads via
+    /// `WidgetCenter` on each data change (see `WidgetSnapshotPublisher` and
+    /// `AppController.reloadAllTimelines`), so the widget can track near-real-
+    /// time data — the passive ~40–70/day budget applies only to widgets whose
+    /// app isn't running.
+    static let widgetRefreshFloor: TimeInterval = 10
+
+    /// The widget-mode refresh cadence. Reuses the *same* field the menu bar
+    /// does — the plugin's filename interval — with no widget-specific tag,
+    /// floored only at the small safety floor: `max(filename interval, floor)`.
+    /// A widget-only plugin whose filename carries no interval falls back to
+    /// the floor.
     private var widgetRefreshInterval: TimeInterval {
-        let requested = header.widgetInterval?.timeInterval ?? plugin.filename.interval.timeInterval ?? 900
-        return max(requested, 300)
+        max(plugin.filename.interval.timeInterval ?? Self.widgetRefreshFloor, Self.widgetRefreshFloor)
     }
 
     private func scheduleWidgetTimer() {

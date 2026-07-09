@@ -90,18 +90,30 @@ shared-snapshot, out-of-process producer.
 - `widget` → no `NSStatusItem`, no menu; invoked only in widget mode on the widget
   interval. The "widget-only plugin."
 
-### 2. Cadence — `<vee.widget.interval>`
+### 2. Cadence — the filename interval, small floor, push-driven
+
+There is **no widget-specific interval tag**. The widget-mode cadence reuses the
+same field the menu bar does — the plugin's filename interval — with only a
+small safety floor:
 
 ```
-<vee.widget.interval>15m</vee.widget.interval>
+widget interval = max(filename interval, 10s)
 ```
 
-The widget-mode refresh cadence, parsed with the existing `RefreshInterval` grammar
-(`ms`/`s`/`m`/`h`/`d`). Defaults to the plugin's filename interval. **Floored at 5
-minutes** regardless of what's requested — WidgetKit's reload budget makes anything
-faster meaningless, and a widget-only plugin has no filename interval to inherit.
-Independent of the menu interval, so a `cpu.5s.sh` can feed a 5‑second menu and a
-15‑minute widget from one file.
+The floor is *not* WidgetKit's passive ~40–70/day reload budget. That budget
+governs widgets whose app **isn't running**. Vee is an always-running menu-bar
+app — the "companion app" — and it pushes reloads via `WidgetCenter` on every
+data change (`WidgetSnapshotPublisher`) and on launch/wake
+(`AppController.reloadAllTimelines`). With a `.never` timeline policy, WidgetKit
+honors those explicit reloads near-immediately, so the widget can track
+near-real-time data. The 10s floor is just an energy guard against a
+pathologically fast filename (`1s`); the real cost of fast updates is the CPU to
+re-run the plugin, which is the author's choice — exactly as for the menu bar.
+
+A widget-only plugin whose filename carries no interval falls back to the floor.
+This is a deliberate *don't-reinvent-the-wheel* choice: no parallel config
+surface for the widget, one source of truth for timing
+(`PluginCoordinator.widgetRefreshInterval`).
 
 ### 3. Mode flag — `VEE_TARGET`
 
@@ -235,8 +247,9 @@ the renderer uses the template; when absent it falls back to the scraped fields
 - `WidgetPublish`/`WidgetSnapshotPublisher` extend to carry an optional card; the
   content-signature dedupe includes it, so a changed card spends a (throttled)
   reload and an unchanged one doesn't — reusing all the existing metering.
-- The `<vee.widget.interval>` floor and the existing 5‑minute reload floor keep the
-  extra runs cheap.
+- The 10s widget-interval floor and the publisher's 10s reload floor (a small
+  energy guard, since the always-running app pushes reloads) keep the extra runs
+  cheap without capping freshness.
 
 ## Security & trust
 
@@ -270,7 +283,7 @@ compiles it, and it can't be unit-tested. So:
 
 - **A. Card model + parser** (`VeeWidgetShared` types, `WidgetCardParser` in
   `VeePluginFormat`) — pure, fully tested.
-- **B. Header tags** — `<vee.surface>`, `<vee.widget.interval>` into
+- **B. Header tags** — `<vee.surface>` into
   `HeaderMetadata`/`HeaderParser`, tested.
 - **C. Snapshot v3** — `card` field, version bump, versioned-decode tests.
 - **D. Widget-mode invocation + scheduling** — `VEE_TARGET`, second scheduler,
@@ -285,12 +298,75 @@ compiles it, and it can't be unit-tested. So:
 Phases A–C are independent and pure; D depends on A–C; E/F depend on A/C; G depends
 on A; H last. Each pushes on its own so CI compiles it incrementally.
 
+## Layout tree (composable escape hatch)
+
+Status: **implemented** (v1; images deferred — see below). The five templates
+in §5 are ergonomic presets, but a fixed record can't express a two-column
+layout, a calendar date rail, activity rings, or a KPI grid. So a card may
+instead carry a **`layout`** — a bounded tree of native primitives Vee walks
+into SwiftUI. A card is *either* a preset template *or* a tree; presets are
+unchanged, so nothing regresses.
+
+This is Scriptable's *describe, don't draw* — a native primitive tree, not a
+WebView — but with Vee's out-of-process twist: the app builds the tree, and the
+sandboxed extension only renders it. It is deliberately **bounded**, never
+freeform: a small vocabulary that each map 1:1 to a SwiftUI primitive.
+
+- **Containers:** `vstack`, `hstack`, `zstack`, `grid` (`columns`, default 2).
+  `hstack` is the load-bearing addition — side-by-side regions the presets
+  can't do (two columns, a date rail, a row of cells, inline per-row gauges).
+- **Leaves:** `text`, `image` (SF Symbol only in v1), `gauge` (`linear` |
+  `circular`), `sparkline`, `spacer`, `divider`.
+- **Per-element `style`:** `font` (`size` token or bounded `point_size`,
+  `weight`, `design`), `tint`, `align`, `padding`, `line_limit`,
+  `monospaced_digit`, `min_scale`, `fill`. The last two exist so the presets'
+  own value text (`monospacedDigit()` + `minimumScaleFactor(0.6)`) desugars
+  faithfully. No absolute positioning, no point frames, no scroll views — that
+  boundary is what keeps a tree from becoming the freeform canvas Vee rejects.
+- **Family adaptation by subtraction:** each node may carry a `families`
+  allow-list (`small`/`medium`/`large`); the walker skips nodes not for the
+  current family, so one tree adapts without authoring three payloads (mirrors
+  how the presets truncate per family).
+
+All five presets re-express in this vocabulary — `stat`/`gauge`/`trend`/`list`
+desugar directly, and `board` is why `grid` is in v1 rather than a later add.
+Presets stay on the wire regardless (compatibility + ergonomics); the tree is
+the escape hatch, not a replacement. The `actions` footer stays renderer-owned
+chrome appended around any tree, so the interactive/trust surface is unchanged.
+
+**Safety — caps live at parse time.** The snapshot the sandboxed extension
+re-reads on every timeline build must already be bounded, so `WidgetCardParser`
+(app-side) sanitizes the tree on decode, not the walker: depth ≤ 8, ≤ 64 total
+nodes, text ≤ 512 chars, sparkline ≤ 256 points, `gauge`/style numerics
+clamped, non-finite values dropped, and an unknown node `type` degraded to a
+diagnostic. A hostile payload degrades to a bounded tree plus diagnostics —
+never a throw (Foundation's own ~512-level decode limit is the backstop for a
+pure-depth bomb, and the existing 8 MB stdout drain bounds total payload size).
+
+**SDKs.** All three gain namespaced `Node.*` builders (`Node.VStack`,
+`Node.Text`, `Node.Gauge`, …) — namespaced so they don't collide with the
+card-level template builders (`Stat`/`Gauge`/…). The `widget-layout` example is
+a golden fixture, byte-identical across TS/Python/Go and round-tripped through
+`WidgetCardParser` (`FixtureRoundTripTests`).
+
+**Deferred to v2 — `image` bitmaps.** v1 renders SF Symbols by name only. Real
+images (now-playing artwork, avatars, map/photo backgrounds) are the one
+primitive that stresses the channel: they must *not* be base64-inlined into the
+hot snapshot JSON. The plan is for the app (never the extension — remote fetch
+belongs un-sandboxed) to fetch/decode and cache images under
+`~/Library/Application Support/Vee/`, with the tree referencing them by
+content-hash filename; the extension's existing read-only home-relative
+entitlement already covers that directory, so images cost zero new sandbox
+surface. Separable, hence deferred.
+
 ## Deferred (not in the first PR)
 
 - **Timeline arrays** — a card carrying an array of dated entries ("next 5
   meetings") handed to WidgetKit as a real timeline, updating all day on zero extra
   runs. The single most WidgetKit-native capability no menu scraper can express;
   worth a follow-up once the single-card contract lands.
+- **Layout-tree images** — bitmap `image` nodes via the app-side cache-and-
+  reference scheme described under "Layout tree" above (v1 is SF Symbols only).
 - Focus filters (`SetFocusFilterIntent`), lock-screen accessory families, an
   `AppIntent`-configurable Control Center control for a chosen plugin.
 

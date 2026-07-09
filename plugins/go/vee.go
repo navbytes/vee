@@ -314,6 +314,149 @@ type WidgetCard struct {
 	RefreshAfter *float64 `json:"refresh_after,omitempty"`
 	// StaleAfter is seconds — when the tile should show a stale treatment.
 	StaleAfter *float64 `json:"stale_after,omitempty"`
+	// Layout is an optional composable layout tree — the escape hatch
+	// alongside the five preset templates. When present, Vee renders the tree
+	// instead of Template. Build it with Node.VStack/HStack/Text/… .
+	Layout *WidgetNode `json:"layout,omitempty"`
+}
+
+// ── Layout tree ──────────────────────────────────────────────────────────────
+// The composable escape hatch alongside the five preset templates. Field order
+// on WidgetNode/WidgetNodeStyle/WidgetNodeFont is the canonical key order the
+// three SDKs share, so encoding/json produces byte-identical output.
+
+// WidgetNodeFont is a text node's font: a semantic token (Size) or an explicit
+// PointSize (clamped 8…96 by Vee) when a token won't fit.
+type WidgetNodeFont struct {
+	Size      *string  `json:"size,omitempty"`
+	PointSize *float64 `json:"point_size,omitempty"`
+	Weight    *string  `json:"weight,omitempty"`
+	Design    *string  `json:"design,omitempty"`
+}
+
+// WidgetNodeStyle is the bounded set of per-element modifiers a node can carry.
+type WidgetNodeStyle struct {
+	Font  *WidgetNodeFont `json:"font,omitempty"`
+	Tint  *string         `json:"tint,omitempty"`
+	Align *string         `json:"align,omitempty"`
+	// Padding is uniform, in points (clamped 0…64).
+	Padding *float64 `json:"padding,omitempty"`
+	// LineLimit is the maximum text lines (clamped 1…20).
+	LineLimit *int `json:"line_limit,omitempty"`
+	// MonospacedDigit keeps numeric columns from jittering.
+	MonospacedDigit *bool `json:"monospaced_digit,omitempty"`
+	// MinScale lets a headline shrink to fit rather than truncate (clamped 0.3…1).
+	MinScale *float64 `json:"min_scale,omitempty"`
+	// Fill grows to fill the available width (the only, bounded, width control).
+	Fill *bool `json:"fill,omitempty"`
+}
+
+// WidgetNode is one node in a card's layout tree. Vee sanitizes/caps the tree
+// on parse (depth 8, ≤64 nodes, text ≤512, sparkline ≤256, numeric clamps).
+type WidgetNode struct {
+	// Type is vstack/hstack/zstack/grid (containers) or
+	// text/image/gauge/sparkline/spacer/divider (leaves).
+	Type       string           `json:"type"`
+	Text       *string          `json:"text,omitempty"`
+	Symbol     *string          `json:"symbol,omitempty"`
+	Value      *float64         `json:"value,omitempty"`
+	Values     []float64        `json:"values,omitempty"`
+	GaugeStyle *string          `json:"gauge_style,omitempty"`
+	Align      *string          `json:"align,omitempty"`
+	Spacing    *float64         `json:"spacing,omitempty"`
+	Columns    *int             `json:"columns,omitempty"`
+	MinLength  *float64         `json:"min_length,omitempty"`
+	Families   []string         `json:"families,omitempty"`
+	Style      *WidgetNodeStyle `json:"style,omitempty"`
+	Children   []WidgetNode     `json:"children,omitempty"`
+}
+
+// NodeOpt sets an optional field on a node (functional-options pattern).
+type NodeOpt func(*WidgetNode)
+
+// Align sets a container's cross-axis (or text) alignment.
+func Align(s string) NodeOpt { return func(n *WidgetNode) { n.Align = &s } }
+
+// Spacing sets a container's inter-child spacing.
+func Spacing(f float64) NodeOpt { return func(n *WidgetNode) { n.Spacing = &f } }
+
+// Columns sets a grid's column count (default 2; clamped 1…4 by Vee).
+func Columns(i int) NodeOpt { return func(n *WidgetNode) { n.Columns = &i } }
+
+// MinLen sets a spacer's minimum length.
+func MinLen(f float64) NodeOpt { return func(n *WidgetNode) { n.MinLength = &f } }
+
+// GaugeStyle selects a gauge's style: "linear" (default) or "circular".
+func GaugeStyle(s string) NodeOpt { return func(n *WidgetNode) { n.GaugeStyle = &s } }
+
+// Families restricts a node to the given widget families (small/medium/large).
+func Families(f ...string) NodeOpt { return func(n *WidgetNode) { n.Families = f } }
+
+// Style attaches per-element styling to a node.
+func Style(s WidgetNodeStyle) NodeOpt { return func(n *WidgetNode) { n.Style = &s } }
+
+// nodeBuilders namespaces the layout-node constructors so they read as
+// Node.VStack(…) — node-level, distinct from the card-level struct literal.
+type nodeBuilders struct{}
+
+// Node is the entry point for the layout-node builders (Node.VStack(…)).
+var Node nodeBuilders
+
+func apply(n WidgetNode, opts []NodeOpt) WidgetNode {
+	for _, o := range opts {
+		o(&n)
+	}
+	return n
+}
+
+// VStack builds a vertical stack.
+func (nodeBuilders) VStack(children []WidgetNode, opts ...NodeOpt) WidgetNode {
+	return apply(WidgetNode{Type: "vstack", Children: children}, opts)
+}
+
+// HStack builds a horizontal stack — side-by-side regions.
+func (nodeBuilders) HStack(children []WidgetNode, opts ...NodeOpt) WidgetNode {
+	return apply(WidgetNode{Type: "hstack", Children: children}, opts)
+}
+
+// ZStack builds a depth stack — overlays and rings.
+func (nodeBuilders) ZStack(children []WidgetNode, opts ...NodeOpt) WidgetNode {
+	return apply(WidgetNode{Type: "zstack", Children: children}, opts)
+}
+
+// Grid builds a grid of Columns (default 2, clamped 1…4).
+func (nodeBuilders) Grid(children []WidgetNode, opts ...NodeOpt) WidgetNode {
+	return apply(WidgetNode{Type: "grid", Children: children}, opts)
+}
+
+// Text builds a text run.
+func (nodeBuilders) Text(text string, opts ...NodeOpt) WidgetNode {
+	return apply(WidgetNode{Type: "text", Text: &text}, opts)
+}
+
+// Image builds an SF Symbol glyph (v1 renders SF Symbols only).
+func (nodeBuilders) Image(symbol string, opts ...NodeOpt) WidgetNode {
+	return apply(WidgetNode{Type: "image", Symbol: &symbol}, opts)
+}
+
+// Gauge builds a gauge — "linear" (default) or "circular"; value is 0…1.
+func (nodeBuilders) Gauge(value float64, opts ...NodeOpt) WidgetNode {
+	return apply(WidgetNode{Type: "gauge", Value: &value}, opts)
+}
+
+// Sparkline builds a dependency-free line chart from values.
+func (nodeBuilders) Sparkline(values []float64, opts ...NodeOpt) WidgetNode {
+	return apply(WidgetNode{Type: "sparkline", Values: values}, opts)
+}
+
+// Spacer builds flexible empty space.
+func (nodeBuilders) Spacer(opts ...NodeOpt) WidgetNode {
+	return apply(WidgetNode{Type: "spacer"}, opts)
+}
+
+// Divider builds a hairline divider.
+func (nodeBuilders) Divider(opts ...NodeOpt) WidgetNode {
+	return apply(WidgetNode{Type: "divider"}, opts)
 }
 
 // widgetCardEnvelope prefixes the schema-version field the parser reads for

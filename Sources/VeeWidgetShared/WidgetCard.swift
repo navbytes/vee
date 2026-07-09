@@ -85,6 +85,11 @@ public struct WidgetCard: Codable, Equatable, Sendable {
     public var refreshAfter: TimeInterval?
     /// Seconds; when the tile should show a stale treatment.
     public var staleAfter: TimeInterval?
+    /// An optional composable **layout tree**. When present, the extension
+    /// walks it (`WidgetNodeView`) instead of dispatching on `template` — a
+    /// card is *either* a preset template *or* a tree. Sanitized/capped by
+    /// `WidgetCardParser`. See `docs/design/widget-surface-contract.md`.
+    public var layout: WidgetNode?
 
     public init(
         template: WidgetTemplate = .stat,
@@ -100,7 +105,8 @@ public struct WidgetCard: Codable, Equatable, Sendable {
         items: [WidgetCardItem]? = nil,
         actions: [WidgetCardAction]? = nil,
         refreshAfter: TimeInterval? = nil,
-        staleAfter: TimeInterval? = nil
+        staleAfter: TimeInterval? = nil,
+        layout: WidgetNode? = nil
     ) {
         self.template = template
         self.title = title
@@ -116,10 +122,11 @@ public struct WidgetCard: Codable, Equatable, Sendable {
         self.actions = actions
         self.refreshAfter = refreshAfter
         self.staleAfter = staleAfter
+        self.layout = layout
     }
 
     enum CodingKeys: String, CodingKey {
-        case template, title, symbol, tint, value, caption, detail, status, progress, trend, items, actions
+        case template, title, symbol, tint, value, caption, detail, status, progress, trend, items, actions, layout
         case refreshAfter = "refresh_after"
         case staleAfter = "stale_after"
     }

@@ -48,8 +48,12 @@ struct PluginStatusProvider: AppIntentTimelineProvider {
 
     func timeline(for configuration: SelectPluginsIntent, in context: Context) async -> Timeline<PluginStatusEntry> {
         let entry = PluginStatusEntry(date: Date(), snapshot: currentSnapshot(), selection: configuration.selectedIDs)
-        // Refresh-on-change is push-driven by the app; this is just a safety net.
-        return Timeline(entries: [entry], policy: .after(Date().addingTimeInterval(30 * 60)))
+        // Refresh is push-driven: the always-running app reloads timelines via
+        // WidgetCenter on each data change (and on launch/wake), so this widget
+        // needs no passive schedule — `.never` frees the reload budget and lets
+        // updates track the plugin's real cadence. If the app isn't running the
+        // widget holds its last (still-accurate) entry until the app returns.
+        return Timeline(entries: [entry], policy: .never)
     }
 }
 

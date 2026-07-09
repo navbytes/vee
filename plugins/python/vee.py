@@ -191,6 +191,7 @@ _CARD_KEYS: list[tuple[str, str]] = [
     ("actions", "actions"),
     ("refreshAfter", "refresh_after"),
     ("staleAfter", "stale_after"),
+    ("layout", "layout"),
 ]
 
 
@@ -270,3 +271,128 @@ def List(**options: Any) -> WidgetCard:
 def Board(**options: Any) -> WidgetCard:
     """A compact grid of ``items`` as stat cells (KPI board)."""
     return WidgetCard(template="board", **options)
+
+
+# ── Layout tree ──────────────────────────────────────────────────────────────
+# The composable escape hatch alongside the five preset templates. Nodes are
+# built as ordered dicts (``_json_value`` preserves insertion order), so keys
+# land in the canonical order the three SDKs share and output is byte-identical.
+# Style keys are snake_case (Python idiom); the wire format is snake_case too.
+
+_STYLE_KEYS = ["font", "tint", "align", "padding", "line_limit", "monospaced_digit", "min_scale", "fill"]
+_FONT_KEYS = ["size", "point_size", "weight", "design"]
+
+
+def _font(f: dict[str, Any]) -> dict[str, Any]:
+    return {k: f[k] for k in _FONT_KEYS if f.get(k) is not None}
+
+
+def _style(s: dict[str, Any]) -> dict[str, Any]:
+    out: dict[str, Any] = {}
+    for k in _STYLE_KEYS:
+        v = s.get(k)
+        if v is not None:
+            out[k] = _font(v) if k == "font" else v
+    return out
+
+
+def _node(
+    type: str,
+    *,
+    text: str | None = None,
+    symbol: str | None = None,
+    value: float | None = None,
+    values: list[float] | None = None,
+    gauge_style: str | None = None,
+    align: str | None = None,
+    spacing: float | None = None,
+    columns: int | None = None,
+    min_length: float | None = None,
+    families: list[str] | None = None,
+    style: dict[str, Any] | None = None,
+    children: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    """Builds a node dict with keys inserted in the shared canonical order."""
+    node: dict[str, Any] = {"type": type}
+    if text is not None:
+        node["text"] = text
+    if symbol is not None:
+        node["symbol"] = symbol
+    if value is not None:
+        node["value"] = value
+    if values is not None:
+        node["values"] = values
+    if gauge_style is not None:
+        node["gauge_style"] = gauge_style
+    if align is not None:
+        node["align"] = align
+    if spacing is not None:
+        node["spacing"] = spacing
+    if columns is not None:
+        node["columns"] = columns
+    if min_length is not None:
+        node["min_length"] = min_length
+    if families is not None:
+        node["families"] = families
+    if style is not None:
+        node["style"] = _style(style)
+    if children is not None:
+        node["children"] = children
+    return node
+
+
+class Node:
+    """Builders for the layout tree, namespaced (``Node.VStack(...)``) so they
+    don't collide with the card-level template builders (``Stat``/``Gauge``/…).
+    Each returns a plain dict; pass the root as ``widget_card(layout=...)``.
+    """
+
+    @staticmethod
+    def VStack(children: list[dict[str, Any]], **opts: Any) -> dict[str, Any]:
+        """A vertical stack."""
+        return _node("vstack", children=children, **opts)
+
+    @staticmethod
+    def HStack(children: list[dict[str, Any]], **opts: Any) -> dict[str, Any]:
+        """A horizontal stack — side-by-side regions."""
+        return _node("hstack", children=children, **opts)
+
+    @staticmethod
+    def ZStack(children: list[dict[str, Any]], **opts: Any) -> dict[str, Any]:
+        """A depth stack — overlays and rings."""
+        return _node("zstack", children=children, **opts)
+
+    @staticmethod
+    def Grid(children: list[dict[str, Any]], **opts: Any) -> dict[str, Any]:
+        """A grid of ``columns`` (default 2, clamped 1…4)."""
+        return _node("grid", children=children, **opts)
+
+    @staticmethod
+    def Text(text: str, **opts: Any) -> dict[str, Any]:
+        """A text run."""
+        return _node("text", text=text, **opts)
+
+    @staticmethod
+    def Image(symbol: str, **opts: Any) -> dict[str, Any]:
+        """An SF Symbol glyph (v1 renders SF Symbols only)."""
+        return _node("image", symbol=symbol, **opts)
+
+    @staticmethod
+    def Gauge(value: float, **opts: Any) -> dict[str, Any]:
+        """A gauge — ``linear`` (default) or ``circular``. ``value`` is 0…1."""
+        return _node("gauge", value=value, **opts)
+
+    @staticmethod
+    def Sparkline(values: list[float], **opts: Any) -> dict[str, Any]:
+        """A dependency-free line chart from ``values``."""
+        return _node("sparkline", values=values, **opts)
+
+    @staticmethod
+    def Spacer(**opts: Any) -> dict[str, Any]:
+        """Flexible empty space."""
+        return _node("spacer", **opts)
+
+    @staticmethod
+    def Divider(**opts: Any) -> dict[str, Any]:
+        """A hairline divider."""
+        return _node("divider", **opts)
