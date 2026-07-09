@@ -24,6 +24,11 @@ All notable changes to Vee are documented here. The format is based on
   freshness demoted to muted text and a hairline-at-rest card surface.
 
 ### Added
+- **Context7 indexing.** A `context7.json` at the repo root scopes
+  [Context7](https://context7.com) to the guides in `docs/_content` (plus the
+  always-included root docs) and ships a set of `rules` so AI coding assistants
+  answer with Vee's actual conventions (filename intervals, `<vee.*>` trust tags,
+  `<xbar.var>` config, the typed SDKs, `<vee.surface>` widgets).
 - **A plugin's Settings and Debug now open in-pane.** Selecting an installed
   plugin in the consolidated window's **Installed** section shows its
   **Settings** and **Debug** as tabs in the detail pane (with a back button)

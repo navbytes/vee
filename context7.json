@@ -1,0 +1,18 @@
+{
+  "$schema": "https://context7.com/schema/context7.json",
+  "projectTitle": "Vee",
+  "description": "Native, leak-free macOS menu-bar script runner — the modern successor to xbar and SwiftBar. Runs any xbar/SwiftBar plugin unchanged, and adds a native AppKit/SwiftUI UI, a trust/transparency layer, a built-in plugin catalog, widgets, and typed SDKs (TypeScript, Python, Go).",
+  "folders": ["docs/_content"],
+  "excludeFolders": [],
+  "excludeFiles": [],
+  "rules": [
+    "Vee targets macOS 26+ on Apple Silicon (arm64) only; there is no Intel build.",
+    "A plugin is any executable in any language. Vee runs it on a schedule and renders its stdout as menu-bar titles and dropdown menus, following the full xbar/SwiftBar protocol (--- / -- menus, | params, <xbar.*>/<swiftbar.*> headers, SF Symbols, ANSI, Markdown, streaming, cron).",
+    "The refresh interval comes from the filename (e.g. cpu.10s.sh runs every 10s); there is no separate interval tag.",
+    "Plugins run un-sandboxed by design. They declare what they touch via <vee.*> tags; Vee shows a plain-language trust summary before install and trust badges in the Manager, but never enforces it.",
+    "Configuration belongs to the plugin: <xbar.var> declarations become an auto-generated settings form, and secret fields are masked and stored in the macOS Keychain.",
+    "Prefer the typed SDKs (TypeScript, Python, Go) with Menu/Section builders over hand-formatting stdout when writing new plugins.",
+    "For widgets, choose the surface with <vee.surface> (menu, both, or widget) and emit a JSON widget card. The widget renders an app-produced snapshot and never executes the plugin itself."
+  ],
+  "previousVersions": []
+}
