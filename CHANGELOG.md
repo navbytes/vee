@@ -6,6 +6,15 @@ All notable changes to Vee are documented here. The format is based on
 
 ## [Unreleased]
 
+### Changed
+- **Calmer, more native visual language.** Introduced a visual-foundation token
+  set in `DesignKit` (a neutral system-surface ladder + hairlines, one brand
+  accent, an 8pt spacing grid, semantic type roles) and split badges into two
+  weights — filled `TrustChip` for state that matters (trust, error) vs. a muted
+  `MetaChip` for descriptive metadata (freshness, store). Discover cards now show
+  one ranked badge row instead of a vertical ladder of same-weight pills, with
+  freshness demoted to muted text and a hairline-at-rest card surface.
+
 ### Added
 - **A plugin's Settings and Debug now open in-pane.** Selecting an installed
   plugin in the consolidated window's **Installed** section shows its

@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 import VeeTrust
 
@@ -135,9 +136,78 @@ public enum Corner {
     public static let popover: CGFloat = 14
 }
 
+// MARK: - Visual foundation ("Calm instrument")
+
+// Structure comes from neutral system surfaces + hairlines; the single brand
+// accent (Ink) is reserved for identity/selection; saturated meaning-colors
+// (trust green/amber/red, category tints) appear only where they mean something.
+
+public extension Color {
+    /// A light/dark sRGB-hex pair, resolved per appearance so a brand token gets
+    /// automatic dark-mode / increased-contrast handling like a system color.
+    init(lightHex: UInt, darkHex: UInt) {
+        self = Color(nsColor: NSColor(name: nil) { appearance in
+            let dark = appearance.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua
+            let hex = dark ? darkHex : lightHex
+            return NSColor(srgbRed: CGFloat((hex >> 16) & 0xFF) / 255,
+                           green: CGFloat((hex >> 8) & 0xFF) / 255,
+                           blue: CGFloat(hex & 0xFF) / 255,
+                           alpha: 1)
+        })
+    }
+}
+
+/// The Vee palette. Neutral system surfaces carry structure; `brand` (Ink) is
+/// identity-only — interactive controls keep the user's system accent color.
+public enum Palette {
+    public static let windowBG = Color(nsColor: .windowBackgroundColor)
+    public static let raisedBG = Color(nsColor: .controlBackgroundColor)
+    public static let insetBG = Color(nsColor: .underPageBackgroundColor)
+    public static let hairline = Color(nsColor: .separatorColor)
+    /// The one brand accent — "Ink".
+    public static let brand = Color(lightHex: 0x4B5BD6, darkHex: 0x7C8CF0)
+    public static let brandSoft = Color(lightHex: 0x4B5BD6, darkHex: 0x7C8CF0).opacity(0.12)
+}
+
+/// 8pt spacing grid, so views stop reaching for one-off literals.
+public enum Space {
+    public static let xs: CGFloat = 4
+    public static let sm: CGFloat = 8
+    public static let md: CGFloat = 12
+    public static let lg: CGFloat = 16
+    public static let xl: CGFloat = 24
+    public static let xxl: CGFloat = 32
+}
+
+/// Semantic type roles. `metric` (rounded + monospaced digits) is the "Apple
+/// dashboard" number treatment, shared by counts and widget values.
+public enum TypeRole {
+    public static let sectionTitle = Font.headline
+    public static let cardTitle = Font.system(.body, weight: .semibold)
+    public static let rowMeta = Font.subheadline
+    public static let chip = Font.caption2.weight(.semibold)
+    public static let metric = Font.system(.title2, design: .rounded).weight(.semibold).monospacedDigit()
+}
+
+public extension View {
+    /// The resting card treatment: raised fill + a hairline border (native depth
+    /// comes from the hairline, not a drop shadow). On hover the border picks up
+    /// the accent and only a whisper of shadow appears.
+    func veeCardSurface(cornerRadius: CGFloat = Corner.card, hovering: Bool = false) -> some View {
+        background(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous).fill(Palette.raisedBG))
+            .overlay(
+                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                    .stroke(hovering ? Color.accentColor.opacity(0.55) : Palette.hairline, lineWidth: 1)
+            )
+            .shadow(color: .black.opacity(hovering ? 0.06 : 0), radius: 4, y: 1)
+    }
+}
+
 // MARK: - Reusable views
 
-/// A small capsule showing an SF Symbol + short label in a tint.
+/// A small capsule showing an SF Symbol + short label in a tint. Filled — so its
+/// weight is reserved for **state that matters** (trust level, error, severity).
+/// For descriptive metadata (store, surface, freshness) use ``MetaChip`` instead.
 public struct TrustChip: View {
     let symbol: String
     let label: String
@@ -156,6 +226,27 @@ public struct TrustChip: View {
             .padding(.horizontal, 7)
             .padding(.vertical, 3)
             .background(Capsule().fill(tint.opacity(0.14)))
+    }
+}
+
+/// A muted, *descriptive* chip: an SF Symbol + label with no fill, for metadata
+/// (store name, surface, freshness) that shouldn't compete with a ``TrustChip``.
+/// Splitting chips into these two weights is what de-clutters a busy card or row.
+public struct MetaChip: View {
+    let symbol: String
+    let label: String
+    var tint: Color
+
+    public init(symbol: String, label: String, tint: Color = .secondary) {
+        self.symbol = symbol
+        self.label = label
+        self.tint = tint
+    }
+
+    public var body: some View {
+        Label(label, systemImage: symbol)
+            .font(.caption2)
+            .foregroundStyle(tint)
     }
 }
 
