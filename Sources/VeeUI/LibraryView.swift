@@ -86,7 +86,11 @@ public struct LibraryView: View {
         NavigationSplitView {
             List(selection: selection) {
                 Section("Library") {
-                    sidebarRow(.installed)
+                    // A live count of installed plugins, the native sidebar idiom
+                    // (Mail/Notes). Observes the manager model so it fills in when
+                    // the off-main row build finishes.
+                    InstalledSidebarLabel(manager: model.manager)
+                        .tag(LibrarySection.installed)
                     sidebarRow(.discover)
                 }
                 Section("Settings") {
@@ -132,6 +136,41 @@ public struct LibraryView: View {
     }
 }
 
+/// The **Installed** sidebar row, carrying a live plugin count as a native
+/// `.badge`. Split into its own view so it observes the manager model directly —
+/// `LibraryView` observes only `LibraryModel`, so without this the count would
+/// not refresh when the off-main row build populates `rows`. The badge is hidden
+/// until the rows load (and when there are none) by passing a count of `0`, which
+/// SwiftUI renders as no badge.
+private struct InstalledSidebarLabel: View {
+    @ObservedObject var manager: PluginManagerModel
+
+    var body: some View {
+        Label(LibrarySection.installed.label, systemImage: LibrarySection.installed.symbol)
+            .badge(manager.isLoaded ? manager.rows.count : 0)
+    }
+}
+
+/// A single placeholder row shown while the installed list loads — neutral bars
+/// in the row's real shape (tile + two text lines), so the list settles into
+/// place instead of popping in from a lone centered spinner.
+private struct SkeletonPluginRow: View {
+    var body: some View {
+        HStack(spacing: 11) {
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(Palette.hairline)
+                .frame(width: 30, height: 30)
+            VStack(alignment: .leading, spacing: 6) {
+                Capsule().fill(Palette.hairline).frame(width: 150, height: 10)
+                Capsule().fill(Palette.hairline).frame(width: 96, height: 8)
+            }
+            Spacer()
+        }
+        .padding(.vertical, 5)
+        .accessibilityHidden(true)
+    }
+}
+
 /// The Installed section: the plugin list extracted from `PluginManagerView`
 /// (minus the folder/login controls, which are now the General section). Reuses
 /// `ManagerRow` and the loaded/empty gating from the off-main row build.
@@ -143,13 +182,8 @@ struct InstalledPluginsList: View {
     var body: some View {
         Form {
             if !model.isLoaded {
-                Section {
-                    HStack {
-                        Spacer()
-                        ProgressView()
-                        Spacer()
-                    }
-                    .listRowBackground(Color.clear)
+                Section("Plugins") {
+                    ForEach(0..<4, id: \.self) { _ in SkeletonPluginRow() }
                 }
             } else if model.rows.isEmpty {
                 Section {

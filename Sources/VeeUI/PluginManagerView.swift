@@ -267,15 +267,27 @@ struct ManagerRow: View {
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(row.name).fontWeight(.medium)
-                HStack(spacing: 6) {
-                    if !row.interval.isEmpty {
-                        Label(row.interval, systemImage: "clock").labelStyle(.titleAndIcon)
-                    }
+                // Badge doctrine (see DesignKit): filled `TrustChip` is reserved
+                // for state that matters (trust, error); descriptive metadata
+                // (schedule, surface, hotkey) is a muted `MetaChip` so it doesn't
+                // compete. Trust and error lead; metadata trails.
+                HStack(spacing: Space.sm) {
                     if !row.trust.isEmpty {
                         TrustChip(symbol: trustSymbol, label: row.trust, tint: trustTint)
                     }
+                    if let error = row.lastError {
+                        Button { model.onDebug(row.id) } label: {
+                            TrustChip(symbol: "exclamationmark.triangle.fill", label: "Error", tint: .red)
+                        }
+                        .buttonStyle(.plain)
+                        .help(error)
+                        .accessibilityLabel("Last run failed: \(error). Open debug console.")
+                    }
+                    if !row.interval.isEmpty {
+                        MetaChip(symbol: "clock", label: row.interval)
+                    }
                     if row.surface != .menu {
-                        TrustChip(
+                        MetaChip(
                             symbol: row.surface == .widget ? "square.grid.2x2.fill" : "square.grid.2x2",
                             label: row.surface == .widget ? "Widget-only" : "Widget",
                             tint: .purple
@@ -286,26 +298,17 @@ struct ManagerRow: View {
                     }
                     if row.features.searchPanel {
                         Image(systemName: "magnifyingglass")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
                             .help("Searchable menu (⌘F)")
                             .accessibilityLabel("Searchable menu")
                     }
                     if let hotkey = row.features.hotkey {
-                        Label(hotkey, systemImage: "keyboard")
-                            .labelStyle(.titleAndIcon)
+                        MetaChip(symbol: "keyboard", label: hotkey)
                             .help("Global hotkey")
                             .accessibilityLabel("Global hotkey \(hotkey)")
                     }
-                    if let error = row.lastError {
-                        Button { model.onDebug(row.id) } label: {
-                            TrustChip(symbol: "exclamationmark.triangle.fill", label: "Error", tint: .red)
-                        }
-                        .buttonStyle(.plain)
-                        .help(error)
-                        .accessibilityLabel("Last run failed: \(error). Open debug console.")
-                    }
                 }
-                .font(.caption)
-                .foregroundStyle(.secondary)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
