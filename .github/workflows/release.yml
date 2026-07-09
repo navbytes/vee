@@ -32,6 +32,10 @@ jobs:
       APPLE_ID: ${{ secrets.APPLE_ID }}
       APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
       APPLE_NOTARY_PASSWORD: ${{ secrets.APPLE_NOTARY_PASSWORD }}
+      # Absent → the Homebrew-tap sync step is skipped (fork/unconfigured repos
+      # still release cleanly). A fine-grained PAT with contents:write on
+      # navbytes/homebrew-tap.
+      HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
       APP_PATH: .build/xcode/Build/Products/Release/Vee.app
     steps:
       - uses: actions/checkout@v7
@@ -116,3 +120,12 @@ jobs:
           tag_name: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
           files: Vee.zip
           fail_on_unmatched_files: true
+
+      # Keep navbytes/homebrew-tap tracking this release. Self-seeding: creates
+      # Casks/vee.rb on the first run and bumps version + sha256 afterwards.
+      # Skipped when HOMEBREW_TAP_TOKEN is unset (see the job env above).
+      - name: Sync Homebrew cask (navbytes/homebrew-tap)
+        if: env.HOMEBREW_TAP_TOKEN != ''
+        env:
+          RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+        run: bash scripts/update-homebrew-cask.sh

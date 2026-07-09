@@ -7,6 +7,14 @@ All notable changes to Vee are documented here. The format is based on
 ## [Unreleased]
 
 ### Changed
+- **Homebrew moves to a dedicated tap.** Install is now `brew tap navbytes/tap`
+  (the [`navbytes/homebrew-tap`](https://github.com/navbytes/homebrew-tap) repo)
+  instead of tapping the app repo directly. The release workflow keeps the tap in
+  sync automatically on every release via
+  [`scripts/update-homebrew-cask.sh`](scripts/update-homebrew-cask.sh) — it
+  publishes/bumps the cask's `version` + `sha256` from the built asset (gated on a
+  `HOMEBREW_TAP_TOKEN` secret; skipped when unset). The old in-repo `Casks/`
+  self-tap, which had to be bumped by hand and had drifted, is retired.
 - **Calmer, more native visual language.** Introduced a visual-foundation token
   set in `DesignKit` (a neutral system-surface ladder + hairlines, one brand
   accent, an 8pt spacing grid, semantic type roles) and split badges into two

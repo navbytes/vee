@@ -45,7 +45,7 @@ Vee is distributed Developer-ID-signed and **notarized**, outside the Mac App St
 **Homebrew (recommended):**
 
 ```sh
-brew tap navbytes/vee https://github.com/navbytes/vee
+brew tap navbytes/tap
 brew install --cask vee
 ```
 
