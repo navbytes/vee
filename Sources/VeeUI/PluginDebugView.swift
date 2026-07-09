@@ -30,8 +30,10 @@ public final class PluginDebugModel: ObservableObject {
 }
 
 /// A developer view of a plugin's last run: exit status, parse diagnostics, and
-/// raw stdout/stderr — answering "why didn't my plugin work?".
-public struct PluginDebugView: View {
+/// raw stdout/stderr — answering "why didn't my plugin work?". The console body
+/// only, with **no** fixed frame, so the caller sizes it: the standalone window
+/// pins it to 580×540; the in-pane Debug tab lets it fill the pane.
+public struct PluginDebugContent: View {
     @ObservedObject private var model: PluginDebugModel
 
     public init(model: PluginDebugModel) {
@@ -69,7 +71,6 @@ public struct PluginDebugView: View {
             }
         }
         .padding(16)
-        .frame(width: 580, height: 540, alignment: .topLeading)
     }
 
     @ViewBuilder private var statusLabel: some View {
@@ -97,5 +98,22 @@ public struct PluginDebugView: View {
             .frame(maxHeight: .infinity)
             .background(RoundedRectangle(cornerRadius: Corner.surface, style: .continuous).fill(.background.secondary))
         }
+    }
+}
+
+/// The plugin debug console in its own resizable window (status-item "Debug…"
+/// menu and the notification "Open Log" action). Wraps `PluginDebugContent` in
+/// the fixed 580×540 frame it had before, so the window is unchanged. The
+/// in-pane Debug tab uses `PluginDebugContent` directly, sized to fill the pane.
+public struct PluginDebugView: View {
+    private let model: PluginDebugModel
+
+    public init(model: PluginDebugModel) {
+        self.model = model
+    }
+
+    public var body: some View {
+        PluginDebugContent(model: model)
+            .frame(width: 580, height: 540, alignment: .topLeading)
     }
 }

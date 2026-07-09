@@ -41,7 +41,11 @@ final class PluginCoordinator {
     /// `stop()` must not spawn a subprocess or render into a removed status item.
     private var stopped = false
     private var lastResult: PluginRunResult?
-    private var debugModel: PluginDebugModel?
+    /// The live debug console model, created lazily on first use and reused
+    /// thereafter so both the pop-out window and the in-pane console share one
+    /// live-updating instance. Renamed from `debugModel` to free that name for
+    /// the `debugModel()` accessor the consolidated window calls.
+    private var cachedDebugModel: PluginDebugModel?
 
     /// The most recent run's error message, or `nil` if the last run succeeded.
     /// The Plugin Manager reads this to flag broken plugins.
@@ -138,9 +142,20 @@ final class PluginCoordinator {
     /// Opens this plugin's debug console (wired to the notification "Open Log" action).
     func showDebugConsole() { showDebug() }
 
-    private func openSettings() {
+    /// Whether the plugin has anything to configure — declared `<xbar.var>`s or
+    /// Vee-native features (search panel / hotkey). Mirrors the `hasSettings`
+    /// gate the Manager row computes, so the consolidated window can decide
+    /// whether to show a Settings tab at all.
+    var hasSettings: Bool {
+        !header.vars.isEmpty || !PluginFeatures(header: header).isEmpty
+    }
+
+    /// Builds this plugin's settings model — the *single* construction path,
+    /// shared by `openSettings()` (pop-out window) and the consolidated window's
+    /// in-pane Settings tab. Building it does not open a window.
+    func settingsModel() -> PluginSettingsModel {
         let id = plugin.id.rawValue
-        let model = PluginSettingsModel(
+        return PluginSettingsModel(
             pluginName: plugin.filename.name,
             prefs: preferences,
             features: PluginFeatures(header: header),
@@ -151,7 +166,20 @@ final class PluginCoordinator {
             onApplyHotkey: { [weak self] enabled, combo in self?.applyHotkey(enabled: enabled, combo: combo) ?? .none },
             onSaved: { [weak self] in self?.refresh() }
         )
-        SettingsWindowManager.shared.show(pluginID: plugin.id.rawValue, model: model)
+    }
+
+    /// Returns this plugin's live debug console model (the cached instance,
+    /// created on first use), populated with the last run. The same model the
+    /// pop-out window shows, so the in-pane console updates live too.
+    func debugModel() -> PluginDebugModel {
+        let model = cachedDebugModel ?? PluginDebugModel(pluginName: plugin.filename.name) { [weak self] in self?.refresh() }
+        cachedDebugModel = model
+        updateDebugModel()
+        return model
+    }
+
+    private func openSettings() {
+        SettingsWindowManager.shared.show(pluginID: plugin.id.rawValue, model: settingsModel())
     }
 
     func start() {
@@ -544,16 +572,13 @@ final class PluginCoordinator {
     // MARK: - Debug console
 
     private func showDebug() {
-        let model = debugModel ?? PluginDebugModel(pluginName: plugin.filename.name) { [weak self] in self?.refresh() }
-        debugModel = model
-        updateDebugModel()
-        DebugWindowManager.shared.show(pluginID: plugin.id.rawValue, model: model)
+        DebugWindowManager.shared.show(pluginID: plugin.id.rawValue, model: debugModel())
     }
 
     /// Pushes the last run's raw output/diagnostics into the debug console when
     /// it's open.
     private func updateDebugModel() {
-        guard let model = debugModel, let result = lastResult else { return }
+        guard let model = cachedDebugModel, let result = lastResult else { return }
         model.update(
             stdout: result.outcome.standardOutput,
             stderr: result.outcome.standardError,

@@ -7,6 +7,13 @@ All notable changes to Vee are documented here. The format is based on
 ## [Unreleased]
 
 ### Added
+- **A plugin's Settings and Debug now open in-pane.** Selecting an installed
+  plugin in the consolidated window's **Installed** section shows its
+  **Settings** and **Debug** as tabs in the detail pane (with a back button)
+  instead of opening separate per-plugin windows. The debug console updates live,
+  sharing the same model the pop-out window uses. The menu-bar status-item menus
+  and the notification "Open Log" action still open the standalone per-plugin
+  windows.
 - **One consolidated Vee window.** The Plugin Manager, Discover, and Preferences
   windows are now a single sidebar window — **Installed**, **Discover**,
   **Variables**, **Stores**, and **General** as sections. ⌘M opens it on

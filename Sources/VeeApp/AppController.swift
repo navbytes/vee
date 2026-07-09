@@ -559,7 +559,17 @@ public final class AppController: NSObject, NSApplicationDelegate {
             general: general,
             stores: stores,
             variables: variables,
-            browser: browserModel()
+            browser: browserModel(),
+            // Resolves an installed plugin id to its live Settings/Debug models
+            // for in-pane display — built from the plugin's coordinator without
+            // opening a window. `nil` for an unknown id.
+            pluginDetail: { [weak self] id in
+                guard let coordinator = self?.coordinators[id] else { return nil }
+                return PluginDetailModels(
+                    settings: coordinator.hasSettings ? coordinator.settingsModel() : nil,
+                    debug: coordinator.debugModel()
+                )
+            }
         )
     }
 
