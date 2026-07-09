@@ -7,13 +7,16 @@ All notable changes to Vee are documented here. The format is based on
 ## [Unreleased]
 
 ### Added
-- **One consolidated Vee window.** The Plugin Manager and Preferences windows
-  are now a single sidebar window — **Installed**, **Discover**, **Variables**,
-  **Stores**, and **General** as sections. ⌘M opens it on Installed and ⌘,
-  focuses General, so the whole "manage my plugins + settings" workflow lives in
-  one place (the folder/launch-at-login controls are no longer duplicated across
-  two windows). Discover currently opens from its section; embedding the catalog
-  browser in-window is a follow-up. See `docs/design/ui-consolidation.md`.
+- **One consolidated Vee window.** The Plugin Manager, Discover, and Preferences
+  windows are now a single sidebar window — **Installed**, **Discover**,
+  **Variables**, **Stores**, and **General** as sections. ⌘M opens it on
+  Installed, ⌘D on Discover, and ⌘, focuses General, so the whole "manage my
+  plugins + settings" workflow lives in one place (the folder/launch-at-login
+  controls are no longer duplicated across two windows). The Discover catalog
+  browser is now **embedded directly** in the window — its category/store filter
+  moved from a nested sidebar into toolbar menus so it renders as a single
+  column (no nested split view), and the retained catalog still opens instantly
+  on reopen. See `docs/design/ui-consolidation.md`.
 - **Widget-only plugins are flagged in Discover and the Manager.** A plugin
   with `<vee.surface>widget</vee.surface>` (no menu-bar item) now shows a
   "Widget-only" badge in the Plugin Manager, and — when a custom store declares

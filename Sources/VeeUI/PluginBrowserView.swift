@@ -337,9 +337,15 @@ public final class PluginBrowserModel: ObservableObject {
     }
 }
 
-/// Browses the shared xbar/SwiftBar catalog: a category sidebar and a grid of
-/// plugin cards, each with a trust chip, gated by a trust-at-install sheet.
-public struct PluginBrowserView: View {
+/// The Discover catalog browser as a **single-column** view (no
+/// `NavigationSplitView`), so it can be embedded in the consolidated window's
+/// detail pane — which is itself already inside a `NavigationSplitView` — without
+/// nesting split views. The category/store filter that used to be the standalone
+/// window's sidebar is surfaced here as toolbar menus, driven by the same
+/// `model.selectedCategory`/`selectedStoreID`. The grid, loading/empty/error
+/// states, the install-notice banner, and the trust-at-install sheet are shared
+/// with the (now dead-code) standalone `PluginBrowserView`, which wraps this.
+public struct DiscoverContentView: View {
     @ObservedObject private var model: PluginBrowserModel
 
     public init(model: PluginBrowserModel) {
@@ -347,95 +353,113 @@ public struct PluginBrowserView: View {
     }
 
     public var body: some View {
-        NavigationSplitView {
-            sidebar
-        } detail: {
-            detail
-        }
-        .frame(minWidth: 760, minHeight: 500)
-        .searchable(text: $model.search, placement: .toolbar, prompt: "Search plugins")
-        .toolbar {
-            ToolbarItem(placement: .primaryAction) {
-                Button {
-                    Task { await model.refresh() }
-                } label: {
-                    Label("Refresh", systemImage: "arrow.clockwise")
+        detail
+            .searchable(text: $model.search, placement: .toolbar, prompt: "Search plugins")
+            .toolbar {
+                // The store scope only exists when more than one store is
+                // configured (mirrors the old sidebar's Stores section).
+                if !model.storesWithCounts.isEmpty {
+                    ToolbarItem(placement: .automatic) { storeMenu }
                 }
-                .keyboardShortcut("r", modifiers: .command)
-                .disabled(model.isLoading)
-                .accessibilityLabel("Refresh catalog")
-                .help("Refresh the plugin list (⌘R)")
+                ToolbarItem(placement: .automatic) { categoryMenu }
+                ToolbarItem(placement: .primaryAction) {
+                    Button {
+                        Task { await model.refresh() }
+                    } label: {
+                        Label("Refresh", systemImage: "arrow.clockwise")
+                    }
+                    .keyboardShortcut("r", modifiers: .command)
+                    .disabled(model.isLoading)
+                    .accessibilityLabel("Refresh catalog")
+                    .help("Refresh the plugin list (⌘R)")
+                }
             }
-        }
-        .task { if model.entries.isEmpty { await model.load() } }
-        .overlay(alignment: .top) {
-            if let notice = model.notice {
-                NoticeBanner(notice: notice) { model.dismissNotice() }
-                    .padding(.top, 8)
-                    // Auto-dismiss after a few seconds; re-arms whenever the
-                    // notice changes (a newer install replaces an older banner).
-                    // `try?` would swallow the CancellationError from a notice
-                    // change cancelling this task and still dismiss the NEW
-                    // banner it raced with — only dismiss on a real timeout.
-                    .task(id: notice.id) {
-                        do {
-                            try await Task.sleep(for: .seconds(3))
-                        } catch {
-                            return
+            .task { if model.entries.isEmpty { await model.load() } }
+            .overlay(alignment: .top) {
+                if let notice = model.notice {
+                    NoticeBanner(notice: notice) { model.dismissNotice() }
+                        .padding(.top, 8)
+                        // Auto-dismiss after a few seconds; re-arms whenever the
+                        // notice changes (a newer install replaces an older banner).
+                        // `try?` would swallow the CancellationError from a notice
+                        // change cancelling this task and still dismiss the NEW
+                        // banner it raced with — only dismiss on a real timeout.
+                        .task(id: notice.id) {
+                            do {
+                                try await Task.sleep(for: .seconds(3))
+                            } catch {
+                                return
+                            }
+                            model.dismissNotice()
                         }
-                        model.dismissNotice()
-                    }
-                    .transition(.move(edge: .top).combined(with: .opacity))
-            }
-        }
-        .animation(.easeInOut(duration: 0.2), value: model.notice)
-        .sheet(item: $model.prompt) { prompt in
-            InstallTrustSheet(prompt: prompt, onCancel: { model.prompt = nil }, onInstall: { model.confirmInstall() })
-        }
-    }
-
-    private var sidebar: some View {
-        List(selection: $model.selectedCategory) {
-            Label("All Plugins", systemImage: "square.grid.2x2.fill")
-                .badge(model.entries.count)
-                .tag("")
-            if !model.storesWithCounts.isEmpty {
-                Section("Stores") {
-                    storeRow(name: "All Stores", symbol: "square.stack.3d.up.fill", count: model.entries.count, id: nil)
-                    ForEach(model.storesWithCounts, id: \.store.id) { item in
-                        storeRow(name: item.store.displayName, symbol: "shippingbox.fill", count: item.count, id: item.store.id)
-                    }
+                        .transition(.move(edge: .top).combined(with: .opacity))
                 }
             }
-            Section("Categories") {
+            .animation(.easeInOut(duration: 0.2), value: model.notice)
+            .sheet(item: $model.prompt) { prompt in
+                InstallTrustSheet(prompt: prompt, onCancel: { model.prompt = nil }, onInstall: { model.confirmInstall() })
+            }
+    }
+
+    /// The category filter, as a toolbar menu bound to `model.selectedCategory`
+    /// ("" = All). Replaces the sidebar's Categories section.
+    private var categoryMenu: some View {
+        Menu {
+            Picker("Category", selection: $model.selectedCategory) {
+                Text("All Plugins").tag("")
                 ForEach(model.categoriesWithCounts, id: \.name) { cat in
-                    Label(cat.name, systemImage: CategoryStyle.symbol(for: cat.name))
-                        .badge(cat.count)
-                        .tag(cat.name)
+                    Text("\(cat.name) (\(cat.count))").tag(cat.name)
                 }
             }
+            .pickerStyle(.inline)
+        } label: {
+            Label(model.selectedCategory.isEmpty ? "All Categories" : model.selectedCategory,
+                  systemImage: "line.3.horizontal.decrease.circle")
         }
-        .navigationSplitViewColumnWidth(min: 200, ideal: 220, max: 280)
-        .navigationTitle("Discover")
+        .help("Filter by category")
     }
 
-    /// A store scope row (selecting one filters the grid to that store). Uses a
-    /// button rather than list selection, which is bound to the category.
-    @ViewBuilder
-    private func storeRow(name: String, symbol: String, count: Int, id: StoreID?) -> some View {
-        Button {
-            model.selectedStoreID = id
-            model.selectedCategory = ""
-        } label: {
-            HStack {
-                Label(name, systemImage: symbol)
-                Spacer()
-                Text("\(count)").font(.caption).foregroundStyle(.secondary)
+    /// The store scope, as a toolbar menu. Uses buttons (not a `Picker`) so
+    /// picking a store also resets the category — matching the old sidebar's
+    /// store rows, whose selection was independent of the category list.
+    private var storeMenu: some View {
+        Menu {
+            Button {
+                model.selectedStoreID = nil
+                model.selectedCategory = ""
+            } label: {
+                storeMenuRow(name: "All Stores", isSelected: model.selectedStoreID == nil)
             }
-            .contentShape(Rectangle())
+            ForEach(model.storesWithCounts, id: \.store.id) { item in
+                Button {
+                    model.selectedStoreID = item.store.id
+                    model.selectedCategory = ""
+                } label: {
+                    storeMenuRow(name: "\(item.store.displayName) (\(item.count))",
+                                 isSelected: model.selectedStoreID == item.store.id)
+                }
+            }
+        } label: {
+            Label(storeMenuLabel, systemImage: "shippingbox")
         }
-        .buttonStyle(.plain)
-        .foregroundStyle(model.selectedStoreID == id ? Color.accentColor : Color.primary)
+        .help("Filter by store")
+    }
+
+    @ViewBuilder
+    private func storeMenuRow(name: String, isSelected: Bool) -> some View {
+        if isSelected {
+            Label(name, systemImage: "checkmark")
+        } else {
+            Text(name)
+        }
+    }
+
+    private var storeMenuLabel: String {
+        guard let id = model.selectedStoreID,
+              let store = model.storesWithCounts.first(where: { $0.store.id == id })?.store else {
+            return "All Stores"
+        }
+        return store.displayName
     }
 
     @ViewBuilder
@@ -478,6 +502,25 @@ public struct PluginBrowserView: View {
             .navigationTitle(model.visibleTitle)
             .navigationSubtitle("\(model.visibleEntries.count) plugins")
         }
+    }
+}
+
+/// The standalone Discover window's root. Retained as **dead-but-compiling**
+/// code after the catalog browser moved into the consolidated window
+/// (`LibraryView` → `.discover`); it simply hosts `DiscoverContentView` at the
+/// window's minimum size.
+public struct PluginBrowserView: View {
+    @ObservedObject private var model: PluginBrowserModel
+
+    public init(model: PluginBrowserModel) {
+        self.model = model
+    }
+
+    public var body: some View {
+        NavigationStack {
+            DiscoverContentView(model: model)
+        }
+        .frame(minWidth: 760, minHeight: 500)
     }
 }
 
