@@ -89,14 +89,17 @@ EOF
 fi
 
 cd "$tap"
-if git diff --quiet; then
+# Stage first, then test the staged diff — a brand-new tap's Casks/vee.rb and
+# README are untracked, and `git diff` (unstaged) would not see them, so the
+# self-seeding first run must compare the index, not the worktree.
+git add -A
+if git diff --cached --quiet; then
   echo "Tap already up to date for ${version}; nothing to push."
   exit 0
 fi
 
 git config user.name "github-actions[bot]"
 git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-git add -A
 git commit -m "vee ${version}"
 git push
 echo "Pushed tap update for vee ${version}."
