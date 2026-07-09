@@ -124,7 +124,13 @@ final class WidgetSnapshotPublisherTests: XCTestCase {
 
         publisher.publish(id: "a", name: "A", interval: nil, publish: makePublish(title: "hi"))
         publisher.publish(id: "b", name: "B", interval: nil, publish: makePublish(title: "yo"))
-        try await settle(coalesce)
+        // The coalesced flush lands on an async task; poll for it with a deadline
+        // rather than sleeping a fixed slice, since a loaded CI runner can outrun a
+        // bare `settle` and leave only the empty seed write visible.
+        let deadline = Date().addingTimeInterval(3.0)
+        while (writes.last?.plugins.count ?? 0) < 2, Date() < deadline {
+            try await Task.sleep(nanoseconds: 20_000_000)
+        }
         XCTAssertEqual(Set(writes.last?.plugins.map(\.id) ?? []), ["a", "b"], "both loaded plugins should appear first")
 
         // Dropping "b" from the loaded set must prune it from the very next
