@@ -15,8 +15,12 @@ public struct PluginManagerRow: Identifiable, Sendable {
     /// The last run's error message, if it failed. Surfaced as a badge that
     /// opens the debug console; `nil` when the plugin is healthy or disabled.
     public var lastError: String?
+    /// The plugin's output surface (`<vee.surface>`). Shown as a badge so a
+    /// widget-only plugin — which has no menu-bar item — is still visible and
+    /// identifiable in the Manager.
+    public var surface: HeaderMetadata.WidgetSurface
 
-    public init(id: String, name: String, interval: String, trust: String, isEnabled: Bool, hasSettings: Bool, features: PluginFeatures = PluginFeatures(), lastError: String? = nil) {
+    public init(id: String, name: String, interval: String, trust: String, isEnabled: Bool, hasSettings: Bool, features: PluginFeatures = PluginFeatures(), lastError: String? = nil, surface: HeaderMetadata.WidgetSurface = .menu) {
         self.id = id
         self.name = name
         self.interval = interval
@@ -25,6 +29,7 @@ public struct PluginManagerRow: Identifiable, Sendable {
         self.hasSettings = hasSettings
         self.features = features
         self.lastError = lastError
+        self.surface = surface
     }
 }
 
@@ -194,6 +199,16 @@ private struct ManagerRow: View {
                     }
                     if !row.trust.isEmpty {
                         TrustChip(symbol: trustSymbol, label: row.trust, tint: trustTint)
+                    }
+                    if row.surface != .menu {
+                        TrustChip(
+                            symbol: row.surface == .widget ? "square.grid.2x2.fill" : "square.grid.2x2",
+                            label: row.surface == .widget ? "Widget-only" : "Widget",
+                            tint: .purple
+                        )
+                        .help(row.surface == .widget
+                              ? "Widget-only — no menu-bar item; add it in Notification Center"
+                              : "Shows in the menu bar and as a widget")
                     }
                     if row.features.searchPanel {
                         Image(systemName: "magnifyingglass")

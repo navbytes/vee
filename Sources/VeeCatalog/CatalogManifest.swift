@@ -44,11 +44,17 @@ public struct ManifestPlugin: Codable, Sendable, Equatable {
     public var signature: String?
     public var deprecated: Bool?
     public var tags: [String]?
+    /// The plugin's output surface (`menu` / `both` / `widget`), if the store
+    /// declares it. Lets Discover flag a widget-only plugin — one with no
+    /// menu-bar presence — before install, without downloading its source.
+    /// Mirrors the plugin's own `<vee.surface>` header; a mismatch is harmless
+    /// (the installed plugin's header is authoritative once on disk).
+    public var surface: String?
 
     enum CodingKeys: String, CodingKey {
         case path, title, category, summary, author
         case minMacOS = "min_macos"
-        case sha256, signature, deprecated, tags
+        case sha256, signature, deprecated, tags, surface
     }
 }
 
@@ -107,7 +113,8 @@ public enum CatalogManifestParser {
                 signature: plugin.signature,
                 manifestSigningKey: manifest.signingKey,
                 minMacOS: plugin.minMacOS,
-                deprecated: plugin.deprecated ?? false
+                deprecated: plugin.deprecated ?? false,
+                manifestSurface: plugin.surface
             )
         }
         .sorted { $0.path < $1.path }

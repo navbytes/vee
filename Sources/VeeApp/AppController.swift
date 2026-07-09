@@ -684,7 +684,8 @@ public final class AppController: NSObject, NSApplicationDelegate {
                 isEnabled: enabled,
                 hasSettings: !header.vars.isEmpty || !declaredFeatures.isEmpty,
                 features: PluginFeatures(searchPanel: header.filter, hotkey: effectiveHotkey),
-                lastError: coordinators[id]?.lastError
+                lastError: coordinators[id]?.lastError,
+                surface: header.surface
             )
         }
     }

@@ -37,6 +37,10 @@ public struct CatalogEntry: Identifiable, Sendable, Equatable {
     public var minMacOS: String?
     /// Whether the store marks this plugin deprecated.
     public var deprecated: Bool
+    /// The store-declared output surface (`menu` / `both` / `widget`), if any.
+    /// `nil` under the zero-config convention (no manifest). Lets Discover flag
+    /// a widget-only plugin before install without fetching its source.
+    public var manifestSurface: String?
 
     /// Unique across stores: two stores may carry the same repo-relative path.
     public var id: String { "\(storeID.rawValue)#\(path)" }
@@ -54,7 +58,8 @@ public struct CatalogEntry: Identifiable, Sendable, Equatable {
         signature: String? = nil,
         manifestSigningKey: String? = nil,
         minMacOS: String? = nil,
-        deprecated: Bool = false
+        deprecated: Bool = false,
+        manifestSurface: String? = nil
     ) {
         self.storeID = storeID
         self.path = path
@@ -69,5 +74,6 @@ public struct CatalogEntry: Identifiable, Sendable, Equatable {
         self.manifestSigningKey = manifestSigningKey
         self.minMacOS = minMacOS
         self.deprecated = deprecated
+        self.manifestSurface = manifestSurface
     }
 }

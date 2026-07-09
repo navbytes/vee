@@ -7,6 +7,11 @@ All notable changes to Vee are documented here. The format is based on
 ## [Unreleased]
 
 ### Added
+- **Widget-only plugins are flagged in Discover and the Manager.** A plugin
+  with `<vee.surface>widget</vee.surface>` (no menu-bar item) now shows a
+  "Widget-only" badge in the Plugin Manager, and — when a custom store declares
+  a plugin's `surface` in its `vee-catalog.json` — in the Discover grid before
+  install, so a plugin with no menu-bar presence isn't a mystery.
 - **Composable widget layout tree.** A widget card can now carry a `layout` —
   a bounded tree of native primitives (`vstack`/`hstack`/`zstack`/`grid`,
   `text`/`image`/`gauge`/`sparkline`/`spacer`/`divider`) with per-element style
