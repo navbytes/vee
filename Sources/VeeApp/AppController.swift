@@ -706,7 +706,7 @@ public final class AppController: NSObject, NSApplicationDelegate {
         let isExecutable: Bool
         let isDisabled: Bool
         let isHotkeyDisabled: Bool
-        let hotkeyBinding: HotKeySpec?
+        let hotkeyBinding: String?
         let lastError: String?
     }
 
