@@ -7,6 +7,12 @@ All notable changes to Vee are documented here. The format is based on
 ## [Unreleased]
 
 ### Changed
+- **Installed section polish (UX tier 2).** The sidebar's **Installed** row now
+  carries a live plugin count as a native badge; the list shows placeholder
+  skeleton rows while it loads instead of a lone centered spinner; and the row
+  badges follow the tier-1 doctrine — schedule, surface, and hotkey are muted
+  `MetaChip`s while trust and error stay filled `TrustChip`s, with state leading
+  and metadata trailing.
 - **Homebrew moves to a dedicated tap.** Install is now `brew tap navbytes/tap`
   (the [`navbytes/homebrew-tap`](https://github.com/navbytes/homebrew-tap) repo)
   instead of tapping the app repo directly. The release workflow keeps the tap in
