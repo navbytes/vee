@@ -608,8 +608,7 @@ public final class AppController: NSObject, NSApplicationDelegate {
 
     /// Opens the consolidated window on the Discover section. Kept as a thin
     /// wrapper (rather than inlined) so the ⌘D menu action, the Manager
-    /// empty-state, and first-run all route through one place; the standalone
-    /// `PluginBrowserWindow` is now unused.
+    /// empty-state, and first-run all route through one place.
     private func openBrowser() {
         LibraryWindow.shared.show(model: makeLibraryModel(section: .discover))
     }
