@@ -118,4 +118,33 @@ final class FixtureRoundTripTests: XCTestCase {
         )
         XCTAssertEqual(card, expected)
     }
+
+    /// Closes the SDK→parser loop for the layout tree: the `widget-layout`
+    /// example (byte-identical across the TS/Python/Go SDKs) emits
+    /// widget-layout.txt, and `WidgetCardParser` must recover the exact tree —
+    /// the same node vocabulary, the two pressure-test modifiers
+    /// (`monospaced_digit`/`min_scale`), and the circular gauge — with no
+    /// diagnostics (a clean tree trips no guardrail).
+    func testWidgetLayoutFixtureParses() throws {
+        let url = fixturesDirectory().appendingPathComponent("widget-layout.txt")
+        let source = try String(contentsOf: url, encoding: .utf8)
+        let (card, diagnostics) = WidgetCardParser.parse(source)
+        XCTAssertEqual(diagnostics, [])
+
+        let expected = WidgetNode(type: "vstack", align: "leading", spacing: 6, children: [
+            WidgetNode(type: "hstack", spacing: 5, children: [
+                WidgetNode(type: "image", symbol: "cpu", style: WidgetNodeStyle(tint: .named("blue"))),
+                WidgetNode(type: "text", text: "CPU", style: WidgetNodeStyle(
+                    font: WidgetNodeFont(size: "caption", weight: "semibold"), tint: .named("secondary"))),
+                WidgetNode(type: "spacer")
+            ]),
+            WidgetNode(type: "text", text: "38%", style: WidgetNodeStyle(
+                font: WidgetNodeFont(size: "title", design: "rounded"),
+                tint: .named("green"), monospacedDigit: true, minScale: 0.6)),
+            WidgetNode(type: "gauge", value: 0.38, gaugeStyle: "circular", style: WidgetNodeStyle(tint: .named("green")))
+        ])
+        XCTAssertEqual(card?.layout, expected)
+        // A pure-layout card still gets the default template.
+        XCTAssertEqual(card?.template, .stat)
+    }
 }
