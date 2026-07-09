@@ -465,7 +465,16 @@ public struct DiscoverContentView: View {
     @ViewBuilder
     private var detail: some View {
         if model.isLoading {
-            ProgressView("Loading catalog…").frame(maxWidth: .infinity, maxHeight: .infinity)
+            // Skeleton cards in the real grid, so the catalog settles into place
+            // instead of the whole pane flipping from a centered spinner to a full
+            // grid (the fetch can take a beat over the network).
+            ScrollView {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 300, maximum: 460), spacing: 12)], spacing: 12) {
+                    ForEach(0..<6, id: \.self) { _ in SkeletonPluginCard() }
+                }
+                .padding(16)
+            }
+            .navigationTitle("Discover")
         } else if let error = model.errorMessage {
             ContentUnavailableView {
                 Label("Couldn't load plugins", systemImage: "wifi.exclamationmark")
@@ -626,6 +635,30 @@ private struct PluginCard: View {
         .onHover { hovering = $0 }
         .animation(.easeOut(duration: 0.15), value: hovering)
         .task { await model.loadLastUpdated(for: entry) }
+    }
+}
+
+/// A placeholder card shown while the catalog loads — neutral bars in
+/// ``PluginCard``'s shape (tile · title/lines/badge · action), on the same
+/// `veeCardSurface`, so the grid holds its layout instead of popping in.
+private struct SkeletonPluginCard: View {
+    var body: some View {
+        HStack(alignment: .top, spacing: 11) {
+            RoundedRectangle(cornerRadius: 9, style: .continuous)
+                .fill(Palette.hairline)
+                .frame(width: 34, height: 34)
+            VStack(alignment: .leading, spacing: 7) {
+                Capsule().fill(Palette.hairline).frame(width: 128, height: 11)
+                Capsule().fill(Palette.hairline).frame(width: 180, height: 8)
+                Capsule().fill(Palette.hairline).frame(width: 150, height: 8)
+                Capsule().fill(Palette.hairline).frame(width: 72, height: 16).padding(.top, 2)
+            }
+            Spacer(minLength: 6)
+            Capsule().fill(Palette.hairline).frame(width: 58, height: 22)
+        }
+        .padding(Space.md)
+        .veeCardSurface()
+        .accessibilityHidden(true)
     }
 }
 
