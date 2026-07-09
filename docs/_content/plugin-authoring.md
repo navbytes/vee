@@ -231,23 +231,23 @@ the menu bar — opt a plugin into the widget surface contract:
 
 ```
 # <vee.surface>both</vee.surface>
-# <vee.widget.interval>15m</vee.widget.interval>
 ```
 
 - `<vee.surface>menu</vee.surface>` (or omit the tag) — unchanged: a normal
   menu-bar plugin, scraped for its widget tile.
 - `<vee.surface>both</vee.surface>` — served in the menu as usual, **and**
-  invoked a second time on its own cadence to produce a rich widget card.
+  invoked a second time in widget mode to produce a rich widget card.
 - `<vee.surface>widget</vee.surface>` — **widget-only**: no status item, no
   menu bar presence at all. The plugin exists only to feed a widget.
 
-`<vee.widget.interval>` sets the widget-mode cadence (same grammar as the
-filename interval: `ms`/`s`/`m`/`h`/`d`). It defaults to the plugin's filename
-interval, or 15 minutes for a widget-only plugin with no filename interval to
-inherit — and is always **floored at 5 minutes** regardless of what's
-requested, since WidgetKit's reload budget makes anything faster meaningless.
-It's independent of the menu interval, so `cpu.5s.sh` can feed a 5-second menu
-and a 15-minute widget from one file.
+The widget-mode cadence needs no separate tag — it reuses the plugin's
+**filename interval** (the same field the menu bar uses), with only a small
+safety floor: `max(filename interval, 10s)`. Because Vee is an always-running
+app, it pushes widget reloads the moment new data arrives (rather than waiting
+on WidgetKit's passive budget, which only applies when an app isn't running), so
+a `cpu.5s.sh` widget can track near-real-time data straight from the menu-bar
+plugin's own cadence. A widget-only plugin whose filename carries no interval
+falls back to the 10-second floor.
 
 ### `VEE_TARGET`
 
@@ -404,7 +404,6 @@ Vee adds a few tags of its own. All are opt-in — omit them for the classic beh
 | `<vee.filter>` | `<vee.filter>true</vee.filter>` opts the dropdown into the [searchable filter panel](#searchable-filter-panel). |
 | `<vee.shortcut>` | `<vee.shortcut>cmd+shift+k</vee.shortcut>` binds a [global hotkey](#global-hotkey-veeshortcut) that opens the search panel from anywhere. |
 | `<vee.surface>` | `menu` (default) / `both` / `widget` — which output surface(s) the plugin serves. See [Widgets](#widgets). |
-| `<vee.widget.interval>` | `<vee.widget.interval>15m</vee.widget.interval>` — the widget-mode refresh cadence for a `both`/`widget` surface plugin. See [Widgets](#widgets). |
 | `<vee.capabilities>`, `<vee.network>`, `<vee.secrets>`, `<vee.filesystem.read>` / `<vee.filesystem.write>`, `<vee.exec>` | Declare the plugin's [trust footprint](trust-model.md). |
 
 ## SF Symbols

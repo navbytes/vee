@@ -73,16 +73,10 @@ public struct HeaderMetadata: Equatable, Sendable {
     }
 
     /// Defaults to `.menu` — unchanged behavior for every plugin that doesn't
-    /// declare a surface.
+    /// declare a surface. The widget-mode refresh cadence is deliberately *not*
+    /// a separate field: it reuses the plugin's filename interval (the same
+    /// field the menu bar uses), floored at the system minimum by the caller.
     public var surface: WidgetSurface = .menu
-
-    /// `<vee.widget.interval>15m</vee.widget.interval>`: the widget-mode
-    /// refresh cadence, parsed with the same grammar as the filename interval
-    /// token. `nil` means "no explicit interval" — the caller falls back to
-    /// the plugin's filename interval (see `RefreshInterval`/`PluginFilename`),
-    /// and floors the result at 5 minutes regardless of source (WidgetKit's
-    /// reload budget makes anything faster meaningless).
-    public var widgetInterval: RefreshInterval?
 
     public init() {}
 }

@@ -143,8 +143,9 @@ All notable changes to Vee are documented here. The format is based on
   ("6 OK · 1 failing") with the failing plugins called out.
 - **Widget surface contract:** a plugin can now feed its widget tile *data*
   instead of a scrape of its menu-bar line. `<vee.surface>both</vee.surface>`
-  runs the plugin a second time with `VEE_TARGET=widget` on its own cadence
-  (`<vee.widget.interval>`, floored at 5 minutes) and reads one JSON "card"
+  runs the plugin a second time with `VEE_TARGET=widget` on the plugin's
+  filename interval (small 10s floor; the always-running app pushes widget
+  reloads on data change, so no 5-minute cap), and reads one JSON "card"
   object from stdout — `stat`/`gauge`/`trend`/`list`/`board`, each a native
   SwiftUI template rendered per widget family. `<vee.surface>widget</vee.surface>`
   makes a plugin **widget-only**: no status item, no menu, feeding just the

@@ -90,18 +90,30 @@ shared-snapshot, out-of-process producer.
 - `widget` → no `NSStatusItem`, no menu; invoked only in widget mode on the widget
   interval. The "widget-only plugin."
 
-### 2. Cadence — `<vee.widget.interval>`
+### 2. Cadence — the filename interval, small floor, push-driven
+
+There is **no widget-specific interval tag**. The widget-mode cadence reuses the
+same field the menu bar does — the plugin's filename interval — with only a
+small safety floor:
 
 ```
-<vee.widget.interval>15m</vee.widget.interval>
+widget interval = max(filename interval, 10s)
 ```
 
-The widget-mode refresh cadence, parsed with the existing `RefreshInterval` grammar
-(`ms`/`s`/`m`/`h`/`d`). Defaults to the plugin's filename interval. **Floored at 5
-minutes** regardless of what's requested — WidgetKit's reload budget makes anything
-faster meaningless, and a widget-only plugin has no filename interval to inherit.
-Independent of the menu interval, so a `cpu.5s.sh` can feed a 5‑second menu and a
-15‑minute widget from one file.
+The floor is *not* WidgetKit's passive ~40–70/day reload budget. That budget
+governs widgets whose app **isn't running**. Vee is an always-running menu-bar
+app — the "companion app" — and it pushes reloads via `WidgetCenter` on every
+data change (`WidgetSnapshotPublisher`) and on launch/wake
+(`AppController.reloadAllTimelines`). With a `.never` timeline policy, WidgetKit
+honors those explicit reloads near-immediately, so the widget can track
+near-real-time data. The 10s floor is just an energy guard against a
+pathologically fast filename (`1s`); the real cost of fast updates is the CPU to
+re-run the plugin, which is the author's choice — exactly as for the menu bar.
+
+A widget-only plugin whose filename carries no interval falls back to the floor.
+This is a deliberate *don't-reinvent-the-wheel* choice: no parallel config
+surface for the widget, one source of truth for timing
+(`PluginCoordinator.widgetRefreshInterval`).
 
 ### 3. Mode flag — `VEE_TARGET`
 
@@ -235,8 +247,9 @@ the renderer uses the template; when absent it falls back to the scraped fields
 - `WidgetPublish`/`WidgetSnapshotPublisher` extend to carry an optional card; the
   content-signature dedupe includes it, so a changed card spends a (throttled)
   reload and an unchanged one doesn't — reusing all the existing metering.
-- The `<vee.widget.interval>` floor and the existing 5‑minute reload floor keep the
-  extra runs cheap.
+- The 10s widget-interval floor and the publisher's 10s reload floor (a small
+  energy guard, since the always-running app pushes reloads) keep the extra runs
+  cheap without capping freshness.
 
 ## Security & trust
 
@@ -270,7 +283,7 @@ compiles it, and it can't be unit-tested. So:
 
 - **A. Card model + parser** (`VeeWidgetShared` types, `WidgetCardParser` in
   `VeePluginFormat`) — pure, fully tested.
-- **B. Header tags** — `<vee.surface>`, `<vee.widget.interval>` into
+- **B. Header tags** — `<vee.surface>` into
   `HeaderMetadata`/`HeaderParser`, tested.
 - **C. Snapshot v3** — `card` field, version bump, versioned-decode tests.
 - **D. Widget-mode invocation + scheduling** — `VEE_TARGET`, second scheduler,

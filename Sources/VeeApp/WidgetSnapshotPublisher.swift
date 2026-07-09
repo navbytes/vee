@@ -3,10 +3,14 @@ import VeeWidgetShared
 
 /// Owns widget-snapshot publishing state and policy: coalesced writes to the
 /// shared snapshot file and metered reload requests, so a fast (e.g. `5s`) or
-/// streaming plugin can't blow through WidgetKit's reload budget or churn disk
-/// once per tick. Extracted from `AppController` so this policy is independently
-/// testable; the production effects (writing the file, asking WidgetKit to
-/// reload) are injected, so this type itself stays WidgetKit-free.
+/// streaming plugin churns neither the disk nor `WidgetCenter` more than once
+/// per short reload window. Because Vee is an always-running companion app,
+/// explicit reloads are honored near-immediately (not bound by the passive
+/// per-app budget that governs widgets whose app isn't running), so the reload
+/// floor is a small energy guard (10s), not a WidgetKit hard limit. Extracted
+/// from `AppController` so this policy is independently testable; the
+/// production effects (writing the file, asking WidgetKit to reload) are
+/// injected, so this type itself stays WidgetKit-free.
 @MainActor
 final class WidgetSnapshotPublisher {
     private let write: (WidgetSnapshot) -> Void
@@ -41,7 +45,7 @@ final class WidgetSnapshotPublisher {
         write: @escaping (WidgetSnapshot) -> Void,
         requestReload: @escaping () -> Void,
         flushCoalesce: TimeInterval = 0.3,
-        reloadFloor: TimeInterval = 300,
+        reloadFloor: TimeInterval = 10,
         timestampFloor: TimeInterval = 60
     ) {
         self.write = write

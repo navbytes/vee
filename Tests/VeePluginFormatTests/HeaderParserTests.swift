@@ -132,19 +132,13 @@ final class HeaderParserTests: XCTestCase {
         XCTAssertEqual(HeaderParser.parse(source: "echo hi\n").surface, .menu)
     }
 
-    func testVeeWidgetIntervalParses() {
+    /// The widget-mode cadence is deliberately *not* a header field — it reuses
+    /// the filename interval (see `PluginCoordinator.widgetRefreshInterval`), so
+    /// `<vee.widget.interval>` is just an unknown tag that parses to nothing.
+    func testVeeWidgetIntervalTagIsIgnored() {
         let m = HeaderParser.parse(source: "# <vee.widget.interval>15m</vee.widget.interval>\n")
-        XCTAssertEqual(m.widgetInterval, .minutes(15))
-    }
-
-    func testVeeWidgetIntervalAbsentIsNil() {
-        let m = HeaderParser.parse(source: "echo hi\n")
-        XCTAssertNil(m.widgetInterval)
-    }
-
-    func testVeeWidgetIntervalInvalidTokenIsNil() {
-        let m = HeaderParser.parse(source: "# <vee.widget.interval>not-a-duration</vee.widget.interval>\n")
-        XCTAssertNil(m.widgetInterval)
+        XCTAssertEqual(m.surface, .menu)
+        XCTAssertTrue(m.vars.isEmpty)
     }
 
     func testNoHeaderYieldsEmptyMetadata() {

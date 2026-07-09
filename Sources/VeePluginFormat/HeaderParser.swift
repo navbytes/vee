@@ -61,10 +61,6 @@ public enum HeaderParser {
             // back to `.menu` (today's behavior), same graceful-degrade shape
             // as every other tag here.
             case "surface": meta.surface = HeaderMetadata.WidgetSurface(rawValue: value.lowercased()) ?? .menu
-            // Vee-native: the widget-mode refresh cadence
-            // (`<vee.widget.interval>`). Ignored when the token can't be
-            // parsed — the caller falls back to the filename interval.
-            case "widget.interval": meta.widgetInterval = RefreshInterval.parse(token: value)
             case "var":
                 if let decl = parseVar(value) { meta.vars.append(decl) }
             default:
