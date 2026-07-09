@@ -192,8 +192,9 @@ public struct PluginManagerView: View {
 }
 
 /// A single plugin row: icon, name, schedule + trust, an overflow menu that
-/// appears on hover, and a trailing enable toggle.
-private struct ManagerRow: View {
+/// appears on hover, and a trailing enable toggle. Internal (not `private`) so
+/// the consolidated `LibraryView` reuses it for its Installed section.
+struct ManagerRow: View {
     @ObservedObject var model: PluginManagerModel
     let row: PluginManagerRow
     @State private var hovering = false
