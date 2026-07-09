@@ -97,6 +97,33 @@ Merge the three "library" surfaces into a single window, reusing the
   window sprawl. Debug may optionally "pop out" as its own resizable window (it's
   a live log).
 
+> **Status update (B1 — done):** selecting a plugin in **Installed** now pushes a
+> `PluginDetailView` (`Sources/VeeUI/PluginDetailView.swift`) into the section's
+> existing detail `NavigationStack` — a segmented **Settings · Debug** switch
+> filling the pane (no nested split view; the push supplies the back button and
+> the plugin name is the `navigationTitle`). To avoid a fixed-size island and a
+> doubled toolbar, the two per-plugin views were split into *embeddable content*:
+> `PluginSettingsFormContent` (the `Form` fields only — no `NavigationStack`,
+> frame, or Save/Cancel toolbar) and `PluginDebugContent` (the console body with
+> no fixed frame). The standalone windows are unchanged: `PluginSettingsView`
+> re-wraps the form content in its `NavigationStack` + 460×420 frame + Save/Cancel
+> toolbar, and `PluginDebugView` re-wraps the console in its 580×540 frame.
+> In-pane, the Settings tab shows `PluginSettingsFormContent` with an in-form
+> **Save** button (applies and stays; the back button returns to the list), and
+> the Debug tab shows `PluginDebugContent` filling the pane. Navigation is
+> per-row: only the row's **identity** area (icon + name + metadata) is a
+> `NavigationLink(value: row.id)` (via `ManagerRow(navigatesToDetail:)`), so the
+> trailing enable toggle and overflow menu stay independent controls; the link is
+> resolved by a `.navigationDestination(for: String.self)`. The per-plugin models
+> come from the plugin's live `PluginCoordinator` via a `pluginDetail` provider on
+> `LibraryModel` (see `AppController.makeLibraryModel`):
+> `PluginCoordinator.settingsModel()` / `debugModel()` are the single construction
+> path also used by the pop-out windows, so the in-pane console shares the
+> coordinator's live, cached debug model. The pop-out windows are **not** retired:
+> the status-item menus (`StatusItemController`) and the notification "Open Log"
+> action still open them for menu-bar plugins, and the Installed row's overflow
+> menu keeps its window-opening `onSettings`/`onDebug` items as a secondary path.
+
 > **Status update:** the shell has landed and **Discover is now embedded** in the
 > `.discover` section. The catalog browser was factored into a single-column
 > `DiscoverContentView` (`PluginBrowserView.swift`) — its old category/store

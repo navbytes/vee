@@ -85,67 +85,68 @@ public final class PluginSettingsModel: ObservableObject {
     }
 }
 
-/// An auto-generated settings form: one control per declared `<xbar.var>`.
-public struct PluginSettingsView: View {
+/// The settings form *content* — just the `Form` fields (Features + declared
+/// variables), with no window chrome: no outer `NavigationStack`, no `.frame`,
+/// and no Save/Cancel toolbar. Shared by the standalone `PluginSettingsView`
+/// window and the consolidated window's in-pane Settings tab, so both render the
+/// identical controls.
+///
+/// When `onSave` is supplied (the in-pane case, where there's no window toolbar
+/// to host Save), an in-form Save button is appended as a trailing section. The
+/// standalone window passes `nil` and keeps Save/Cancel in its toolbar.
+public struct PluginSettingsFormContent: View {
     @ObservedObject private var model: PluginSettingsModel
-    private let onClose: () -> Void
+    private let onSave: (() -> Void)?
 
-    public init(model: PluginSettingsModel, onClose: @escaping () -> Void) {
+    public init(model: PluginSettingsModel, onSave: (() -> Void)? = nil) {
         self.model = model
-        self.onClose = onClose
+        self.onSave = onSave
     }
 
     public var body: some View {
-        NavigationStack {
-            Group {
-                if model.declarations.isEmpty && model.features.isEmpty {
-                    ContentUnavailableView(
-                        "No preferences",
-                        systemImage: "slider.horizontal.3",
-                        description: Text("This plugin has no configurable settings.")
-                    )
-                } else {
-                    Form {
-                        if !model.features.isEmpty {
-                            Section("Features") {
-                                if model.features.searchPanel {
-                                    featureRow(
-                                        symbol: "magnifyingglass",
-                                        title: "Searchable menu",
-                                        detail: "Filter this plugin's items from a search panel (⌘F)."
-                                    )
-                                }
-                                if model.hotkeyControllable {
-                                    hotkeyControl
-                                }
+        Group {
+            if model.declarations.isEmpty && model.features.isEmpty {
+                ContentUnavailableView(
+                    "No preferences",
+                    systemImage: "slider.horizontal.3",
+                    description: Text("This plugin has no configurable settings.")
+                )
+            } else {
+                Form {
+                    if !model.features.isEmpty {
+                        Section("Features") {
+                            if model.features.searchPanel {
+                                featureRow(
+                                    symbol: "magnifyingglass",
+                                    title: "Searchable menu",
+                                    detail: "Filter this plugin's items from a search panel (⌘F)."
+                                )
                             }
-                        }
-                        if !model.declarations.isEmpty {
-                            Section {
-                                ForEach(model.declarations, id: \.name) { declaration in
-                                    row(for: declaration)
-                                }
-                            } footer: {
-                                Text("Secret values are masked and stored in your macOS Keychain. Saving refreshes \(model.pluginName).")
+                            if model.hotkeyControllable {
+                                hotkeyControl
                             }
                         }
                     }
-                    .formStyle(.grouped)
+                    if !model.declarations.isEmpty {
+                        Section {
+                            ForEach(model.declarations, id: \.name) { declaration in
+                                row(for: declaration)
+                            }
+                        } footer: {
+                            Text("Secret values are masked and stored in your macOS Keychain. Saving refreshes \(model.pluginName).")
+                        }
+                    }
+                    if let onSave {
+                        Section {
+                            Button("Save") { onSave() }
+                                .keyboardShortcut(.defaultAction)
+                                .disabled(model.declarations.isEmpty)
+                        }
+                    }
                 }
-            }
-            .navigationTitle("\(model.pluginName) Settings")
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel", role: .cancel) { onClose() }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") { model.save(); onClose() }
-                        .keyboardShortcut(.defaultAction)
-                        .disabled(model.declarations.isEmpty)
-                }
+                .formStyle(.grouped)
             }
         }
-        .frame(width: 460, height: 420)
     }
 
     private func row(for declaration: VarDeclaration) -> some View {
@@ -206,5 +207,38 @@ public struct PluginSettingsView: View {
         case .disabled, .none:
             EmptyView()
         }
+    }
+}
+
+/// An auto-generated settings form in its own window (status-item "Settings…"
+/// menu). Wraps `PluginSettingsFormContent` in the window chrome — a
+/// `NavigationStack`, the fixed window frame, and Save/Cancel toolbar buttons —
+/// so its look and behavior are unchanged. The in-pane Settings tab uses
+/// `PluginSettingsFormContent` directly instead.
+public struct PluginSettingsView: View {
+    @ObservedObject private var model: PluginSettingsModel
+    private let onClose: () -> Void
+
+    public init(model: PluginSettingsModel, onClose: @escaping () -> Void) {
+        self.model = model
+        self.onClose = onClose
+    }
+
+    public var body: some View {
+        NavigationStack {
+            PluginSettingsFormContent(model: model)
+                .navigationTitle("\(model.pluginName) Settings")
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Cancel", role: .cancel) { onClose() }
+                    }
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Save") { model.save(); onClose() }
+                            .keyboardShortcut(.defaultAction)
+                            .disabled(model.declarations.isEmpty)
+                    }
+                }
+        }
+        .frame(width: 460, height: 420)
     }
 }

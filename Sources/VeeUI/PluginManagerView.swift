@@ -197,10 +197,70 @@ public struct PluginManagerView: View {
 struct ManagerRow: View {
     @ObservedObject var model: PluginManagerModel
     let row: PluginManagerRow
+    /// When `true` (the consolidated window's Installed list), the identity area
+    /// (icon + name + metadata) is a `NavigationLink` to the plugin's in-pane
+    /// Settings/Debug detail. The trailing overflow menu and enable toggle stay
+    /// *outside* the link as independent controls, so tapping them never
+    /// navigates. The standalone Plugin Manager window passes `false` (default),
+    /// leaving the row a plain, non-navigating row exactly as before.
+    var navigatesToDetail: Bool = false
     @State private var hovering = false
     @State private var confirmingDelete = false
 
     var body: some View {
+        HStack(spacing: 11) {
+            if navigatesToDetail {
+                NavigationLink(value: row.id) { identity }
+                    .buttonStyle(.plain)
+            } else {
+                identity
+            }
+
+            Menu {
+                if row.hasSettings {
+                    Button { model.onSettings(row.id) } label: { Label("Settings…", systemImage: "slider.horizontal.3") }
+                }
+                Button { model.onDebug(row.id) } label: { Label("Debug…", systemImage: "ladybug") }
+                Button { model.onReveal(row.id) } label: { Label("Reveal in Finder", systemImage: "folder") }
+                Divider()
+                Button(role: .destructive) { confirmingDelete = true } label: {
+                    Label("Delete…", systemImage: "trash")
+                }
+            } label: {
+                Image(systemName: "ellipsis")
+                    .foregroundStyle(.secondary)
+                    .frame(width: 22, height: 22)
+                    .contentShape(Rectangle())
+            }
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .fixedSize()
+            // Kept faint until hover for a calm resting state, but always fully
+            // opaque under VoiceOver / keyboard focus so it isn't easy to miss.
+            .opacity(hovering ? 1 : 0.35)
+            .accessibilityLabel("Actions for \(row.name)")
+
+            Toggle("", isOn: model.enabledBinding(row.id))
+                .labelsHidden()
+                .toggleStyle(.switch)
+                .controlSize(.small)
+                .accessibilityLabel("Enable \(row.name)")
+        }
+        .padding(.vertical, 3)
+        .onHover { hovering = $0 }
+        .confirmationDialog("Delete “\(row.name)”?", isPresented: $confirmingDelete, titleVisibility: .visible) {
+            Button("Move to Trash", role: .destructive) { model.delete(row.id) }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("The plugin script will be moved to the Trash. You can restore it from there.")
+        }
+    }
+
+    /// The row's identity: icon, name, and metadata badges. Rendered plainly in
+    /// the standalone window, or wrapped in a `NavigationLink` in the Installed
+    /// list (see `navigatesToDetail`). `.contentShape` makes the whole area —
+    /// including gaps between badges — a single tap target for the link.
+    private var identity: some View {
         HStack(spacing: 11) {
             PluginTile(symbol: "puzzlepiece.extension.fill", tint: row.isEnabled ? .accentColor : .secondary, size: 30)
                 .opacity(row.isEnabled ? 1 : 0.6)
@@ -247,47 +307,9 @@ struct ManagerRow: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
             }
-
-            Spacer(minLength: 6)
-
-            Menu {
-                if row.hasSettings {
-                    Button { model.onSettings(row.id) } label: { Label("Settings…", systemImage: "slider.horizontal.3") }
-                }
-                Button { model.onDebug(row.id) } label: { Label("Debug…", systemImage: "ladybug") }
-                Button { model.onReveal(row.id) } label: { Label("Reveal in Finder", systemImage: "folder") }
-                Divider()
-                Button(role: .destructive) { confirmingDelete = true } label: {
-                    Label("Delete…", systemImage: "trash")
-                }
-            } label: {
-                Image(systemName: "ellipsis")
-                    .foregroundStyle(.secondary)
-                    .frame(width: 22, height: 22)
-                    .contentShape(Rectangle())
-            }
-            .menuStyle(.borderlessButton)
-            .menuIndicator(.hidden)
-            .fixedSize()
-            // Kept faint until hover for a calm resting state, but always fully
-            // opaque under VoiceOver / keyboard focus so it isn't easy to miss.
-            .opacity(hovering ? 1 : 0.35)
-            .accessibilityLabel("Actions for \(row.name)")
-
-            Toggle("", isOn: model.enabledBinding(row.id))
-                .labelsHidden()
-                .toggleStyle(.switch)
-                .controlSize(.small)
-                .accessibilityLabel("Enable \(row.name)")
         }
-        .padding(.vertical, 3)
-        .onHover { hovering = $0 }
-        .confirmationDialog("Delete “\(row.name)”?", isPresented: $confirmingDelete, titleVisibility: .visible) {
-            Button("Move to Trash", role: .destructive) { model.delete(row.id) }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("The plugin script will be moved to the Trash. You can restore it from there.")
-        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .contentShape(Rectangle())
     }
 
     private var trustTint: Color {

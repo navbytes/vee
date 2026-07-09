@@ -46,6 +46,11 @@ public final class LibraryModel: ObservableObject {
     public let stores: StoresSettingsModel
     public let variables: VariablesEditorModel
     public let browser: PluginBrowserModel
+    /// Resolves an installed plugin's id to its live Settings/Debug models so the
+    /// Installed section can show them in-pane. Returns `nil` for an unknown id
+    /// (e.g. a plugin removed while the window is open). Supplied by the app,
+    /// which owns the per-plugin coordinators.
+    public let pluginDetail: (String) -> PluginDetailModels?
 
     public init(
         section: LibrarySection = .installed,
@@ -53,7 +58,8 @@ public final class LibraryModel: ObservableObject {
         general: GeneralSettingsModel,
         stores: StoresSettingsModel,
         variables: VariablesEditorModel,
-        browser: PluginBrowserModel
+        browser: PluginBrowserModel,
+        pluginDetail: @escaping (String) -> PluginDetailModels? = { _ in nil }
     ) {
         self.section = section
         self.manager = manager
@@ -61,6 +67,7 @@ public final class LibraryModel: ObservableObject {
         self.stores = stores
         self.variables = variables
         self.browser = browser
+        self.pluginDetail = pluginDetail
     }
 }
 
@@ -112,7 +119,7 @@ public struct LibraryView: View {
     private var detail: some View {
         switch model.section {
         case .installed:
-            InstalledPluginsList(model: model.manager)
+            InstalledPluginsList(model: model.manager, pluginDetail: model.pluginDetail)
         case .discover:
             DiscoverContentView(model: model.browser)
         case .variables:
@@ -130,6 +137,8 @@ public struct LibraryView: View {
 /// `ManagerRow` and the loaded/empty gating from the off-main row build.
 struct InstalledPluginsList: View {
     @ObservedObject var model: PluginManagerModel
+    /// Resolves a row's id to its in-pane Settings/Debug models (see `LibraryModel`).
+    let pluginDetail: (String) -> PluginDetailModels?
 
     var body: some View {
         Form {
@@ -160,13 +169,28 @@ struct InstalledPluginsList: View {
             } else {
                 Section("Plugins") {
                     ForEach(model.rows) { row in
-                        ManagerRow(model: model, row: row)
+                        // The identity area navigates to the plugin's in-pane
+                        // Settings/Debug detail; the trailing toggle and overflow
+                        // menu stay outside the link as independent controls.
+                        ManagerRow(model: model, row: row, navigatesToDetail: true)
                     }
                 }
             }
         }
         .formStyle(.grouped)
         .navigationTitle("Installed")
+        .navigationDestination(for: String.self) { id in
+            if let models = pluginDetail(id) {
+                PluginDetailView(name: name(for: id), models: models)
+            } else {
+                // The plugin went away (e.g. deleted) while the window was open.
+                ContentUnavailableView(
+                    "Plugin unavailable",
+                    systemImage: "puzzlepiece.extension",
+                    description: Text("This plugin is no longer available.")
+                )
+            }
+        }
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button {
@@ -185,5 +209,11 @@ struct InstalledPluginsList: View {
                 .help("Open the plugins folder in Finder")
             }
         }
+    }
+
+    /// The display name for a row id, for the detail's navigation title. Falls
+    /// back to the id if the row is gone.
+    private func name(for id: String) -> String {
+        model.rows.first(where: { $0.id == id })?.name ?? id
     }
 }
