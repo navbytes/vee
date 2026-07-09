@@ -559,26 +559,26 @@ public final class AppController: NSObject, NSApplicationDelegate {
             general: general,
             stores: stores,
             variables: variables,
-            onDiscover: { [weak self] in self?.openBrowser() }
+            browser: browserModel()
         )
     }
 
-    private func openBrowser() {
+    /// The retained Discover catalog model, embedded in the consolidated window's
+    /// Discover section. Rebuilt only when the store set or plugins directory
+    /// changes; otherwise the already-fetched catalog (and per-plugin
+    /// header/freshness caches) is reused so Discover opens instantly with no
+    /// re-fetch (#56). The view's `.task { if entries.isEmpty }` guard skips a
+    /// re-fetch on the reused model, and `isInstalled` reads disk live so the
+    /// installed state stays correct. Explicit refresh stays on the toolbar
+    /// Refresh button.
+    private func browserModel() -> PluginBrowserModel {
         // Discover spans every configured store — the built-in public catalog
         // plus any user-added or MDM-managed enterprise stores.
         let registry = StoreRegistry()
         let stores = registry.stores()
 
-        // Reuse the retained model when nothing that would change the catalog has
-        // changed (the store set and the plugins directory), so Discover opens
-        // instantly with the already-fetched catalog instead of hitting the
-        // network again. The view's `.task { if entries.isEmpty }` guard skips a
-        // re-fetch on the reused model, and `isInstalled` reads disk live so the
-        // installed state stays correct. Explicit refresh stays on the toolbar
-        // Refresh button.
         if let cached = cachedBrowserModel, cachedBrowserStores == stores, cachedBrowserDirectory == directory {
-            PluginBrowserWindow.shared.show(model: cached)
-            return
+            return cached
         }
 
         let model = PluginBrowserModel(
@@ -593,7 +593,15 @@ public final class AppController: NSObject, NSApplicationDelegate {
         cachedBrowserModel = model
         cachedBrowserStores = stores
         cachedBrowserDirectory = directory
-        PluginBrowserWindow.shared.show(model: model)
+        return model
+    }
+
+    /// Opens the consolidated window on the Discover section. Kept as a thin
+    /// wrapper (rather than inlined) so the ⌘D menu action, the Manager
+    /// empty-state, and first-run all route through one place; the standalone
+    /// `PluginBrowserWindow` is now unused.
+    private func openBrowser() {
+        LibraryWindow.shared.show(model: makeLibraryModel(section: .discover))
     }
 
     /// On the very first launch, a brand-new user sees only a menu-bar icon and

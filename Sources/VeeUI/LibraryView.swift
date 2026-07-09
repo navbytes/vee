@@ -35,9 +35,9 @@ public enum LibrarySection: String, CaseIterable, Identifiable, Hashable, Sendab
 
 /// Backs the consolidated window, holding the sub-models for each section. The
 /// installed rows are built off the main thread (see `AppController`); the other
-/// sub-models are cheap. Opening the standalone Discover window is a callback —
-/// embedding the catalog browser in-window is a follow-up (it is itself a split
-/// view).
+/// sub-models are cheap. The Discover catalog browser is embedded directly (the
+/// `browser` model, whose catalog is retained across opens by `AppController`),
+/// so there's no standalone-window callback anymore.
 @MainActor
 public final class LibraryModel: ObservableObject {
     @Published public var section: LibrarySection
@@ -45,7 +45,7 @@ public final class LibraryModel: ObservableObject {
     public let general: GeneralSettingsModel
     public let stores: StoresSettingsModel
     public let variables: VariablesEditorModel
-    public var onDiscover: () -> Void
+    public let browser: PluginBrowserModel
 
     public init(
         section: LibrarySection = .installed,
@@ -53,14 +53,14 @@ public final class LibraryModel: ObservableObject {
         general: GeneralSettingsModel,
         stores: StoresSettingsModel,
         variables: VariablesEditorModel,
-        onDiscover: @escaping () -> Void
+        browser: PluginBrowserModel
     ) {
         self.section = section
         self.manager = manager
         self.general = general
         self.stores = stores
         self.variables = variables
-        self.onDiscover = onDiscover
+        self.browser = browser
     }
 }
 
@@ -114,7 +114,7 @@ public struct LibraryView: View {
         case .installed:
             InstalledPluginsList(model: model.manager)
         case .discover:
-            DiscoverSectionPlaceholder(onOpen: model.onDiscover)
+            DiscoverContentView(model: model.browser)
         case .variables:
             VariablesEditorView(model: model.variables)
         case .stores:
@@ -185,24 +185,5 @@ struct InstalledPluginsList: View {
                 .help("Open the plugins folder in Finder")
             }
         }
-    }
-}
-
-/// The Discover section. Embedding the catalog browser in-window is a follow-up
-/// (the browser is itself a `NavigationSplitView`), so for now this opens the
-/// standalone Discover window.
-private struct DiscoverSectionPlaceholder: View {
-    let onOpen: () -> Void
-
-    var body: some View {
-        ContentUnavailableView {
-            Label("Discover plugins", systemImage: "square.grid.2x2")
-        } description: {
-            Text("Browse the catalog and install new plugins.")
-        } actions: {
-            Button("Open Discover") { onOpen() }
-                .buttonStyle(.borderedProminent)
-        }
-        .navigationTitle("Discover")
     }
 }

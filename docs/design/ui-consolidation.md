@@ -96,6 +96,15 @@ Merge the three "library" surfaces into a single window, reusing the
   when a plugin is selected, retiring `SettingsWindowManager` and the per-plugin
   window sprawl. Debug may optionally "pop out" as its own resizable window (it's
   a live log).
+
+> **Status update:** the shell has landed and **Discover is now embedded** in the
+> `.discover` section. The catalog browser was factored into a single-column
+> `DiscoverContentView` (`PluginBrowserView.swift`) — its old category/store
+> sidebar became toolbar menus — so it renders inside `LibraryView`'s detail
+> (already a `NavigationSplitView` detail) without nesting split views. The
+> standalone `PluginBrowserView`/`PluginBrowserWindow` remain as dead-but-compiling
+> code, wrapping `DiscoverContentView`. The retained catalog cache
+> (`cachedBrowserModel`) is reused by `makeLibraryModel` so reopen stays instant.
 - Shortcuts preserved: ⌘, → focus General, ⌘M → Installed, ⌘D → Discover — same
   muscle memory, one window.
 - Collapses the duplicated General settings and unifies chrome (resizable, one
