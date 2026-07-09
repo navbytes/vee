@@ -96,31 +96,29 @@ final class WidgetCardLayoutTests: XCTestCase {
 
     // MARK: - Sparkline
 
-    func testSparklineIsCappedAndNonFiniteDropped() {
+    func testSparklineIsCapped() {
         let many = (0..<400).map { String($0) }.joined(separator: ",")
         let (card, diagnostics) = WidgetCardParser.parse(#"{"layout":{"type":"sparkline","values":[\#(many)]}}"#)
         XCTAssertEqual(card?.layout?.values?.count, 256)
         XCTAssertTrue(diagnostics.contains { $0.message.contains("sparkline") })
-
-        // 1e400 overflows to Infinity in Foundation's decoder — a real, testable
-        // non-finite value (unlike a NaN literal, which JSON can't express).
-        let (inf, infDiagnostics) = WidgetCardParser.parse(#"{"layout":{"type":"sparkline","values":[1,1e400,3]}}"#)
-        XCTAssertEqual(inf?.layout?.values, [1, 3])
-        XCTAssertTrue(infDiagnostics.contains { $0.message.contains("sparkline") })
     }
+
+    // The sanitizer also drops non-finite sparkline/gauge values (`.isFinite`
+    // guards mirroring `finiteTrend`/`clampProgress`), but — as the existing
+    // WidgetCardParserTests already notes — a non-finite value can't be written
+    // as a JSON literal: JSON has no NaN/Infinity token, and an overflowing
+    // exponent like `1e400` makes JSONDecoder *throw* before the sanitizer runs
+    // (the whole card degrades to a "not a JSON object" diagnostic). So those
+    // guards are defensive parity, not exercised by a literal fixture here.
 
     // MARK: - Gauge value clamp
 
-    func testGaugeValueClampedAndNonFiniteDropped() {
+    func testGaugeValueClamped() {
         let (over, _) = WidgetCardParser.parse(#"{"layout":{"type":"gauge","value":1.4}}"#)
         XCTAssertEqual(over?.layout?.value, 1.0)
 
         let (under, _) = WidgetCardParser.parse(#"{"layout":{"type":"gauge","value":-0.5}}"#)
         XCTAssertEqual(under?.layout?.value, 0.0)
-
-        let (inf, infDiagnostics) = WidgetCardParser.parse(#"{"layout":{"type":"gauge","value":1e400}}"#)
-        XCTAssertNil(inf?.layout?.value)
-        XCTAssertTrue(infDiagnostics.contains { $0.message.contains("gauge") })
     }
 
     // MARK: - Style clamps
