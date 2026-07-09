@@ -23,6 +23,13 @@ public final class AppController: NSObject, NSApplicationDelegate {
     /// The Plugin Manager model while its window is open, held weakly so live
     /// per-plugin error updates can be pushed into it. Nil when the window is closed.
     private weak var currentManagerModel: PluginManagerModel?
+    /// The Discover model, retained across window opens so the fetched catalog
+    /// (and per-plugin freshness/header caches) survives a close/reopen instead
+    /// of re-fetching the network from scratch every time. Rebuilt only when the
+    /// store set or plugins directory changes (see `openBrowser`).
+    private var cachedBrowserModel: PluginBrowserModel?
+    private var cachedBrowserStores: [StoreConfig]?
+    private var cachedBrowserDirectory: String?
     private var ephemerals: [String: StatusItemController] = [:]
     /// Per-key deadline task for an ephemeral item's `exitafter=`. Re-setting
     /// an ephemeral item under the same name must cancel and replace the OLD
@@ -514,8 +521,22 @@ public final class AppController: NSObject, NSApplicationDelegate {
         // Discover spans every configured store — the built-in public catalog
         // plus any user-added or MDM-managed enterprise stores.
         let registry = StoreRegistry()
+        let stores = registry.stores()
+
+        // Reuse the retained model when nothing that would change the catalog has
+        // changed (the store set and the plugins directory), so Discover opens
+        // instantly with the already-fetched catalog instead of hitting the
+        // network again. The view's `.task { if entries.isEmpty }` guard skips a
+        // re-fetch on the reused model, and `isInstalled` reads disk live so the
+        // installed state stays correct. Explicit refresh stays on the toolbar
+        // Refresh button.
+        if let cached = cachedBrowserModel, cachedBrowserStores == stores, cachedBrowserDirectory == directory {
+            PluginBrowserWindow.shared.show(model: cached)
+            return
+        }
+
         let model = PluginBrowserModel(
-            stores: registry.stores(),
+            stores: stores,
             makeClient: { store in
                 let token: StoreTokenProviding? = store.authMode == .token ? KeychainStoreTokenStore(storeID: store.id) : nil
                 return CatalogClientFactory.make(for: store, tokenProvider: token)
@@ -523,6 +544,9 @@ public final class AppController: NSObject, NSApplicationDelegate {
             pluginsDirectory: directory,
             onInstalled: { [weak self] in self?.reload() }
         )
+        cachedBrowserModel = model
+        cachedBrowserStores = stores
+        cachedBrowserDirectory = directory
         PluginBrowserWindow.shared.show(model: model)
     }
 
