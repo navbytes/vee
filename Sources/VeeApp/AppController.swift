@@ -496,7 +496,15 @@ public final class AppController: NSObject, NSApplicationDelegate {
     private func openFolder() { NSWorkspace.shared.open(URL(fileURLWithPath: directory)) }
 
     private func openManager() {
-        let model = PluginManagerModel(
+        LibraryWindow.shared.show(model: makeLibraryModel(section: .installed))
+    }
+
+    /// Builds the model for the consolidated window (`LibraryView`): the
+    /// installed-plugin rows (populated off the main thread) plus the
+    /// General/Stores/Variables settings sub-models. Both ⌘M (Installed) and ⌘,
+    /// (General) route here, jumping to their section.
+    private func makeLibraryModel(section: LibrarySection) -> LibraryModel {
+        let manager = PluginManagerModel(
             rows: [],
             currentDirectory: directory,
             launchAtLogin: LoginItemManager.isEnabled,
@@ -513,23 +521,46 @@ public final class AppController: NSObject, NSApplicationDelegate {
         )
         // Held weakly so coordinators can push live error updates into the open
         // window; the window retains the model, so this nils out once it closes.
-        currentManagerModel = model
-        PluginManagerWindow.shared.show(model: model)
+        currentManagerModel = manager
 
         // Reading and parsing every plugin's source is the slow part, so build
         // the rows off the main thread and populate the model when ready — the
-        // window opens immediately instead of blocking the ⌘M menu action on a
+        // window opens immediately instead of blocking the menu action on a
         // synchronous fan-out of file reads + header/trust parses. Inputs are
         // snapshotted on the main actor first; only the disk read + parse runs
         // detached (every type it touches is Sendable).
         let inputs = managerRowInputs()
-        Task { [weak model] in
+        Task { [weak manager] in
             let rows = await Task.detached(priority: .userInitiated) {
                 AppController.buildManagerRows(inputs)
             }.value
-            model?.rows = rows
-            model?.isLoaded = true
+            manager?.rows = rows
+            manager?.isLoaded = true
         }
+
+        let general = GeneralSettingsModel(
+            currentDirectory: directory,
+            launchAtLogin: LoginItemManager.isEnabled,
+            onLaunchAtLogin: { LoginItemManager.setEnabled($0) },
+            onChooseFolder: { [weak self] in self?.chooseFolderFromPreferences() },
+            onOpenFolder: { [weak self] in self?.openFolder() },
+            onRefreshAll: { [weak self] in self?.refreshAll() }
+        )
+        generalSettingsModel = general
+
+        let groups = VariableAggregator.aggregate(plugins: aggregatablePlugins(), reader: HeaderVariableReader())
+        let variables = VariablesEditorModel(groups: groups, onSaved: { [weak self] in self?.refreshAll() })
+
+        let stores = StoresSettingsModel()
+
+        return LibraryModel(
+            section: section,
+            manager: manager,
+            general: general,
+            stores: stores,
+            variables: variables,
+            onDiscover: { [weak self] in self?.openBrowser() }
+        )
     }
 
     private func openBrowser() {
@@ -612,22 +643,7 @@ public final class AppController: NSObject, NSApplicationDelegate {
     /// app-level settings and a Variables tab aggregating every installed
     /// plugin's declared `<xbar.var>` variables.
     @objc private func openPreferences() {
-        let general = GeneralSettingsModel(
-            currentDirectory: directory,
-            launchAtLogin: LoginItemManager.isEnabled,
-            onLaunchAtLogin: { LoginItemManager.setEnabled($0) },
-            onChooseFolder: { [weak self] in self?.chooseFolderFromPreferences() },
-            onOpenFolder: { [weak self] in self?.openFolder() },
-            onRefreshAll: { [weak self] in self?.refreshAll() }
-        )
-        self.generalSettingsModel = general
-
-        let groups = VariableAggregator.aggregate(plugins: aggregatablePlugins(), reader: HeaderVariableReader())
-        let variables = VariablesEditorModel(groups: groups, onSaved: { [weak self] in self?.refreshAll() })
-
-        let stores = StoresSettingsModel()
-
-        PreferencesWindow.shared.show(general: general, variables: variables, stores: stores)
+        LibraryWindow.shared.show(model: makeLibraryModel(section: .general))
     }
 
     /// Every installed plugin, described for the pure variable aggregator.
