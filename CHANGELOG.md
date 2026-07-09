@@ -30,6 +30,10 @@ All notable changes to Vee are documented here. The format is based on
   only when the store set or plugins folder changes; the toolbar Refresh button
   still forces a fresh fetch. First step of a broader window-consolidation and
   loading-UX effort (see `docs/design/ui-consolidation.md`).
+- **The Plugin Manager opens instantly.** Building each row read and parsed
+  every plugin file synchronously on the main thread when the window opened;
+  that work now runs off the main thread and the window shows immediately with
+  a brief loader while the rows populate.
 
 ### Fixed
 - **Search panel swallowed row actions meant for the previous app.** Presenting

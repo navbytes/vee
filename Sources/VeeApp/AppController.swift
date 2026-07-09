@@ -497,7 +497,7 @@ public final class AppController: NSObject, NSApplicationDelegate {
 
     private func openManager() {
         let model = PluginManagerModel(
-            rows: managerRows(),
+            rows: [],
             currentDirectory: directory,
             launchAtLogin: LoginItemManager.isEnabled,
             onToggleEnabled: { [weak self] id, enabled in self?.setEnabled(enabled, id: id) },
@@ -515,6 +515,21 @@ public final class AppController: NSObject, NSApplicationDelegate {
         // window; the window retains the model, so this nils out once it closes.
         currentManagerModel = model
         PluginManagerWindow.shared.show(model: model)
+
+        // Reading and parsing every plugin's source is the slow part, so build
+        // the rows off the main thread and populate the model when ready — the
+        // window opens immediately instead of blocking the ⌘M menu action on a
+        // synchronous fan-out of file reads + header/trust parses. Inputs are
+        // snapshotted on the main actor first; only the disk read + parse runs
+        // detached (every type it touches is Sendable).
+        let inputs = managerRowInputs()
+        Task { [weak model] in
+            let rows = await Task.detached(priority: .userInitiated) {
+                AppController.buildManagerRows(inputs)
+            }.value
+            model?.rows = rows
+            model?.isLoaded = true
+        }
     }
 
     private func openBrowser() {
@@ -680,41 +695,78 @@ public final class AppController: NSObject, NSApplicationDelegate {
         reload()
     }
 
-    private func managerRows() -> [PluginManagerRow] {
+    /// A per-plugin snapshot of the main-actor state a row needs (enabled,
+    /// hotkey prefs, last error), gathered on the main actor so the heavy disk
+    /// read + parse can then run detached. Every field is `Sendable`.
+    private struct ManagerRowInput: Sendable {
+        let path: String
+        let id: String
+        let name: String
+        let interval: RefreshInterval
+        let isExecutable: Bool
+        let isDisabled: Bool
+        let isHotkeyDisabled: Bool
+        let hotkeyBinding: HotKeySpec?
+        let lastError: String?
+    }
+
+    /// Gathers the row inputs on the main actor (cheap: directory listing +
+    /// prefs/coordinator lookups). The expensive per-file read + parse happens
+    /// later in `buildManagerRows`, off the main thread.
+    private func managerRowInputs() -> [ManagerRowInput] {
         PluginDiscovery.enumerate(directory: directory).map { plugin in
-            let source = (try? String(contentsOfFile: plugin.path, encoding: .utf8)) ?? ""
+            let id = plugin.id.rawValue
+            return ManagerRowInput(
+                path: plugin.path,
+                id: id,
+                name: plugin.filename.name,
+                interval: plugin.filename.interval,
+                isExecutable: plugin.isExecutable,
+                isDisabled: prefs.isDisabled(id),
+                isHotkeyDisabled: prefs.isHotkeyDisabled(id),
+                hotkeyBinding: prefs.hotkeyBinding(id),
+                lastError: coordinators[id]?.lastError
+            )
+        }
+    }
+
+    /// Builds the manager rows from the snapshotted inputs. `nonisolated static`
+    /// so it can run off the main actor (`Task.detached`): it reads each
+    /// plugin's source and runs the pure header/trust parsers, touching no
+    /// actor-isolated state.
+    private nonisolated static func buildManagerRows(_ inputs: [ManagerRowInput]) -> [PluginManagerRow] {
+        inputs.map { input in
+            let source = (try? String(contentsOfFile: input.path, encoding: .utf8)) ?? ""
             let header = HeaderParser.parse(source: source)
             let level = TrustAnalyzer.analyze(TrustParser.parse(source: source)).level
-            let id = plugin.id.rawValue
-            let enabled = plugin.isExecutable && !prefs.isDisabled(id)
             // Declared features gate Settings reachability (so a disabled hotkey
             // stays re-enable-able); the indicators reflect the *effective* state.
             let declaredFeatures = PluginFeatures(header: header)
             let effectiveHotkey: String?
             if case .use(let spec) = EffectiveHotkey.resolve(
                 declared: header.shortcut,
-                userDisabled: prefs.isHotkeyDisabled(id),
-                customBinding: prefs.hotkeyBinding(id)
+                userDisabled: input.isHotkeyDisabled,
+                customBinding: input.hotkeyBinding
             ) {
                 effectiveHotkey = spec.display
             } else {
                 effectiveHotkey = nil
             }
             return PluginManagerRow(
-                id: id,
-                name: plugin.filename.name,
-                interval: describe(plugin.filename.interval),
+                id: input.id,
+                name: input.name,
+                interval: describe(input.interval),
                 trust: describe(level),
-                isEnabled: enabled,
+                isEnabled: input.isExecutable && !input.isDisabled,
                 hasSettings: !header.vars.isEmpty || !declaredFeatures.isEmpty,
                 features: PluginFeatures(searchPanel: header.filter, hotkey: effectiveHotkey),
-                lastError: coordinators[id]?.lastError,
+                lastError: input.lastError,
                 surface: header.surface
             )
         }
     }
 
-    private func describe(_ interval: RefreshInterval) -> String {
+    private nonisolated static func describe(_ interval: RefreshInterval) -> String {
         switch interval {
         case .manual: return "on demand"
         case .milliseconds(let n): return "\(n)ms"
@@ -726,7 +778,7 @@ public final class AppController: NSObject, NSApplicationDelegate {
         }
     }
 
-    private func describe(_ level: TrustLevel) -> String {
+    private nonisolated static func describe(_ level: TrustLevel) -> String {
         switch level {
         case .declared: return "capabilities declared"
         case .partial: return "capabilities incomplete"

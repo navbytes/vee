@@ -38,6 +38,10 @@ public struct PluginManagerRow: Identifiable, Sendable {
 @MainActor
 public final class PluginManagerModel: ObservableObject {
     @Published public var rows: [PluginManagerRow]
+    /// Whether the rows have finished loading. Built off the main thread, so the
+    /// window shows a brief loader instead of flashing the "no plugins" empty
+    /// state before the rows arrive. Set `true` by the app once `rows` is populated.
+    @Published public var isLoaded: Bool = false
     @Published public var currentDirectory: String
     @Published public var launchAtLogin: Bool
 
@@ -121,7 +125,16 @@ public struct PluginManagerView: View {
     public var body: some View {
         NavigationStack {
             Form {
-                if model.rows.isEmpty {
+                if !model.isLoaded {
+                    Section {
+                        HStack {
+                            Spacer()
+                            ProgressView()
+                            Spacer()
+                        }
+                        .listRowBackground(Color.clear)
+                    }
+                } else if model.rows.isEmpty {
                     Section {
                         ContentUnavailableView {
                             Label("No plugins yet", systemImage: "puzzlepiece.extension")
