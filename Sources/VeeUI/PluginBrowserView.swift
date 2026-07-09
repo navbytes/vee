@@ -568,7 +568,7 @@ private struct PluginCard: View {
             PluginTile(symbol: CategoryStyle.symbol(for: entry.category), tint: CategoryStyle.tint(for: entry.category))
 
             VStack(alignment: .leading, spacing: 3) {
-                Text(model.title(for: entry)).font(.headline).lineLimit(1)
+                Text(model.title(for: entry)).font(TypeRole.cardTitle).lineLimit(1)
                 if model.hasMultipleStores, let storeName = model.storeName(for: entry) {
                     Text(storeName)
                         .font(.caption2.weight(.medium))
@@ -582,13 +582,19 @@ private struct PluginCard: View {
                 if let desc = model.summary(for: entry), !desc.isEmpty {
                     Text(desc).font(.caption).foregroundStyle(.secondary).lineLimit(2)
                 }
-                if let level = model.trustLevel(for: entry), level != .undeclared {
-                    TrustChip(symbol: level.symbol, label: level.label, tint: level.color).padding(.top, 1)
+                // One ranked badge row instead of a vertical ladder of
+                // same-weight pills: a filled chip for state that matters (trust,
+                // widget-only), muted text for metadata (freshness).
+                HStack(spacing: Space.sm) {
+                    if let level = model.trustLevel(for: entry), level != .undeclared {
+                        TrustChip(symbol: level.symbol, label: level.label, tint: level.color)
+                    }
+                    SurfaceBadge(surface: entry.manifestSurface)
+                    if let date = model.lastUpdatedDate(for: entry), let freshness = model.freshness(for: entry) {
+                        FreshnessBadge(date: date, freshness: freshness)
+                    }
                 }
-                SurfaceBadge(surface: entry.manifestSurface).padding(.top, 1)
-                if let date = model.lastUpdatedDate(for: entry), let freshness = model.freshness(for: entry) {
-                    FreshnessBadge(date: date, freshness: freshness).padding(.top, 1)
-                }
+                .padding(.top, 2)
             }
 
             Spacer(minLength: 6)
@@ -615,13 +621,8 @@ private struct PluginCard: View {
                 }
             }
         }
-        .padding(12)
-        .background(RoundedRectangle(cornerRadius: Corner.card, style: .continuous).fill(.background.secondary))
-        .overlay(
-            RoundedRectangle(cornerRadius: Corner.card, style: .continuous)
-                .stroke(hovering ? Color.accentColor.opacity(0.5) : Color.primary.opacity(0.08), lineWidth: 1)
-        )
-        .shadow(color: .black.opacity(hovering ? 0.12 : 0), radius: 8, y: 3)
+        .padding(Space.md)
+        .veeCardSurface(hovering: hovering)
         .onHover { hovering = $0 }
         .animation(.easeOut(duration: 0.15), value: hovering)
         .task { await model.loadLastUpdated(for: entry) }
@@ -688,6 +689,7 @@ private struct FreshnessBadge: View {
 
     var body: some View {
         let relative = Self.relative.localizedString(for: date, relativeTo: Date())
-        TrustChip(symbol: "clock", label: "Updated \(relative)", tint: tint)
+        // Freshness is metadata, not state — a muted MetaChip, not a filled pill.
+        MetaChip(symbol: "clock", label: "Updated \(relative)", tint: tint)
     }
 }
