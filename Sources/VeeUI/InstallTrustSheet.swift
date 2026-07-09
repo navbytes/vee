@@ -105,8 +105,12 @@ public struct InstallTrustSheet: View {
                     body: "This plugin doesn't say what it accesses. Review its source before trusting it."
                 )
             } else {
-                VStack(alignment: .leading, spacing: 12) {
-                    ForEach(Array(prompt.summary.badges.enumerated()), id: \.offset) { _, badge in
+                // A grouped permissions table: an inset card with a hairline
+                // between rows, so the capabilities read as one scannable block
+                // (icon · plain name/detail · severity) instead of floating rows.
+                tableCard {
+                    ForEach(Array(prompt.summary.badges.enumerated()), id: \.offset) { index, badge in
+                        if index > 0 { Divider() }
                         HStack(alignment: .top, spacing: 11) {
                             Image(systemName: badge.capability.symbol)
                                 .font(.body)
@@ -126,6 +130,8 @@ public struct InstallTrustSheet: View {
                                       label: badge.severity.word,
                                       tint: badge.severity.color)
                         }
+                        .padding(.vertical, 10)
+                        .padding(.horizontal, 12)
                         .accessibilityElement(children: .combine)
                     }
                 }
@@ -142,8 +148,9 @@ public struct InstallTrustSheet: View {
             VStack(alignment: .leading, spacing: 10) {
                 Text("Features it adds")
                     .font(.subheadline).fontWeight(.semibold)
-                VStack(alignment: .leading, spacing: 12) {
-                    ForEach(Array(prompt.features.items.enumerated()), id: \.offset) { _, feature in
+                tableCard {
+                    ForEach(Array(prompt.features.items.enumerated()), id: \.offset) { index, feature in
+                        if index > 0 { Divider() }
                         HStack(alignment: .top, spacing: 11) {
                             Image(systemName: feature.symbol)
                                 .font(.body)
@@ -155,6 +162,8 @@ public struct InstallTrustSheet: View {
                             }
                             Spacer()
                         }
+                        .padding(.vertical, 10)
+                        .padding(.horizontal, 12)
                     }
                 }
             }
@@ -217,6 +226,20 @@ public struct InstallTrustSheet: View {
                 .keyboardShortcut(.defaultAction)
         }
         .padding(16)
+    }
+
+    /// Groups disclosure rows (permissions, features) into a single inset card
+    /// with a hairline border — a "table" affordance, so the rows read as one
+    /// block. Rows supply their own padding and inter-row `Divider`s, which span
+    /// the card's full width because the stack has no spacing.
+    private func tableCard<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
+        VStack(spacing: 0) { content() }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(RoundedRectangle(cornerRadius: Corner.callout, style: .continuous).fill(Palette.insetBG))
+            .overlay(
+                RoundedRectangle(cornerRadius: Corner.callout, style: .continuous)
+                    .stroke(Palette.hairline, lineWidth: 1)
+            )
     }
 
     /// A tinted callout box for warnings, requirements, and the undeclared state.

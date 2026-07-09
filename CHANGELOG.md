@@ -7,6 +7,10 @@ All notable changes to Vee are documented here. The format is based on
 ## [Unreleased]
 
 ### Changed
+- **Install trust sheet reads as a table.** The "What this plugin can do"
+  permissions and the "Features it adds" rows are now grouped into an inset card
+  with hairline row dividers, so each list scans as one block instead of floating
+  rows.
 - **Installed section polish (UX tier 2).** The sidebar's **Installed** row now
   carries a live plugin count as a native badge; the list shows placeholder
   skeleton rows while it loads instead of a lone centered spinner; and the row
