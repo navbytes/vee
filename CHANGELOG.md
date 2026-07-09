@@ -23,6 +23,14 @@ All notable changes to Vee are documented here. The format is based on
   and Go SDKs gain namespaced `Node.*` builders, with a `widget-layout` golden
   fixture verified byte-identical across all three.
 
+### Changed
+- **Discover opens instantly on reopen.** The catalog is now retained across
+  window opens instead of being re-fetched from the network every time, so
+  reopening Discover shows the already-loaded plugins immediately. It rebuilds
+  only when the store set or plugins folder changes; the toolbar Refresh button
+  still forces a fresh fetch. First step of a broader window-consolidation and
+  loading-UX effort (see `docs/design/ui-consolidation.md`).
+
 ### Fixed
 - **Search panel swallowed row actions meant for the previous app.** Presenting
   the `⌘⇧`-style search panel force-activates Vee (needed so its search field
