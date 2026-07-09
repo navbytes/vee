@@ -285,12 +285,75 @@ compiles it, and it can't be unit-tested. So:
 Phases A–C are independent and pure; D depends on A–C; E/F depend on A/C; G depends
 on A; H last. Each pushes on its own so CI compiles it incrementally.
 
+## Layout tree (composable escape hatch)
+
+Status: **implemented** (v1; images deferred — see below). The five templates
+in §5 are ergonomic presets, but a fixed record can't express a two-column
+layout, a calendar date rail, activity rings, or a KPI grid. So a card may
+instead carry a **`layout`** — a bounded tree of native primitives Vee walks
+into SwiftUI. A card is *either* a preset template *or* a tree; presets are
+unchanged, so nothing regresses.
+
+This is Scriptable's *describe, don't draw* — a native primitive tree, not a
+WebView — but with Vee's out-of-process twist: the app builds the tree, and the
+sandboxed extension only renders it. It is deliberately **bounded**, never
+freeform: a small vocabulary that each map 1:1 to a SwiftUI primitive.
+
+- **Containers:** `vstack`, `hstack`, `zstack`, `grid` (`columns`, default 2).
+  `hstack` is the load-bearing addition — side-by-side regions the presets
+  can't do (two columns, a date rail, a row of cells, inline per-row gauges).
+- **Leaves:** `text`, `image` (SF Symbol only in v1), `gauge` (`linear` |
+  `circular`), `sparkline`, `spacer`, `divider`.
+- **Per-element `style`:** `font` (`size` token or bounded `point_size`,
+  `weight`, `design`), `tint`, `align`, `padding`, `line_limit`,
+  `monospaced_digit`, `min_scale`, `fill`. The last two exist so the presets'
+  own value text (`monospacedDigit()` + `minimumScaleFactor(0.6)`) desugars
+  faithfully. No absolute positioning, no point frames, no scroll views — that
+  boundary is what keeps a tree from becoming the freeform canvas Vee rejects.
+- **Family adaptation by subtraction:** each node may carry a `families`
+  allow-list (`small`/`medium`/`large`); the walker skips nodes not for the
+  current family, so one tree adapts without authoring three payloads (mirrors
+  how the presets truncate per family).
+
+All five presets re-express in this vocabulary — `stat`/`gauge`/`trend`/`list`
+desugar directly, and `board` is why `grid` is in v1 rather than a later add.
+Presets stay on the wire regardless (compatibility + ergonomics); the tree is
+the escape hatch, not a replacement. The `actions` footer stays renderer-owned
+chrome appended around any tree, so the interactive/trust surface is unchanged.
+
+**Safety — caps live at parse time.** The snapshot the sandboxed extension
+re-reads on every timeline build must already be bounded, so `WidgetCardParser`
+(app-side) sanitizes the tree on decode, not the walker: depth ≤ 8, ≤ 64 total
+nodes, text ≤ 512 chars, sparkline ≤ 256 points, `gauge`/style numerics
+clamped, non-finite values dropped, and an unknown node `type` degraded to a
+diagnostic. A hostile payload degrades to a bounded tree plus diagnostics —
+never a throw (Foundation's own ~512-level decode limit is the backstop for a
+pure-depth bomb, and the existing 8 MB stdout drain bounds total payload size).
+
+**SDKs.** All three gain namespaced `Node.*` builders (`Node.VStack`,
+`Node.Text`, `Node.Gauge`, …) — namespaced so they don't collide with the
+card-level template builders (`Stat`/`Gauge`/…). The `widget-layout` example is
+a golden fixture, byte-identical across TS/Python/Go and round-tripped through
+`WidgetCardParser` (`FixtureRoundTripTests`).
+
+**Deferred to v2 — `image` bitmaps.** v1 renders SF Symbols by name only. Real
+images (now-playing artwork, avatars, map/photo backgrounds) are the one
+primitive that stresses the channel: they must *not* be base64-inlined into the
+hot snapshot JSON. The plan is for the app (never the extension — remote fetch
+belongs un-sandboxed) to fetch/decode and cache images under
+`~/Library/Application Support/Vee/`, with the tree referencing them by
+content-hash filename; the extension's existing read-only home-relative
+entitlement already covers that directory, so images cost zero new sandbox
+surface. Separable, hence deferred.
+
 ## Deferred (not in the first PR)
 
 - **Timeline arrays** — a card carrying an array of dated entries ("next 5
   meetings") handed to WidgetKit as a real timeline, updating all day on zero extra
   runs. The single most WidgetKit-native capability no menu scraper can express;
   worth a follow-up once the single-card contract lands.
+- **Layout-tree images** — bitmap `image` nodes via the app-side cache-and-
+  reference scheme described under "Layout tree" above (v1 is SF Symbols only).
 - Focus filters (`SetFocusFilterIntent`), lock-screen accessory families, an
   `AppIntent`-configurable Control Center control for a chosen plugin.
 

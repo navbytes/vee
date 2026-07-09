@@ -16,13 +16,42 @@ struct WidgetCardView: View {
     let stale: Bool
 
     var body: some View {
-        switch card.template {
-        case .stat: StatCardView(pluginID: pluginID, card: card, updated: updated, stale: stale)
-        case .gauge: GaugeCardView(pluginID: pluginID, card: card, updated: updated, stale: stale)
-        case .trend: TrendCardView(pluginID: pluginID, card: card, updated: updated, stale: stale)
-        case .list: ListCardView(pluginID: pluginID, card: card, updated: updated, stale: stale)
-        case .board: BoardCardView(pluginID: pluginID, card: card, updated: updated, stale: stale)
+        // A card is *either* a composable layout tree or a preset template.
+        // The tree wins when present; the footer chrome (freshness + actions)
+        // is appended around it, exactly as for the presets.
+        if let layout = card.layout {
+            LayoutCardView(pluginID: pluginID, card: card, layout: layout, updated: updated, stale: stale)
+        } else {
+            switch card.template {
+            case .stat: StatCardView(pluginID: pluginID, card: card, updated: updated, stale: stale)
+            case .gauge: GaugeCardView(pluginID: pluginID, card: card, updated: updated, stale: stale)
+            case .trend: TrendCardView(pluginID: pluginID, card: card, updated: updated, stale: stale)
+            case .list: ListCardView(pluginID: pluginID, card: card, updated: updated, stale: stale)
+            case .board: BoardCardView(pluginID: pluginID, card: card, updated: updated, stale: stale)
+            }
         }
+    }
+}
+
+// MARK: - layout tree
+
+/// Renders a card's composable `layout` tree (via `WidgetNodeView`) and appends
+/// the same footer every preset shows. The tree gets the space above the
+/// footer; the plugin author owns the layout within it.
+struct LayoutCardView: View {
+    let pluginID: String
+    let card: WidgetCard
+    let layout: WidgetNode
+    let updated: Date
+    let stale: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            WidgetNodeView(node: layout)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            CardFooter(pluginID: pluginID, card: card, updated: updated, stale: stale)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 }
 

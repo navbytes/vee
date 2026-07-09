@@ -6,6 +6,18 @@ All notable changes to Vee are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+- **Composable widget layout tree.** A widget card can now carry a `layout` —
+  a bounded tree of native primitives (`vstack`/`hstack`/`zstack`/`grid`,
+  `text`/`image`/`gauge`/`sparkline`/`spacer`/`divider`) with per-element style
+  — as an escape hatch alongside the five preset templates, for widgets the
+  presets can't express (two columns, a date rail, activity rings, KPI grids).
+  It's *describe, don't draw*: no WebView, no freeform canvas. The tree is
+  sanitized and capped app-side on parse (depth ≤ 8, ≤ 64 nodes, clamped
+  numerics) so the sandboxed extension only renders. The TypeScript, Python,
+  and Go SDKs gain namespaced `Node.*` builders, with a `widget-layout` golden
+  fixture verified byte-identical across all three.
+
 ### Fixed
 - **Search panel swallowed row actions meant for the previous app.** Presenting
   the `⌘⇧`-style search panel force-activates Vee (needed so its search field
