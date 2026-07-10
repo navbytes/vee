@@ -47,6 +47,19 @@ public struct CatalogNotice: Identifiable, Equatable, Sendable {
     public let message: String
 }
 
+/// How the Discover grid orders plugins.
+public enum CatalogSortOrder: String, CaseIterable {
+    case name
+    case updated
+
+    var label: String {
+        switch self {
+        case .name: return "Name"
+        case .updated: return "Recently updated"
+        }
+    }
+}
+
 /// Backs the plugin browser: fetches the catalog, filters it, and runs the
 /// trust-at-install gate before writing a plugin to disk.
 @MainActor
@@ -57,6 +70,7 @@ public final class PluginBrowserModel: ObservableObject {
     @Published public var selectedCategory: String = ""
     /// Selected store; `nil` means "All stores".
     @Published public var selectedStoreID: StoreID?
+    @Published public var sortOrder: CatalogSortOrder = .name
     @Published public var isLoading = false
     /// A fatal catalog-index load failure — shown full-screen with a Retry, since
     /// there's nothing else to display. Install/fetch problems use ``notice``.
@@ -73,12 +87,17 @@ public final class PluginBrowserModel: ObservableObject {
     /// Entry ids whose last-updated fetch has been started, so we only make the
     /// (one-call-per-plugin) commits-API request once.
     private var lastUpdatedRequested: Set<String> = []
+    /// The on-disk freshness ledger, decoded once at construction (and again
+    /// on `refresh()`) rather than on every card appearance — a per-card disk
+    /// read/decode of the whole ledger on `@MainActor` was a jank source.
+    private var freshnessLedger: [String: CatalogFreshnessStore.Record]
 
     /// The configured stores (in Discover order) and a client per store.
     private let stores: [StoreConfig]
     private let clients: [StoreID: CatalogFetching]
     private let pluginsDirectory: String
     private let provenanceStore: ProvenanceStore
+    private let freshnessStore: CatalogFreshnessStore
     private let onInstalled: () -> Void
 
     /// Multi-store initializer: builds a client per store via `makeClient`.
@@ -89,7 +108,11 @@ public final class PluginBrowserModel: ObservableObject {
         self.clients = map
         self.pluginsDirectory = pluginsDirectory
         self.provenanceStore = ProvenanceStore(directory: pluginsDirectory)
+        let freshnessStore = CatalogFreshnessStore(directory: pluginsDirectory)
+        self.freshnessStore = freshnessStore
+        self.freshnessLedger = freshnessStore.all()
         self.onInstalled = onInstalled
+        seedFreshnessCache()
     }
 
     /// Single-store convenience (the public catalog), preserved for existing
@@ -137,14 +160,53 @@ public final class PluginBrowserModel: ObservableObject {
         trustLevels[entry.id] = TrustAnalyzer.analyze(TrustParser.parse(source: source)).level
     }
 
+    /// Seeds ``lastUpdated``/``lastUpdatedRequested`` from ``freshnessLedger``
+    /// (persists across launches and `refresh()`), skipping any record older
+    /// than ``CatalogFreshnessStore/ttl`` — an expired record is left
+    /// unseeded so the entry's first `loadLastUpdated` still falls through to
+    /// a real network fetch instead of being treated as already-served.
+    private func seedFreshnessCache(now: Date = Date()) {
+        for (id, record) in freshnessLedger where now.timeIntervalSince(record.fetchedAt) < CatalogFreshnessStore.ttl {
+            lastUpdated[id] = record.date
+            lastUpdatedRequested.insert(id)
+        }
+    }
+
     /// Lazily fetches an entry's last-updated date once, for its freshness
-    /// badge. Costs one commits-API call per plugin, so it's guarded to fire a
-    /// single time per card and only when the card appears — never eagerly for
-    /// the whole grid. Failures leave the date `nil` so the badge is hidden.
+    /// badge. `seedFreshnessCache()` already served any fresh on-disk record
+    /// into `lastUpdated`/`lastUpdatedRequested`, so this only needs the
+    /// in-memory guard — no disk I/O on the hot per-card path. Guarded to
+    /// fire a single time per card and only when the card appears — never
+    /// eagerly for the whole grid. Failures leave the date `nil` so the badge
+    /// is hidden.
     func loadLastUpdated(for entry: CatalogEntry) async {
         guard lastUpdatedRequested.insert(entry.id).inserted else { return }
         guard let date = try? await client(for: entry)?.fetchLastUpdated(entry) else { return }
         lastUpdated[entry.id] = date
+        let fetchedAt = Date()
+        freshnessLedger[entry.id] = CatalogFreshnessStore.Record(date: date, fetchedAt: fetchedAt)
+        try? freshnessStore.record(entryID: entry.id, date: date, fetchedAt: fetchedAt)
+    }
+
+    /// Eagerly backfills the last-updated date for every entry in `entries`,
+    /// used when the user switches to "Recently updated" sort — normal
+    /// browsing still relies on ``loadLastUpdated(for:)`` firing lazily as
+    /// each card scrolls into view. Bounded to a handful of concurrent
+    /// fetches (rather than fully serial) so a cold cache on a large catalog
+    /// doesn't chain one commits-API call at a time — still ultimately capped
+    /// by GitHub's real unauthenticated rate limit, and best-effort (a failed
+    /// fetch just leaves that entry's date `nil`, same as `loadLastUpdated`).
+    func ensureLastUpdatedLoaded(for entries: [CatalogEntry]) async {
+        let maxConcurrent = 4
+        await withTaskGroup(of: Void.self) { group in
+            var iterator = entries.makeIterator()
+            func addNext() {
+                guard let entry = iterator.next() else { return }
+                group.addTask { await self.loadLastUpdated(for: entry) }
+            }
+            for _ in 0..<maxConcurrent { addNext() }
+            while await group.next() != nil { addNext() }
+        }
     }
 
     /// Loads every enabled store and merges their entries. A store that fails is
@@ -178,6 +240,12 @@ public final class PluginBrowserModel: ObservableObject {
         trustLevels = [:]
         lastUpdated = [:]
         lastUpdatedRequested = []
+        // Reseed from the in-memory ledger (no disk read) rather than leaving
+        // it empty: a still-fresh record should keep being served without a
+        // wasted re-fetch, while an expired one is skipped so this refresh is
+        // exactly what corrects a stale badge (fix for the freshness cache
+        // that used to never expire).
+        seedFreshnessCache()
         await load()
     }
 
@@ -224,7 +292,8 @@ public final class PluginBrowserModel: ObservableObject {
         return stores.map { (store: $0, count: counts[$0.id] ?? 0) }
     }
 
-    /// Entries matching the selected store, category, and search text.
+    /// Entries matching the selected store, category, and search text, in the
+    /// current sort order.
     var visibleEntries: [CatalogEntry] {
         var result = storeScopedEntries
         if !selectedCategory.isEmpty {
@@ -239,7 +308,39 @@ public final class PluginBrowserModel: ObservableObject {
                     || (summary(for: $0)?.lowercased().contains(q) ?? false)
             }
         }
-        return result
+        return sorted(result)
+    }
+
+    /// `visibleEntries` grouped by category (sorted by category name),
+    /// preserving each entry's position within the current sort order. Lives on
+    /// the model (not the view) so the grouping/sort-within-section logic is
+    /// unit-testable.
+    var sectionedEntries: [(category: String, entries: [CatalogEntry])] {
+        Dictionary(grouping: visibleEntries, by: \.category)
+            .map { (category: $0.key, entries: $0.value) }
+            .sorted { $0.category < $1.category }
+    }
+
+    /// Sorts `entries` by the current `sortOrder`. `.updated` sorts
+    /// newest-first with `nil`-date entries pushed to the end, falling back to
+    /// `.name` order within that "unknown date" group so it isn't left
+    /// arbitrary/unstable.
+    private func sorted(_ entries: [CatalogEntry]) -> [CatalogEntry] {
+        switch sortOrder {
+        case .name:
+            return entries.sorted { title(for: $0).localizedCaseInsensitiveCompare(title(for: $1)) == .orderedAscending }
+        case .updated:
+            return entries.sorted { a, b in
+                let dateA = lastUpdatedDate(for: a)
+                let dateB = lastUpdatedDate(for: b)
+                switch (dateA, dateB) {
+                case let (a?, b?): return a > b
+                case (nil, nil): return title(for: a).localizedCaseInsensitiveCompare(title(for: b)) == .orderedAscending
+                case (nil, _): return false
+                case (_, nil): return true
+                }
+            }
+        }
     }
 
     var visibleTitle: String { selectedCategory.isEmpty ? "All Plugins" : selectedCategory }
@@ -347,6 +448,10 @@ public final class PluginBrowserModel: ObservableObject {
 /// with the (now dead-code) standalone `PluginBrowserView`, which wraps this.
 public struct DiscoverContentView: View {
     @ObservedObject private var model: PluginBrowserModel
+    /// Local to the view — the popover's own filter text doesn't need to
+    /// survive beyond the popover being open.
+    @State private var showingCategoryPopover = false
+    @State private var categoryFilterText = ""
 
     public init(model: PluginBrowserModel) {
         self.model = model
@@ -361,7 +466,8 @@ public struct DiscoverContentView: View {
                 if !model.storesWithCounts.isEmpty {
                     ToolbarItem(placement: .automatic) { storeMenu }
                 }
-                ToolbarItem(placement: .automatic) { categoryMenu }
+                ToolbarItem(placement: .automatic) { categoryFilterButton }
+                ToolbarItem(placement: .automatic) { sortMenu }
                 ToolbarItem(placement: .primaryAction) {
                     Button {
                         Task { await model.refresh() }
@@ -375,6 +481,15 @@ public struct DiscoverContentView: View {
                 }
             }
             .task { if model.entries.isEmpty { await model.load() } }
+            // Only "Recently updated" needs every entry's date up front —
+            // normal browsing relies on each card's own lazy `.task` firing as
+            // it scrolls into view. Re-runs (and progressively re-sorts, for
+            // free via the @Published date updates) only when the sort order
+            // itself changes.
+            .task(id: model.sortOrder) {
+                guard model.sortOrder == .updated else { return }
+                await model.ensureLastUpdatedLoaded(for: model.visibleEntries)
+            }
             .overlay(alignment: .top) {
                 if let notice = model.notice {
                     NoticeBanner(notice: notice) { model.dismissNotice() }
@@ -401,22 +516,95 @@ public struct DiscoverContentView: View {
             }
     }
 
-    /// The category filter, as a toolbar menu bound to `model.selectedCategory`
-    /// ("" = All). Replaces the sidebar's Categories section.
-    private var categoryMenu: some View {
-        Menu {
-            Picker("Category", selection: $model.selectedCategory) {
-                Text("All Plugins").tag("")
-                ForEach(model.categoriesWithCounts, id: \.name) { cat in
-                    Text("\(cat.name) (\(cat.count))").tag(cat.name)
-                }
-            }
-            .pickerStyle(.inline)
+    /// The category filter, as a toolbar button presenting a type-to-filter
+    /// popover. A plain `Menu`/`Picker` (the previous design) doesn't scale
+    /// once a catalog has many categories. Replaces the sidebar's Categories
+    /// section.
+    private var categoryFilterButton: some View {
+        Button {
+            showingCategoryPopover = true
         } label: {
             Label(model.selectedCategory.isEmpty ? "All Categories" : model.selectedCategory,
                   systemImage: "line.3.horizontal.decrease.circle")
         }
         .help("Filter by category")
+        .popover(isPresented: $showingCategoryPopover) {
+            categoryFilterPopover
+        }
+    }
+
+    private var filteredCategories: [(name: String, count: Int)] {
+        guard !categoryFilterText.isEmpty else { return model.categoriesWithCounts }
+        return model.categoriesWithCounts.filter { $0.name.localizedCaseInsensitiveContains(categoryFilterText) }
+    }
+
+    private var categoryFilterPopover: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: Space.sm) {
+                Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
+                TextField("Filter categories", text: $categoryFilterText)
+                    .textFieldStyle(.plain)
+            }
+            .padding(Space.sm)
+            Divider()
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    categoryFilterRow(name: "All Categories", isSelected: model.selectedCategory.isEmpty) {
+                        model.selectedCategory = ""
+                    }
+                    if filteredCategories.isEmpty {
+                        Text("No categories match “\(categoryFilterText)”.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .padding(Space.sm)
+                    } else {
+                        ForEach(filteredCategories, id: \.name) { cat in
+                            categoryFilterRow(name: "\(cat.name) (\(cat.count))", isSelected: model.selectedCategory == cat.name) {
+                                model.selectedCategory = cat.name
+                            }
+                        }
+                    }
+                }
+                .padding(.vertical, Space.xs)
+            }
+            .frame(maxHeight: 280)
+        }
+        .frame(width: 230)
+    }
+
+    private func categoryFilterRow(name: String, isSelected: Bool, action: @escaping () -> Void) -> some View {
+        Button {
+            action()
+            showingCategoryPopover = false
+            categoryFilterText = ""
+        } label: {
+            HStack {
+                Text(name).lineLimit(1)
+                Spacer()
+                if isSelected {
+                    Image(systemName: "checkmark").foregroundStyle(.secondary)
+                }
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .padding(.horizontal, Space.sm)
+        .padding(.vertical, 5)
+    }
+
+    /// The sort control, as a toolbar menu bound to `model.sortOrder`.
+    private var sortMenu: some View {
+        Menu {
+            Picker("Sort", selection: $model.sortOrder) {
+                ForEach(CatalogSortOrder.allCases, id: \.self) { order in
+                    Text(order.label).tag(order)
+                }
+            }
+            .pickerStyle(.inline)
+        } label: {
+            Label("Sort", systemImage: "arrow.up.arrow.down")
+        }
+        .help("Sort plugins")
     }
 
     /// The store scope, as a toolbar menu. Uses buttons (not a `Picker`) so
@@ -462,6 +650,12 @@ public struct DiscoverContentView: View {
         return store.displayName
     }
 
+    /// The shared column spec for every Discover grid (skeleton, sectioned,
+    /// and flat) — kept in one place so the three branches below can't drift.
+    private var gridColumns: [GridItem] {
+        [GridItem(.adaptive(minimum: 300, maximum: 460), spacing: Space.md)]
+    }
+
     @ViewBuilder
     private var detail: some View {
         if model.isLoading {
@@ -469,10 +663,10 @@ public struct DiscoverContentView: View {
             // instead of the whole pane flipping from a centered spinner to a full
             // grid (the fetch can take a beat over the network).
             ScrollView {
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 300, maximum: 460), spacing: 12)], spacing: 12) {
+                LazyVGrid(columns: gridColumns, spacing: Space.md) {
                     ForEach(0..<6, id: \.self) { _ in SkeletonPluginCard() }
                 }
-                .padding(16)
+                .padding(Space.lg)
             }
             .navigationTitle("Discover")
         } else if let error = model.errorMessage {
@@ -498,15 +692,38 @@ public struct DiscoverContentView: View {
                         .buttonStyle(.borderedProminent)
                 }
             }
+        } else if model.selectedCategory.isEmpty {
+            // "All Categories" — group into sections so a large catalog scans
+            // by category instead of one undifferentiated wall of cards. A
+            // single category is already a scoped list, so it stays flat (a
+            // lone repeated header would just be noise).
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: Space.lg) {
+                    ForEach(model.sectionedEntries, id: \.category) { section in
+                        VStack(alignment: .leading, spacing: Space.sm) {
+                            CategorySectionHeader(name: section.category, count: section.entries.count)
+                            LazyVGrid(columns: gridColumns, spacing: Space.md) {
+                                ForEach(section.entries) { entry in
+                                    PluginCard(model: model, entry: entry)
+                                        .task { await model.loadHeader(for: entry) }
+                                }
+                            }
+                        }
+                    }
+                }
+                .padding(Space.lg)
+            }
+            .navigationTitle(model.visibleTitle)
+            .navigationSubtitle("\(model.visibleEntries.count) plugins")
         } else {
             ScrollView {
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 300, maximum: 460), spacing: 12)], spacing: 12) {
+                LazyVGrid(columns: gridColumns, spacing: Space.md) {
                     ForEach(model.visibleEntries) { entry in
                         PluginCard(model: model, entry: entry)
                             .task { await model.loadHeader(for: entry) }
                     }
                 }
-                .padding(16)
+                .padding(Space.lg)
             }
             .navigationTitle(model.visibleTitle)
             .navigationSubtitle("\(model.visibleEntries.count) plugins")
@@ -530,6 +747,26 @@ public struct PluginBrowserView: View {
             DiscoverContentView(model: model)
         }
         .frame(minWidth: 760, minHeight: 500)
+    }
+}
+
+/// A category header above one section of the grouped-by-category Discover
+/// grid — muted, uppercase, matching the weight of a section label rather
+/// than competing with the plugin cards below it.
+private struct CategorySectionHeader: View {
+    let name: String
+    let count: Int
+
+    var body: some View {
+        HStack(spacing: Space.xs) {
+            Text(name)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+                .textCase(.uppercase)
+            Text("\(count)")
+                .font(.caption)
+                .foregroundStyle(.tertiary)
+        }
     }
 }
 
