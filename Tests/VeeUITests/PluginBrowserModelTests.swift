@@ -110,7 +110,7 @@ final class PluginBrowserModelTests: XCTestCase {
         model.lastUpdated = [
             old.id: Date(timeIntervalSince1970: 100),
             mid.id: Date(timeIntervalSince1970: 200),
-            new.id: Date(timeIntervalSince1970: 300),
+            new.id: Date(timeIntervalSince1970: 300)
         ]
         model.sortOrder = .updated
 
@@ -156,7 +156,7 @@ final class PluginBrowserModelTests: XCTestCase {
         model.entries = [netOld, sys, netNew]
         model.lastUpdated = [
             netOld.id: Date(timeIntervalSince1970: 100),
-            netNew.id: Date(timeIntervalSince1970: 200),
+            netNew.id: Date(timeIntervalSince1970: 200)
         ]
         model.sortOrder = .updated
 
