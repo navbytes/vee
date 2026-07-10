@@ -79,6 +79,10 @@ public final class StatusItemController {
     /// identical-output render can advance the timestamp in place without
     /// rebuilding the menu.
     private weak var stampItem: NSMenuItem?
+    /// Tracks the most recent `setRefreshing` request so the delayed dim
+    /// (below) can no-op if the refresh already finished by the time it fires.
+    private var isRefreshing = false
+    private var dimWorkItem: DispatchWorkItem?
 
     private static let timeFormatter: DateFormatter = {
         let f = DateFormatter()
@@ -213,6 +217,33 @@ public final class StatusItemController {
         menu.delegate = controls
         appendControls(to: menu)
         statusItem.menu = menu
+    }
+
+    /// Surfaces an in-flight refresh: the controls submenu's stamp row (if
+    /// present) switches to "Refreshing…", and the status item dims slightly
+    /// once the run has been going for >300ms (avoids flicker on fast plugins).
+    public func setRefreshing(_ refreshing: Bool) {
+        isRefreshing = refreshing
+        dimWorkItem?.cancel()
+
+        if let stampItem {
+            if refreshing {
+                stampItem.title = "Refreshing…"
+            } else if let lastUpdated, !hideLastUpdated {
+                stampItem.title = "Updated \(Self.timeFormatter.string(from: lastUpdated))"
+            }
+        }
+
+        guard refreshing else {
+            statusItem.button?.alphaValue = 1.0
+            return
+        }
+        let work = DispatchWorkItem { [weak self] in
+            guard let self, self.isRefreshing else { return }
+            self.statusItem.button?.alphaValue = 0.55
+        }
+        dimWorkItem = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3, execute: work)
     }
 
     public func remove() {
