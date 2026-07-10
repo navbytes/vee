@@ -53,6 +53,13 @@ jobs:
       - name: Install XcodeGen
         run: brew install xcodegen
 
+      - name: Set app version from tag
+        run: |
+          tag="${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}"
+          version="${tag#v}"
+          sed -i '' "s/CFBundleShortVersionString: \"[^\"]*\"/CFBundleShortVersionString: \"${version}\"/" project.yml
+          sed -i '' "s/MARKETING_VERSION: \"[^\"]*\"/MARKETING_VERSION: \"${version}\"/" project.yml
+
       - name: Generate project
         run: xcodegen generate
 
