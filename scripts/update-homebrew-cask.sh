@@ -52,7 +52,7 @@ cask "vee" do
 
   # Apple Silicon + macOS 26 (Tahoe) or later, matching the app's requirements.
   depends_on arch: :arm64
-  depends_on macos: ">= :tahoe"
+  depends_on macos: :tahoe
 
   app "Vee.app"
 
