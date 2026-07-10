@@ -162,7 +162,11 @@ public extension Color {
 public enum Palette {
     public static let windowBG = Color(nsColor: .windowBackgroundColor)
     public static let raisedBG = Color(nsColor: .controlBackgroundColor)
-    public static let insetBG = Color(nsColor: .underPageBackgroundColor)
+    // ponytail: NSColor.underPageBackgroundColor resolves to a flat mid-gray
+    // (RGB 150,150,150) outside a real NSScrollView, not the subtle recessed
+    // tint its name implies — a primary-tinted overlay reads correctly (and
+    // adapts to light/dark automatically) at any nesting depth.
+    public static let insetBG = Color.primary.opacity(0.05)
     public static let hairline = Color(nsColor: .separatorColor)
     /// The one brand accent — "Ink".
     public static let brand = Color(lightHex: 0x4B5BD6, darkHex: 0x7C8CF0)
