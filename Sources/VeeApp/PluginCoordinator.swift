@@ -430,6 +430,7 @@ final class PluginCoordinator {
 
         guard !isRefreshing else { return }
         isRefreshing = true
+        controller?.setRefreshing(true)
 
         let context = PluginsDirectory.context(pluginPath: plugin.path, pluginsDirectory: pluginsDirectory, declaredVariables: mergedDeclaredVariables())
         let runtime = self.runtime
@@ -438,7 +439,10 @@ final class PluginCoordinator {
         let runInBash = self.runInBash
 
         Task { @MainActor [weak self] in
-            defer { self?.isRefreshing = false }
+            defer {
+                self?.isRefreshing = false
+                self?.controller?.setRefreshing(false)
+            }
             do {
                 let result = try await runtime.refresh(pluginPath: path, context: context, header: header, runInBash: runInBash, timeout: 30)
                 self?.lastResult = result
