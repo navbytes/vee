@@ -31,6 +31,19 @@ public struct SwiftBarParams: Equatable, Sendable {
     public var webviewHeight: Double?
     public var shortcut: String?
 
+    // NOTE: `header`/`accessory` below are Vee-native, not SwiftBar params —
+    // they live in this struct as a workaround, not for provenance. See the
+    // comment on `LineParams.swiftbar` for why.
+
+    /// A first-class, non-interactive section-header row (`header=true`),
+    /// rendered with AppKit's native `NSMenuItem.sectionHeader(title:)` — not a
+    /// `disabled=true` line dressed up to look like one.
+    public var header: Bool?
+
+    /// Placement of the row's `progress=`/`sparkline=` accessory (`accessory=`).
+    /// `nil` (absent) means today's default: trailing.
+    public var accessory: AccessoryPlacement?
+
     public init() {}
 }
 
@@ -45,6 +58,15 @@ public enum PluginControl: Equatable, Sendable {
     /// A continuous slider bounded by `min...max` at the current `value`
     /// (clamped into range at parse time; `min < max` guaranteed).
     case slider(min: Double, max: Double, value: Double)
+}
+
+/// Where a row's visual accessory (`progress=`/`sparkline=`) sits relative to
+/// its label (`accessory=leading`/`accessory=trailing`). Applies uniformly to
+/// both, since they share the same in-row layout geometry (`ProgressBarLayout`
+/// in `VeeMenu`).
+public enum AccessoryPlacement: String, Equatable, Sendable {
+    case leading
+    case trailing
 }
 
 /// A Vee-native inline progress gauge (`progress=`). Rendered as a real capsule
@@ -95,7 +117,23 @@ public struct LineParams: Equatable, Sendable {
     public var image: String?
     public var templateImage: String?
 
-    // SwiftBar extensions
+    // SwiftBar extensions.
+    //
+    // IMPORTANT — do not add new direct stored properties to `LineParams`
+    // itself: this struct sits at a hard ceiling where one more top-level
+    // field (of *any* type, regardless of Equatable being synthesized or
+    // hand-written) deterministically SIGSEGVs any code path that builds a
+    // *nested* `MenuNode`/`MenuItem` tree (a submenu) — e.g.
+    // `VeeSearchTests.MenuFlattenerTests.testClickableParentEmittedAndRecursed`.
+    // Verified empirically (bisected in an isolated worktree): growing this
+    // struct's own direct field list crashes; growing a struct nested *inside*
+    // one of its existing fields (like `swiftbar` below) does not. Root cause
+    // looks like a Swift compiler/runtime metadata bug tied to this struct's
+    // participation in the recursive `indirect enum MenuNode` — not something
+    // fixable from call-site code. Until someone root-causes/files that bug
+    // (or `MenuNode`/`MenuItem` are restructured), add new params inside an
+    // existing nested struct (`swiftbar`, or a dedicated one of its own),
+    // never as a new top-level `LineParams` field.
     public var swiftbar: SwiftBarParams
 
     // Vee-native extensions

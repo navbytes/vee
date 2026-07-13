@@ -1,6 +1,7 @@
 import AppKit
 import Foundation
 import UserNotifications
+import VeeCatalog
 import VeeCore
 import VeePluginFormat
 
@@ -25,6 +26,10 @@ enum NotificationAction: Equatable, Sendable {
     case silence(pluginID: String)
     case openLog(pluginID: String)
     case openHref(URL)
+    /// Tapped a "N plugin updates available" catalog nudge — open Discover.
+    /// Install itself is never triggered from here; the trust gate still owns
+    /// it, same as any other Discover update.
+    case openDiscover
     case none
 }
 
@@ -37,10 +42,15 @@ enum NotificationRouter {
     static let silenceAction = "SILENCE"
     static let openLogAction = "OPEN_LOG"
 
+    /// Category for a coalesced "N plugin updates available" catalog nudge —
+    /// no custom actions, just a default tap that opens Discover.
+    static let updateCategoryID = "VEE_CATALOG_UPDATE"
+
     /// Maps a tapped action identifier + payload to the work Vee should perform.
     /// The three custom actions require a plugin id; the default tap (the whole
-    /// banner) falls back to opening the `href`, preserving legacy behavior.
-    static func route(actionIdentifier: String, pluginID: String?, href: URL?) -> NotificationAction {
+    /// banner) opens Discover for a catalog-update nudge, else falls back to
+    /// opening the `href`, preserving legacy behavior.
+    static func route(actionIdentifier: String, pluginID: String?, href: URL?, isUpdateNudge: Bool = false) -> NotificationAction {
         switch actionIdentifier {
         case rerunAction:
             if let pluginID { return .rerun(pluginID: pluginID) }
@@ -57,8 +67,10 @@ enum NotificationRouter {
             // correctly regardless.)
             return .none
         default:
-            // The default tap (UNNotificationDefaultActionIdentifier) opens the
-            // click-through URL when present, matching SwiftBar.
+            // The default tap (UNNotificationDefaultActionIdentifier) opens
+            // Discover for a catalog-update nudge, else the click-through URL
+            // when present, matching SwiftBar.
+            if isUpdateNudge { return .openDiscover }
             if let href { return .openHref(href) }
             return .none
         }
@@ -86,6 +98,10 @@ enum Notifier {
     /// Wired from the app so notification actions can drive the live plugins.
     private static var onRerun: (@MainActor (String) -> Void)?
     private static var onOpenLog: (@MainActor (String) -> Void)?
+    /// Wired from the app so tapping a catalog-update nudge opens Discover.
+    /// Defaults to a no-op so `configure` callers that predate this feature
+    /// still compile and simply do nothing on tap until they wire it up.
+    private static var onOpenDiscover: (@MainActor () -> Void) = {}
 
     /// UNUserNotificationCenter requires a real app bundle; skip when running as
     /// a bare binary (e.g. `swift run vee` during development).
@@ -93,12 +109,16 @@ enum Notifier {
 
     /// Connects the action buttons to the app: Re-run refreshes the plugin,
     /// Open-log opens its debug console. Silence is handled internally.
+    /// `onOpenDiscover` defaults to a no-op — optional so existing call sites
+    /// are unaffected until they wire up the Discover surface.
     static func configure(
         onRerun: @escaping @MainActor (String) -> Void,
-        onOpenLog: @escaping @MainActor (String) -> Void
+        onOpenLog: @escaping @MainActor (String) -> Void,
+        onOpenDiscover: @escaping @MainActor () -> Void = {}
     ) {
         Self.onRerun = onRerun
         Self.onOpenLog = onOpenLog
+        Self.onOpenDiscover = onOpenDiscover
     }
 
     /// Whether we've already asked the system for notification permission this
@@ -187,9 +207,49 @@ enum Notifier {
             onOpenLog?(id)
         case .openHref(let url):
             NSWorkspace.shared.open(url)
+        case .openDiscover:
+            onOpenDiscover()
         case .none:
             break
         }
+    }
+
+    // MARK: - Catalog update nudge
+
+    /// Notifies about installed plugins with a newer version in the catalog:
+    /// one coalesced banner ("2 plugin updates available"), de-duped against
+    /// versions already surfaced (persisted in `store`). No-op if every
+    /// candidate was already notified. Never installs anything — tapping the
+    /// banner only opens Discover; the trust gate still owns the actual
+    /// update, same as any other Discover install/update.
+    static func notifyCatalogUpdates(_ candidates: [PluginUpdateCandidate], store: UpdateNotificationStore = UpdateNotificationStore()) {
+        let unseen = unnotifiedCandidates(candidates, store: store)
+        guard !unseen.isEmpty else { return }
+        guard isAvailable else {
+            Self.log.info("catalog-update notification skipped (no bundle): \(unseen.count, privacy: .public) plugin(s)")
+            return
+        }
+        requestAuthorization()
+        let content = UNMutableNotificationContent()
+        content.title = "Vee"
+        content.body = CatalogUpdateNudgeText.body(for: unseen.map(\.filename))
+        content.categoryIdentifier = NotificationRouter.updateCategoryID
+        // Stable identifier: a later scan replaces this banner instead of
+        // stacking a new one alongside it, mirroring the plugin-alert
+        // coalescing above.
+        let request = UNNotificationRequest(identifier: "vee.catalog-updates", content: content, trigger: nil)
+        UNUserNotificationCenter.current().add(request) { error in
+            if let error { Self.log.error("catalog-update notification failed: \(error.localizedDescription, privacy: .public)") }
+        }
+        store.markNotified(unseen)
+    }
+
+    /// The candidates not already notified about (same plugin *and* version
+    /// already seen is skipped; a new version for a previously-seen plugin is
+    /// not). Exposed separately from `notifyCatalogUpdates` so the de-dupe
+    /// filter is testable without touching `UNUserNotificationCenter`.
+    static func unnotifiedCandidates(_ candidates: [PluginUpdateCandidate], store: UpdateNotificationStore) -> [PluginUpdateCandidate] {
+        candidates.filter { !store.hasNotified($0) }
     }
 }
 
@@ -201,10 +261,12 @@ private final class NotifierDelegate: NSObject, UNUserNotificationCenterDelegate
     static let hrefKey = "vee.href"
 
     func userNotificationCenter(_ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse, withCompletionHandler completionHandler: @escaping () -> Void) {
-        let userInfo = response.notification.request.content.userInfo
+        let content = response.notification.request.content
+        let userInfo = content.userInfo
         let pluginID = userInfo[Notifier.pluginIDKey] as? String
         let href = (userInfo[Self.hrefKey] as? String).flatMap { URL(string: $0) }.flatMap { URLScheme.isSafeToOpen($0) ? $0 : nil }
-        let action = NotificationRouter.route(actionIdentifier: response.actionIdentifier, pluginID: pluginID, href: href)
+        let isUpdateNudge = content.categoryIdentifier == NotificationRouter.updateCategoryID
+        let action = NotificationRouter.route(actionIdentifier: response.actionIdentifier, pluginID: pluginID, href: href, isUpdateNudge: isUpdateNudge)
         // `action` is Sendable; capture no non-Sendable self in the hop.
         Task { @MainActor in Notifier.handle(action) }
         completionHandler()

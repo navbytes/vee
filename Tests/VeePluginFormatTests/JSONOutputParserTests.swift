@@ -97,6 +97,30 @@ final class JSONOutputParserTests: XCTestCase {
         XCTAssertEqual(c.params.sparkline, [1, 2])
     }
 
+    /// `header=`/`accessory=` mirror the text protocol from `JSONItem`.
+    func testHeaderAndAccessoryMapFromJSON() throws {
+        let json = """
+        {"vee":1,"items":[
+          {"text":"Section","header":true},
+          {"text":"Budget","progress":0.5,"accessory":"leading"}
+        ]}
+        """
+        let out = try XCTUnwrap(JSONOutputParser.parse(json))
+        func item(_ i: Int) throws -> MenuItem {
+            guard case .item(let m) = out.body[i] else { throw XCTSkip("not an item") }
+            return m
+        }
+        XCTAssertEqual(try item(0).params.swiftbar.header, true)
+        XCTAssertEqual(try item(1).params.swiftbar.accessory, .leading)
+    }
+
+    func testInvalidAccessoryStringIsNilFromJSON() throws {
+        let json = #"{"vee":1,"items":[{"text":"x","accessory":"middle"}]}"#
+        let out = try XCTUnwrap(JSONOutputParser.parse(json))
+        guard case .item(let item) = out.body[0] else { return XCTFail("expected item") }
+        XCTAssertNil(item.params.swiftbar.accessory)
+    }
+
     func testReturnsNilForNonJSON() {
         XCTAssertNil(JSONOutputParser.parse("CPU 12%\n---\nplain text"))
     }

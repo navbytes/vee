@@ -170,6 +170,24 @@ enum LineParser {
             case "trackcolor": progressTrack = VeeColor.parse(value)
             case "progressw": progressW = finite(value)
             case "progressh": progressH = finite(value)
+            case "header":
+                // Vee-native: a first-class, non-interactive section-header
+                // row. Stored on `p.swiftbar` — see the doc comment on
+                // `LineParams.swiftbar` for why it lives there.
+                p.swiftbar.header = bool(value)
+            case "accessory":
+                // Vee-native: which edge a progress=/sparkline= accessory
+                // anchors to. Default (absent/unrecognised) stays trailing —
+                // today's rendering. Stored on `p.swiftbar` — see the doc
+                // comment on `LineParams.swiftbar` for why it lives there.
+                switch value.lowercased() {
+                case "leading": p.swiftbar.accessory = .leading
+                case "trailing": p.swiftbar.accessory = .trailing
+                default:
+                    if !value.isEmpty {
+                        diagnostics.append(.init(severity: .warning, message: "accessory= expects 'leading' or 'trailing'"))
+                    }
+                }
             default:
                 if key.hasPrefix("param"), let n = Int(key.dropFirst(5)) {
                     positional[n] = value

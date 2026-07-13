@@ -5,6 +5,11 @@ import VeeCore
 /// (bash-wrapped by default, like SwiftBar's RunInBash), injects the
 /// environment, and delegates to a `ProcessRunning`.
 public struct PluginExecutor: Sendable {
+    /// Applied when nothing more specific is given — i.e. a plugin declares no
+    /// `<vee.timeout>` header and the caller passes no explicit override.
+    /// `PluginRuntime.refresh` checks the header first and falls back to this.
+    public static let defaultTimeout: TimeInterval = 30
+
     private let runner: ProcessRunning
     private let baseEnvironment: [String: String]
 
@@ -19,11 +24,15 @@ public struct PluginExecutor: Sendable {
     ///     shebang interpreter if it has one — so a non-`+x` Python/Node/Ruby
     ///     plugin runs with the right interpreter — and only falls back to
     ///     `/bin/bash <path>` when there's no shebang.
+    ///   - timeout: wall-clock limit before the process is killed (SIGTERM,
+    ///     then SIGKILL — see `SystemProcessRunner`). Defaults to
+    ///     `defaultTimeout`; pass a plugin's `<vee.timeout>` override here
+    ///     (`PluginRuntime.refresh` does this automatically).
     public func run(
         pluginPath: String,
         context: RuntimeEnvironmentContext,
         runInBash: Bool = true,
-        timeout: TimeInterval? = 30
+        timeout: TimeInterval? = PluginExecutor.defaultTimeout
     ) async throws -> ProcessOutcome {
         let (launchPath, arguments) = Self.launchCommand(pluginPath: pluginPath, runInBash: runInBash)
         let invocation = ProcessInvocation(

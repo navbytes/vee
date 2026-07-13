@@ -57,6 +57,7 @@ public enum JSONOutputParser {
         }
         p.refresh = item.refresh
         p.disabled = item.disabled
+        p.swiftbar.header = item.header
         p.swiftbar.checked = item.checked
         p.swiftbar.tooltip = item.tooltip
         applyRichParams(from: item, to: &p)
@@ -82,6 +83,9 @@ public enum JSONOutputParser {
                 width: item.progressWidth.flatMap { $0.isFinite ? $0 : nil },
                 height: item.progressHeight.flatMap { $0.isFinite ? $0 : nil }
             )
+        }
+        if let raw = item.accessory {
+            p.swiftbar.accessory = AccessoryPlacement(rawValue: raw.lowercased())
         }
     }
 
@@ -129,6 +133,7 @@ private final class JSONItem: Decodable {
     let disabled: Bool?
     let checked: Bool?
     let tooltip: String?
+    let header: Bool?
     // Rich params (Vee-native inline controls), mirroring the text protocol.
     let sparkline: [Double]?
     let toggle: Bool?
@@ -137,6 +142,7 @@ private final class JSONItem: Decodable {
     let trackColor: String?
     let progressWidth: Double?
     let progressHeight: Double?
+    let accessory: String?
     let submenu: [JSONItem]?
     let alternate: JSONItem?
 }

@@ -25,12 +25,16 @@ public struct ProcessOutcome: Sendable, Equatable {
     public var standardError: String
     public var exitCode: Int32
     public var timedOut: Bool
+    /// `true` when stdout and/or stderr hit `SystemProcessRunner`'s capture cap
+    /// and the rest of the output was discarded (see `ProcessRun.boundedDrain`).
+    public var outputTruncated: Bool
 
-    public init(standardOutput: String, standardError: String, exitCode: Int32, timedOut: Bool) {
+    public init(standardOutput: String, standardError: String, exitCode: Int32, timedOut: Bool, outputTruncated: Bool = false) {
         self.standardOutput = standardOutput
         self.standardError = standardError
         self.exitCode = exitCode
         self.timedOut = timedOut
+        self.outputTruncated = outputTruncated
     }
 }
 

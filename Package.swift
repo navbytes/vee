@@ -53,7 +53,7 @@ let package = Package(
         .executableTarget(name: "vee", dependencies: ["VeeApp", "VeeCLI"]),
         .testTarget(name: "VeeCoreTests", dependencies: ["VeeCore"]),
         .testTarget(name: "VeePluginFormatTests", dependencies: ["VeePluginFormat", "VeeWidgetShared", "VeeCore"]),
-        .testTarget(name: "VeeRuntimeTests", dependencies: ["VeeRuntime"]),
+        .testTarget(name: "VeeRuntimeTests", dependencies: ["VeeRuntime", "VeePluginFormat"]),
         .testTarget(name: "VeeMenuTests", dependencies: ["VeeMenu"]),
         .testTarget(name: "VeeSearchTests", dependencies: ["VeeSearch"]),
         .testTarget(name: "VeePreferencesTests", dependencies: ["VeePreferences"]),
@@ -62,6 +62,6 @@ let package = Package(
         .testTarget(name: "VeeUITests", dependencies: ["VeeUI", "VeeCore", "VeePluginFormat", "VeePreferences", "VeeTrust", "VeeCatalog"]),
         .testTarget(name: "VeeWidgetSharedTests", dependencies: ["VeeWidgetShared"]),
         .testTarget(name: "VeeCLITests", dependencies: ["VeeCLI"]),
-        .testTarget(name: "VeeAppTests", dependencies: ["VeeApp", "VeeSearch"]),
+        .testTarget(name: "VeeAppTests", dependencies: ["VeeApp", "VeeSearch", "VeeUI"]),
     ]
 )

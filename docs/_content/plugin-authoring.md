@@ -61,6 +61,22 @@ Network
 
 Here `Network` is a submenu containing `Wi-Fi`, `IP`, and a further `Speed` submenu.
 
+## Section headers
+
+Mark a line `header=true` to render it as a real, non-interactive section header — AppKit's native section-header row — instead of a `disabled=true` line dressed up to look like one:
+
+```
+---
+Accounts | header=true
+Checking
+Savings
+---
+Cards | header=true
+Visa ···· 4242
+```
+
+A header row is title-only: it ignores click/appearance params (`href=`, `color=`, `md=`, …) since AppKit's native section header renders plain text and never fires an action. Keep it at the same indentation as the items it introduces — like `disabled=true` today, it doesn't nest anything under itself.
+
 ## Line parameters
 
 Append `| key=value key2=value2 …` to any line to attach parameters. Quote values that contain spaces (`title="Open in browser"`), and escape quotes with `\"`.
@@ -80,6 +96,7 @@ Append `| key=value key2=value2 …` to any line to attach parameters. Quote val
 | `dropdown` | `false` — show the line only in the menu bar, not the dropdown. |
 | `alternate` | `true` — this line is the Option-key alternate of the line above it. |
 | `disabled` | `true` — render the item greyed-out and non-clickable. |
+| `header` | `true` — render this line as a real, non-interactive [section header](#section-headers) instead of a normal item. |
 | `key` | Keyboard shortcut for the item, active while the menu is open (e.g. `key=Cmd+R`, `key=shift+F2`, `key=cmd+space`). |
 | `image` | Base64-encoded image (or file reference) shown next to the text. |
 | `templateImage` | Like `image`, but treated as a template image that adapts to light/dark. |
@@ -96,26 +113,29 @@ Append `| key=value key2=value2 …` to any line to attach parameters. Quote val
 | `badge` | A short badge/chip shown after the text (e.g. `badge=12`). |
 | `shortcut` | Run a macOS Shortcut by name when the item is clicked (e.g. `shortcut="Start Meeting"`). |
 | `webview`, `webvieww`, `webviewh` | Open a URL in a standalone WebView window (never inside the menu), with optional width/height. |
-| `sparkline` | A comma-separated list of numbers (e.g. `sparkline=1,2,3,4,5`). Clicking the item opens a native Liquid Glass popover that renders the series as an inline Swift Charts sparkline — rich UI without a WebView. |
+| `sparkline` | A comma-separated list of numbers (e.g. `sparkline=1,2,3,4,5`). Renders as a small chart **inline in the menu row**; clicking the item also opens a fuller native Liquid Glass Swift Charts popover. |
 | `toggle` | `toggle=on` / `toggle=off` (also `true`/`false`/`1`/`0`). Clicking opens a Liquid Glass popover with a switch; flipping it re-invokes the item's `shell=`/`bash=` with the new value. |
 | `slider` | `slider=min,max,value` (e.g. `slider=0,100,40`). Clicking opens a Liquid Glass popover with a slider; releasing it re-invokes the item's `shell=`/`bash=` with the chosen value. |
 | `progress`, `trackcolor`, `progressw`, `progressh` | `progress=<0..1>` or `progress=value,max` (e.g. `progress=0.72` or `progress=23.65,100`). Draws a real capsule bar **inline in the menu row**. Fill uses `color=`; `trackcolor=` is the groove, `progressw=`/`progressh=` set the bar size in points. |
+| `accessory` | `leading` / `trailing` — which edge of the row a `progress=`/`sparkline=` accessory anchors to (default `trailing`, today's rendering). See [Accessory placement](#accessory-placement-accessory). |
 
 Unknown parameters are preserved rather than dropped, so the format can evolve without breaking existing plugins.
 
 ## Rich inline charts (Liquid Glass popovers)
 
-Attach `sparkline=` to a dropdown item to opt it into a **native** rich-UI surface:
+Attach `sparkline=` to a dropdown item to render a compact chart **inline in the
+menu row** — the same in-row custom view `progress=` uses:
 
 ```
 Load average | sparkline=0.4,0.6,0.9,1.2,0.8,0.5
 ```
 
-Clicking the item opens an `NSPopover` that renders the numbers as a Swift Charts
-line/area sparkline on a macOS 26 Liquid Glass background. This is Vee's answer to
-"rich plugin UI without a WebView" — everything is drawn with SwiftUI + Swift
-Charts and AppKit, so there is no embedded browser or cross-platform runtime.
-Malformed values are skipped; an empty list is ignored.
+Clicking the item still opens the richer surface: an `NSPopover` that renders the
+same numbers as a full Swift Charts line/area sparkline on a macOS 26 Liquid Glass
+background. This is Vee's answer to "rich plugin UI without a WebView" —
+everything is drawn with SwiftUI + Swift Charts and AppKit, so there is no
+embedded browser or cross-platform runtime. Malformed values are skipped; an
+empty list is ignored (no inline chart, no popover).
 
 ### Interactive controls (`toggle=` / `slider=`)
 
@@ -169,8 +189,23 @@ Disk | progress=0.88 color=#F5A623
   never truncates. Unknown to xbar/SwiftBar, so plugins stay portable (they just
   ignore it).
 
-Progress rows are display-only (they don't fire a click action) and can't have a
-submenu.
+The gauge itself is display-only (it doesn't fire a click by being a gauge), but
+the row can still carry its own `href=`/`shell=` action or a submenu, exactly
+like a plain item.
+
+### Accessory placement (`accessory=`)
+
+Both `progress=` and `sparkline=` anchor their accessory (bar/chart) to the
+row's **trailing** edge by default, with the label filling the rest — today's
+rendering. Set `accessory=leading` to flip it: the accessory anchors to the
+row's leading edge instead, with the label filling the remaining trailing
+space.
+
+```
+Budget | progress=0.72 accessory=leading
+```
+
+Omit `accessory=` (or set `accessory=trailing`) for today's default.
 
 ## Searchable filter panel
 
@@ -404,6 +439,7 @@ Vee adds a few tags of its own. All are opt-in — omit them for the classic beh
 | `<vee.filter>` | `<vee.filter>true</vee.filter>` opts the dropdown into the [searchable filter panel](#searchable-filter-panel). |
 | `<vee.shortcut>` | `<vee.shortcut>cmd+shift+k</vee.shortcut>` binds a [global hotkey](#global-hotkey-veeshortcut) that opens the search panel from anywhere. |
 | `<vee.surface>` | `menu` (default) / `both` / `widget` — which output surface(s) the plugin serves. See [Widgets](#widgets). |
+| `<vee.timeout>` | `<vee.timeout>90</vee.timeout>` overrides the default 30s execution timeout for this plugin. Accepts a plain number of seconds or a duration token (`ms`/`s`/`m`/`h`/`d`, same format as [filename intervals](#filenames-and-refresh-intervals)), e.g. `<vee.timeout>2m</vee.timeout>`. Clamped to 1s–1h. |
 | `<vee.capabilities>`, `<vee.network>`, `<vee.secrets>`, `<vee.filesystem.read>` / `<vee.filesystem.write>`, `<vee.exec>` | Declare the plugin's [trust footprint](trust-model.md). |
 
 ## SF Symbols

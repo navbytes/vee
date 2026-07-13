@@ -150,6 +150,61 @@ final class MenuBuilderTests: XCTestCase {
         let m = menu("T\n---\nBudget | progress=0.5 href=https://example.com")
         XCTAssertNotNil(m.items[0].target, "progress row with href should be wired")
     }
+
+    // MARK: - sparkline= (in-row)
+
+    func testSparklineItemGetsCustomView() {
+        let m = menu("T\n---\nLoad | sparkline=1,2,3,4,5")
+        XCTAssertNotNil(m.items[0].view, "sparkline row should render a custom view, same as progress=")
+    }
+
+    /// Mirrors `testProgressItemWithSubmenuKeepsSubmenu`: the custom-view branch
+    /// must fall through to the same submenu wiring, not return early.
+    func testSparklineItemWithSubmenuKeepsSubmenu() {
+        let m = menu("T\n---\nLoad | sparkline=1,2,3\n--Detail")
+        XCTAssertNotNil(m.items[0].submenu, "sparkline row should keep its submenu")
+        XCTAssertEqual(m.items[0].submenu?.items.first?.title, "Detail")
+    }
+
+    /// The click-to-popover behavior (`AppActionDispatcher`) depends on the item
+    /// staying wired to a target/action regardless of its inline view.
+    func testSparklineItemStaysActionableForPopoverClick() {
+        let m = menu("T\n---\nLoad | sparkline=1,2,3")
+        XCTAssertNotNil(m.items[0].target, "sparkline row must stay actionable so its click-to-popover still fires")
+    }
+
+    /// A row with both `progress=` and `sparkline=` can only carry one custom
+    /// view; progress wins (it shipped first) and sparkline's click behavior is
+    /// untouched either way.
+    func testProgressTakesPrecedenceOverSparklineForTheView() {
+        let m = menu("T\n---\nBoth | progress=0.5 sparkline=1,2,3")
+        XCTAssertTrue(m.items[0].view is ProgressMenuItemView)
+    }
+
+    // MARK: - header= (section headers)
+
+    func testHeaderItemIsNativeSectionHeader() {
+        let m = menu("T\n---\nSection A | header=true\nItem 1")
+        XCTAssertTrue(m.items[0].isSectionHeader)
+        XCTAssertEqual(m.items[0].title, "Section A")
+        XCTAssertEqual(m.items[1].title, "Item 1")
+    }
+
+    /// A header row is non-interactive: it never gets the target/action wiring
+    /// a normal actionable item would, even if it also declares href=/shell=.
+    func testHeaderItemIgnoresActionParams() {
+        let m = menu("T\n---\nSection | header=true href=https://example.com")
+        XCTAssertTrue(m.items[0].isSectionHeader)
+        XCTAssertNil(m.items[0].target, "section headers don't perform an action")
+    }
+
+    /// AppKit's native section-header item takes a plain title only — nested
+    /// children (from dash-depth) aren't promoted onto it.
+    func testHeaderItemDropsNestedSubmenu() {
+        let m = menu("T\n---\nSection | header=true\n--Child")
+        XCTAssertTrue(m.items[0].isSectionHeader)
+        XCTAssertNil(m.items[0].submenu, "section headers can't carry a submenu")
+    }
 }
 
 final class SFSymbolConfigTests: XCTestCase {

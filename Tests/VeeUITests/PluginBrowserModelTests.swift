@@ -248,4 +248,81 @@ final class PluginBrowserModelTests: XCTestCase {
         let secondCount = await fetcher.fetchLastUpdatedCallCount
         XCTAssertEqual(secondCount, 2, "already-fetched entries must not be re-fetched")
     }
+
+    // MARK: - Catalog-update nudge wiring (`onUpdatesFound`)
+
+    /// `load()` must report an installed, catalog-tracked plugin whose
+    /// manifest-pinned hash has moved on from what's recorded at install —
+    /// the seam `AppController` wires to `Notifier.notifyCatalogUpdates`.
+    func testLoadReportsCandidateForInstalledPluginWithNewerCatalogHash() async throws {
+        let dir = tempDir()
+        var entry = makeEntry("cpu")
+        entry.declaredSHA256 = "new-hash"
+        try ProvenanceStore(directory: dir).record(
+            PluginProvenance(filename: entry.filename, sourceURL: entry.rawURL, sha256: "old-hash", installedAt: Date(timeIntervalSince1970: 0))
+        )
+        let fetcher = FakeCatalogFetcher(index: [entry])
+        var reported: [PluginUpdateCandidate]?
+        let model = PluginBrowserModel(fetcher: fetcher, pluginsDirectory: dir, onInstalled: {}, onUpdatesFound: { reported = $0 })
+
+        await model.load()
+
+        XCTAssertEqual(reported?.map(\.filename), [entry.filename])
+    }
+
+    /// An installed plugin whose recorded hash still matches the catalog must
+    /// never trigger the notify path.
+    func testLoadDoesNotReportWhenInstalledHashMatchesCatalog() async throws {
+        let dir = tempDir()
+        var entry = makeEntry("cpu")
+        entry.declaredSHA256 = "same-hash"
+        try ProvenanceStore(directory: dir).record(
+            PluginProvenance(filename: entry.filename, sourceURL: entry.rawURL, sha256: "same-hash", installedAt: Date(timeIntervalSince1970: 0))
+        )
+        let fetcher = FakeCatalogFetcher(index: [entry])
+        var reportCount = 0
+        let model = PluginBrowserModel(fetcher: fetcher, pluginsDirectory: dir, onInstalled: {}, onUpdatesFound: { _ in reportCount += 1 })
+
+        await model.load()
+
+        XCTAssertEqual(reportCount, 0, "an up-to-date installed plugin must never trigger the notify path")
+    }
+
+    /// A plugin that merely shares a filename with a catalog entry, but was
+    /// never installed *through* Discover (no provenance record), must never
+    /// be nudged — `pendingUpdates` only scans `ProvenanceStore`'s ledger, and
+    /// this must not be bypassed.
+    func testLoadDoesNotReportForAPluginWithNoProvenanceRecord() async throws {
+        let dir = tempDir()
+        var entry = makeEntry("cpu")
+        entry.declaredSHA256 = "new-hash"
+        let fetcher = FakeCatalogFetcher(index: [entry])
+        var reportCount = 0
+        let model = PluginBrowserModel(fetcher: fetcher, pluginsDirectory: dir, onInstalled: {}, onUpdatesFound: { _ in reportCount += 1 })
+
+        await model.load()
+
+        XCTAssertEqual(reportCount, 0, "no provenance record means never installed via the catalog — must never be nudged")
+    }
+
+    /// `refresh()` calls through to `load()`, so the same report fires for a
+    /// manual refresh as for the view's automatic cold-open `load()` — one
+    /// report per fetch, with zero extra wiring needed at either call site.
+    func testRefreshAlsoReportsPendingUpdates() async throws {
+        let dir = tempDir()
+        var entry = makeEntry("cpu")
+        entry.declaredSHA256 = "new-hash"
+        try ProvenanceStore(directory: dir).record(
+            PluginProvenance(filename: entry.filename, sourceURL: entry.rawURL, sha256: "old-hash", installedAt: Date(timeIntervalSince1970: 0))
+        )
+        let fetcher = FakeCatalogFetcher(index: [entry], source: "#!/bin/bash\necho hi\n")
+        var reportCount = 0
+        let model = PluginBrowserModel(fetcher: fetcher, pluginsDirectory: dir, onInstalled: {}, onUpdatesFound: { _ in reportCount += 1 })
+
+        await model.load()
+        XCTAssertEqual(reportCount, 1, "the initial load already reports the pending update once")
+
+        await model.refresh()
+        XCTAssertEqual(reportCount, 2, "refresh() re-runs load(), so a still-pending update reports again — de-duping repeat reports is Notifier's job, not this model's")
+    }
 }

@@ -12,6 +12,7 @@ final class ProcessRunnerIntegrationTests: XCTestCase {
         XCTAssertEqual(out.standardOutput, "hello world\n")
         XCTAssertEqual(out.exitCode, 0)
         XCTAssertFalse(out.timedOut)
+        XCTAssertFalse(out.outputTruncated)
     }
 
     func testExitCodeAndStderr() async throws {
@@ -45,7 +46,8 @@ final class ProcessRunnerIntegrationTests: XCTestCase {
 
     /// Regression: a plugin spewing far more than the capture cap must be
     /// truncated in memory (bounded-memory guarantee), not buffered wholesale —
-    /// while still draining to EOF so the child never blocks.
+    /// while still draining to EOF so the child never blocks. The truncation
+    /// must also be recorded (diagnostics surface it) rather than silent.
     func testHugeOutputIsCappedNotUnbounded() async throws {
         // Emit ~12 MB, well past the 8 MB cap.
         let out = try await runner.run(ProcessInvocation(
@@ -57,6 +59,21 @@ final class ProcessRunnerIntegrationTests: XCTestCase {
         XCTAssertFalse(out.timedOut)
         XCTAssertLessThanOrEqual(out.standardOutput.utf8.count, 8 * 1024 * 1024)
         XCTAssertGreaterThan(out.standardOutput.utf8.count, 4 * 1024 * 1024) // captured a lot, just bounded
+        XCTAssertTrue(out.outputTruncated)
+    }
+
+    /// Boundary regression: output landing at *exactly* the 8 MB cap, with
+    /// nothing beyond it, must NOT be flagged as truncated — nothing was
+    /// actually discarded, so the diagnostic would be a false alarm.
+    func testOutputExactlyAtCapIsNotFlaggedTruncated() async throws {
+        let out = try await runner.run(ProcessInvocation(
+            launchPath: "/bin/sh",
+            arguments: ["-c", "head -c 8388608 /dev/zero"], // exactly 8 * 1024 * 1024
+            timeout: 30
+        ))
+        XCTAssertEqual(out.exitCode, 0)
+        XCTAssertEqual(out.standardOutput.utf8.count, 8 * 1024 * 1024)
+        XCTAssertFalse(out.outputTruncated)
     }
 
     func testTimeoutTerminatesProcess() async throws {

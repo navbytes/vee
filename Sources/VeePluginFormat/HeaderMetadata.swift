@@ -78,5 +78,12 @@ public struct HeaderMetadata: Equatable, Sendable {
     /// field the menu bar uses), floored at the system minimum by the caller.
     public var surface: WidgetSurface = .menu
 
+    /// `<vee.timeout>45</vee.timeout>` (or a duration token like `2m`/`500ms` —
+    /// the same format filename intervals use): overrides
+    /// `PluginExecutor.defaultTimeout` for this plugin. Already clamped to
+    /// `HeaderParser`'s sane range (1s–1h) by the parser. `nil` (the default)
+    /// means no override — strictly opt-in, like every other Vee-native tag.
+    public var timeout: TimeInterval?
+
     public init() {}
 }

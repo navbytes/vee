@@ -38,6 +38,9 @@ private final class StreamingProc: @unchecked Sendable {
     private let lock = NSLock()
     private var partial = Data()
     private var finished = false
+    /// Guards against re-logging `maxLineBytes` truncation on every subsequent
+    /// chunk of a stream that keeps emitting with no newlines.
+    private var loggedLineTruncation = false
     private var selfRetain: StreamingProc?
 
     init(invocation: ProcessInvocation, continuation: AsyncThrowingStream<String, Error>.Continuation, killGracePeriod: TimeInterval) {
@@ -95,6 +98,7 @@ private final class StreamingProc: @unchecked Sendable {
 
     private func ingest(_ data: Data) {
         var linesToYield: [String] = []
+        var shouldLogTruncation = false
         lock.withLock {
             partial.append(data)
             while let nl = partial.firstIndex(of: 0x0A) {
@@ -111,9 +115,22 @@ private final class StreamingProc: @unchecked Sendable {
             if partial.count > Self.maxLineBytes {
                 linesToYield.append(String(decoding: partial, as: UTF8.self))
                 partial.removeAll(keepingCapacity: false)
+                // Once per process is enough to flag a misbehaving plugin
+                // without flooding the log if it keeps streaming with no newlines.
+                if !loggedLineTruncation {
+                    loggedLineTruncation = true
+                    shouldLogTruncation = true
+                }
             }
         }
         for line in linesToYield { continuation.yield(line) }
+        // Logged (rather than folded silently into the yielded content, which
+        // would corrupt whatever the plugin was mid-emitting) — matches the
+        // "record it instead of dropping it silently" treatment
+        // SystemProcessRunner gives its own 8 MB capture cap.
+        if shouldLogTruncation {
+            VeeLog.make("streaming").warning("output line truncated at 1 MB")
+        }
     }
 
     private func finish(error: Error?) {
