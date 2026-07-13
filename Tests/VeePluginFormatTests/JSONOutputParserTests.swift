@@ -121,6 +121,18 @@ final class JSONOutputParserTests: XCTestCase {
         XCTAssertNil(item.params.swiftbar.accessory)
     }
 
+    /// Unlike the text protocol (`LineParser`/`OutputParser`, which reports an
+    /// unrecognized `accessory=` value as a `ParseDiagnostic`), the JSON
+    /// protocol has no diagnostics channel at all: `JSONOutputParser.parse`
+    /// never populates `ParsedOutput.diagnostics`, for this field or any other.
+    /// Locks in the asymmetry so a future change doesn't add diagnostics for
+    /// one JSON field but not its siblings.
+    func testJSONProtocolNeverEmitsDiagnosticsUnlikeTextProtocol() throws {
+        let json = #"{"vee":1,"items":[{"text":"x","accessory":"middle","header":true}]}"#
+        let out = try XCTUnwrap(JSONOutputParser.parse(json))
+        XCTAssertEqual(out.diagnostics, [], "the JSON protocol has no diagnostics channel — the equivalent text line `x | accessory=middle` does warn")
+    }
+
     func testReturnsNilForNonJSON() {
         XCTAssertNil(JSONOutputParser.parse("CPU 12%\n---\nplain text"))
     }

@@ -147,4 +147,71 @@ final class CompactMenuBarControllerTests: XCTestCase {
 
         XCTAssertEqual(compact.menu.items.count, 0, "remove() must tear down this plugin's row")
     }
+
+    // MARK: - Lifecycle churn (disable/delete one plugin, enable another)
+
+    /// Disabling/deleting a plugin (`remove()`, as `PluginCoordinator.stop()`
+    /// calls) from the *middle* of several rows, then a different plugin
+    /// enabling, must leave no orphan row behind and must not double-count —
+    /// the existing add/remove tests above never combine more than two rows
+    /// or a "remove-then-add" sequence.
+    func testDisablingAPluginThenEnablingAnotherLeavesNoOrphanRow() {
+        let prefs = makeCompactPrefs()
+        let compact = CompactMenuBarController(attachesStatusItem: false)
+        let a = makeController(prefs: prefs, compact: compact, name: "A")
+        let b = makeController(prefs: prefs, compact: compact, name: "B")
+        let c = makeController(prefs: prefs, compact: compact, name: "C")
+        a.render(output(title: "A-title"))
+        b.render(output(title: "B-title"))
+        c.render(output(title: "C-title"))
+        XCTAssertEqual(compact.menu.items.count, 3)
+
+        b.remove() // simulates disabling/deleting the middle plugin
+
+        XCTAssertEqual(compact.menu.items.count, 2, "the disabled plugin's row must be gone, not orphaned")
+        XCTAssertEqual(compact.menu.items.map { $0.attributedTitle?.string }, ["A-title", "C-title"])
+
+        let d = makeController(prefs: prefs, compact: compact, name: "D") // simulates enabling a new plugin
+        d.render(output(title: "D-title"))
+
+        XCTAssertEqual(compact.menu.items.count, 3, "no double-add: exactly one new row for the newly-enabled plugin")
+        XCTAssertEqual(
+            compact.menu.items.map { $0.attributedTitle?.string },
+            ["A-title", "C-title", "D-title"],
+            "no orphan row left over from B, and no duplicate row for D"
+        )
+        withExtendedLifetime((a, c, d)) {}
+    }
+
+    // MARK: - Mode-switch notification churn
+
+    /// A "notification storm" where `compactMenuBarDidChangeNotification` fires
+    /// repeatedly without the preference actually changing (e.g. redundant sets
+    /// from rapid, no-op UI churn) must be a no-op every time: `reconcileMode()`
+    /// guards on the live value actually differing from its current surface.
+    /// Only this direction (already-compact, notified again while still compact)
+    /// is safely unit-testable — the actual compact⇄standalone flip always
+    /// creates/removes a real `NSStatusItem` (see the file-level note above).
+    func testRedundantModeChangeNotificationIsIdempotent() {
+        let prefs = makeCompactPrefs()
+        let compact = CompactMenuBarController(attachesStatusItem: false)
+        let controller = makeController(prefs: prefs, compact: compact)
+        let rowBefore = compact.menu.items[0]
+
+        for _ in 0..<5 {
+            NotificationCenter.default.post(name: AppPreferences.compactMenuBarDidChangeNotification, object: nil)
+        }
+
+        // Notification observers registered with `queue: .main` are dispatched
+        // onto the main (serial) queue rather than run synchronously inside
+        // `post()`; enqueue a marker after the storm and wait for it so every
+        // `reconcileMode()` call above has actually run before asserting.
+        let drained = expectation(description: "main queue drained past the notification storm")
+        DispatchQueue.main.async { drained.fulfill() }
+        wait(for: [drained], timeout: 2)
+
+        XCTAssertEqual(compact.menu.items.count, 1, "a same-value notification storm must never add a duplicate row")
+        XCTAssertIdentical(compact.menu.items[0], rowBefore, "the row must be the same instance, not rebuilt")
+        withExtendedLifetime(controller) {}
+    }
 }

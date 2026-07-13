@@ -166,6 +166,22 @@ final class HeaderParserTests: XCTestCase {
         XCTAssertNil(HeaderParser.parse(source: "echo hi\n").timeout)
     }
 
+    /// A repeated `<vee.timeout>` tag: the parser has no special-casing for
+    /// duplicates (it's a plain loop over every regex match, assigning as it
+    /// goes), so the last occurrence in source order wins.
+    func testDuplicateTimeoutTagLastOneWins() {
+        let src = "# <vee.timeout>10</vee.timeout>\n# <vee.timeout>20</vee.timeout>\n"
+        XCTAssertEqual(HeaderParser.parse(source: src).timeout, 20, "last occurrence should win, same as any other duplicated tag")
+    }
+
+    /// Cross-check: the same "last one wins" rule applies to an unrelated,
+    /// pre-existing tag — confirms `<vee.timeout>`'s duplicate handling isn't a
+    /// special case, it's just the parser's ordinary last-write-wins loop.
+    func testDuplicateTagLastWinsRuleIsUniformAcrossKeys() {
+        let src = "# <xbar.title>First</xbar.title>\n# <xbar.title>Second</xbar.title>\n"
+        XCTAssertEqual(HeaderParser.parse(source: src).title, "Second")
+    }
+
     /// The widget-mode cadence is deliberately *not* a header field — it reuses
     /// the filename interval (see `PluginCoordinator.widgetRefreshInterval`), so
     /// `<vee.widget.interval>` is just an unknown tag that parses to nothing.

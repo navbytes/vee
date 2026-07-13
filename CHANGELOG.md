@@ -6,6 +6,29 @@ All notable changes to Vee are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+- **Compact menu-bar mode.** An opt-in General setting collapses every plugin
+  into rows of a single "Vee" status item (issue #45), solving menu-bar crowding
+  for users with many plugins. Each plugin's submenu and menu behavior stay
+  unchanged; General settings toggle, default off.
+- **Inline sparkline rendering.** `sparkline=` rows now render a sparkline
+  **inline in the menu row** itself (alongside text, like `progress=`), with the
+  click-to-popover behavior retained. Clicking opens a richer native Liquid Glass
+  Swift Charts visualization.
+- **Accessory placement control.** `accessory=leading` / `accessory=trailing`
+  places a `progress=` or `sparkline=` accessory at either edge of a row (default
+  trailing, today's rendering).
+- **Native section headers.** `header=true` renders a line as a real, non-interactive
+  macOS section header (`NSMenuItem.sectionHeader`) instead of a `disabled=true` line
+  dressed up to look like one — rendering is native, no click handling.
+- **Catalog update nudge.** After Discover refreshes, a coalesced notification
+  surfaces "N plugin updates available" (one notification per version, de-duped),
+  opening Discover so users can install. Never auto-installs.
+- **Per-plugin execution timeout override.** `<vee.timeout>ms/s/m/h/d` header
+  sets a per-plugin timeout (or a plain number of seconds; decimals allowed).
+  Clamped to 1s–1h (default 30s). Debug console surfaces 8MB output truncation
+  and 1MB streaming line caps.
+
 ### Changed
 - **Discover loads with skeleton cards.** While the catalog fetches, Discover now
   shows placeholder cards in the real grid instead of a centered spinner, so the

@@ -43,6 +43,28 @@ final class CatalogUpdateCheckTests: XCTestCase {
         XCTAssertEqual(CatalogUpdateCheck.status(installed: installed, entry: nil, catalogLastUpdated: Date()), .notInCatalog)
     }
 
+    /// Cross-feature regression: `ProvenanceStatus` (pre-existing local-edit
+    /// detection) and `CatalogUpdateCheck` (this wave) both read from
+    /// `PluginProvenance`, but must never conflate their signals. A local edit
+    /// after install correctly flips `ProvenanceStatus` to `.modified` — but
+    /// `installed.sha256` is the value frozen at install time, never
+    /// recomputed from the live file, so the same edit must not leak into a
+    /// false "update available": the catalog's own copy hasn't changed.
+    func testLocalEditDoesNotProduceFalseUpdateAvailable() {
+        let installedSource = "#!/bin/bash\necho original\n"
+        let record = PluginProvenance(filename: "x.sh", sourceURL: url, source: installedSource, installedAt: Date(timeIntervalSince1970: 1_000))
+
+        let editedSource = "#!/bin/bash\necho edited-locally\n"
+        XCTAssertEqual(ProvenanceStatus.evaluate(record: record, currentSource: editedSource), .modified, "sanity: the local edit is detected")
+
+        let catalogEntry = entry(declaredSHA256: PluginHash.sha256Hex(installedSource))
+        XCTAssertEqual(
+            CatalogUpdateCheck.status(installed: record, entry: catalogEntry, catalogLastUpdated: nil),
+            .upToDate,
+            "a local edit must never surface as a catalog update — the catalog's copy hasn't changed"
+        )
+    }
+
     // MARK: - status: hash-based (manifest-pinned store, no fetch needed)
 
     func testDifferingDeclaredHashIsUpdateAvailable() {

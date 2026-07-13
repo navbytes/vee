@@ -205,6 +205,20 @@ final class MenuBuilderTests: XCTestCase {
         XCTAssertTrue(m.items[0].isSectionHeader)
         XCTAssertNil(m.items[0].submenu, "section headers can't carry a submenu")
     }
+
+    /// Nonsensical combo: `alternate=true` together with `header=true`.
+    /// `alternate=true` attaches the line as the *preceding* item's alternate
+    /// (a real, separate `MenuNode`, not a submenu child), so it reaches
+    /// `makeItem(_:isAlternate:true)` — but `header=true`'s early return skips
+    /// the `isAlternate`/⌥-key wiring too, same as it skips href=/submenu.
+    /// Degrades gracefully (no crash): the row renders as a plain, always-visible
+    /// section header rather than a hidden ⌥-revealed alternate.
+    func testHeaderAlternateComboDegradesToPlainSectionHeaderNotHiddenAlternate() {
+        let m = menu("T\n---\nOpen\nOpen in Background | alternate=true header=true")
+        XCTAssertEqual(m.items.count, 2, "the header row still renders as its own row, just not hidden behind the option key")
+        XCTAssertTrue(m.items[1].isSectionHeader)
+        XCTAssertFalse(m.items[1].isAlternate, "the header early-return skips the isAlternate/⌥-key wiring too")
+    }
 }
 
 final class SFSymbolConfigTests: XCTestCase {
