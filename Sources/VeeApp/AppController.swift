@@ -48,6 +48,11 @@ public final class AppController: NSObject, NSApplicationDelegate {
     private let prefs = AppPreferences.shared
     private let log = VeeLog.make("app-controller")
 
+    /// Live "combine everything into one menu bar item" toggle (issue #71 —
+    /// one icon total in compact mode, not two side by side). Removed at
+    /// `applicationWillTerminate` for symmetry with the app's other observers.
+    private var compactModeObserverToken: NSObjectProtocol?
+
     /// The Carbon hotkey token for the opt-in cross-plugin "Search All Plugins"
     /// hotkey, or `nil` when nothing is registered (off, invalid, or already
     /// claimed elsewhere) — the app-level analog of `PluginCoordinator.hotKeyID`.
@@ -109,6 +114,15 @@ public final class AppController: NSObject, NSApplicationDelegate {
             onSearchAll: { [weak self] in self?.openSearchAllPanel() },
             onOpenFolder: { [weak self] in self?.openFolder() }
         )
+        // Issue #71 ("one icon total"): fold the app item's own controls under
+        // the compact item's shared icon when compact mode is already on at
+        // launch, and keep reconciling live afterward — see `applyCompactMode`.
+        applyCompactMode(prefs.compactMenuBar)
+        compactModeObserverToken = NotificationCenter.default.addObserver(
+            forName: AppPreferences.compactMenuBarDidChangeNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.applyCompactMode(self?.prefs.compactMenuBar ?? false) }
+        }
         // Opt-in, no default combo (see AppPreferences.searchAllHotkeyEnabled) —
         // a no-op unless the user already set one in a prior launch.
         registerSearchAllHotkey()
@@ -167,6 +181,24 @@ public final class AppController: NSObject, NSApplicationDelegate {
         watcher?.start()
     }
 
+    /// Reconciles the app item's visibility and the compact item's
+    /// app-controls footer against the live "combine everything into one menu
+    /// bar item" preference (issue #71 — one icon total, not two side by
+    /// side): compact on folds `mainMenu`'s own controls under
+    /// `CompactMenuBarController.shared`'s footer and hides its standalone
+    /// item; compact off reverses both. Both directions are idempotent — the
+    /// underlying calls all no-op on a repeated same-state call — so a
+    /// redundant notification can never leak an item or duplicate the footer.
+    private func applyCompactMode(_ compact: Bool) {
+        mainMenu?.setVisible(!compact)
+        guard let mainMenu else { return }
+        if compact {
+            CompactMenuBarController.shared.installFooter(target: mainMenu)
+        } else {
+            CompactMenuBarController.shared.removeFooter()
+        }
+    }
+
     // MARK: - URL scheme (vee:// and swiftbar://)
 
     public func application(_ application: NSApplication, open urls: [URL]) {
@@ -200,6 +232,7 @@ public final class AppController: NSObject, NSApplicationDelegate {
         coordinators.values.forEach { $0.stop() }
         ephemerals.values.forEach { $0.remove() }
         if let searchHotkeyID { GlobalHotKeys.shared.unregister(searchHotkeyID) }
+        if let compactModeObserverToken { NotificationCenter.default.removeObserver(compactModeObserverToken) }
         wakeMonitor?.stop()
         watcher?.stop()
         // Symmetry with registerControlRefreshObserver: drop the Darwin observer.

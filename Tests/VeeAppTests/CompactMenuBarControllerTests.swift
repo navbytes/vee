@@ -218,10 +218,14 @@ final class CompactMenuBarControllerTests: XCTestCase {
 
     // MARK: - Shared-item error roll-up (D11 — a child's ⚠️ was invisible from the menu bar)
 
-    func testSharedGlyphDefaultsToASymbolDistinctFromTheAppItem() {
+    /// Issue #71 ("one icon total"): the shared item is now the ONLY Vee icon
+    /// while compact mode is on, so its normal glyph is the same primary "V"
+    /// circle `MainMenuController`'s own item always showed — not a distinct
+    /// symbol sitting beside it.
+    func testSharedGlyphDefaultsToThePrimaryAppGlyph() {
         let compact = CompactMenuBarController(attachesStatusItem: false)
         XCTAssertEqual(compact.currentSymbolName, CompactMenuBarController.normalSymbolName)
-        XCTAssertNotEqual(compact.currentSymbolName, "v.circle.fill", "must not match MainMenuController's always-on app item glyph")
+        XCTAssertEqual(compact.currentSymbolName, "v.circle.fill", "must match MainMenuController's app item glyph — they're the same icon now, not two side by side")
     }
 
     func testChildErrorSwapsSharedGlyphAndRecoveryRestoresIt() {
@@ -315,5 +319,134 @@ final class CompactMenuBarControllerTests: XCTestCase {
         let controlsSubmenu = compact.menu.items[0].submenu?.items.last?.submenu
         XCTAssertEqual(controlsSubmenu?.items.first(where: { $0.title == "Refresh" })?.keyEquivalent, "", "a key equivalent here would ambiguously fire on whichever plugin's row AppKit finds first in the shared tree")
         XCTAssertEqual(controlsSubmenu?.items.first(where: { $0.title == "Quit Vee" })?.keyEquivalent, "")
+    }
+
+    // MARK: - App-controls footer (issue #71 — one icon total, not two side by side)
+
+    private func makeMainMenuTarget() -> MainMenuController {
+        MainMenuController(
+            onManager: {}, onDiscover: {}, onPreferences: {}, onRefreshAll: {}, onSearchAll: {}, onOpenFolder: {},
+            attachesStatusItem: false
+        )
+    }
+
+    func testInstallFooterAddsASeparatorThenTheIdenticalAppControlRows() {
+        let compact = CompactMenuBarController(attachesStatusItem: false)
+        let target = makeMainMenuTarget()
+
+        compact.installFooter(target: target)
+
+        XCTAssertTrue(compact.menu.items.first?.isSeparatorItem ?? false, "the footer starts with a separator below any plugin rows")
+        XCTAssertEqual(compact.menu.items.dropFirst().map(\.title), target.menu.items.map(\.title), "the footer's rows must be identical to MainMenuController's own standalone menu")
+    }
+
+    func testInstallFooterKeepsTheSharedItemAliveWithZeroPluginRows() {
+        let compact = CompactMenuBarController(attachesStatusItem: false)
+        let target = makeMainMenuTarget()
+        XCTAssertEqual(compact.menu.items.count, 0)
+
+        compact.installFooter(target: target)
+
+        XCTAssertFalse(compact.menu.items.isEmpty, "the footer alone (zero plugins) must still populate the shared menu, so Preferences/Quit/etc. stay reachable")
+    }
+
+    /// V5-review nit: with zero plugin rows the footer's leading separator is
+    /// a dangling divider at the very top of the menu — `menuNeedsUpdate`
+    /// hides it, and shows it again once a row exists above it.
+    func testFooterSeparatorHiddenWhenNoPluginRowsAboveIt() {
+        let compact = CompactMenuBarController(attachesStatusItem: false)
+        let target = makeMainMenuTarget()
+        compact.installFooter(target: target)
+
+        compact.menuNeedsUpdate(compact.menu)
+        XCTAssertTrue(compact.menu.items.first?.isHidden ?? false, "no rows above the footer: the leading separator must hide")
+
+        let entry = compact.addEntry()
+        compact.menuNeedsUpdate(compact.menu)
+        XCTAssertFalse(compact.menu.items.first?.isHidden ?? true, "a plugin row above the footer: the separator must show again")
+        compact.removeEntry(entry)
+    }
+
+    /// A live toggle firing the mode-change notification repeatedly (or the
+    /// user flipping Settings back and forth) must never duplicate the footer.
+    func testFooterPresentExactlyOnceAfterMultipleInstallRemoveToggles() {
+        let compact = CompactMenuBarController(attachesStatusItem: false)
+        let target = makeMainMenuTarget()
+
+        compact.installFooter(target: target)
+        let countAfterFirstInstall = compact.menu.items.count
+        compact.installFooter(target: target) // redundant install: no-op
+        compact.removeFooter()
+        compact.removeFooter() // redundant remove: no-op
+        compact.installFooter(target: target)
+        compact.installFooter(target: target) // redundant install again: no-op
+
+        XCTAssertEqual(compact.menu.items.count, countAfterFirstInstall, "repeated toggles must leave exactly one footer, never zero or two")
+        XCTAssertEqual(compact.menu.items.dropFirst().map(\.title), target.menu.items.map(\.title), "still exactly one copy of the app-control rows, not a duplicated set")
+    }
+
+    func testRemoveFooterTearsDownTheSharedItemWhenNoRowsRemain() {
+        let compact = CompactMenuBarController(attachesStatusItem: false)
+        let target = makeMainMenuTarget()
+        compact.installFooter(target: target)
+
+        compact.removeFooter()
+
+        XCTAssertTrue(compact.menu.items.isEmpty, "removing the footer with zero plugin rows must leave nothing in the shared menu")
+    }
+
+    /// The core anchoring guarantee: rows insert ABOVE the footer regardless
+    /// of when they're added relative to `installFooter`, and stay above it
+    /// across add/remove churn — the footer must never end up sandwiched
+    /// between rows or pushed to the top.
+    func testFooterStaysBelowPluginRowsAcrossAddRemoveChurn() {
+        let prefs = makeCompactPrefs()
+        let compact = CompactMenuBarController(attachesStatusItem: false)
+        let target = makeMainMenuTarget()
+        let a = makeController(prefs: prefs, compact: compact, name: "A")
+        a.render(output(title: "A-title"))
+        compact.installFooter(target: target)
+
+        // A row added AFTER the footer is installed must still land above it.
+        let b = makeController(prefs: prefs, compact: compact, name: "B")
+        b.render(output(title: "B-title"))
+
+        XCTAssertEqual(
+            [compact.menu.items[0], compact.menu.items[1]].map { $0.attributedTitle?.string },
+            ["A-title", "B-title"],
+            "both rows must sit above the footer, in insertion order"
+        )
+        XCTAssertTrue(compact.menu.items[2].isSeparatorItem, "the footer's separator must be the first item below the rows")
+
+        // Churn: remove A, add C — the footer must still trail every row.
+        a.remove()
+        let c = makeController(prefs: prefs, compact: compact, name: "C")
+        c.render(output(title: "C-title"))
+
+        XCTAssertEqual(
+            [compact.menu.items[0], compact.menu.items[1]].map { $0.attributedTitle?.string },
+            ["B-title", "C-title"],
+            "after churn, the surviving/new rows must still sit above the footer"
+        )
+        XCTAssertTrue(compact.menu.items[2].isSeparatorItem, "the footer must still trail every row after add/remove churn")
+        XCTAssertEqual(compact.menu.items.dropFirst(3).map(\.title), target.menu.items.map(\.title), "the footer's own content must be untouched by row churn")
+        withExtendedLifetime((b, c)) {}
+    }
+
+    /// The shared item must never tear down while plugin rows are still
+    /// attached, even if the footer is removed first (compact mode turning
+    /// off doesn't necessarily race ahead of every plugin's own reconcile).
+    func testRemoveFooterLeavesTheSharedItemUpWhilePluginRowsRemain() {
+        let prefs = makeCompactPrefs()
+        let compact = CompactMenuBarController(attachesStatusItem: false)
+        let target = makeMainMenuTarget()
+        let a = makeController(prefs: prefs, compact: compact, name: "A")
+        a.render(output(title: "A-title"))
+        compact.installFooter(target: target)
+
+        compact.removeFooter()
+
+        XCTAssertEqual(compact.menu.items.map { $0.attributedTitle?.string }, ["A-title"], "the row must survive footer removal untouched")
+        withExtendedLifetime(a) {}
     }
 }
