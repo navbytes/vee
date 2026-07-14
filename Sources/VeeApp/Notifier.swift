@@ -222,7 +222,14 @@ enum Notifier {
     /// candidate was already notified. Never installs anything — tapping the
     /// banner only opens Discover; the trust gate still owns the actual
     /// update, same as any other Discover install/update.
-    static func notifyCatalogUpdates(_ candidates: [PluginUpdateCandidate], store: UpdateNotificationStore = UpdateNotificationStore()) {
+    /// `installedFilenames`, when provided, prunes ledger entries for plugins
+    /// that are no longer installed before the de-dupe check.
+    static func notifyCatalogUpdates(
+        _ candidates: [PluginUpdateCandidate],
+        installedFilenames: Set<String>? = nil,
+        store: UpdateNotificationStore = UpdateNotificationStore()
+    ) {
+        if let installedFilenames { store.prune(keepingOnly: installedFilenames) }
         let unseen = unnotifiedCandidates(candidates, store: store)
         guard !unseen.isEmpty else { return }
         guard isAvailable else {
@@ -239,9 +246,15 @@ enum Notifier {
         // coalescing above.
         let request = UNNotificationRequest(identifier: "vee.catalog-updates", content: content, trigger: nil)
         UNUserNotificationCenter.current().add(request) { error in
-            if let error { Self.log.error("catalog-update notification failed: \(error.localizedDescription, privacy: .public)") }
+            if let error {
+                // Not marked as notified: a banner that never posted (e.g.
+                // notifications denied) must not permanently suppress this
+                // version — the next scan is free to try again.
+                Self.log.error("catalog-update notification failed: \(error.localizedDescription, privacy: .public)")
+            } else {
+                store.markNotified(unseen)
+            }
         }
-        store.markNotified(unseen)
     }
 
     /// The candidates not already notified about (same plugin *and* version

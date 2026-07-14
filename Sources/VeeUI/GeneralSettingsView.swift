@@ -9,7 +9,7 @@ import VeePreferences
 public final class GeneralSettingsModel: ObservableObject {
     @Published public var currentDirectory: String
     @Published public var launchAtLogin: Bool
-    /// Opt-in "collapse into one Vee menu" (issue #45 — menu-bar crowding).
+    /// Opt-in "combine all plugins into one menu bar item" (issue #45 — menu-bar crowding).
     /// Unlike `launchAtLogin` (which needs `LoginItemManager`, a `VeeApp`-layer
     /// type `VeeUI` can't import) this reads/writes `AppPreferences` directly —
     /// `VeeUI` already depends on `VeePreferences` — so no callback plumbing
@@ -92,12 +92,14 @@ public struct GeneralSettingsTab: View {
                 onChooseFolder: { model.onChooseFolder() }
             )
             Section {
-                Toggle("Collapse into one Vee menu", isOn: Binding(
+                Toggle("Combine all plugins into one menu bar item", isOn: Binding(
                     get: { model.compactMenuBar },
                     set: { model.compactMenuBar = $0; model.onCompactMenuBar($0) }
                 ))
+            } header: {
+                Text("Menu Bar")
             } footer: {
-                Text("Show one Vee status item instead of one per plugin. Each plugin becomes a submenu.")
+                Text("Use this when several plugins are crowding your menu bar. Each plugin's controls move into a submenu of one shared item.")
             }
             Section {
                 Button {

@@ -1,4 +1,5 @@
 import XCTest
+import AppKit
 @testable import VeeApp
 import VeeMenu
 import VeePluginFormat
@@ -213,5 +214,106 @@ final class CompactMenuBarControllerTests: XCTestCase {
         XCTAssertEqual(compact.menu.items.count, 1, "a same-value notification storm must never add a duplicate row")
         XCTAssertIdentical(compact.menu.items[0], rowBefore, "the row must be the same instance, not rebuilt")
         withExtendedLifetime(controller) {}
+    }
+
+    // MARK: - Shared-item error roll-up (D11 — a child's ⚠️ was invisible from the menu bar)
+
+    func testSharedGlyphDefaultsToASymbolDistinctFromTheAppItem() {
+        let compact = CompactMenuBarController(attachesStatusItem: false)
+        XCTAssertEqual(compact.currentSymbolName, CompactMenuBarController.normalSymbolName)
+        XCTAssertNotEqual(compact.currentSymbolName, "v.circle.fill", "must not match MainMenuController's always-on app item glyph")
+    }
+
+    func testChildErrorSwapsSharedGlyphAndRecoveryRestoresIt() {
+        let prefs = makeCompactPrefs()
+        let compact = CompactMenuBarController(attachesStatusItem: false)
+        let controller = makeController(prefs: prefs, compact: compact, name: "Flaky")
+
+        controller.renderError("boom")
+        XCTAssertEqual(compact.currentSymbolName, CompactMenuBarController.errorSymbolName, "a child in error must roll up to the shared item's glyph")
+
+        controller.render(output(title: "back to normal"))
+        XCTAssertEqual(compact.currentSymbolName, CompactMenuBarController.normalSymbolName, "recovering must restore the shared item's normal glyph")
+    }
+
+    func testSharedGlyphStaysErroredUntilTheLastErrorClears() {
+        let prefs = makeCompactPrefs()
+        let compact = CompactMenuBarController(attachesStatusItem: false)
+        let a = makeController(prefs: prefs, compact: compact, name: "A")
+        let b = makeController(prefs: prefs, compact: compact, name: "B")
+
+        a.renderError("a is down")
+        b.renderError("b is down")
+        XCTAssertEqual(compact.currentSymbolName, CompactMenuBarController.errorSymbolName)
+
+        a.render(output(title: "A recovered"))
+        XCTAssertEqual(compact.currentSymbolName, CompactMenuBarController.errorSymbolName, "B is still erroring — the shared glyph must not clear early")
+
+        b.render(output(title: "B recovered"))
+        XCTAssertEqual(compact.currentSymbolName, CompactMenuBarController.normalSymbolName, "the last error clearing must restore the shared glyph")
+    }
+
+    /// A plugin removed (disabled/deleted) while erroring must not leave the
+    /// shared item's badge stuck on forever.
+    func testRemovingAnErroredPluginClearsItsShareOfTheSharedGlyph() {
+        let prefs = makeCompactPrefs()
+        let compact = CompactMenuBarController(attachesStatusItem: false)
+        let controller = makeController(prefs: prefs, compact: compact, name: "Flaky")
+        controller.renderError("boom")
+        XCTAssertEqual(compact.currentSymbolName, CompactMenuBarController.errorSymbolName)
+
+        controller.remove()
+
+        XCTAssertEqual(compact.currentSymbolName, CompactMenuBarController.normalSymbolName, "an errored plugin being removed must not leave the shared glyph stuck")
+    }
+
+    // MARK: - Refresh-in-progress roll-up onto the compact row (D12)
+
+    func testRefreshingPastTheFlickerDelayDimsTheCompactRowTitle() {
+        let prefs = makeCompactPrefs()
+        let compact = CompactMenuBarController(attachesStatusItem: false)
+        let controller = makeController(prefs: prefs, compact: compact, name: "Weather")
+        controller.render(output(title: "72°"))
+
+        controller.setRefreshing(true)
+        let delay = expectation(description: "flicker-avoidance delay elapsed")
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { delay.fulfill() }
+        wait(for: [delay], timeout: 2)
+
+        let row = compact.menu.items[0]
+        let color = row.attributedTitle?.attribute(.foregroundColor, at: 0, effectiveRange: nil) as? NSColor
+        XCTAssertEqual(color, NSColor.secondaryLabelColor, "a row mid-refresh past the anti-flicker delay must visibly dim — the only prior cue was two levels deep in its own submenu")
+
+        controller.setRefreshing(false)
+        let colorAfter = row.attributedTitle?.attribute(.foregroundColor, at: 0, effectiveRange: nil) as? NSColor
+        XCTAssertNotEqual(colorAfter, NSColor.secondaryLabelColor, "finishing a refresh must undim the row immediately")
+        XCTAssertEqual(row.attributedTitle?.string, "72°", "undimming must restore the exact prior title")
+    }
+
+    func testFastRefreshNeverDimsTheCompactRow() {
+        let prefs = makeCompactPrefs()
+        let compact = CompactMenuBarController(attachesStatusItem: false)
+        let controller = makeController(prefs: prefs, compact: compact, name: "Weather")
+        controller.render(output(title: "72°"))
+
+        controller.setRefreshing(true)
+        controller.setRefreshing(false) // finishes before the 0.3s anti-flicker delay fires
+
+        let row = compact.menu.items[0]
+        let color = row.attributedTitle?.attribute(.foregroundColor, at: 0, effectiveRange: nil) as? NSColor
+        XCTAssertNotEqual(color, NSColor.secondaryLabelColor, "a refresh finishing before the anti-flicker delay must never dim, same as the standalone item")
+    }
+
+    // MARK: - Compact-tree key equivalents (bonus: first-match ambiguity across nested plugin submenus)
+
+    func testControlItemsCarryNoKeyEquivalentInCompactMode() {
+        let prefs = makeCompactPrefs()
+        let compact = CompactMenuBarController(attachesStatusItem: false)
+        let controller = makeController(prefs: prefs, compact: compact)
+        controller.render(output(title: "42%"))
+
+        let controlsSubmenu = compact.menu.items[0].submenu?.items.last?.submenu
+        XCTAssertEqual(controlsSubmenu?.items.first(where: { $0.title == "Refresh" })?.keyEquivalent, "", "a key equivalent here would ambiguously fire on whichever plugin's row AppKit finds first in the shared tree")
+        XCTAssertEqual(controlsSubmenu?.items.first(where: { $0.title == "Quit Vee" })?.keyEquivalent, "")
     }
 }

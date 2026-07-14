@@ -35,6 +35,16 @@ struct UpdateNotificationStore: @unchecked Sendable {
         for candidate in candidates { current[candidate.filename] = candidate.versionToken }
         defaults.set(current, forKey: Self.key)
     }
+
+    /// Drops ledger entries for plugins no longer installed, so the ledger
+    /// tracks the installed set instead of growing without bound as plugins
+    /// come and go.
+    func prune(keepingOnly installedFilenames: Set<String>) {
+        let current = notified()
+        let kept = current.filter { installedFilenames.contains($0.key) }
+        guard kept.count != current.count else { return }
+        defaults.set(kept, forKey: Self.key)
+    }
 }
 
 /// The coalesced notification body for a catalog-update nudge — always one

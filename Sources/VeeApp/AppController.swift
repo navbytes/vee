@@ -113,6 +113,7 @@ public final class AppController: NSObject, NSApplicationDelegate {
         )
 
         presentFirstRunIfNeeded()
+        scanCatalogSnapshotForUpdates()
 
         // Resolve the user's real login-shell PATH before loading plugins, so a
         // Finder/Dock launch finds Homebrew/pyenv/asdf/nvm binaries just like a
@@ -595,7 +596,15 @@ public final class AppController: NSObject, NSApplicationDelegate {
             },
             pluginsDirectory: directory,
             onInstalled: { [weak self] in self?.reload() },
-            onUpdatesFound: { candidates in Notifier.notifyCatalogUpdates(candidates) }
+            onUpdatesFound: { candidates, installed in
+                // Skip the banner while the user is already in the Vee window
+                // looking at Discover's own Update buttons — it would only
+                // re-open the window they're in. Skipped versions are never
+                // marked notified, so the launch-time snapshot scan still
+                // surfaces them later. Pruning still runs either way.
+                let windowInFront = LibraryWindow.shared.isVisible && (NSApp?.isActive ?? false)
+                Notifier.notifyCatalogUpdates(windowInFront ? [] : candidates, installedFilenames: installed)
+            }
         )
         cachedBrowserModel = model
         cachedBrowserStores = stores
@@ -608,6 +617,27 @@ public final class AppController: NSObject, NSApplicationDelegate {
     /// empty-state, and first-run all route through one place.
     private func openBrowser() {
         LibraryWindow.shared.show(model: makeLibraryModel(section: .discover))
+    }
+
+    /// Launch-time catalog-update scan against the on-disk snapshot written by
+    /// the last successful Discover load (`CatalogSnapshotStore`) — makes the
+    /// update nudge proactive without any network fetch at launch (Vee makes
+    /// no unexplained launch network calls; cf. matryer/xbar#859). No snapshot
+    /// (never opened Discover) or no catalog-installed plugins → silent no-op.
+    private func scanCatalogSnapshotForUpdates() {
+        let dir = directory
+        Task.detached(priority: .utility) {
+            let entries = CatalogSnapshotStore(directory: dir).load()
+            guard !entries.isEmpty else { return }
+            let installed = Array(ProvenanceStore(directory: dir).all().values)
+            guard !installed.isEmpty else { return }
+            let freshness = CatalogFreshnessStore(directory: dir)
+            let candidates = CatalogUpdateCheck.pendingUpdates(installed: installed, catalog: entries) {
+                freshness.date(for: $0.id) ?? $0.lastUpdated
+            }
+            let installedNames = Set(installed.map(\.filename))
+            await Notifier.notifyCatalogUpdates(candidates, installedFilenames: installedNames)
+        }
     }
 
     /// On the very first launch, a brand-new user sees only a menu-bar icon and

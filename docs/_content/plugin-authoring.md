@@ -135,7 +135,8 @@ same numbers as a full Swift Charts line/area sparkline on a macOS 26 Liquid Gla
 background. This is Vee's answer to "rich plugin UI without a WebView" —
 everything is drawn with SwiftUI + Swift Charts and AppKit, so there is no
 embedded browser or cross-platform runtime. Malformed values are skipped; an
-empty list is ignored (no inline chart, no popover).
+empty list is ignored (no inline chart, no popover). A single value has no series
+to chart, so it draws as a flat centered baseline instead.
 
 ### Interactive controls (`toggle=` / `slider=`)
 
@@ -192,6 +193,9 @@ Disk | progress=0.88 color=#F5A623
 The gauge itself is display-only (it doesn't fire a click by being a gauge), but
 the row can still carry its own `href=`/`shell=` action or a submenu, exactly
 like a plain item.
+
+If a row sets both `progress=` and `sparkline=`, the progress bar takes the
+inline view; `sparkline=`'s click-to-popover still opens as normal either way.
 
 ### Accessory placement (`accessory=`)
 

@@ -47,6 +47,16 @@ final class LinterTests: XCTestCase {
         XCTAssertTrue(findings.isEmpty, "\(findings)")
     }
 
+    /// Regression: `header=`/`accessory=` are valid Vee-native params (see
+    /// `LineParser`'s `header`/`accessory` cases) that `vee render` already
+    /// accepted, but `knownParams` hadn't caught up — a plugin line using both
+    /// used to false-positive as "unknown parameter".
+    func testHeaderAndAccessoryParamsAreKnown() {
+        let raw = "Budget | header=false accessory=leading\n"
+        let findings = Linter.lint(rawOutput: raw)
+        XCTAssertTrue(findings.isEmpty, "\(findings)")
+    }
+
     /// Regression: a Windows-line-ending plugin's `---\r` must still be
     /// recognized as the title/body separator (`.whitespaces` trimming
     /// doesn't strip "\r"). Before the fix, `inBody` stayed permanently

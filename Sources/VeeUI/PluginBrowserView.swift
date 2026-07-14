@@ -99,15 +99,16 @@ public final class PluginBrowserModel: ObservableObject {
     private let provenanceStore: ProvenanceStore
     private let freshnessStore: CatalogFreshnessStore
     private let onInstalled: () -> Void
-    /// Fired after a fresh catalog load with any installed, catalog-tracked
-    /// plugins that now have a newer version upstream — wired by the app to
-    /// the catalog-update notification (`Notifier.notifyCatalogUpdates`).
-    /// Defaults to a no-op so existing call sites (and every test below)
-    /// compile unchanged.
-    private let onUpdatesFound: ([PluginUpdateCandidate]) -> Void
+    /// Fired after every fresh catalog load: the installed, catalog-tracked
+    /// plugins that now have a newer version upstream (possibly empty), plus
+    /// the currently installed filename set so the app can prune its
+    /// notified-versions ledger — wired by the app to the catalog-update
+    /// notification (`Notifier.notifyCatalogUpdates`). Defaults to a no-op so
+    /// existing call sites (and every test below) compile unchanged.
+    private let onUpdatesFound: ([PluginUpdateCandidate], Set<String>) -> Void
 
     /// Multi-store initializer: builds a client per store via `makeClient`.
-    public init(stores: [StoreConfig], makeClient: (StoreConfig) -> CatalogFetching, pluginsDirectory: String, onInstalled: @escaping () -> Void, onUpdatesFound: @escaping ([PluginUpdateCandidate]) -> Void = { _ in }) {
+    public init(stores: [StoreConfig], makeClient: (StoreConfig) -> CatalogFetching, pluginsDirectory: String, onInstalled: @escaping () -> Void, onUpdatesFound: @escaping ([PluginUpdateCandidate], Set<String>) -> Void = { _, _ in }) {
         self.stores = stores
         var map: [StoreID: CatalogFetching] = [:]
         for store in stores { map[store.id] = makeClient(store) }
@@ -124,7 +125,7 @@ public final class PluginBrowserModel: ObservableObject {
 
     /// Single-store convenience (the public catalog), preserved for existing
     /// call sites and tests.
-    public convenience init(fetcher: CatalogFetching, pluginsDirectory: String, onInstalled: @escaping () -> Void, onUpdatesFound: @escaping ([PluginUpdateCandidate]) -> Void = { _ in }) {
+    public convenience init(fetcher: CatalogFetching, pluginsDirectory: String, onInstalled: @escaping () -> Void, onUpdatesFound: @escaping ([PluginUpdateCandidate], Set<String>) -> Void = { _, _ in }) {
         self.init(stores: [BuiltInStores.xbar], makeClient: { _ in fetcher }, pluginsDirectory: pluginsDirectory, onInstalled: onInstalled, onUpdatesFound: onUpdatesFound)
     }
 
@@ -236,24 +237,30 @@ public final class PluginBrowserModel: ObservableObject {
             errorMessage = CatalogErrorPresenter.message(for: firstError)
         }
         isLoading = false
+        if !entries.isEmpty {
+            // Persist the index so the app's launch-time update scan can run
+            // against it with zero network — Vee never fetches at launch.
+            try? CatalogSnapshotStore(directory: pluginsDirectory).save(entries)
+        }
         reportPendingUpdates()
     }
 
     /// Checks installed, catalog-provenance-tracked plugins against the
-    /// entries just loaded for a newer version, and hands any found to
-    /// `onUpdatesFound`. A plugin with no provenance record (never installed
-    /// through Discover) can never appear here — `pendingUpdates` only scans
-    /// `provenanceStore`'s ledger. Uses only the already-cached
-    /// `lastUpdatedDate(for:)` (seeded from the on-disk freshness ledger or a
-    /// manifest-pinned hash) — never triggers a new network fetch — so both
-    /// the view's cold-open `load()` and the manual-refresh `refresh()`
-    /// (which calls through to `load()`) report the same way, for free.
+    /// entries just loaded for a newer version, and hands the result (plus the
+    /// installed filename set, for ledger pruning) to `onUpdatesFound` — even
+    /// when no updates were found, so the app-side ledger tracks uninstalls.
+    /// A plugin with no provenance record (never installed through Discover)
+    /// can never appear here — `pendingUpdates` only scans `provenanceStore`'s
+    /// ledger. Uses only the already-cached `lastUpdatedDate(for:)` (seeded
+    /// from the on-disk freshness ledger or a manifest-pinned hash) — never
+    /// triggers a new network fetch — so both the view's cold-open `load()`
+    /// and the manual-refresh `refresh()` (which calls through to `load()`)
+    /// report the same way, for free.
     private func reportPendingUpdates() {
         let installed = Array(provenanceStore.all().values)
         guard !installed.isEmpty else { return }
         let candidates = CatalogUpdateCheck.pendingUpdates(installed: installed, catalog: entries) { lastUpdatedDate(for: $0) }
-        guard !candidates.isEmpty else { return }
-        onUpdatesFound(candidates)
+        onUpdatesFound(candidates, Set(installed.map(\.filename)))
     }
 
     /// Re-fetches the catalog from scratch. `load()` only runs once (on first

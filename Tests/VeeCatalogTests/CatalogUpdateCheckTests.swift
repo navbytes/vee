@@ -4,12 +4,19 @@ import XCTest
 final class CatalogUpdateCheckTests: XCTestCase {
     private let url = URL(string: "https://example.com/x.sh")!
 
-    private func entry(filename: String = "x.sh", declaredSHA256: String? = nil) -> CatalogEntry {
-        CatalogEntry(path: "System/\(filename)", category: "System", filename: filename, rawURL: url, declaredSHA256: declaredSHA256)
+    /// Matching is by origin (`sourceURL == rawURL`), so fixtures derive the
+    /// URL from the filename: each plugin's install origin lines up with its
+    /// own catalog entry, and only the origin-forgery test diverges on purpose.
+    private func originURL(_ filename: String) -> URL {
+        URL(string: "https://example.com/\(filename)")!
     }
 
-    private func provenance(filename: String = "x.sh", sha256: String = "abc", installedAt: Date = Date(timeIntervalSince1970: 1_000)) -> PluginProvenance {
-        PluginProvenance(filename: filename, sourceURL: url, sha256: sha256, installedAt: installedAt)
+    private func entry(filename: String = "x.sh", rawURL: URL? = nil, declaredSHA256: String? = nil) -> CatalogEntry {
+        CatalogEntry(path: "System/\(filename)", category: "System", filename: filename, rawURL: rawURL ?? originURL(filename), declaredSHA256: declaredSHA256)
+    }
+
+    private func provenance(filename: String = "x.sh", sourceURL: URL? = nil, sha256: String = "abc", installedAt: Date = Date(timeIntervalSince1970: 1_000)) -> PluginProvenance {
+        PluginProvenance(filename: filename, sourceURL: sourceURL ?? originURL(filename), sha256: sha256, installedAt: installedAt)
     }
 
     // MARK: - status: date-based (no manifest-pinned hash)
@@ -112,16 +119,16 @@ final class CatalogUpdateCheckTests: XCTestCase {
         let installed = [
             provenance(filename: "newer.sh", installedAt: Date(timeIntervalSince1970: 1_000)),
             provenance(filename: "same.sh", installedAt: Date(timeIntervalSince1970: 1_000)),
-            provenance(filename: "gone.sh", installedAt: Date(timeIntervalSince1970: 1_000)),
+            provenance(filename: "gone.sh", installedAt: Date(timeIntervalSince1970: 1_000))
         ]
         let catalog = [
             entry(filename: "newer.sh"),
-            entry(filename: "same.sh"),
+            entry(filename: "same.sh")
             // "gone.sh" intentionally absent — removed upstream.
         ]
         let dates: [String: Date] = [
             "newer.sh": Date(timeIntervalSince1970: 2_000),
-            "same.sh": Date(timeIntervalSince1970: 1_000),
+            "same.sh": Date(timeIntervalSince1970: 1_000)
         ]
 
         let candidates = CatalogUpdateCheck.pendingUpdates(installed: installed, catalog: catalog) { dates[$0.filename] }
@@ -132,7 +139,7 @@ final class CatalogUpdateCheckTests: XCTestCase {
     func testPendingUpdatesSortedByFilenameForStableCoalescing() {
         let installed = [
             provenance(filename: "z.sh", installedAt: Date(timeIntervalSince1970: 1_000)),
-            provenance(filename: "a.sh", installedAt: Date(timeIntervalSince1970: 1_000)),
+            provenance(filename: "a.sh", installedAt: Date(timeIntervalSince1970: 1_000))
         ]
         let catalog = [entry(filename: "z.sh"), entry(filename: "a.sh")]
         let candidates = CatalogUpdateCheck.pendingUpdates(installed: installed, catalog: catalog) { _ in Date(timeIntervalSince1970: 2_000) }
@@ -152,5 +159,30 @@ final class CatalogUpdateCheckTests: XCTestCase {
         let catalog = [entry(filename: "a.sh", declaredSHA256: "new")]
         let candidates = CatalogUpdateCheck.pendingUpdates(installed: installed, catalog: catalog) { _ in nil }
         XCTAssertEqual(candidates, [PluginUpdateCandidate(filename: "a.sh", versionToken: "new")])
+    }
+
+    /// Security regression (V-security D1): with several stores configured, a
+    /// hostile store publishing an entry with the SAME FILENAME as a plugin
+    /// installed from a different store must not be able to forge an "update
+    /// available" nudge — matching is by origin URL, not filename.
+    func testPendingUpdatesIgnoresSameFilenameFromDifferentOrigin() {
+        let installed = [provenance(filename: "x.sh", sourceURL: URL(string: "https://trusted.example/x.sh")!, sha256: "installed-hash")]
+        let hostile = entry(
+            filename: "x.sh",
+            rawURL: URL(string: "https://hostile.example/x.sh")!,
+            declaredSHA256: "attacker-controlled-differing-hash"
+        )
+        let candidates = CatalogUpdateCheck.pendingUpdates(installed: installed, catalog: [hostile]) { _ in Date(timeIntervalSince1970: 99_000) }
+        XCTAssertEqual(candidates, [], "a same-named entry from a different origin must never match")
+    }
+
+    /// The conservative flip side of origin matching: a store that MOVES a
+    /// plugin to a new path (new rawURL) stops matching — no update nudge, and
+    /// crucially no false positive. A missing signal is never guessed.
+    func testPendingUpdatesSilentWhenStoreMovedThePlugin() {
+        let installed = [provenance(filename: "x.sh", sourceURL: URL(string: "https://store.example/old-path/x.sh")!, sha256: "old")]
+        let moved = entry(filename: "x.sh", rawURL: URL(string: "https://store.example/new-path/x.sh")!, declaredSHA256: "new")
+        let candidates = CatalogUpdateCheck.pendingUpdates(installed: installed, catalog: [moved]) { _ in nil }
+        XCTAssertEqual(candidates, [])
     }
 }

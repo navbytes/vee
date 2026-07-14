@@ -53,6 +53,15 @@ public final class StatusItemController {
     /// menu (`CompactMenuBarController`). Mutated directly (title/image/
     /// submenu) the same way `statusItem`'s button/menu are in standalone mode.
     private var compactEntry: NSMenuItem?
+    /// The compact row's title with no refresh-dim tint applied — cached so
+    /// `applyAlpha` can restore it verbatim, or re-derive the dimmed variant
+    /// on every title update (e.g. a cycling frame) while a refresh is still
+    /// in flight. `nil` outside compact mode.
+    private var compactBaseTitle: NSAttributedString?
+    /// Whether the compact row is currently tinted to signal an in-flight
+    /// refresh — the row analog of the standalone item's `alphaValue` dim;
+    /// `applyAlpha` drives both together.
+    private var isCompactDimmed = false
     /// Which surface this controller is currently rendering into. Kept
     /// alongside `statusItem`/`compactEntry` (rather than derived from them)
     /// so `reconcileMode()` has something to compare the live preference
@@ -168,8 +177,9 @@ public final class StatusItemController {
         )
         searchPresenter = { [weak self] in self?.presentSearch() }
 
-        // Live mode toggle: react to Settings' "Collapse into one Vee menu"
-        // switch without a relaunch, for every plugin already running.
+        // Live mode toggle: react to Settings' "Combine all plugins into one
+        // menu bar item" switch without a relaunch, for every plugin already
+        // running.
         modeObserverToken = NotificationCenter.default.addObserver(
             forName: AppPreferences.compactMenuBarDidChangeNotification, object: nil, queue: .main
         ) { [weak self] _ in
@@ -236,6 +246,12 @@ public final class StatusItemController {
         apply(image: presentation.image)
         startCyclingIfNeeded()
         applyMenu(buildMenu(body: output.body))
+        // Issue #45 UX follow-up: a recovering plugin must clear its share of
+        // the shared item's error roll-up (see `renderError` and
+        // `CompactMenuBarController.setEntryError`).
+        if let compactEntry {
+            compactController.setEntryError(compactEntry, hasError: false)
+        }
     }
 
     /// Renders an error surface (the launcher stays up; the plugin shows ⚠️).
@@ -277,6 +293,13 @@ public final class StatusItemController {
         menu.delegate = controls
         appendControls(to: menu)
         applyMenu(menu)
+        // Rolls this row's error into the shared item's glyph (issue #45 UX
+        // follow-up): the menu bar itself now signals "something's wrong"
+        // without the user needing to open every plugin's dropdown to find
+        // the ⚠️ row.
+        if let compactEntry {
+            compactController.setEntryError(compactEntry, hasError: true)
+        }
     }
 
     /// Surfaces an in-flight refresh: the controls submenu's stamp row (if
@@ -394,7 +417,7 @@ public final class StatusItemController {
             // (the icon carries it) but is ambiguous stacked among sibling
             // rows in one shared menu — fall back to the plugin name so every
             // row stays identifiable.
-            compactEntry.attributedTitle = title.string.isEmpty ? NSAttributedString(string: pluginName) : title
+            setCompactTitle(title.string.isEmpty ? NSAttributedString(string: pluginName) : title)
         }
     }
 
@@ -404,9 +427,27 @@ public final class StatusItemController {
     private func applyTitleText(_ title: NSAttributedString) {
         if let button = statusItem?.button {
             button.attributedTitle = title
-        } else if let compactEntry {
-            compactEntry.attributedTitle = title.string.isEmpty ? NSAttributedString(string: pluginName) : title
+        } else if compactEntry != nil {
+            setCompactTitle(title.string.isEmpty ? NSAttributedString(string: pluginName) : title)
         }
+    }
+
+    /// Stores `title` as the compact row's undimmed content and paints it,
+    /// re-applying the refresh-in-progress tint (see `applyAlpha`) if one is
+    /// currently active — so a cycling frame mid-refresh doesn't clear the
+    /// dim early.
+    private func setCompactTitle(_ title: NSAttributedString) {
+        compactBaseTitle = title
+        compactEntry?.attributedTitle = isCompactDimmed ? Self.dimmed(title) : title
+    }
+
+    /// The compact-row analog of dimming a standalone button's `alphaValue`:
+    /// a menu item has no such property, so the same "in flight" cue is
+    /// carried by tinting its title text instead.
+    private static func dimmed(_ title: NSAttributedString) -> NSAttributedString {
+        let tinted = NSMutableAttributedString(attributedString: title)
+        tinted.addAttribute(.foregroundColor, value: NSColor.secondaryLabelColor, range: NSRange(location: 0, length: tinted.length))
+        return tinted
     }
 
     /// Assigns a freshly built dropdown to whichever surface is active. In
@@ -421,11 +462,17 @@ public final class StatusItemController {
         }
     }
 
-    /// Dims the status-bar button while a refresh is in flight. No analog for
-    /// a compact-mode row — its own submenu already carries a "Refreshing…"
-    /// stamp (see `stampItem`), so this simply no-ops there.
+    /// Dims the status-bar button while a refresh is in flight. A compact-mode
+    /// row has no `alphaValue` of its own, so the same cue is carried by
+    /// tinting its title text instead — on top of the "Refreshing…" stamp its
+    /// own submenu already carries (see `stampItem`), which stays two levels
+    /// deep and easy to miss.
     private func applyAlpha(_ alpha: CGFloat) {
         statusItem?.button?.alphaValue = alpha
+        isCompactDimmed = alpha < 1
+        if let compactBaseTitle {
+            compactEntry?.attributedTitle = isCompactDimmed ? Self.dimmed(compactBaseTitle) : compactBaseTitle
+        }
     }
 
     /// Give VoiceOver a spoken label for the status item. An icon-only plugin
@@ -466,7 +513,10 @@ public final class StatusItemController {
         // submenus — without disturbing the native menu, its trust row, or the
         // controls footer.
         if filterEnabled {
-            let search = NSMenuItem(title: "Search…", action: #selector(ControlsTarget.search), keyEquivalent: "f")
+            // Compact mode nests every plugin's menu in one tree, where a key
+            // equivalent set here would ambiguously fire on whichever
+            // plugin's item AppKit finds first — strip it there.
+            let search = NSMenuItem(title: "Search…", action: #selector(ControlsTarget.search), keyEquivalent: isCompact ? "" : "f")
             search.target = controls
             let glass = NSImage(systemSymbolName: "magnifyingglass", accessibilityDescription: "Search")
             glass?.isTemplate = true
@@ -598,12 +648,15 @@ public final class StatusItemController {
             stampItem = stamp
         }
 
-        let refresh = NSMenuItem(title: "Refresh", action: #selector(ControlsTarget.refresh), keyEquivalent: "r")
+        // Same first-match-wins hazard as the Search row above: no key
+        // equivalent on a per-plugin control item once it's nested in
+        // compact mode's shared tree.
+        let refresh = NSMenuItem(title: "Refresh", action: #selector(ControlsTarget.refresh), keyEquivalent: isCompact ? "" : "r")
         refresh.target = controls
         menu.addItem(refresh)
 
         if hasSettings {
-            let settings = NSMenuItem(title: "Settings…", action: #selector(ControlsTarget.settings), keyEquivalent: ",")
+            let settings = NSMenuItem(title: "Settings…", action: #selector(ControlsTarget.settings), keyEquivalent: isCompact ? "" : ",")
             settings.target = controls
             menu.addItem(settings)
         }
@@ -628,7 +681,7 @@ public final class StatusItemController {
 
         menu.addItem(.separator())
 
-        let quit = NSMenuItem(title: "Quit Vee", action: #selector(ControlsTarget.quit), keyEquivalent: "q")
+        let quit = NSMenuItem(title: "Quit Vee", action: #selector(ControlsTarget.quit), keyEquivalent: isCompact ? "" : "q")
         quit.target = controls
         menu.addItem(quit)
         return menu

@@ -96,6 +96,49 @@ final class NotificationUpdateTests: XCTestCase {
         XCTAssertTrue(store.hasNotified(b))
     }
 
+    // MARK: - Ledger pruning (`UpdateNotificationStore.prune`)
+
+    func testPruneDropsUninstalledPluginsAndKeepsInstalled() throws {
+        let suite = "vee.updatenudge.\(UUID().uuidString)"
+        let (store, defaults) = ephemeralStore(suite)
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let kept = PluginUpdateCandidate(filename: "kept.sh", versionToken: "v1")
+        let gone = PluginUpdateCandidate(filename: "uninstalled.sh", versionToken: "v1")
+        store.markNotified([kept, gone])
+
+        store.prune(keepingOnly: ["kept.sh"])
+
+        XCTAssertTrue(store.hasNotified(kept))
+        XCTAssertFalse(store.hasNotified(gone), "an uninstalled plugin's ledger entry must not outlive it")
+    }
+
+    func testPruneWithFullInstalledSetIsANoOp() throws {
+        let suite = "vee.updatenudge.\(UUID().uuidString)"
+        let (store, defaults) = ephemeralStore(suite)
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let a = PluginUpdateCandidate(filename: "a.sh", versionToken: "v1")
+        store.markNotified([a])
+
+        store.prune(keepingOnly: ["a.sh", "other-installed.sh"])
+
+        XCTAssertTrue(store.hasNotified(a))
+    }
+
+    /// Reinstalling a pruned plugin starts from a clean slate: its old version
+    /// pair was dropped with the uninstall, so the same version may notify
+    /// again — correct, because the user may have uninstalled precisely to
+    /// ignore it and a fresh install is a fresh relationship.
+    func testPrunedPluginNotifiesAgainAfterReinstall() throws {
+        let suite = "vee.updatenudge.\(UUID().uuidString)"
+        let (store, defaults) = ephemeralStore(suite)
+        defer { defaults.removePersistentDomain(forName: suite) }
+        let candidate = PluginUpdateCandidate(filename: "cpu.5s.sh", versionToken: "v1")
+        store.markNotified([candidate])
+        store.prune(keepingOnly: [])
+
+        XCTAssertFalse(store.hasNotified(candidate))
+    }
+
     // MARK: - De-dupe filter (`Notifier.unnotifiedCandidates`)
 
     @MainActor

@@ -2,7 +2,7 @@ import Foundation
 
 /// A plugin available in the shared xbar/SwiftBar catalog
 /// (`matryer/xbar-plugins`).
-public struct CatalogEntry: Identifiable, Sendable, Equatable {
+public struct CatalogEntry: Identifiable, Sendable, Equatable, Codable {
     /// Which store this entry came from. Defaults to the built-in xbar catalog so
     /// existing single-store call sites are unchanged.
     public var storeID: StoreID

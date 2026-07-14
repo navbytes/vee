@@ -121,16 +121,27 @@ final class JSONOutputParserTests: XCTestCase {
         XCTAssertNil(item.params.swiftbar.accessory)
     }
 
-    /// Unlike the text protocol (`LineParser`/`OutputParser`, which reports an
-    /// unrecognized `accessory=` value as a `ParseDiagnostic`), the JSON
-    /// protocol has no diagnostics channel at all: `JSONOutputParser.parse`
-    /// never populates `ParsedOutput.diagnostics`, for this field or any other.
-    /// Locks in the asymmetry so a future change doesn't add diagnostics for
-    /// one JSON field but not its siblings.
-    func testJSONProtocolNeverEmitsDiagnosticsUnlikeTextProtocol() throws {
+    /// Parity fix (was locked in as the opposite behavior): an unrecognized
+    /// `accessory=` value now reports the same `ParseDiagnostic` the text
+    /// protocol (`LineParser`/`OutputParser`) already emits for the equivalent
+    /// line (`x | accessory=middle`), instead of defaulting silently. The value
+    /// itself still defaults to `nil` either way (see
+    /// `testInvalidAccessoryStringIsNilFromJSON`) — only the feedback changed.
+    func testInvalidAccessoryEmitsDiagnosticMatchingTextProtocol() throws {
         let json = #"{"vee":1,"items":[{"text":"x","accessory":"middle","header":true}]}"#
         let out = try XCTUnwrap(JSONOutputParser.parse(json))
-        XCTAssertEqual(out.diagnostics, [], "the JSON protocol has no diagnostics channel — the equivalent text line `x | accessory=middle` does warn")
+        XCTAssertEqual(out.diagnostics.count, 1, "\(out.diagnostics)")
+        XCTAssertEqual(out.diagnostics.first?.message, "accessory= expects 'leading' or 'trailing'")
+        XCTAssertEqual(out.diagnostics.first?.severity, .warning)
+    }
+
+    /// The JSON protocol still doesn't manufacture diagnostics out of thin
+    /// air: valid rich params (including a recognized `accessory=`) produce
+    /// none, same as before.
+    func testValidRichParamsStillEmitNoDiagnosticsFromJSON() throws {
+        let json = #"{"vee":1,"items":[{"text":"x","header":true,"accessory":"leading","progress":0.5}]}"#
+        let out = try XCTUnwrap(JSONOutputParser.parse(json))
+        XCTAssertEqual(out.diagnostics, [])
     }
 
     func testReturnsNilForNonJSON() {

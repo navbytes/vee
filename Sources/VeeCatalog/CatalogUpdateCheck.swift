@@ -41,8 +41,8 @@ public struct PluginUpdateCandidate: Sendable, Equatable {
 /// result in.
 public enum CatalogUpdateCheck {
     /// Compares one installed plugin's provenance against its current catalog
-    /// `entry` (already matched by filename) to decide whether a newer
-    /// version is available.
+    /// `entry` (already matched by origin — see `pendingUpdates`) to decide
+    /// whether a newer version is available.
     ///
     /// - `entry == nil` → ``CatalogUpdateStatus/notInCatalog``.
     /// - A manifest-pinned ``CatalogEntry/declaredSHA256`` is authoritative
@@ -70,22 +70,27 @@ public enum CatalogUpdateCheck {
         entry.declaredSHA256 ?? catalogLastUpdated.map { ISO8601DateFormatter().string(from: $0) }
     }
 
-    /// Scans every `installed` provenance record against the fresh `catalog`
-    /// (matched by filename — the same key ``ProvenanceStore`` and
-    /// ``PluginInstaller`` use), returning the ones with an update available.
-    /// `lastUpdated` resolves a catalog entry's upstream "last touched" date;
-    /// callers with more than one candidate matching the same filename across
-    /// stores get the first match — installed plugins are one file per
-    /// filename, so any store's current entry is the relevant comparison.
+    /// Scans every `installed` provenance record against the fresh `catalog`,
+    /// returning the ones with an update available.
+    ///
+    /// Matching is by ORIGIN, not filename: an entry is only compared against
+    /// the installed plugin whose ``PluginProvenance/sourceURL`` equals the
+    /// entry's ``CatalogEntry/rawURL`` (the exact URL ``PluginInstaller``
+    /// records at install time). With several stores configured, a same-named
+    /// entry in a *different* store can therefore never forge an "update
+    /// available" for a plugin installed from elsewhere. A store that moves a
+    /// plugin to a new path stops matching — conservative by design: a missing
+    /// signal is never guessed into an update.
+    /// `lastUpdated` resolves a catalog entry's upstream "last touched" date.
     public static func pendingUpdates(
         installed: [PluginProvenance],
         catalog: [CatalogEntry],
         lastUpdated: (CatalogEntry) -> Date?
     ) -> [PluginUpdateCandidate] {
-        let byFilename = Dictionary(catalog.map { ($0.filename, $0) }, uniquingKeysWith: { first, _ in first })
+        let byOrigin = Dictionary(catalog.map { ($0.rawURL, $0) }, uniquingKeysWith: { first, _ in first })
         return installed
             .compactMap { record -> PluginUpdateCandidate? in
-                let entry = byFilename[record.filename]
+                let entry = byOrigin[record.sourceURL]
                 let date = entry.flatMap(lastUpdated)
                 guard status(installed: record, entry: entry, catalogLastUpdated: date) == .updateAvailable,
                       let entry, let token = versionToken(entry: entry, catalogLastUpdated: date)

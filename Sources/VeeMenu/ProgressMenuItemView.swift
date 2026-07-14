@@ -73,11 +73,24 @@ final class ProgressMenuItemView: NSView {
         let desiredWidth = layout.leadingInset + titleWidth + layout.gap + barWidth + layout.trailingInset
         super.init(frame: NSRect(x: 0, y: 0, width: Swift.max(240, desiredWidth), height: rowHeight))
         autoresizingMask = [.width] // still stretch if another row makes the menu wider
+
+        // VoiceOver: expose the row's own text/value since a custom `NSMenuItem.
+        // view` draws its own title instead of using the item's native one (see
+        // `NSMenuItem.view`'s doc comment) — without this the row is silent.
+        setAccessibilityElement(true)
+        setAccessibilityLabel(title.string)
+        let percent = Int((Swift.min(Swift.max(self.fraction, 0), 1) * 100).rounded())
+        setAccessibilityValue("\(percent)%")
     }
 
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
     override func draw(_ dirtyRect: NSRect) {
+        if let highlight = menuRowHighlightPath(highlighted: enclosingMenuItem?.isHighlighted ?? false, in: bounds) {
+            NSColor.selectedContentBackgroundColor.setFill()
+            highlight.fill()
+        }
+
         let rects = layout.rects(in: bounds, fraction: fraction)
 
         // Label — vertically centered in its column, truncated if it collides
@@ -93,6 +106,18 @@ final class ProgressMenuItemView: NSView {
             NSBezierPath(roundedRect: rects.fill, xRadius: radius, yRadius: radius).fill()
         }
     }
+}
+
+/// Whether — and where — a custom menu-row view should draw the standard menu
+/// selection highlight, shared by `ProgressMenuItemView`/`SparklineMenuItemView`.
+/// `NSMenuItem.isHighlighted` is AppKit-managed and read-only (true only while
+/// the item is highlighted during live menu tracking — hover/arrow-key focus),
+/// so this is split out as a pure function of that state so the geometry
+/// itself stays unit-testable without a live `NSMenu` track.
+func menuRowHighlightPath(highlighted: Bool, in bounds: NSRect) -> NSBezierPath? {
+    guard highlighted, bounds.width > 0, bounds.height > 0 else { return nil }
+    // Matches the inset, rounded-rect look of AppKit's own modern menu highlight.
+    return NSBezierPath(roundedRect: bounds.insetBy(dx: 5, dy: 0), xRadius: 5, yRadius: 5)
 }
 
 extension NSAttributedString {
