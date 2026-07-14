@@ -97,6 +97,53 @@ final class JSONOutputParserTests: XCTestCase {
         XCTAssertEqual(c.params.sparkline, [1, 2])
     }
 
+    /// `header=`/`accessory=` mirror the text protocol from `JSONItem`.
+    func testHeaderAndAccessoryMapFromJSON() throws {
+        let json = """
+        {"vee":1,"items":[
+          {"text":"Section","header":true},
+          {"text":"Budget","progress":0.5,"accessory":"leading"}
+        ]}
+        """
+        let out = try XCTUnwrap(JSONOutputParser.parse(json))
+        func item(_ i: Int) throws -> MenuItem {
+            guard case .item(let m) = out.body[i] else { throw XCTSkip("not an item") }
+            return m
+        }
+        XCTAssertEqual(try item(0).params.swiftbar.header, true)
+        XCTAssertEqual(try item(1).params.swiftbar.accessory, .leading)
+    }
+
+    func testInvalidAccessoryStringIsNilFromJSON() throws {
+        let json = #"{"vee":1,"items":[{"text":"x","accessory":"middle"}]}"#
+        let out = try XCTUnwrap(JSONOutputParser.parse(json))
+        guard case .item(let item) = out.body[0] else { return XCTFail("expected item") }
+        XCTAssertNil(item.params.swiftbar.accessory)
+    }
+
+    /// Parity fix (was locked in as the opposite behavior): an unrecognized
+    /// `accessory=` value now reports the same `ParseDiagnostic` the text
+    /// protocol (`LineParser`/`OutputParser`) already emits for the equivalent
+    /// line (`x | accessory=middle`), instead of defaulting silently. The value
+    /// itself still defaults to `nil` either way (see
+    /// `testInvalidAccessoryStringIsNilFromJSON`) — only the feedback changed.
+    func testInvalidAccessoryEmitsDiagnosticMatchingTextProtocol() throws {
+        let json = #"{"vee":1,"items":[{"text":"x","accessory":"middle","header":true}]}"#
+        let out = try XCTUnwrap(JSONOutputParser.parse(json))
+        XCTAssertEqual(out.diagnostics.count, 1, "\(out.diagnostics)")
+        XCTAssertEqual(out.diagnostics.first?.message, "accessory= expects 'leading' or 'trailing'")
+        XCTAssertEqual(out.diagnostics.first?.severity, .warning)
+    }
+
+    /// The JSON protocol still doesn't manufacture diagnostics out of thin
+    /// air: valid rich params (including a recognized `accessory=`) produce
+    /// none, same as before.
+    func testValidRichParamsStillEmitNoDiagnosticsFromJSON() throws {
+        let json = #"{"vee":1,"items":[{"text":"x","header":true,"accessory":"leading","progress":0.5}]}"#
+        let out = try XCTUnwrap(JSONOutputParser.parse(json))
+        XCTAssertEqual(out.diagnostics, [])
+    }
+
     func testReturnsNilForNonJSON() {
         XCTAssertNil(JSONOutputParser.parse("CPU 12%\n---\nplain text"))
     }

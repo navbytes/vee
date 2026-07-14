@@ -307,27 +307,36 @@ cross-platform UI framework.
 Good ideas that aren't gating launch. Grouped from an authoring-session wishlist
 and triaged against what already ships. Ordered roughly by value.
 
+### Shipped this wave
+
+- ✅ **In-row sparkline** — `sparkline=` renders inline in the menu row (popover
+  on click retained). Native custom `NSMenuItem.view` via `SparklineMenuItemView`.
+- ✅ **Trailing accessory slot** — `accessory=leading` / `accessory=trailing`
+  places `progress=`/`sparkline=` at either edge (default trailing).
+- ✅ **First-class section headers** — `header=true` renders as native
+  `NSMenuItem.sectionHeader` (non-interactive), not a `disabled` line.
+- ✅ **Hot-reload on save** — plugin edits to headers/intervals now re-detect on
+  file write, not just add/remove (PR #51 watcher correctness); wave-1 added
+  regression tests.
+- ✅ **Catalog update notifications** — coalesced "N updates available" nudge
+  after Discover refresh, per-version de-duped, opens Discover (never auto-installs).
+- ✅ **Compact menu-bar mode** — opt-in General setting collapses plugins into
+  one "Vee" status item (issue #45), with submenus unchanged.
+- ✅ **Per-plugin timeout override** — `<vee.timeout>` header (1s–1h, default 30s;
+  supports ms/s/m/h/d tokens or plain seconds).
+
+### Still open
+
 - **Focus filters** (`SetFocusFilterIntent`) — per-Focus show/hide of plugin
   groups. Needs a plugin-grouping model (new `<vee.group>`-style tag or a
   preferences mapping), a lightweight status-item hide (today only full
   teardown exists), and a plugin `AppEntity` picker.
-- **In-row sparkline** — render a `sparkline=` inline in the menu row (not only
-  click-to-popover). Rides on the `progress=` custom-`NSMenuItem.view` work.
-- **Trailing accessory slot** — let a bar/badge sit at the *end* of a text row
-  (today an item has only one leading image). Pairs with `progress=`.
 - **Column / table layout** — an auto-aligned `columns=`/table-row primitive so
   authors stop hand-padding `label · bar · amount` with monospace.
 - **Multi-color inline spans without ANSI** — a lightweight span markup (or
   `md=true` extended with color) instead of hand-rolled truecolor escapes.
-- **First-class section headers** — a real section-header/divider-with-label
-  concept, not a `disabled` line.
 - **Stale-while-revalidate for the open menu** — Vee already keeps the last
   render; the gap is *live-updating a menu that's currently open* mid-refresh.
-- **Hot-reload on save** — the dir watcher reloads on add/remove, but editing an
-  existing plugin's header/interval isn't picked up (`reload()` early-returns on
-  an unchanged plugin set). Small fix.
-- **Catalog update notifications** — the trust-gated update flow + freshness
-  badges ship; a "new version available" nudge is the missing sliver.
 - **Signed plugins** — provenance (source URL + content hash) already ships;
   cryptographic author signing is the next step up.
 - **Command-palette / fuzzy picker** — ✅ **shipped** (per-plugin). A Spotlight-

@@ -107,7 +107,10 @@ public enum TreeRenderer {
     }
 
     /// Formats a Double without a trailing `.0` for whole numbers.
+    /// `Int(exactly:)` because `Int.init(Double)` traps on |v| ≥ ~9.2e18 and
+    /// the value comes from plugin output.
     private static func trim(_ v: Double) -> String {
-        v == v.rounded() ? String(Int(v)) : String(v)
+        if v == v.rounded(), let whole = Int(exactly: v.rounded()) { return String(whole) }
+        return String(v)
     }
 }

@@ -12,10 +12,30 @@ public final class AppPreferences: @unchecked Sendable {
     private let hotkeyOffKey = "vee.hotkeyDisabledPluginIDs"
     private let hotkeyCustomKey = "vee.hotkeyCustomBindings"
     private let firstRunDoneKey = "vee.hasCompletedFirstRun"
+    private let compactMenuBarKey = "vee.compactMenuBar"
 
     public init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
     }
+
+    /// Opt-in "compact menu bar" (issue #45 — menu-bar crowding): collapses
+    /// every plugin's status item into a submenu of one shared Vee status
+    /// item, instead of one item per plugin. Default off — zero behavior
+    /// change until a user opts in.
+    public var compactMenuBar: Bool {
+        get { defaults.bool(forKey: compactMenuBarKey) }
+        set {
+            defaults.set(newValue, forKey: compactMenuBarKey)
+            // Lets every already-running `StatusItemController` switch
+            // presentation live — see `StatusItemController.reconcileMode()`.
+            NotificationCenter.default.post(name: Self.compactMenuBarDidChangeNotification, object: nil)
+        }
+    }
+
+    /// Posted whenever `compactMenuBar` changes, from any `AppPreferences`
+    /// instance. Carries no payload — observers re-read the (possibly
+    /// injected) instance they already hold to decide what changed.
+    public static let compactMenuBarDidChangeNotification = Notification.Name("vee.compactMenuBarDidChange")
 
     /// Whether the app has completed its first-run onboarding. Used to open
     /// Discover once for a brand-new user with an empty plugins folder.

@@ -41,8 +41,14 @@ extension ProcessRun {
     /// 8 MB is orders of magnitude beyond any real menu render.
     static let maxCapturedBytes = 8 * 1024 * 1024
 
-    static func boundedDrain(_ handle: FileHandle, cap: Int) -> Data {
+    /// - Returns: the captured bytes, and whether any bytes were discarded
+    ///   because the stream kept producing data past `cap` (as opposed to the
+    ///   stream simply happening to end at exactly `cap` bytes, which is not
+    ///   truncation — `truncated` is only `true` when something was actually
+    ///   dropped).
+    static func boundedDrain(_ handle: FileHandle, cap: Int) -> (data: Data, truncated: Bool) {
         var accumulated = Data()
+        var truncated = false
         let bufferSize = 64 * 1024
         var buffer = [UInt8](repeating: 0, count: bufferSize)
         let fd = handle.fileDescriptor
@@ -57,11 +63,16 @@ extension ProcessRun {
                 if errno == EINTR { continue }        // transient interrupt: retry
                 break                                 // closed / error: end drain
             }
-            if accumulated.count < cap {
-                accumulated.append(contentsOf: buffer[0..<Swift.min(n, cap - accumulated.count)])
+            let remaining = cap - accumulated.count
+            if remaining > 0 {
+                let kept = Swift.min(n, remaining)
+                accumulated.append(contentsOf: buffer[0..<kept])
+                if kept < n { truncated = true }
+            } else {
+                truncated = true
             }
         }
-        return accumulated
+        return (accumulated, truncated)
     }
 
     /// `waitpid`'s raw status word is decoded via C macros — `WIFEXITED`,
@@ -228,6 +239,9 @@ private final class ProcessRun: @unchecked Sendable {
     private var errData = Data()
     private var exitCode: Int32 = 0
     private var timedOut = false
+    /// Set if either drain hit `maxCapturedBytes` and discarded output —
+    /// surfaced in `ProcessOutcome` so it's diagnosable instead of silent.
+    private var outputTruncated = false
     /// Set by the dedicated wait thread once the child has terminated
     /// (replaces the old `process.isRunning` check from the Foundation
     /// `Process`-backed implementation). Guarded the same way `resumed` is.
@@ -286,12 +300,12 @@ private final class ProcessRun: @unchecked Sendable {
         let outHandle = outPipe.fileHandleForReading
         let errHandle = errPipe.fileHandleForReading
         DispatchQueue.global().async { [weak self] in
-            let data = ProcessRun.boundedDrain(outHandle, cap: ProcessRun.maxCapturedBytes)
-            self?.complete { $0.outData = data }
+            let (data, truncated) = ProcessRun.boundedDrain(outHandle, cap: ProcessRun.maxCapturedBytes)
+            self?.complete { $0.outData = data; if truncated { $0.outputTruncated = true } }
         }
         DispatchQueue.global().async { [weak self] in
-            let data = ProcessRun.boundedDrain(errHandle, cap: ProcessRun.maxCapturedBytes)
-            self?.complete { $0.errData = data }
+            let (data, truncated) = ProcessRun.boundedDrain(errHandle, cap: ProcessRun.maxCapturedBytes)
+            self?.complete { $0.errData = data; if truncated { $0.outputTruncated = true } }
         }
 
         // Dedicated blocking wait (replaces Process.terminationHandler):
@@ -373,7 +387,8 @@ private final class ProcessRun: @unchecked Sendable {
                 standardOutput: String(decoding: outData, as: UTF8.self),
                 standardError: String(decoding: errData, as: UTF8.self),
                 exitCode: exitCode,
-                timedOut: timedOut)
+                timedOut: timedOut,
+                outputTruncated: outputTruncated)
         }
         let item = timeoutItem
         lock.unlock()
@@ -401,7 +416,8 @@ private final class ProcessRun: @unchecked Sendable {
                 standardOutput: String(decoding: outData, as: UTF8.self),
                 standardError: String(decoding: errData, as: UTF8.self),
                 exitCode: exitCode,
-                timedOut: timedOut)
+                timedOut: timedOut,
+                outputTruncated: outputTruncated)
         }
         let item = timeoutItem
         lock.unlock()

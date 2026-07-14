@@ -30,6 +30,15 @@ public enum MenuBuilder {
     }
 
     private static func makeItem(_ item: MenuItem, target: MenuActionTarget, isAlternate: Bool = false) -> NSMenuItem {
+        // `header=true`: a first-class, non-interactive section-header row,
+        // using AppKit's native section-header item (macOS 14+) instead of a
+        // `disabled=true` line pretending to be one. Title only — none of the
+        // interactive/visual params below apply to it (Apple: section headers
+        // "are non-interactive and do not perform an action").
+        if item.params.swiftbar.header == true {
+            return NSMenuItem.sectionHeader(title: item.text)
+        }
+
         let menuItem = NSMenuItem()
         menuItem.attributedTitle = AttributedTitleFactory.make(
             text: item.text, params: item.params, ansiRuns: item.ansiRuns,
@@ -40,11 +49,16 @@ public enum MenuBuilder {
         menuItem.isEnabled = !(item.params.disabled ?? false)
         if item.params.swiftbar.checked == true { menuItem.state = .on }
 
-        // `progress=`: render an inline capsule gauge as a custom row view. The
-        // view itself is decorative (no click handling — see
-        // ProgressMenuItemView), but the row can still carry a submenu or its
-        // own action (href=/shell=/…), same as any other item, so fall through
-        // to the same submenu/action wiring below instead of returning early.
+        // `progress=`/`sparkline=`: render an inline capsule gauge / chart as a
+        // custom row view. Both views are decorative (no click handling of
+        // their own — see ProgressMenuItemView/SparklineMenuItemView), but the
+        // row can still carry a submenu or its own action (href=/shell=/…),
+        // same as any other item, so fall through to the same submenu/action
+        // wiring below instead of returning early. A row that sets both
+        // renders the progress bar (it shipped first); sparkline='s
+        // click-to-popover keeps working regardless, since the dispatcher
+        // reads `params.sparkline`, not the row's view.
+        let accessoryLeading = item.params.swiftbar.accessory == .leading
         if let progress = item.params.progress {
             let view = ProgressMenuItemView(
                 title: menuItem.attributedTitle ?? NSAttributedString(string: item.text),
@@ -53,7 +67,17 @@ public enum MenuBuilder {
                 trackColor: progress.trackColor.flatMap(ColorResolver.nsColor(for:))
                     ?? NSColor.tertiaryLabelColor.withAlphaComponent(0.25),
                 barWidth: progress.width.map { CGFloat($0) } ?? 120,
-                barHeight: progress.height.map { CGFloat($0) } ?? 6
+                barHeight: progress.height.map { CGFloat($0) } ?? 6,
+                leading: accessoryLeading
+            )
+            view.toolTip = item.params.swiftbar.tooltip
+            menuItem.view = view
+        } else if let series = item.params.sparkline {
+            let view = SparklineMenuItemView(
+                title: menuItem.attributedTitle ?? NSAttributedString(string: item.text),
+                values: series,
+                lineColor: item.params.color.flatMap(ColorResolver.nsColor(for:)) ?? .controlAccentColor,
+                leading: accessoryLeading
             )
             view.toolTip = item.params.swiftbar.tooltip
             menuItem.view = view

@@ -248,4 +248,103 @@ final class PluginBrowserModelTests: XCTestCase {
         let secondCount = await fetcher.fetchLastUpdatedCallCount
         XCTAssertEqual(secondCount, 2, "already-fetched entries must not be re-fetched")
     }
+
+    // MARK: - Catalog-update nudge wiring (`onUpdatesFound`)
+
+    /// `load()` must report an installed, catalog-tracked plugin whose
+    /// manifest-pinned hash has moved on from what's recorded at install —
+    /// the seam `AppController` wires to `Notifier.notifyCatalogUpdates`.
+    func testLoadReportsCandidateForInstalledPluginWithNewerCatalogHash() async throws {
+        let dir = tempDir()
+        var entry = makeEntry("cpu")
+        entry.declaredSHA256 = "new-hash"
+        try ProvenanceStore(directory: dir).record(
+            PluginProvenance(filename: entry.filename, sourceURL: entry.rawURL, sha256: "old-hash", installedAt: Date(timeIntervalSince1970: 0))
+        )
+        let fetcher = FakeCatalogFetcher(index: [entry])
+        var reported: [PluginUpdateCandidate]?
+        var reportedInstalled: Set<String>?
+        let model = PluginBrowserModel(fetcher: fetcher, pluginsDirectory: dir, onInstalled: {}, onUpdatesFound: { candidates, installed in
+            reported = candidates
+            reportedInstalled = installed
+        })
+
+        await model.load()
+
+        XCTAssertEqual(reported?.map(\.filename), [entry.filename])
+        XCTAssertEqual(reportedInstalled, [entry.filename], "the installed set rides along so the app can prune its notified-versions ledger")
+    }
+
+    /// A successful `load()` persists the fetched index as the on-disk
+    /// snapshot the app's launch-time update scan reads — written only here,
+    /// on a user-initiated Discover load, never by a launch fetch.
+    func testLoadWritesCatalogSnapshotForLaunchScan() async throws {
+        let dir = tempDir()
+        let entry = makeEntry("cpu")
+        let fetcher = FakeCatalogFetcher(index: [entry])
+        let model = PluginBrowserModel(fetcher: fetcher, pluginsDirectory: dir, onInstalled: {}, onUpdatesFound: { _, _ in })
+
+        await model.load()
+
+        XCTAssertEqual(CatalogSnapshotStore(directory: dir).load().map(\.filename), [entry.filename])
+    }
+
+    /// An installed plugin whose recorded hash still matches the catalog must
+    /// never produce a candidate. The callback still fires (with an empty
+    /// list) so the app can prune its ledger on every scan.
+    func testLoadReportsNoCandidateWhenInstalledHashMatchesCatalog() async throws {
+        let dir = tempDir()
+        var entry = makeEntry("cpu")
+        entry.declaredSHA256 = "same-hash"
+        try ProvenanceStore(directory: dir).record(
+            PluginProvenance(filename: entry.filename, sourceURL: entry.rawURL, sha256: "same-hash", installedAt: Date(timeIntervalSince1970: 0))
+        )
+        let fetcher = FakeCatalogFetcher(index: [entry])
+        var reported: [PluginUpdateCandidate]?
+        let model = PluginBrowserModel(fetcher: fetcher, pluginsDirectory: dir, onInstalled: {}, onUpdatesFound: { candidates, _ in reported = candidates })
+
+        await model.load()
+
+        XCTAssertEqual(reported, [], "an up-to-date installed plugin must never produce a candidate (the empty prune-only call is expected)")
+    }
+
+    /// A plugin that merely shares a filename with a catalog entry, but was
+    /// never installed *through* Discover (no provenance record), must never
+    /// be nudged — `pendingUpdates` only scans `ProvenanceStore`'s ledger, and
+    /// this must not be bypassed.
+    func testLoadDoesNotReportForAPluginWithNoProvenanceRecord() async throws {
+        let dir = tempDir()
+        var entry = makeEntry("cpu")
+        entry.declaredSHA256 = "new-hash"
+        let fetcher = FakeCatalogFetcher(index: [entry])
+        var reportCount = 0
+        let model = PluginBrowserModel(fetcher: fetcher, pluginsDirectory: dir, onInstalled: {}, onUpdatesFound: { _, _ in reportCount += 1 })
+
+        await model.load()
+
+        XCTAssertEqual(reportCount, 0, "no provenance record means never installed via the catalog — must never be nudged (nothing installed, so not even a prune call)")
+    }
+
+    /// `refresh()` calls through to `load()`, so the same report fires for a
+    /// manual refresh as for the view's automatic cold-open `load()` — one
+    /// report per fetch, with zero extra wiring needed at either call site.
+    func testRefreshAlsoReportsPendingUpdates() async throws {
+        let dir = tempDir()
+        var entry = makeEntry("cpu")
+        entry.declaredSHA256 = "new-hash"
+        try ProvenanceStore(directory: dir).record(
+            PluginProvenance(filename: entry.filename, sourceURL: entry.rawURL, sha256: "old-hash", installedAt: Date(timeIntervalSince1970: 0))
+        )
+        let fetcher = FakeCatalogFetcher(index: [entry], source: "#!/bin/bash\necho hi\n")
+        var reportCount = 0
+        let model = PluginBrowserModel(fetcher: fetcher, pluginsDirectory: dir, onInstalled: {}, onUpdatesFound: { candidates, _ in
+            if !candidates.isEmpty { reportCount += 1 }
+        })
+
+        await model.load()
+        XCTAssertEqual(reportCount, 1, "the initial load already reports the pending update once")
+
+        await model.refresh()
+        XCTAssertEqual(reportCount, 2, "refresh() re-runs load(), so a still-pending update reports again — de-duping repeat reports is Notifier's job, not this model's")
+    }
 }

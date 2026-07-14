@@ -18,11 +18,12 @@ public enum JSONOutputParser {
         guard trimmed.hasPrefix("{"), let data = trimmed.data(using: .utf8) else { return nil }
         guard let menu = try? JSONDecoder().decode(JSONMenu.self, from: data) else { return nil }
 
+        var diagnostics: [ParseDiagnostic] = []
         let titleLines = (menu.title ?? []).map {
             TitleLine(text: $0.text, params: lineParams(color: $0.color, sfimage: $0.sfimage, size: $0.size))
         }
-        let body = (menu.items ?? []).map { node(from: $0, depth: 0) }
-        return ParsedOutput(titleLines: titleLines, body: body)
+        let body = (menu.items ?? []).map { node(from: $0, depth: 0, diagnostics: &diagnostics) }
+        return ParsedOutput(titleLines: titleLines, body: body, diagnostics: diagnostics)
     }
 
     // MARK: - Mapping
@@ -34,22 +35,19 @@ public enum JSONOutputParser {
     /// overflow the stack. Real menus are only a few levels deep.
     private static let maxDepth = 64
 
-    private static func node(from item: JSONItem, depth: Int) -> MenuNode {
+    private static func node(from item: JSONItem, depth: Int, diagnostics: inout [ParseDiagnostic]) -> MenuNode {
         if item.separator == true { return .separator }
-        return .item(menuItem(from: item, depth: depth))
+        return .item(menuItem(from: item, depth: depth, diagnostics: &diagnostics))
     }
 
-    private static func menuItem(from item: JSONItem, depth: Int) -> MenuItem {
-        let children = depth >= maxDepth ? [] : (item.submenu ?? []).map { node(from: $0, depth: depth + 1) }
-        return MenuItem(
-            text: item.text ?? "",
-            params: params(from: item),
-            submenu: children,
-            alternate: depth >= maxDepth ? nil : item.alternate.map { menuItem(from: $0, depth: depth + 1) }
-        )
+    private static func menuItem(from item: JSONItem, depth: Int, diagnostics: inout [ParseDiagnostic]) -> MenuItem {
+        let children = depth >= maxDepth ? [] : (item.submenu ?? []).map { node(from: $0, depth: depth + 1, diagnostics: &diagnostics) }
+        let itemParams = params(from: item, diagnostics: &diagnostics)
+        let alternate = depth >= maxDepth ? nil : item.alternate.map { menuItem(from: $0, depth: depth + 1, diagnostics: &diagnostics) }
+        return MenuItem(text: item.text ?? "", params: itemParams, submenu: children, alternate: alternate)
     }
 
-    private static func params(from item: JSONItem) -> LineParams {
+    private static func params(from item: JSONItem, diagnostics: inout [ParseDiagnostic]) -> LineParams {
         var p = lineParams(color: item.color, sfimage: item.sfimage, size: item.size)
         p.href = item.href.flatMap(URL.init(string:)).flatMap { URLScheme.isSafeToOpen($0) ? $0 : nil }
         if let shell = item.shell {
@@ -57,16 +55,17 @@ public enum JSONOutputParser {
         }
         p.refresh = item.refresh
         p.disabled = item.disabled
+        p.swiftbar.header = item.header
         p.swiftbar.checked = item.checked
         p.swiftbar.tooltip = item.tooltip
-        applyRichParams(from: item, to: &p)
+        applyRichParams(from: item, to: &p, diagnostics: &diagnostics)
         return p
     }
 
     /// Maps the structured-JSON rich params onto the same `LineParams` fields the
     /// text parser sets, with identical validation (non-finite values rejected,
     /// ranges clamped) so JSON and text produce the same model.
-    private static func applyRichParams(from item: JSONItem, to p: inout LineParams) {
+    private static func applyRichParams(from item: JSONItem, to p: inout LineParams, diagnostics: inout [ParseDiagnostic]) {
         if let series = item.sparkline?.filter(\.isFinite), !series.isEmpty {
             p.sparkline = series
         }
@@ -82,6 +81,15 @@ public enum JSONOutputParser {
                 width: item.progressWidth.flatMap { $0.isFinite ? $0 : nil },
                 height: item.progressHeight.flatMap { $0.isFinite ? $0 : nil }
             )
+        }
+        if let raw = item.accessory {
+            if let placement = AccessoryPlacement(rawValue: raw.lowercased()) {
+                p.swiftbar.accessory = placement
+            } else if !raw.isEmpty {
+                // Parity with LineParser's accessory= diagnostic (was silent
+                // here — defaulted with no feedback for the same bad input).
+                diagnostics.append(.init(severity: .warning, message: "accessory= expects 'leading' or 'trailing'"))
+            }
         }
     }
 
@@ -129,6 +137,7 @@ private final class JSONItem: Decodable {
     let disabled: Bool?
     let checked: Bool?
     let tooltip: String?
+    let header: Bool?
     // Rich params (Vee-native inline controls), mirroring the text protocol.
     let sparkline: [Double]?
     let toggle: Bool?
@@ -137,6 +146,7 @@ private final class JSONItem: Decodable {
     let trackColor: String?
     let progressWidth: Double?
     let progressHeight: Double?
+    let accessory: String?
     let submenu: [JSONItem]?
     let alternate: JSONItem?
 }

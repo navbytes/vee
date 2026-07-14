@@ -132,6 +132,56 @@ final class HeaderParserTests: XCTestCase {
         XCTAssertEqual(HeaderParser.parse(source: "echo hi\n").surface, .menu)
     }
 
+    /// Plain seconds (the tag's documented format) and the same `ms`/`s`/`m`/`h`/`d`
+    /// duration suffix `RefreshInterval` parses for filename intervals — reused
+    /// here rather than reimplemented.
+    func testVeeTimeoutAcceptsPlainSecondsAndDurationSuffix() {
+        XCTAssertEqual(HeaderParser.parse(source: "# <vee.timeout>45</vee.timeout>\n").timeout, 45)
+        XCTAssertEqual(HeaderParser.parse(source: "# <vee.timeout>90s</vee.timeout>\n").timeout, 90)
+        XCTAssertEqual(HeaderParser.parse(source: "# <vee.timeout>2m</vee.timeout>\n").timeout, 120)
+        XCTAssertEqual(HeaderParser.parse(source: "# <vee.timeout>1h</vee.timeout>\n").timeout, 3600)
+        // Decimals are allowed on the plain-seconds path.
+        XCTAssertEqual(HeaderParser.parse(source: "# <vee.timeout>2.5</vee.timeout>\n").timeout, 2.5)
+    }
+
+    /// Out-of-range values are clamped rather than rejected outright — a typo'd
+    /// `<vee.timeout>7200</vee.timeout>` still runs, just capped at the ceiling.
+    func testVeeTimeoutClampedToSaneRange() {
+        XCTAssertEqual(HeaderParser.parse(source: "# <vee.timeout>0.2</vee.timeout>\n").timeout, 1, "below the 1s floor")
+        XCTAssertEqual(HeaderParser.parse(source: "# <vee.timeout>500ms</vee.timeout>\n").timeout, 1, "500ms floors to 1s")
+        XCTAssertEqual(HeaderParser.parse(source: "# <vee.timeout>7200</vee.timeout>\n").timeout, 3600, "above the 1h ceiling")
+        XCTAssertEqual(HeaderParser.parse(source: "# <vee.timeout>2d</vee.timeout>\n").timeout, 3600, "2d ceilings to 1h")
+    }
+
+    /// Garbage, zero, and negative values are ignored (nil) — same
+    /// graceful-degrade every other tag here gets — rather than crashing or
+    /// silently arming a zero-second timeout.
+    func testVeeTimeoutInvalidValueIsIgnored() {
+        for bad in ["0", "0s", "-5", "not-a-number", ""] {
+            XCTAssertNil(HeaderParser.parse(source: "# <vee.timeout>\(bad)</vee.timeout>\n").timeout, "\(bad) should be rejected")
+        }
+    }
+
+    func testVeeTimeoutAbsentDefaultsToNil() {
+        XCTAssertNil(HeaderParser.parse(source: "echo hi\n").timeout)
+    }
+
+    /// A repeated `<vee.timeout>` tag: the parser has no special-casing for
+    /// duplicates (it's a plain loop over every regex match, assigning as it
+    /// goes), so the last occurrence in source order wins.
+    func testDuplicateTimeoutTagLastOneWins() {
+        let src = "# <vee.timeout>10</vee.timeout>\n# <vee.timeout>20</vee.timeout>\n"
+        XCTAssertEqual(HeaderParser.parse(source: src).timeout, 20, "last occurrence should win, same as any other duplicated tag")
+    }
+
+    /// Cross-check: the same "last one wins" rule applies to an unrelated,
+    /// pre-existing tag — confirms `<vee.timeout>`'s duplicate handling isn't a
+    /// special case, it's just the parser's ordinary last-write-wins loop.
+    func testDuplicateTagLastWinsRuleIsUniformAcrossKeys() {
+        let src = "# <xbar.title>First</xbar.title>\n# <xbar.title>Second</xbar.title>\n"
+        XCTAssertEqual(HeaderParser.parse(source: src).title, "Second")
+    }
+
     /// The widget-mode cadence is deliberately *not* a header field — it reuses
     /// the filename interval (see `PluginCoordinator.widgetRefreshInterval`), so
     /// `<vee.widget.interval>` is just an unknown tag that parses to nothing.

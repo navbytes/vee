@@ -195,6 +195,9 @@ public enum Linter {
     }
 
     /// The parameter keys the parser recognises (mirrors `LineParser.mapParams`).
+    /// Hand-maintained, not derived — `LineParser`/`LineParams` are out of this
+    /// linter's scope. When `LineParser.mapParams` gains a new case, mirror its
+    /// key here too.
     private static let knownParams: Set<String> = [
         "color", "font", "size", "length", "trim", "ansi", "emojize",
         "href", "shell", "bash", "terminal", "refresh", "dropdown",
@@ -202,7 +205,7 @@ public enum Linter {
         "sfimage", "sfcolor", "sfsize", "sfconfig", "symbolize", "tooltip",
         "md", "markdown", "checked", "badge", "webview", "webvieww",
         "webviewh", "shortcut", "sparkline", "toggle", "slider", "progress",
-        "trackcolor", "progressw", "progressh"
+        "trackcolor", "progressw", "progressh", "header", "accessory"
     ]
 
     private static func isKnownParam(_ key: String) -> Bool {

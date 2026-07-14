@@ -11,6 +11,10 @@ public final class LibraryWindow {
 
     private var window: NSWindow?
 
+    /// Whether the consolidated window is currently on screen — lets the app
+    /// skip a "look at Discover" nudge the user is already looking at.
+    public var isVisible: Bool { window?.isVisible ?? false }
+
     public init() {}
 
     public func show(model: LibraryModel) {

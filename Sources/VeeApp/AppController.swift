@@ -36,9 +36,9 @@ public final class AppController: NSObject, NSApplicationDelegate {
     /// deadline — otherwise it still fires on the old schedule and removes the
     /// REPLACED content early. See `showEphemeral`.
     private var ephemeralExpiries: [String: Task<Void, Never>] = [:]
-    /// Path → file-modification-time of the currently loaded plugins; a change
-    /// here (including an in-place edit) triggers a rebuild. See `reload()`.
-    private var loadedSignature: [String: TimeInterval] = [:]
+    /// Per-file identity of the currently loaded plugins; a change here
+    /// (including an in-place edit) triggers a rebuild. See `reload()`.
+    private var loadedSignature: [String: PluginChangeSnapshot.FileIdentity] = [:]
     private var watcher: PluginDirectoryWatcher?
     private var wakeMonitor: WakeMonitor?
     private var mainMenu: MainMenuController?
@@ -104,12 +104,16 @@ public final class AppController: NSObject, NSApplicationDelegate {
         Notifier.prepare()
         // Wire the plugin-alert action buttons to the live coordinators:
         // Re-run refreshes the plugin; Open-log opens its debug console.
+        // Tapping a catalog-update nudge opens Discover, the same way the
+        // menu's Discover item and first-run do.
         Notifier.configure(
             onRerun: { [weak self] id in self?.coordinators[id]?.forceRefresh() },
-            onOpenLog: { [weak self] id in self?.coordinators[id]?.showDebugConsole() }
+            onOpenLog: { [weak self] id in self?.coordinators[id]?.showDebugConsole() },
+            onOpenDiscover: { [weak self] in self?.openBrowser() }
         )
 
         presentFirstRunIfNeeded()
+        scanCatalogSnapshotForUpdates()
 
         // Resolve the user's real login-shell PATH before loading plugins, so a
         // Finder/Dock launch finds Homebrew/pyenv/asdf/nvm binaries just like a
@@ -341,10 +345,10 @@ public final class AppController: NSObject, NSApplicationDelegate {
 
     private func reload() {
         let plugins = enabledPlugins()
-        let signature = Self.loadSignature(plugins)
+        let signature = PluginChangeSnapshot.snapshot(plugins)
         // Rebuild when the effective set changes OR any plugin's file changes on
-        // disk (by modification time). Keying on the path set alone missed an
-        // in-place edit (same filename), so header-derived config — schedule,
+        // disk (by modification time/size). Keying on the path set alone missed
+        // an in-place edit (same filename), so header-derived config — schedule,
         // hotkey, runInBash, the trust footprint — silently kept its stale value
         // until a toggle or relaunch. Still coalesced by the directory watcher's
         // debounce, so this doesn't storm on rapid saves.
@@ -371,17 +375,6 @@ public final class AppController: NSObject, NSApplicationDelegate {
         }
         // Drop widget entries for plugins that are no longer loaded.
         widgetPublisher.setLoaded(ids: Set(coordinators.keys))
-    }
-
-    /// A change key for the loaded plugin set: each plugin's path plus its file
-    /// modification time, so an in-place edit (unchanged path) is detected.
-    private static func loadSignature(_ plugins: [DiscoveredPlugin]) -> [String: TimeInterval] {
-        var signature: [String: TimeInterval] = [:]
-        for plugin in plugins {
-            let attrs = try? FileManager.default.attributesOfItem(atPath: plugin.path)
-            signature[plugin.path] = (attrs?[.modificationDate] as? Date)?.timeIntervalSince1970 ?? 0
-        }
-        return signature
     }
 
     // MARK: - Control Center refresh
@@ -502,8 +495,12 @@ public final class AppController: NSObject, NSApplicationDelegate {
     /// Builds the model for the consolidated window (`LibraryView`): the
     /// installed-plugin rows (populated off the main thread) plus the
     /// General/Stores/Variables settings sub-models. Both ⌘M (Installed) and ⌘,
-    /// (General) route here, jumping to their section.
-    private func makeLibraryModel(section: LibrarySection) -> LibraryModel {
+    /// (General) route here, jumping to their section. Internal (not private)
+    /// so a test can verify the `.discover`-scoped model `onOpenDiscover`
+    /// ultimately shows, without going through `openBrowser()`'s
+    /// `LibraryWindow.shared.show` — which touches `NSApp` and is unsafe to
+    /// invoke from a unit test.
+    func makeLibraryModel(section: LibrarySection) -> LibraryModel {
         let manager = PluginManagerModel(
             rows: [],
             currentDirectory: directory,
@@ -598,7 +595,16 @@ public final class AppController: NSObject, NSApplicationDelegate {
                 return CatalogClientFactory.make(for: store, tokenProvider: token)
             },
             pluginsDirectory: directory,
-            onInstalled: { [weak self] in self?.reload() }
+            onInstalled: { [weak self] in self?.reload() },
+            onUpdatesFound: { candidates, installed in
+                // Skip the banner while the user is already in the Vee window
+                // looking at Discover's own Update buttons — it would only
+                // re-open the window they're in. Skipped versions are never
+                // marked notified, so the launch-time snapshot scan still
+                // surfaces them later. Pruning still runs either way.
+                let windowInFront = LibraryWindow.shared.isVisible && (NSApp?.isActive ?? false)
+                Notifier.notifyCatalogUpdates(windowInFront ? [] : candidates, installedFilenames: installed)
+            }
         )
         cachedBrowserModel = model
         cachedBrowserStores = stores
@@ -611,6 +617,27 @@ public final class AppController: NSObject, NSApplicationDelegate {
     /// empty-state, and first-run all route through one place.
     private func openBrowser() {
         LibraryWindow.shared.show(model: makeLibraryModel(section: .discover))
+    }
+
+    /// Launch-time catalog-update scan against the on-disk snapshot written by
+    /// the last successful Discover load (`CatalogSnapshotStore`) — makes the
+    /// update nudge proactive without any network fetch at launch (Vee makes
+    /// no unexplained launch network calls; cf. matryer/xbar#859). No snapshot
+    /// (never opened Discover) or no catalog-installed plugins → silent no-op.
+    private func scanCatalogSnapshotForUpdates() {
+        let dir = directory
+        Task.detached(priority: .utility) {
+            let entries = CatalogSnapshotStore(directory: dir).load()
+            guard !entries.isEmpty else { return }
+            let installed = Array(ProvenanceStore(directory: dir).all().values)
+            guard !installed.isEmpty else { return }
+            let freshness = CatalogFreshnessStore(directory: dir)
+            let candidates = CatalogUpdateCheck.pendingUpdates(installed: installed, catalog: entries) {
+                freshness.date(for: $0.id) ?? $0.lastUpdated
+            }
+            let installedNames = Set(installed.map(\.filename))
+            await Notifier.notifyCatalogUpdates(candidates, installedFilenames: installedNames)
+        }
     }
 
     /// On the very first launch, a brand-new user sees only a menu-bar icon and

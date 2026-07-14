@@ -35,4 +35,34 @@ final class ProgressBarLayoutTests: XCTestCase {
         let tiny = layout.rects(in: CGRect(x: 0, y: 0, width: 130, height: 22), fraction: 0.5)
         XCTAssertEqual(tiny.label.width, 0, accuracy: 0.01) // trackX (~ -2) - gap - inset < 0
     }
+
+    // MARK: - accessory=leading
+
+    private let leadingLayout = ProgressBarLayout(barWidth: 120, barHeight: 6, leading: true)
+
+    func testLeadingAnchorsTrackToLeadingEdgeAndLabelFillsRest() {
+        let (label, track, fill) = leadingLayout.rects(in: CGRect(x: 0, y: 0, width: 260, height: 22), fraction: 0.5)
+        XCTAssertEqual(track.minX, 20, accuracy: 0.01)    // leadingInset
+        XCTAssertEqual(track.width, 120, accuracy: 0.01)
+        XCTAssertEqual(fill.width, 60, accuracy: 0.01)    // 120 * 0.5, still grows from the track's own origin
+        XCTAssertEqual(fill.minX, track.minX, accuracy: 0.01)
+        XCTAssertEqual(label.minX, 20 + 120 + 10, accuracy: 0.01) // trackX + barWidth + gap
+        XCTAssertEqual(label.width, 260 - 12 - label.minX, accuracy: 0.01) // maxX - trailingInset - labelX
+    }
+
+    func testLeadingTrackStaysLeadingAsWidthGrows() {
+        let wide = leadingLayout.rects(in: CGRect(x: 0, y: 0, width: 400, height: 22), fraction: 1)
+        XCTAssertEqual(wide.track.minX, 20, accuracy: 0.01) // unchanged — anchored to the leading edge, not the trailing one
+        XCTAssertEqual(wide.label.width, 400 - 12 - (20 + 120 + 10), accuracy: 0.01)
+    }
+
+    func testLeadingNarrowRowClampsLabelWidthToZero() {
+        let tiny = leadingLayout.rects(in: CGRect(x: 0, y: 0, width: 130, height: 22), fraction: 0.5)
+        XCTAssertEqual(tiny.label.width, 0, accuracy: 0.01) // labelX (160) already past maxX - trailingInset (118)
+    }
+
+    func testLeadingDefaultsFalseSoExistingInitCallersAreUnaffected() {
+        XCTAssertFalse(layout.leading)
+        XCTAssertTrue(leadingLayout.leading)
+    }
 }

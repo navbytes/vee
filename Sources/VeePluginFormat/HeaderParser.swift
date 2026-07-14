@@ -61,6 +61,9 @@ public enum HeaderParser {
             // back to `.menu` (today's behavior), same graceful-degrade shape
             // as every other tag here.
             case "surface": meta.surface = HeaderMetadata.WidgetSurface(rawValue: value.lowercased()) ?? .menu
+            // Vee-native: per-plugin execution timeout override (`<vee.timeout>`).
+            // Ignored (falls back to the default) when it can't be parsed.
+            case "timeout": meta.timeout = parseTimeout(value)
             case "var":
                 if let decl = parseVar(value) { meta.vars.append(decl) }
             default:
@@ -70,7 +73,33 @@ public enum HeaderParser {
         return meta
     }
 
+    /// A `<vee.timeout>` override is clamped to this range: 1s floors out a
+    /// pathologically tiny value (nothing useful times out sub-second), 1h
+    /// ceilings it well above any legitimate plugin while still bounding a
+    /// hung/misbehaving one (callers already prevent overlapping runs of the
+    /// same plugin, so a long-but-bounded timeout is safe, just slow).
+    private static let timeoutRange: ClosedRange<TimeInterval> = 1...3600
+
     private static func boolValue(_ v: String) -> Bool { ["true", "1", "yes"].contains(v.lowercased()) }
+
+    /// Parses a `<vee.timeout>` value: a duration token in the same
+    /// `ms`/`s`/`m`/`h`/`d` format filename intervals use (reusing
+    /// `RefreshInterval.parse` rather than reimplementing it), or a plain
+    /// number of seconds (decimals allowed, e.g. `2.5`). Invalid input is
+    /// ignored — same graceful-degrade as every other tag here. The result is
+    /// clamped to `timeoutRange`.
+    private static func parseTimeout(_ v: String) -> TimeInterval? {
+        let trimmed = v.trimmingCharacters(in: .whitespaces)
+        let seconds: TimeInterval
+        if let interval = RefreshInterval.parse(token: trimmed), let parsed = interval.timeInterval {
+            seconds = parsed
+        } else if let plain = TimeInterval(trimmed), plain > 0 {
+            seconds = plain
+        } else {
+            return nil
+        }
+        return min(max(seconds, timeoutRange.lowerBound), timeoutRange.upperBound)
+    }
 
     private static func splitList(_ v: String) -> [String] {
         v.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }

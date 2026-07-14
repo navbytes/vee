@@ -105,6 +105,28 @@ final class StreamingRunnerIntegrationTests: XCTestCase {
         if let tail = accumulator.flush() { blocks.append(tail) }
         XCTAssertEqual(blocks, ["a", "b"], "the CRLF separator must still reset the accumulator")
     }
+
+    /// Regression: a streaming plugin emitting one line with no newline for a
+    /// long stretch must not grow `partial` without bound — past 1 MB it's
+    /// force-flushed as a line so memory stays bounded (mirrors
+    /// SystemProcessRunner's 8 MB capture cap). This was previously untested.
+    func testPathologicalNoNewlineRunIsFlushedAtOneMB() async throws {
+        let runner = SystemStreamingRunner()
+        let invocation = ProcessInvocation(
+            launchPath: "/bin/sh",
+            arguments: ["-c", "yes x | tr -d '\\n' | head -c 1200000; printf '\\ndone\\n'"]
+        )
+        var lines: [String] = []
+        for try await line in runner.lines(invocation) {
+            lines.append(line)
+        }
+        XCTAssertEqual(lines.count, 3, "1.2M no-newline bytes should split into a forced flush, the remainder, then 'done'")
+        XCTAssertGreaterThan(lines[0].utf8.count, 1024 * 1024, "the forced flush should not happen before the 1 MB cap")
+        XCTAssertTrue(lines[0].allSatisfy { $0 == "x" })
+        XCTAssertTrue(lines[1].allSatisfy { $0 == "x" })
+        XCTAssertEqual(lines[0].utf8.count + lines[1].utf8.count, 1_200_000, "no bytes lost across the forced flush")
+        XCTAssertEqual(lines[2], "done")
+    }
 }
 
 /// Thread-safe one-shot flag, set from the streaming Task's consumer loop and

@@ -1,5 +1,6 @@
 import XCTest
 import VeeCore
+import VeePluginFormat
 @testable import VeeRuntime
 
 /// Records the invocation it was handed and returns a canned outcome — lets us
@@ -88,6 +89,16 @@ final class PluginExecutorTests: XCTestCase {
         XCTAssertEqual(inv?.launchPath, "/plugins/w.py")
         XCTAssertEqual(inv?.arguments, [])
     }
+
+    /// `defaultTimeout` is the single source of truth for "no override
+    /// specified" — `PluginRuntime` falls back to it after checking the header.
+    func testDefaultTimeoutAppliedWhenNoneSpecified() async throws {
+        let runner = RecordingProcessRunner(stub: ProcessOutcome(standardOutput: "", standardError: "", exitCode: 0, timedOut: false))
+        let exec = PluginExecutor(runner: runner, baseEnvironment: [:])
+        _ = try await exec.run(pluginPath: "/plugins/cpu.5s.sh", context: makeContext(pluginPath: "/plugins/cpu.5s.sh"))
+        let inv = await runner.lastInvocation
+        XCTAssertEqual(inv?.timeout, PluginExecutor.defaultTimeout)
+    }
 }
 
 final class ShebangLaunchTests: XCTestCase {
@@ -131,6 +142,62 @@ final class PluginRuntimeTests: XCTestCase {
             return XCTFail("expected a menu item")
         }
         XCTAssertEqual(item.params.color, .named("red"))
+    }
+
+    /// A plugin's `<vee.timeout>` header overrides the default when the caller
+    /// passes no explicit timeout.
+    func testRefreshUsesHeaderTimeoutOverride() async throws {
+        let stub = ProcessOutcome(standardOutput: "", standardError: "", exitCode: 0, timedOut: false)
+        let runner = RecordingProcessRunner(stub: stub)
+        let runtime = PluginRuntime(executor: PluginExecutor(runner: runner, baseEnvironment: [:]))
+        var header = HeaderMetadata()
+        header.timeout = 90
+        _ = try await runtime.refresh(pluginPath: "/plugins/cpu.5s.sh", context: makeContext(pluginPath: "/plugins/cpu.5s.sh"), header: header)
+        let inv = await runner.lastInvocation
+        XCTAssertEqual(inv?.timeout, 90)
+    }
+
+    /// No header, no explicit override: falls back to `PluginExecutor.defaultTimeout`.
+    func testRefreshFallsBackToDefaultTimeoutWithoutHeader() async throws {
+        let stub = ProcessOutcome(standardOutput: "", standardError: "", exitCode: 0, timedOut: false)
+        let runner = RecordingProcessRunner(stub: stub)
+        let runtime = PluginRuntime(executor: PluginExecutor(runner: runner, baseEnvironment: [:]))
+        _ = try await runtime.refresh(pluginPath: "/plugins/cpu.5s.sh", context: makeContext(pluginPath: "/plugins/cpu.5s.sh"))
+        let inv = await runner.lastInvocation
+        XCTAssertEqual(inv?.timeout, PluginExecutor.defaultTimeout)
+    }
+
+    /// An explicit `timeout:` argument still wins over the header — same
+    /// caller-overrides-header precedence `runInBash` already has.
+    func testRefreshExplicitTimeoutOverridesHeader() async throws {
+        let stub = ProcessOutcome(standardOutput: "", standardError: "", exitCode: 0, timedOut: false)
+        let runner = RecordingProcessRunner(stub: stub)
+        let runtime = PluginRuntime(executor: PluginExecutor(runner: runner, baseEnvironment: [:]))
+        var header = HeaderMetadata()
+        header.timeout = 90
+        _ = try await runtime.refresh(pluginPath: "/plugins/cpu.5s.sh", context: makeContext(pluginPath: "/plugins/cpu.5s.sh"), header: header, timeout: 12)
+        let inv = await runner.lastInvocation
+        XCTAssertEqual(inv?.timeout, 12)
+    }
+
+    /// SystemProcessRunner's 8 MB capture cap being hit is surfaced as a parse
+    /// diagnostic (what the debug console already reads) instead of silently
+    /// dropped.
+    func testRefreshSurfacesOutputTruncationAsDiagnostic() async throws {
+        let stub = ProcessOutcome(standardOutput: "Title", standardError: "", exitCode: 0, timedOut: false, outputTruncated: true)
+        let runtime = PluginRuntime(executor: PluginExecutor(runner: RecordingProcessRunner(stub: stub), baseEnvironment: [:]))
+        let result = try await runtime.refresh(pluginPath: "/plugins/cpu.5s.sh", context: makeContext(pluginPath: "/plugins/cpu.5s.sh"))
+        XCTAssertTrue(result.output.diagnostics.contains {
+            $0.severity == .warning && $0.message == "Output truncated at 8 MB"
+        })
+    }
+
+    /// The common case stays clean: no truncation, no diagnostic added.
+    func testRefreshAddsNoDiagnosticWhenNotTruncated() async throws {
+        let stub = ProcessOutcome(standardOutput: "Title", standardError: "", exitCode: 0, timedOut: false)
+        let runtime = PluginRuntime(executor: PluginExecutor(runner: RecordingProcessRunner(stub: stub), baseEnvironment: [:]))
+        let result = try await runtime.refresh(pluginPath: "/plugins/cpu.5s.sh", context: makeContext(pluginPath: "/plugins/cpu.5s.sh"))
+        XCTAssertTrue(result.output.diagnostics.isEmpty)
     }
 }
 

@@ -444,7 +444,10 @@ final class PluginCoordinator {
                 self?.controller?.setRefreshing(false)
             }
             do {
-                let result = try await runtime.refresh(pluginPath: path, context: context, header: header, runInBash: runInBash, timeout: 30)
+                // No explicit timeout override here: `runtime.refresh` derives it
+                // from `header`'s `<vee.timeout>` (falling back to the default)
+                // now that `header` carries the plugin's declared value.
+                let result = try await runtime.refresh(pluginPath: path, context: context, header: header, runInBash: runInBash)
                 self?.lastResult = result
                 self?.updateDebugModel()
                 // stop() may have run while this refresh was in flight — a
@@ -547,7 +550,10 @@ final class PluginCoordinator {
         Task { @MainActor [weak self] in
             defer { self?.isRefreshingWidget = false }
             do {
-                let result = try await runtime.refresh(pluginPath: path, context: context, header: header, runInBash: runInBash, timeout: 30)
+                // No explicit timeout override here: `runtime.refresh` derives it
+                // from `header`'s `<vee.timeout>` (falling back to the default)
+                // now that `header` carries the plugin's declared value.
+                let result = try await runtime.refresh(pluginPath: path, context: context, header: header, runInBash: runInBash)
                 guard self?.stopped != true else { return }
                 if result.outcome.timedOut {
                     self?.onPublish?(WidgetPublish(title: "⚠︎ timed out", isError: true))
