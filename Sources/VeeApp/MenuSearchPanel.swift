@@ -1,6 +1,5 @@
 import AppKit
 import SwiftUI
-import VeeMenu
 import VeePluginFormat
 import VeeSearch
 
@@ -13,21 +12,25 @@ final class KeyablePanel: NSPanel {
     override var canBecomeMain: Bool { false }
 }
 
-/// Presents the Spotlight-like search panel for one plugin's (flattened) menu.
-/// Lives *outside* the `NSMenu` — the menu that launched it has already closed —
-/// so the native menu, its trust row, and its controls footer are untouched;
-/// this is an additional surface, not a replacement. Only one panel at a time.
+/// Presents the Spotlight-like search panel over a (flattened) menu — either
+/// one plugin's own, or every enabled plugin's merged together. Lives *outside*
+/// the `NSMenu` — the menu that launched it has already closed — so the native
+/// menu, its trust row, and its controls footer are untouched; this is an
+/// additional surface, not a replacement. Only one panel at a time.
 ///
-/// Selecting a row dispatches through the plugin's existing `MenuActionHandling`,
-/// so href / shell / shortcut / refresh and the toggle/slider/sparkline popovers
-/// all fire with no new action model.
+/// Selecting a row runs `activate`, which the caller wires to dispatch through
+/// the right plugin's `MenuActionHandling` — so href / shell / shortcut /
+/// refresh and the toggle/slider/sparkline popovers all fire with no new
+/// action model. A single-plugin caller closes over that one handler; the
+/// cross-plugin aggregator closes over a per-row lookup so a row from plugin A
+/// never fires through plugin B's handler.
 @MainActor
 final class MenuSearchPanel: NSObject {
     static let shared = MenuSearchPanel()
 
     private var panel: KeyablePanel?
     private var model: MenuSearchViewModel?
-    private weak var handler: MenuActionHandling?
+    private var onActivateRow: ((FlatRow) -> Void)?
     private var keyMonitor: Any?
     private var clickMonitor: Any?
     /// Restored on dismiss so row actions (e.g. a clipboard plugin's simulated
@@ -37,10 +40,10 @@ final class MenuSearchPanel: NSObject {
     private static let size = NSSize(width: 440, height: 380)
 
     /// Opens the panel for `rows`, anchored near the mouse (i.e. under the just-
-    /// clicked status item), routing activations to `handler`.
-    func present(rows: [FlatRow], pluginName: String, handler: MenuActionHandling) {
+    /// clicked status item), routing activations through `activate`.
+    func present(rows: [FlatRow], pluginName: String, activate: @escaping (FlatRow) -> Void) {
         dismiss()
-        self.handler = handler
+        self.onActivateRow = activate
         // Capture BEFORE self-activating below — after that call, Vee itself
         // would be frontmost and we'd have nothing to restore.
         frontmostRestorer.capture(NSWorkspace.shared.frontmostApplication)
@@ -83,9 +86,9 @@ final class MenuSearchPanel: NSObject {
     /// if the action opens its own popover (toggle/slider/sparkline) the panel
     /// isn't stealing key back from it.
     private func activate(_ row: FlatRow) {
-        let handler = self.handler
+        let onActivateRow = self.onActivateRow
         dismiss()
-        handler?.perform(row.item)
+        onActivateRow?(row)
     }
 
     func dismiss() {
@@ -96,7 +99,7 @@ final class MenuSearchPanel: NSObject {
         panel?.orderOut(nil)
         panel = nil
         model = nil
-        handler = nil
+        onActivateRow = nil
         // Hand focus back to whatever the user was in before the panel stole
         // activation. Runs on every dismissal path — row selection, Esc, and
         // outside-click alike — not just the row-activation path, so a

@@ -1,4 +1,5 @@
 import XCTest
+import VeePluginFormat
 import VeePreferences
 @testable import VeeUI
 
@@ -70,5 +71,66 @@ final class GeneralSettingsModelTests: XCTestCase {
         model.onCompactMenuBar(false)
 
         XCTAssertEqual(written, false, "flipping the toggle must forward the new value through onCompactMenuBar")
+    }
+
+    // MARK: - AppPreferences.searchAllHotkey* round-trip (cross-plugin search)
+
+    func testSearchAllHotkeyDefaultsOffWithNoCombo() {
+        let (prefs, suiteName) = makePrefs()
+        defer { UserDefaults().removePersistentDomain(forName: suiteName) }
+        XCTAssertFalse(prefs.searchAllHotkeyEnabled, "no default combo may ever be squatted — off until the user opts in")
+        XCTAssertNil(prefs.searchAllHotkeyCombo)
+    }
+
+    func testSearchAllHotkeyEnabledRoundTrips() {
+        let (prefs, suiteName) = makePrefs()
+        defer { UserDefaults().removePersistentDomain(forName: suiteName) }
+        prefs.searchAllHotkeyEnabled = true
+        XCTAssertTrue(prefs.searchAllHotkeyEnabled)
+        prefs.searchAllHotkeyEnabled = false
+        XCTAssertFalse(prefs.searchAllHotkeyEnabled)
+    }
+
+    func testSearchAllHotkeyComboRoundTrips() {
+        let (prefs, suiteName) = makePrefs()
+        defer { UserDefaults().removePersistentDomain(forName: suiteName) }
+        prefs.searchAllHotkeyCombo = "cmd+shift+/"
+        XCTAssertEqual(prefs.searchAllHotkeyCombo, "cmd+shift+/")
+        prefs.searchAllHotkeyCombo = nil
+        XCTAssertNil(prefs.searchAllHotkeyCombo)
+    }
+
+    // MARK: - GeneralSettingsModel wiring (cross-plugin search hotkey)
+
+    func testModelStartsFromInjectedSearchAllHotkeyValuesAndForwardsWrites() {
+        var applied: (enabled: Bool, combo: String)?
+        let model = GeneralSettingsModel(
+            currentDirectory: "/tmp",
+            launchAtLogin: false,
+            onLaunchAtLogin: { _ in },
+            onChooseFolder: {},
+            onOpenFolder: {},
+            onRefreshAll: {},
+            searchAllHotkeyEnabled: true,
+            searchAllHotkeyCombo: "cmd+shift+/",
+            searchAllHotkeyStatus: .active("⌘⇧/"),
+            onApplySearchAllHotkey: { enabled, combo in
+                applied = (enabled, combo)
+                return .unavailable("⌘⇧/")
+            }
+        )
+        XCTAssertTrue(model.searchAllHotkeyEnabled, "must start from the injected value, not read AppPreferences.shared itself")
+        XCTAssertEqual(model.searchAllHotkeyCombo, "cmd+shift+/")
+        XCTAssertEqual(model.searchAllHotkeyStatus, .active("⌘⇧/"))
+
+        // Mirrors what the toggle/text field bindings do: mutate the published
+        // value, then trigger the apply that round-trips through the app layer.
+        model.searchAllHotkeyEnabled = false
+        model.searchAllHotkeyCombo = "cmd+shift+k"
+        model.applySearchAllHotkey()
+
+        XCTAssertEqual(applied?.enabled, false)
+        XCTAssertEqual(applied?.combo, "cmd+shift+k")
+        XCTAssertEqual(model.searchAllHotkeyStatus, .unavailable("⌘⇧/"), "the model must reflect whatever status onApplySearchAllHotkey returns")
     }
 }

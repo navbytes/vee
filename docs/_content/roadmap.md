@@ -339,12 +339,14 @@ and triaged against what already ships. Ordered roughly by value.
   render; the gap is *live-updating a menu that's currently open* mid-refresh.
 - **Signed plugins** — provenance (source URL + content hash) already ships;
   cryptographic author signing is the next step up.
-- **Command-palette / fuzzy picker** — ✅ **shipped** (per-plugin). A Spotlight-
-  style searchable filter panel opts in via `<vee.filter>`, flattens the whole
-  nested menu, and fuzzy-filters it; `<vee.shortcut>` binds an optional global
-  hotkey, and `vee search` exposes the same matching on the CLI (`VeeSearch/…`,
-  `VeeApp/MenuSearchPanel.swift`, `VeeApp/GlobalHotKeys.swift`). The remaining
-  slice — a single **cross-plugin** "search everything" panel — is still parked.
+- **Command-palette / fuzzy picker** — ✅ **shipped** (per-plugin *and*
+  cross-plugin). A Spotlight-style searchable filter panel opts in via
+  `<vee.filter>`, flattens the whole nested menu, and fuzzy-filters it;
+  `<vee.shortcut>` binds an optional global hotkey, and `vee search` exposes
+  the same matching on the CLI (`VeeSearch/…`, `VeeApp/MenuSearchPanel.swift`,
+  `VeeApp/GlobalHotKeys.swift`). The final slice — a single **cross-plugin**
+  "Search All Plugins" panel merging every enabled plugin's menu, with an
+  opt-in global hotkey — shipped as the main-menu item.
 
 ## Explicitly out of scope
 

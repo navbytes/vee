@@ -31,6 +31,17 @@ public struct FlatRow: Equatable, Sendable {
 
     /// The breadcrumb string for display, e.g. `orders › Epics`.
     public var breadcrumb: String { path.joined(separator: " › ") }
+
+    /// Returns a copy of this row with `pluginName` prepended to the breadcrumb
+    /// path. Used when aggregating rows across every enabled plugin into one
+    /// cross-plugin search panel, so (a) the panel shows which plugin a row
+    /// belongs to and (b) the plugin name itself becomes fuzzy-searchable —
+    /// re-folded into `haystack` exactly like any other ancestor group.
+    public func prefixed(with pluginName: String) -> FlatRow {
+        let newPath = [pluginName] + path
+        let newHaystack = SearchText.fold(([item.text] + newPath).joined(separator: " "))
+        return FlatRow(item: item, path: newPath, title: title, haystack: newHaystack)
+    }
 }
 
 /// A row paired with its match score for a given query (higher is better).
