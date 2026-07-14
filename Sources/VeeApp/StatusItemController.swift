@@ -83,15 +83,21 @@ public final class StatusItemController {
     private let controls: ControlsTarget
     /// Kept so the search panel can dispatch a row through the same handler the
     /// menu uses (the menu's action target already retains it strongly too).
-    private let handler: MenuActionHandling
+    /// Internal (not `private`) so `AppController`'s cross-plugin search
+    /// aggregator can route an aggregated row through this exact plugin's
+    /// handler — never a shared one — the same way `presentSearch()` below does
+    /// for the single-plugin panel.
+    let handler: MenuActionHandling
     /// Whether this plugin opts into the searchable filter panel (`<vee.filter>`).
     private let filterEnabled: Bool
     /// Effective Vee-native features (search panel, active global hotkey) for the
     /// capabilities area. Updated live when the user toggles the hotkey.
     private var features: PluginFeatures
     /// The most recently rendered dropdown tree, frozen into the search panel on
-    /// open so it reflects what the user currently sees.
-    private var lastBody: [MenuNode] = []
+    /// open so it reflects what the user currently sees. Internal (not
+    /// `private`, read-only outside) so `AppController`'s cross-plugin search
+    /// aggregator can read the live menu without duplicating render state.
+    private(set) var lastBody: [MenuNode] = []
 
     private var frames: [NSAttributedString] = []
     private var frameIndex = 0
@@ -210,7 +216,7 @@ public final class StatusItemController {
         MenuSearchPanel.shared.present(
             rows: MenuSearch.flatten(lastBody),
             pluginName: pluginName,
-            handler: handler
+            activate: { [weak self] row in self?.handler.perform(row.item) }
         )
     }
 

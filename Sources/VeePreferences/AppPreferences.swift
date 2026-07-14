@@ -13,6 +13,8 @@ public final class AppPreferences: @unchecked Sendable {
     private let hotkeyCustomKey = "vee.hotkeyCustomBindings"
     private let firstRunDoneKey = "vee.hasCompletedFirstRun"
     private let compactMenuBarKey = "vee.compactMenuBar"
+    private let searchAllHotkeyEnabledKey = "vee.searchAllHotkeyEnabled"
+    private let searchAllHotkeyComboKey = "vee.searchAllHotkeyCombo"
 
     public init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
@@ -88,5 +90,24 @@ public final class AppPreferences: @unchecked Sendable {
         var map = (defaults.dictionary(forKey: hotkeyCustomKey) as? [String: String]) ?? [:]
         if let binding, !binding.isEmpty { map[id] = binding } else { map.removeValue(forKey: id) }
         defaults.set(map, forKey: hotkeyCustomKey)
+    }
+
+    // MARK: - Cross-plugin "Search All Plugins" hotkey
+
+    /// Whether the user opted into the app-level global hotkey that opens the
+    /// cross-plugin search panel. Unlike a plugin's declared `<vee.shortcut>`
+    /// (on by default once declared), there is no default combination to
+    /// squat here, so this defaults to `false` — inert until the user both
+    /// enables it and supplies a combo.
+    public var searchAllHotkeyEnabled: Bool {
+        get { defaults.bool(forKey: searchAllHotkeyEnabledKey) }
+        set { defaults.set(newValue, forKey: searchAllHotkeyEnabledKey) }
+    }
+
+    /// The user-chosen combination (e.g. `"cmd+shift+/"`) for the cross-plugin
+    /// search hotkey, or `nil` when never set.
+    public var searchAllHotkeyCombo: String? {
+        get { defaults.string(forKey: searchAllHotkeyComboKey) }
+        set { defaults.set(newValue, forKey: searchAllHotkeyComboKey) }
     }
 }

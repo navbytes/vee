@@ -258,6 +258,17 @@ sheet — so a global hotkey a plugin grabs is always visible and never a
 surprise. You can also preview a plugin's search from the terminal without
 installing it: see [`vee search`](cli-and-urls.md#vee-search).
 
+### Cross-plugin search ("Search All Plugins")
+
+The panel above searches one plugin at a time. **Search All Plugins…**, in
+Vee's main menu-bar menu rather than any single plugin's, merges *every
+enabled* plugin's current menu into one panel — regardless of whether a
+plugin opted into `<vee.filter>` — with each row breadcrumb-prefixed by its
+plugin's name (itself part of the fuzzy match, so typing a plugin's name
+surfaces its rows). Selecting a row still runs that row's own plugin's
+action, never a different plugin's. It has its own opt-in global hotkey, off
+by default with no preset combination — set one in Vee's General settings.
+
 ## Widgets
 
 By default your plugin's widget tile is a **scrape** of its menu-bar line —

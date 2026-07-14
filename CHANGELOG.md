@@ -32,6 +32,13 @@ All notable changes to Vee are documented here. The format is based on
   sets a per-plugin timeout (or a plain number of seconds; decimals allowed).
   Clamped to 1s–1h (default 30s). Debug console surfaces 8MB output truncation
   and 1MB streaming line caps.
+- **Cross-plugin "Search All Plugins" panel.** A **Search All Plugins…** item
+  in Vee's main menu now opens the same Spotlight-style search panel merged
+  across *every enabled plugin's* current menu at once, not just one plugin's
+  — each row breadcrumb-prefixed with its plugin's name (itself
+  fuzzy-searchable), still firing through that plugin's own action handler and
+  never a shared one. An opt-in global hotkey (General settings, no default
+  combination, mirroring the per-plugin hotkey pattern) opens it from anywhere.
 
 ### Changed
 - **Discover loads with skeleton cards.** While the catalog fetches, Discover now

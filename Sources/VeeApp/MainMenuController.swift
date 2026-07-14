@@ -10,14 +10,16 @@ final class MainMenuController: NSObject, NSMenuDelegate {
     private let onDiscover: () -> Void
     private let onPreferences: () -> Void
     private let onRefreshAll: () -> Void
+    private let onSearchAll: () -> Void
     private let onOpenFolder: () -> Void
     private var loginItem: NSMenuItem!
 
-    init(onManager: @escaping () -> Void, onDiscover: @escaping () -> Void, onPreferences: @escaping () -> Void, onRefreshAll: @escaping () -> Void, onOpenFolder: @escaping () -> Void) {
+    init(onManager: @escaping () -> Void, onDiscover: @escaping () -> Void, onPreferences: @escaping () -> Void, onRefreshAll: @escaping () -> Void, onSearchAll: @escaping () -> Void, onOpenFolder: @escaping () -> Void) {
         self.onManager = onManager
         self.onDiscover = onDiscover
         self.onPreferences = onPreferences
         self.onRefreshAll = onRefreshAll
+        self.onSearchAll = onSearchAll
         self.onOpenFolder = onOpenFolder
         self.statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         super.init()
@@ -36,6 +38,10 @@ final class MainMenuController: NSObject, NSMenuDelegate {
         menu.addItem(item("Plugin Manager…", #selector(manage), key: "m"))
         menu.addItem(item("Discover Plugins…", #selector(discover), key: "d"))
         menu.addItem(item("Refresh All Plugins", #selector(refreshAll), key: "r"))
+        // Cross-plugin "search everything" panel (docs/_content/roadmap.md's
+        // parked slice): fuzzy-searches every enabled plugin's current menu at
+        // once, not just one plugin's — see `AppController.openSearchAllPanel()`.
+        menu.addItem(item("Search All Plugins…", #selector(searchAll), key: "f"))
         menu.addItem(.separator())
         loginItem = item("Launch Vee at Login", #selector(toggleLogin), key: "")
         menu.addItem(loginItem)
@@ -59,6 +65,7 @@ final class MainMenuController: NSObject, NSMenuDelegate {
     @objc private func manage() { onManager() }
     @objc private func discover() { onDiscover() }
     @objc private func refreshAll() { onRefreshAll() }
+    @objc private func searchAll() { onSearchAll() }
     @objc private func openFolder() { onOpenFolder() }
     @objc private func toggleLogin() { LoginItemManager.setEnabled(!LoginItemManager.isEnabled) }
     @objc private func quit() { NSApp.terminate(nil) }

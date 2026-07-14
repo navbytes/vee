@@ -22,8 +22,11 @@ final class PluginCoordinator {
 
     /// `nil` for a `.widget`-surface plugin: "no NSStatusItem, no menu; invoked
     /// only in widget mode" (see `docs/design/widget-surface-contract.md` §1).
-    /// Every other call site null-guards through this.
-    private var controller: StatusItemController?
+    /// Every other call site null-guards through this. Internal (not
+    /// `private`, read-only outside) so `AppController`'s cross-plugin search
+    /// aggregator can reach this plugin's live menu/handler — a `.widget`
+    /// plugin is excluded naturally since it stays `nil`.
+    private(set) var controller: StatusItemController?
     private var timer: RefreshTimer?
     private var background: BackgroundRefreshScheduler?
     private var cron: CronScheduler?
