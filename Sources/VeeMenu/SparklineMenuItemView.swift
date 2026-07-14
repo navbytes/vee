@@ -1,4 +1,5 @@
 import AppKit
+import VeePluginFormat
 
 /// A custom menu-row view that draws a plugin's `sparkline=` series inline: the
 /// item's label on one side and a small polyline chart on the other. The
@@ -65,10 +66,11 @@ final class SparklineMenuItemView: NSView {
         return "\(format(last)), \(trend)"
     }
 
-    // Mirrors SparklineChartView's (VeeUI) footer formatting: whole numbers
-    // print bare, everything else to 2 decimal places.
+    // Mirrors SparklineChartView's (VeeUI) footer formatting via the shared
+    // trap-safe helper — `String(Int(v))` aborts on |v| ≥ ~9.2e18 and this
+    // runs eagerly in `init` on plugin-supplied data.
     private static func format(_ v: Double) -> String {
-        v == v.rounded() ? String(Int(v)) : String(format: "%.2f", v)
+        CompactNumber.label(v)
     }
 
     private func drawChart(in chart: CGRect) {

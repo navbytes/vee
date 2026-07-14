@@ -21,9 +21,13 @@ All notable changes to Vee are documented here. The format is based on
 - **Native section headers.** `header=true` renders a line as a real, non-interactive
   macOS section header (`NSMenuItem.sectionHeader`) instead of a `disabled=true` line
   dressed up to look like one — rendering is native, no click handling.
-- **Catalog update nudge.** After Discover refreshes, a coalesced notification
-  surfaces "N plugin updates available" (one notification per version, de-duped),
-  opening Discover so users can install. Never auto-installs.
+- **Catalog update nudge.** A coalesced notification surfaces "N plugin updates
+  available" (one notification per version, de-duped), opening Discover so users
+  can install. Never auto-installs. Checks run at app launch against the catalog
+  snapshot saved by the last Discover visit — no network call at launch — and
+  after every Discover refresh (suppressed while the Vee window is already in
+  front). Updates are matched by install origin, so an entry from one store can
+  never masquerade as an update for a plugin installed from another.
 - **Per-plugin execution timeout override.** `<vee.timeout>ms/s/m/h/d` header
   sets a per-plugin timeout (or a plain number of seconds; decimals allowed).
   Clamped to 1s–1h (default 30s). Debug console surfaces 8MB output truncation

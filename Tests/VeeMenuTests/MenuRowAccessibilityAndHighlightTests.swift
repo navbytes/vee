@@ -82,6 +82,16 @@ final class MenuRowAccessibilityAndHighlightTests: XCTestCase {
         view.draw(view.bounds) // must not crash with nothing to plot
     }
 
+    /// V2-review S1 regression: the VoiceOver summary runs eagerly in `init`
+    /// on plugin-supplied data, and `String(Int(v))` traps on finite values
+    /// ≥ ~9.2e18 — `sparkline=1,2,1e19` in a plugin's output must render a
+    /// row, not abort the entire app when its menu opens.
+    func testSparklineViewSurvivesHugeFiniteValues() {
+        let view = SparklineMenuItemView(title: NSAttributedString(string: "Load"), values: [1, 2, 1e19], lineColor: .controlAccentColor)
+        XCTAssertEqual(view.accessibilityValue() as? String, "\(String(format: "%.2f", 1e19)), trending up")
+        view.draw(view.bounds) // geometry must also survive the magnitude
+    }
+
     /// A NaN mixed into an otherwise-valid series is dropped, not propagated
     /// into the trend/value calculation.
     func testSparklineViewDropsOnlyTheNonFiniteEntries() {

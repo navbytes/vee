@@ -1,5 +1,6 @@
 import Charts
 import SwiftUI
+import VeePluginFormat
 
 /// Renders a plugin's inline `sparkline=…` series as a compact Swift Charts
 /// line/area chart on a Liquid Glass surface — rich UI rendered natively, with
@@ -88,7 +89,7 @@ public struct SparklineChartView: View {
     }
 
     private static func format(_ v: Double) -> String {
-        v == v.rounded() ? String(Int(v)) : String(format: "%.2f", v)
+        CompactNumber.label(v)
     }
 
     private struct Point: Identifiable {

@@ -81,6 +81,6 @@ public struct PluginControlView: View {
     }
 
     private func numberString(_ value: Double) -> String {
-        value == value.rounded() ? String(Int(value)) : String(format: "%.2f", value)
+        CompactNumber.label(value)
     }
 }
