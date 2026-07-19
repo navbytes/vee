@@ -7,6 +7,21 @@ All notable changes to Vee are documented here. The format is based on
 ## [Unreleased]
 
 ### Added
+- **`vee show` — a live terminal view of a plugin's dropdown.** A new authoring
+  subcommand renders what a plugin's menu-bar dropdown would look like, natively
+  in the terminal, and live-refreshes it on the plugin's own filename cadence
+  (`r` to refresh now, `q`/`Ctrl-C` to quit). `<plugin>` is a path or the name of
+  an installed plugin. Rich params render the way a terminal can — `color=`/ANSI
+  as real SGR, `progress=` as a Unicode block gauge, `sparkline=` as a block
+  sparkline, `toggle=`/`slider=` as inline state — and things a terminal can't
+  draw (SF Symbols, base64 images) are shown by name rather than dropped. A status
+  line reports cadence + last exit code; parse diagnostics and stderr surface
+  below, like `vee render`. `--once` prints a single frame (also the piped/non-TTY
+  behavior); `--no-color`/`NO_COLOR` disable color; `--dir` sets the folder a
+  plugin *name* resolves against. Reuses the existing AppKit-free cores
+  (`VeeRuntime`/`VeePluginFormat`); the pure renderer (`TerminalRenderer`) and
+  name/path resolver (`PluginResolver`) are unit-tested, with only the raw-mode
+  live loop (`LiveView`) touching the real terminal.
 - **Compact menu-bar mode.** An opt-in General setting collapses every plugin
   into rows of a single "Vee" status item (issue #45), solving menu-bar crowding
   for users with many plugins. Each plugin's submenu and menu behavior stay

@@ -46,9 +46,11 @@ let package = Package(
         // Control Center extension via an App Group container. Kept dependency-free
         // so the extension links almost nothing.
         .target(name: "VeeWidgetShared"),
-        // AppKit-free CLI logic (render/lint/new subcommands) so it builds
-        // headless in CI. The `vee` executable dispatches to it.
-        .target(name: "VeeCLI", dependencies: ["VeePluginFormat", "VeeRuntime", "VeeSearch"]),
+        // AppKit-free CLI logic (render/lint/new/show subcommands) so it builds
+        // headless in CI. The `vee` executable dispatches to it. VeeCore is a
+        // direct dependency for `PluginFilename`/`RefreshInterval` (used by
+        // `vee show` to drive its live-refresh cadence from the filename).
+        .target(name: "VeeCLI", dependencies: ["VeeCore", "VeePluginFormat", "VeeRuntime", "VeeSearch"]),
         .target(name: "VeeApp", dependencies: ["VeeCore", "VeePluginFormat", "VeeRuntime", "VeeMenu", "VeeSearch", "VeePreferences", "VeeTrust", "VeeCatalog", "VeeUI", "VeeWidgetShared"]),
         .executableTarget(name: "vee", dependencies: ["VeeApp", "VeeCLI"]),
         .testTarget(name: "VeeCoreTests", dependencies: ["VeeCore"]),
