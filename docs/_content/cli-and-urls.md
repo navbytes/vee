@@ -29,6 +29,7 @@ zero-install authoring loop that reuses Vee's real parser — no app, no GUI:
 | Command | What it does |
 |---------|--------------|
 | `vee render <plugin>` | Runs the plugin and prints the parsed menu tree plus any parse diagnostics. |
+| `vee show <plugin>` | Renders the plugin's dropdown in the terminal — color, block progress bars, and sparklines — and live-refreshes it on the plugin's own cadence. |
 | `vee lint <plugin>` | Runs the plugin and reports problems: unknown params, a bare `\|` in a title, unquoted values containing spaces, and the parser's own diagnostics. Exits non-zero if anything is flagged. |
 | `vee search <plugin> [query…]` | Runs the plugin, flattens its (nested) menu, and prints the items fuzzy-filtered and ranked by your query — each with its breadcrumb and the action it would fire. |
 | `vee new [flags]` | Scaffolds a new plugin file with the right filename, header tags, and a working body. |
@@ -50,6 +51,38 @@ Refresh  [refresh]
 Parse diagnostics (unknown params, malformed lines) and a non-zero exit, a
 timeout, or anything on stderr are surfaced too — it's the fastest way to answer
 "why doesn't my plugin look right?".
+
+### `vee show`
+
+Where `vee render` prints one static tree, `vee show` is a live view of what the
+plugin's menu-bar dropdown would look like — rendered natively in your terminal.
+It re-runs the plugin on the cadence encoded in its filename and repaints, so you
+can edit a script and watch the result without ever installing it into the menu
+bar:
+
+```sh
+$ vee show ./cpu.10s.sh      # or an installed plugin by name: vee show cpu
+```
+
+The dropdown is rendered the way a terminal can: `color=`/ANSI as real color,
+`progress=` as a Unicode block gauge (`████████░░░░ 72%`), `sparkline=` as a
+block sparkline (`▁▂▃▅▇█`), and `toggle=`/`slider=` as inline state. The things a
+terminal can't draw — SF Symbols and base64 images — are shown by name (`[cpu]`,
+`[img]`) rather than dropped. A status line reports the plugin's cadence and last
+exit code; parse diagnostics and stderr surface below, exactly like `vee render`.
+
+Press **`r`** to refresh now and **`q`** (or `Ctrl-C`) to quit. A plugin with no
+interval token in its filename (`.manual`) simply renders once and waits for `r`.
+
+Flags: `--once` prints a single frame instead of watching (also what happens when
+stdout is piped); `--no-color` disables ANSI color (as does a `NO_COLOR`
+environment variable or a non-TTY stdout); `--dir DIR` sets the folder a plugin
+*name* is resolved against.
+
+`vee show` is a view, not a controller — it displays a row's action (with a small
+trailing glyph: `↗` link, `$` shell, `⟳` refresh, `⌘` Shortcut) but does not fire
+it. Activating items, the interactive control popovers, and the embedded WebView
+remain the menu bar's job.
 
 ### `vee lint`
 

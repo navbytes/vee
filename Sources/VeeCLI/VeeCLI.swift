@@ -1,4 +1,5 @@
 import Foundation
+import VeeCore
 import VeePluginFormat
 import VeeRuntime
 import VeeSearch
@@ -45,6 +46,8 @@ public enum VeeCLI {
                 return runNew(rest, out: &out, err: &err)
             case "search":
                 return await runSearch(rest, runner: runner, out: &out, err: &err)
+            case "show":
+                return await runShow(rest, runner: runner, out: &out, err: &err)
             default:
                 err += "vee: unknown subcommand '\(name)'\n\n"
                 err += Usage.text
@@ -223,6 +226,173 @@ public enum VeeCLI {
         return "—"
     }
 
+    // MARK: - show
+
+    /// `vee show <plugin> [--once] [--no-color] [--dir DIR]` — render one plugin's
+    /// menu-bar dropdown in the terminal (color, block progress bars, sparklines),
+    /// live-refreshing on the plugin's own filename cadence. `<plugin>` is a path
+    /// or the name of an installed plugin. On a non-interactive stdout (a pipe, or
+    /// `--once`) it prints a single frame and exits — the seam tests exercise.
+    static func runShow(
+        _ args: [String],
+        runner: ProcessRunning,
+        out: inout String,
+        err: inout String
+    ) async -> Int32 {
+        var once = false
+        var noColor = false
+        var dirOverride: String?
+        var positionals: [String] = []
+
+        var i = 0
+        while i < args.count {
+            let arg = args[i]
+            switch arg {
+            case "--once": once = true
+            case "--no-color": noColor = true
+            case "--dir":
+                i += 1
+                if i < args.count { dirOverride = args[i] }
+            default:
+                if arg.hasPrefix("-") {
+                    err += "vee show: unknown flag '\(arg)'\n"
+                    return 2
+                }
+                positionals.append(arg)
+            }
+            i += 1
+        }
+
+        guard let argument = positionals.first else {
+            err += "vee show: missing <plugin>\n\nUsage: vee show <plugin> [--once] [--no-color] [--dir DIR]\n"
+            return 2
+        }
+
+        let directory = PluginResolver.pluginsDirectory(override: dirOverride)
+        let resolved: PluginResolver.Resolved
+        switch PluginResolver.resolve(
+            argument: argument,
+            directory: directory,
+            currentDirectory: FileManager.default.currentDirectoryPath
+        ) {
+        case .success(let value):
+            resolved = value
+        case .failure(let error):
+            switch error {
+            case .fileNotFound(let path):
+                err += "vee show: no such plugin file '\(path)'\n"
+            case .nameNotFound(let name, let available):
+                err += "vee show: no installed plugin named '\(name)'.\n"
+                if available.isEmpty {
+                    err += "  (no plugins found in \(directory))\n"
+                } else {
+                    err += "  available: \(available.joined(separator: ", "))\n"
+                }
+            }
+            return 1
+        }
+
+        // Color and the live loop both require a real interactive stdout; a pipe
+        // or `--once` takes the single-frame path (deterministic, testable).
+        let stdoutIsTTY = isatty(FileHandle.standardOutput.fileDescriptor) != 0
+        let stdinIsTTY = isatty(FileHandle.standardInput.fileDescriptor) != 0
+        let colorEnabled = !noColor
+            && ProcessInfo.processInfo.environment["NO_COLOR"] == nil
+            && stdoutIsTTY
+
+        if once || !stdoutIsTTY || !stdinIsTTY {
+            let width = terminalWidth()
+            let result = await showBody(resolved: resolved, runner: runner, color: colorEnabled, width: width)
+            out += result.status + "\n\n" + result.body
+            if !out.hasSuffix("\n") { out += "\n" }
+            return result.code
+        }
+
+        return await LiveView.run(resolved: resolved, runner: runner, color: colorEnabled)
+    }
+
+    /// Runs `resolved` once and renders it to a status line + a terminal-styled
+    /// dropdown body, with any parse diagnostics / stderr surfaced as a dim
+    /// footer. Shared by the single-frame path and the live loop.
+    static func showBody(
+        resolved: PluginResolver.Resolved,
+        runner: ProcessRunning,
+        color: Bool,
+        width: Int
+    ) async -> (status: String, body: String, code: Int32, timedOut: Bool) {
+        let options = TerminalRenderer.Options(color: color, width: width)
+
+        let outcome: ProcessOutcome
+        do {
+            outcome = try await runPlugin(path: resolved.path, runner: runner)
+        } catch {
+            let status = statusLine(name: resolved.displayName, interval: resolved.interval, code: 1, timedOut: false, color: color)
+            let body = TerminalRenderer.dimmed("could not run plugin: \(error)", color: color)
+            return (status, body, 1, false)
+        }
+
+        let parsed = OutputParser.parseAuto(outcome.standardOutput)
+        var body = TerminalRenderer.render(parsed, options: options)
+
+        var notes: [String] = []
+        for d in parsed.diagnostics { notes.append(format(d)) }
+        if outcome.timedOut { notes.append("  plugin timed out") }
+        if !outcome.standardError.isEmpty {
+            notes.append("  stderr: " + outcome.standardError.trimmingCharacters(in: .whitespacesAndNewlines))
+        }
+        if !notes.isEmpty {
+            let block = notes.map { TerminalRenderer.dimmed($0, color: color) }.joined(separator: "\n")
+            body += (body.isEmpty ? "" : "\n\n") + block
+        }
+
+        let hadError = outcome.exitCode != 0 || outcome.timedOut || parsed.diagnostics.contains { $0.severity == .error }
+        let status = statusLine(
+            name: resolved.displayName,
+            interval: resolved.interval,
+            code: outcome.exitCode,
+            timedOut: outcome.timedOut,
+            color: color)
+        return (status, body, hadError ? 1 : 0, outcome.timedOut)
+    }
+
+    /// A one-line plugin status banner: a health dot, the name, its refresh
+    /// cadence, and the last exit code (or a timeout / non-zero flag).
+    static func statusLine(name: String, interval: RefreshInterval, code: Int32, timedOut: Bool, color: Bool) -> String {
+        let healthy = !timedOut && code == 0
+        let dot = TerminalRenderer.colored("●", healthy ? .named("green") : .named("red"), color: color)
+        var parts = [dot + " " + name, describeInterval(interval)]
+        if timedOut {
+            parts.append(TerminalRenderer.colored("timed out", .named("red"), color: color))
+        } else if code != 0 {
+            parts.append(TerminalRenderer.colored("exit \(code)", .named("red"), color: color))
+        } else {
+            parts.append(TerminalRenderer.dimmed("exit 0", color: color))
+        }
+        return parts.joined(separator: TerminalRenderer.dimmed("  ·  ", color: color))
+    }
+
+    /// Human-readable form of a plugin's refresh cadence.
+    static func describeInterval(_ interval: RefreshInterval) -> String {
+        switch interval {
+        case .manual: return "manual"
+        case .cron(let expr): return "cron \(expr)"
+        case .milliseconds(let n): return "every \(n)ms"
+        case .seconds(let n): return "every \(n)s"
+        case .minutes(let n): return "every \(n)m"
+        case .hours(let n): return "every \(n)h"
+        case .days(let n): return "every \(n)d"
+        }
+    }
+
+    /// Terminal width for the single-frame path (the live loop queries the TTY
+    /// directly via `ioctl`).
+    static func terminalWidth() -> Int {
+        if let columns = ProcessInfo.processInfo.environment["COLUMNS"], let n = Int(columns), n > 0 {
+            return n
+        }
+        return 80
+    }
+
     // MARK: - new
 
     static func runNew(_ args: [String], out: inout String, err: inout String) -> Int32 {
@@ -351,7 +521,13 @@ enum Usage {
       vee render <path>        Run a plugin and print its parsed menu tree.
       vee lint <path>          Run a plugin and report format/authoring problems.
       vee search <path> [q…]   Run a plugin and fuzzy-search its (nested) items.
+      vee show <plugin>        Live-render a plugin's dropdown in the terminal.
       vee new [flags]          Scaffold a new plugin.
+
+    show flags:
+      --once               Print a single frame instead of live-refreshing.
+      --no-color           Disable ANSI color output.
+      --dir DIR            Plugins folder to resolve a plugin name against.
 
     new flags:
       --lang ts|py|sh      Source language (default: sh).
