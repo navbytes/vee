@@ -201,6 +201,38 @@ final class MenuFlattenerTests: XCTestCase {
         XCTAssertTrue(MenuFlattener.flattenEntries([plain("   ")]).isEmpty)   // whitespace-only text
     }
 
+    /// Mirrors `MenuBuilder.makeItem`'s early return for `header=true`
+    /// (`NSMenuItem.sectionHeader(title:)`, built before any submenu) — a
+    /// header's submenu is never part of the native dropdown, so it must
+    /// never reach the panel either, unlike `dropdown=false` which still
+    /// descends.
+    func testHeaderWithSubmenuNeverDescendsMirrorsDropdownHiddenSubmenu() {
+        let entries = MenuFlattener.flattenEntries([
+            header("Section", submenu: [href("Hidden Action")]),
+            href("Sibling")
+        ])
+        XCTAssertEqual(entries.count, 2, "the header's submenu contributes nothing — not even its actionable child")
+        XCTAssertEqual(entries[0], .header("Section"), "the header row itself still emits, at the top level")
+        XCTAssertNil(flatRow("Hidden Action", in: entries), "a header's submenu must never be walked")
+        guard case .action(let sibling) = entries[1] else { return XCTFail("expected the sibling action") }
+        XCTAssertEqual(sibling.item.text, "Sibling")
+    }
+
+    /// `header=true` is checked before the action/info branch and always
+    /// `continue`s past it — an incidental `href=` must not smuggle a header
+    /// line into `.action`.
+    func testHeaderWithHrefNeverBecomesAnActionRow() {
+        var p = LineParams()
+        p.swiftbar.header = true
+        p.href = URL(string: "https://example.com")
+        let entries = MenuFlattener.flattenEntries([
+            .item(MenuItem(text: "Section", params: p)),
+            href("Sibling")
+        ])
+        XCTAssertEqual(entries[0], .header("Section"), "header=true takes precedence over an incidental href")
+        XCTAssertFalse(entries.contains { if case .action(let r) = $0 { return r.item.text == "Section" }; return false })
+    }
+
     // MARK: - Section scoping
 
     func testSectionScopesFollowingSiblingsBreadcrumb() {
@@ -246,6 +278,7 @@ final class MenuFlattenerTests: XCTestCase {
             ]),
             href("Issue 1")
         ])
+        XCTAssertEqual(entries.count, 5, "the nested header and separator are section-scope bookkeeping only — never their own entries below depth 0")
         XCTAssertEqual(flatRow("orders", in: entries)?.path, ["Recent"], "the outer section wraps the group itself")
         XCTAssertEqual(flatRow("Task A", in: entries)?.path, ["Recent", "orders", "Sub"], "the submenu's own header opens an independent inner section")
         XCTAssertEqual(flatRow("Task B", in: entries)?.path, ["Recent", "orders"], "the inner separator ends the submenu's OWN section, not the parent's")
@@ -264,6 +297,38 @@ final class MenuFlattenerTests: XCTestCase {
         let result = MenuSearch.search("recent", in: entries)
         XCTAssertEqual(result.count, 2)
         XCTAssertTrue(result.allSatisfy { if case .action = $0 { return true }; return false })
+    }
+
+    // MARK: - Depth-gated furniture: nested headers/separators never leak into the flat stream
+
+    /// The reviewer's leak scenario: before the fix, a header/separator
+    /// nested inside a sibling item's submenu spliced its own `.header`/
+    /// `.separator` entry into the flat stream between top-level rows it has
+    /// no business separating. Pinned by the full emitted sequence, not just
+    /// a couple of sampled paths.
+    func testNestedHeaderAndSeparatorNeverLeakIntoTheFlatStreamBetweenTopLevelRows() {
+        let entries = MenuFlattener.flattenEntries([
+            header("Recent"),
+            plain("CPU: 42%"),
+            plain("orders", submenu: [
+                header("Sub"),
+                href("Task A"),
+                .separator,
+                href("Task B")
+            ]),
+            href("Trailing")
+        ])
+
+        XCTAssertEqual(entries.count, 6, "no entry for the nested header or the nested separator")
+        XCTAssertEqual(entries.filter { if case .header = $0 { return true }; return false }, [.header("Recent")], "exactly one .header entry in the whole stream")
+        XCTAssertTrue(entries.allSatisfy { if case .separator = $0 { return false }; return true }, "zero .separator entries — the tree's only separator is nested")
+
+        XCTAssertEqual(flatRow("Task A", in: entries)?.path, ["Recent", "orders", "Sub"], "the nested header still opens its own section before the nested separator")
+        XCTAssertEqual(flatRow("Task B", in: entries)?.path, ["Recent", "orders"], "the nested separator still resets that section afterward")
+
+        guard case .action(let trailing) = entries.last else { return XCTFail("expected the trailing top-level action last") }
+        XCTAssertEqual(trailing.item.text, "Trailing")
+        XCTAssertEqual(trailing.path, ["Recent"], "sits directly after Task B — no nested header entry leaked in between — and stays scoped by the OUTER section")
     }
 
     // MARK: - normalized(_:)
