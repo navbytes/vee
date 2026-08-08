@@ -21,7 +21,7 @@ public enum MenuFlattener {
     /// native dropdown renders instead of showing only the clickable subset.
     public static func flattenEntries(_ nodes: [MenuNode]) -> [SearchEntry] {
         var entries: [SearchEntry] = []
-        walk(nodes, path: [], into: &entries)
+        walk(nodes, path: [], depth: 0, into: &entries)
         return normalized(entries)
     }
 
@@ -50,12 +50,21 @@ public enum MenuFlattener {
     /// name surfaces its rows. The section resets at the next header or
     /// separator at the same level. `section` is a local to this call frame,
     /// so nested submenus always start their own tracking fresh.
-    private static func walk(_ nodes: [MenuNode], path: [String], into entries: inout [SearchEntry]) {
+    ///
+    /// `depth` (0 = the top-level list) gates whether `.header`/`.separator`
+    /// are appended as their own entries: a submenu opens as a *sibling*
+    /// dropdown, not inline, so its furniture must not splice into the
+    /// flat stream between top-level rows that visually surround it — only
+    /// depth 0's own headers/separators become panel rows. Section-scope
+    /// bookkeeping still runs at every depth regardless (a nested header
+    /// still folds into its own level's breadcrumb, a nested separator
+    /// still resets it) — only the emitted *entry* is suppressed.
+    private static func walk(_ nodes: [MenuNode], path: [String], depth: Int, into entries: inout [SearchEntry]) {
         var section: String?
 
         for node in nodes {
             guard case .item(let item) = node else {
-                entries.append(.separator)
+                if depth == 0 { entries.append(.separator) }
                 section = nil
                 continue
             }
@@ -68,13 +77,17 @@ public enum MenuFlattener {
             // even as a section boundary — but still descends, exactly like
             // `flatten` treats it today.
             if item.params.dropdown == false {
-                if !item.submenu.isEmpty { walk(item.submenu, path: childPath, into: &entries) }
+                if !item.submenu.isEmpty { walk(item.submenu, path: childPath, depth: depth + 1, into: &entries) }
                 continue
             }
 
             if item.params.swiftbar.header == true {
-                if hasText { entries.append(.header(item.text)) }
-                if !item.submenu.isEmpty { walk(item.submenu, path: childPath, into: &entries) }
+                // Mirrors MenuBuilder.makeItem's early return for
+                // `header=true` (returns `NSMenuItem.sectionHeader(title:)`
+                // before any submenu is ever built) — a header's submenu is
+                // never part of the native dropdown, so it's never walked
+                // here either.
+                if hasText, depth == 0 { entries.append(.header(item.text)) }
                 section = hasText ? item.text : nil   // opens (or, if titleless, just closes) scope for what follows
                 continue
             }
@@ -85,7 +98,7 @@ public enum MenuFlattener {
                 entries.append(!disabled && isActionable(item) ? .action(row) : .info(row))
             }
             // Always descend; empty text contributes no breadcrumb segment.
-            if !item.submenu.isEmpty { walk(item.submenu, path: childPath, into: &entries) }
+            if !item.submenu.isEmpty { walk(item.submenu, path: childPath, depth: depth + 1, into: &entries) }
         }
     }
 
