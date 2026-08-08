@@ -548,19 +548,22 @@ public final class AppController: NSObject, NSApplicationDelegate {
         let plugins = enabledPlugins().map { plugin in
             (name: plugin.filename.name, controller: coordinators[plugin.id.rawValue]?.controller)
         }
-        let paired = Self.aggregateSearchRows(plugins)
+        let aggregated = Self.aggregateSearchRows(plugins)
         MenuSearchPanel.shared.present(
-            rows: paired.map(\.row),
+            entries: aggregated.entries,
             pluginName: "All Plugins",
-            activate: { row in paired.first(where: { $0.row == row })?.activate() }
+            activate: { row in aggregated.pairs.first(where: { $0.row == row })?.activate() }
         )
     }
 
-    /// Flattens every given plugin's *current* menu into one search-ready row
-    /// set, breadcrumb-prefixed with its display name, and pairs each row with
-    /// a closure that fires it through that SAME plugin's handler — a row from
-    /// plugin A must never fire through plugin B's. `controller` is `nil` for
-    /// a `.widget`-surface plugin (`PluginCoordinator.controller`, no menu at
+    /// Flattens every given plugin's *current* menu into one search-ready
+    /// entry list, breadcrumb-prefixed with its display name and separated
+    /// plugin-to-plugin by a `.separator`, normalized once as a whole (so a
+    /// plugin boundary can't leave a dangling separator/header next to
+    /// another). Alongside it, pairs every `.action` row with a closure that
+    /// fires it through that SAME plugin's handler — a row from plugin A must
+    /// never fire through plugin B's. `controller` is `nil` for a
+    /// `.widget`-surface plugin (`PluginCoordinator.controller`, no menu at
     /// all) — excluded naturally, not filtered explicitly by the caller.
     /// `static`/pure given the snapshot, so it is unit-tested directly, without
     /// a live `AppController`/`NSApplication`.
@@ -575,14 +578,21 @@ public final class AppController: NSObject, NSApplicationDelegate {
     /// action), so the scan itself is not a performance concern.
     static func aggregateSearchRows(
         _ plugins: [(name: String, controller: StatusItemController?)]
-    ) -> [(row: FlatRow, activate: () -> Void)] {
-        plugins.flatMap { name, controller -> [(row: FlatRow, activate: () -> Void)] in
-            guard let controller else { return [] }
+    ) -> (entries: [SearchEntry], pairs: [(row: FlatRow, activate: () -> Void)]) {
+        var entries: [SearchEntry] = []
+        var pairs: [(row: FlatRow, activate: () -> Void)] = []
+        for (name, controller) in plugins {
+            guard let controller else { continue }
+            if !entries.isEmpty { entries.append(.separator) }
             let handler = controller.handler
-            return MenuSearch.flatten(controller.lastBody).map { $0.prefixed(with: name) }.map { row in
-                (row: row, activate: { handler.perform(row.item) })
+            let pluginEntries = MenuSearch.flattenEntries(controller.lastBody).map { $0.prefixed(with: name) }
+            entries.append(contentsOf: pluginEntries)
+            pairs += pluginEntries.compactMap { entry in
+                guard case .action(let row) = entry else { return nil }
+                return (row: row, activate: { handler.perform(row.item) })
             }
         }
+        return (entries: MenuFlattener.normalized(entries), pairs: pairs)
     }
 
     /// Registers (or re-evaluates) the opt-in "Search All Plugins" global

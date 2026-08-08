@@ -39,16 +39,19 @@ final class MenuSearchPanel: NSObject {
 
     private static let size = NSSize(width: 440, height: 380)
 
-    /// Opens the panel for `rows`, anchored near the mouse (i.e. under the just-
-    /// clicked status item), routing activations through `activate`.
-    func present(rows: [FlatRow], pluginName: String, activate: @escaping (FlatRow) -> Void) {
+    /// Opens the panel for `entries`, anchored near the mouse (i.e. under the
+    /// just-clicked status item), routing activations through `activate`.
+    /// `entries` carries the full panel-visible structure (rows, section
+    /// headers, separators); only `.action` rows are ever selectable/
+    /// activatable, so `activate` still deals only in `FlatRow`.
+    func present(entries: [SearchEntry], pluginName: String, activate: @escaping (FlatRow) -> Void) {
         dismiss()
         self.onActivateRow = activate
         // Capture BEFORE self-activating below — after that call, Vee itself
         // would be frontmost and we'd have nothing to restore.
         frontmostRestorer.capture(NSWorkspace.shared.frontmostApplication)
 
-        let model = MenuSearchViewModel(rows: rows)
+        let model = MenuSearchViewModel(entries: entries)
         self.model = model
 
         let root = MenuSearchView(
@@ -197,38 +200,80 @@ private struct MenuSearchView: View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(spacing: 0) {
-                    ForEach(Array(model.results.enumerated()), id: \.offset) { index, row in
-                        SearchRowView(row: row, selected: index == model.selection)
+                    ForEach(Array(model.results.enumerated()), id: \.offset) { index, entry in
+                        row(for: entry, index: index)
                             .id(index)
-                            .contentShape(Rectangle())
-                            .onTapGesture { onActivate(row) }
                     }
                 }
                 .padding(6)
             }
             .onChange(of: model.selection) { _, selection in
+                // `-1` (no `.action` entry in the results) has nothing to scroll to.
+                guard model.results.indices.contains(selection) else { return }
                 withAnimation(.easeOut(duration: 0.1)) { proxy.scrollTo(selection, anchor: .center) }
             }
+        }
+    }
+
+    /// Renders one entry by kind. Only `.action` is interactive — `.info` uses
+    /// the same row view dimmed and inert, `.header`/`.separator` are plain
+    /// structural furniture.
+    @ViewBuilder
+    private func row(for entry: SearchEntry, index: Int) -> some View {
+        switch entry {
+        case .action(let flatRow):
+            SearchRowView(row: flatRow, selected: index == model.selection)
+                .contentShape(Rectangle())
+                .onTapGesture { onActivate(flatRow) }
+        case .info(let flatRow):
+            SearchRowView(row: flatRow, selected: false, enabled: false)
+        case .header(let title):
+            Text(title)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 10)
+                .padding(.top, 10)
+                .padding(.bottom, 2)
+        case .separator:
+            Divider()
+                .padding(.horizontal, 10)
+                .padding(.vertical, 4)
         }
     }
 }
 
 /// One result row: SF Symbol (when the item declares one), the item text, and a
-/// dim breadcrumb of its ancestor groups.
+/// dim breadcrumb of its ancestor groups. `enabled: false` renders an `.info`
+/// entry (a disabled item or a plain sub-text line) — same layout/metrics so
+/// the list stays visually aligned, but dimmed, never highlighted, and inert;
+/// the caller (not this view) is what leaves off the tap gesture.
 private struct SearchRowView: View {
     let row: FlatRow
     let selected: Bool
+    var enabled: Bool = true
 
     var body: some View {
         HStack(spacing: 9) {
-            Image(systemName: row.item.params.swiftbar.sfimage ?? "circle.dashed")
-                .font(.system(size: 13))
-                .foregroundStyle(selected ? AnyShapeStyle(.white) : AnyShapeStyle(.secondary))
-                .frame(width: 18)
+            // `.action` always shows an icon (a placeholder when the item
+            // declares none); a dimmed `.info` row only shows one when the
+            // item actually declares `sfimage=` — but keeps the 18pt frame
+            // either way, so text stays aligned across rows.
+            Group {
+                if enabled {
+                    Image(systemName: row.item.params.swiftbar.sfimage ?? "circle.dashed")
+                } else if let sfimage = row.item.params.swiftbar.sfimage {
+                    Image(systemName: sfimage)
+                }
+            }
+            .font(.system(size: 13))
+            .foregroundStyle(selected ? AnyShapeStyle(.white) : AnyShapeStyle(.secondary))
+            .frame(width: 18)
             VStack(alignment: .leading, spacing: 1) {
                 Text(row.item.text)
                     .font(.system(size: 13))
                     .lineLimit(1)
+                    .foregroundStyle(enabled ? (selected ? AnyShapeStyle(.white) : AnyShapeStyle(.primary)) : AnyShapeStyle(.secondary))
                 if !row.breadcrumb.isEmpty {
                     Text(row.breadcrumb)
                         .font(.system(size: 11))
@@ -250,7 +295,7 @@ private struct SearchRowView: View {
         .foregroundStyle(selected ? AnyShapeStyle(.white) : AnyShapeStyle(.primary))
         .background(
             RoundedRectangle(cornerRadius: 7, style: .continuous)
-                .fill(selected ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(Color.clear))
+                .fill(enabled && selected ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(Color.clear))
         )
     }
 }
