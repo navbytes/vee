@@ -9,9 +9,11 @@ import VeeSearch
 /// The cross-plugin "search everything" panel — the parked slice from
 /// `docs/_content/roadmap.md`. `AppController.aggregateSearchRows` is the pure
 /// aggregation core: given each plugin's (name, controller) snapshot, it
-/// flattens + breadcrumb-prefixes every plugin's *current* menu into one row
-/// set and pairs each row with a closure that must fire through that SAME
-/// plugin's handler — never a shared one.
+/// flattens + breadcrumb-prefixes every plugin's *current* menu into one
+/// `SearchEntry` list (headers/info rows/separators included, a `.separator`
+/// spliced between plugin blocks, normalized as a whole) and pairs each
+/// `.action` row with a closure that must fire through that SAME plugin's
+/// handler — never a shared one.
 ///
 /// Constructed the same `NSApplication`-free way `CompactMenuBarControllerTests`
 /// does: compact mode forced on via injected `AppPreferences`, and
@@ -52,11 +54,11 @@ final class SearchAllPluginsAggregatorTests: XCTestCase {
         alpha.render(output(itemText: "Foo"))
         beta.render(output(itemText: "Bar"))
 
-        let paired = AppController.aggregateSearchRows([("Alpha", alpha), ("Beta", beta)])
+        let aggregated = AppController.aggregateSearchRows([("Alpha", alpha), ("Beta", beta)])
 
-        XCTAssertEqual(Set(paired.map(\.row.item.text)), ["Foo", "Bar"])
-        XCTAssertEqual(paired.first(where: { $0.row.item.text == "Foo" })?.row.breadcrumb, "Alpha")
-        XCTAssertEqual(paired.first(where: { $0.row.item.text == "Bar" })?.row.breadcrumb, "Beta")
+        XCTAssertEqual(Set(aggregated.pairs.map(\.row.item.text)), ["Foo", "Bar"])
+        XCTAssertEqual(aggregated.pairs.first(where: { $0.row.item.text == "Foo" })?.row.breadcrumb, "Alpha")
+        XCTAssertEqual(aggregated.pairs.first(where: { $0.row.item.text == "Bar" })?.row.breadcrumb, "Beta")
         withExtendedLifetime((alpha, beta)) {}
     }
 
@@ -69,15 +71,17 @@ final class SearchAllPluginsAggregatorTests: XCTestCase {
         let alpha = makeController(name: "Alpha", handler: RecordingHandler(), prefs: prefs, compact: compact)
         alpha.render(output(itemText: "Foo"))
 
-        let paired = AppController.aggregateSearchRows([("Alpha", alpha), ("WidgetOnly", nil)])
+        let aggregated = AppController.aggregateSearchRows([("Alpha", alpha), ("WidgetOnly", nil)])
 
-        XCTAssertEqual(paired.count, 1, "a .widget-surface plugin (nil controller) must contribute no rows")
-        XCTAssertEqual(paired.first?.row.item.text, "Foo")
+        XCTAssertEqual(aggregated.pairs.count, 1, "a .widget-surface plugin (nil controller) must contribute no rows")
+        XCTAssertEqual(aggregated.pairs.first?.row.item.text, "Foo")
         withExtendedLifetime(alpha) {}
     }
 
     func testNoPluginsYieldsEmptyRows() {
-        XCTAssertTrue(AppController.aggregateSearchRows([]).isEmpty)
+        let aggregated = AppController.aggregateSearchRows([])
+        XCTAssertTrue(aggregated.entries.isEmpty)
+        XCTAssertTrue(aggregated.pairs.isEmpty)
     }
 
     /// The critical routing guarantee: a row from plugin A must fire through
@@ -93,15 +97,58 @@ final class SearchAllPluginsAggregatorTests: XCTestCase {
         alpha.render(output(itemText: "Foo"))
         beta.render(output(itemText: "Bar"))
 
-        let paired = AppController.aggregateSearchRows([("Alpha", alpha), ("Beta", beta)])
+        let aggregated = AppController.aggregateSearchRows([("Alpha", alpha), ("Beta", beta)])
 
-        paired.first(where: { $0.row.item.text == "Foo" })?.activate()
+        aggregated.pairs.first(where: { $0.row.item.text == "Foo" })?.activate()
         XCTAssertEqual(handlerA.performed.map(\.text), ["Foo"])
         XCTAssertTrue(handlerB.performed.isEmpty, "activating Alpha's row must not fire Beta's handler")
 
-        paired.first(where: { $0.row.item.text == "Bar" })?.activate()
+        aggregated.pairs.first(where: { $0.row.item.text == "Bar" })?.activate()
         XCTAssertEqual(handlerB.performed.map(\.text), ["Bar"])
         XCTAssertEqual(handlerA.performed.map(\.text), ["Foo"], "Alpha's handler must not fire again for Beta's row")
         withExtendedLifetime((alpha, beta)) {}
+    }
+
+    // MARK: - entries: separator splicing + normalization across plugin boundaries
+
+    func testEntriesInsertsSeparatorBetweenPluginBlocks() {
+        let prefs = makeCompactPrefs()
+        let compact = CompactMenuBarController(attachesStatusItem: false)
+        let alpha = makeController(name: "Alpha", handler: RecordingHandler(), prefs: prefs, compact: compact)
+        let beta = makeController(name: "Beta", handler: RecordingHandler(), prefs: prefs, compact: compact)
+        alpha.render(output(itemText: "Foo"))
+        beta.render(output(itemText: "Bar"))
+
+        let aggregated = AppController.aggregateSearchRows([("Alpha", alpha), ("Beta", beta)])
+
+        guard case .action(let foo) = aggregated.entries.first else { return XCTFail("expected Alpha's row first") }
+        XCTAssertEqual(foo.item.text, "Foo")
+        XCTAssertEqual(aggregated.entries[1], .separator)
+        guard case .action(let bar) = aggregated.entries.last else { return XCTFail("expected Beta's row last") }
+        XCTAssertEqual(bar.item.text, "Bar")
+        XCTAssertEqual(aggregated.entries.count, 3)
+        withExtendedLifetime((alpha, beta)) {}
+    }
+
+    /// A plugin with a controller but an empty menu contributes no entries of
+    /// its own — but the separator unconditionally inserted before its slot
+    /// would otherwise double up with the next plugin's, or dangle at the
+    /// end. `entries` runs `normalized` over the WHOLE concatenation
+    /// specifically to clean this up.
+    func testEntriesCollapseSeparatorAroundAnEmptyMiddlePlugin() {
+        let prefs = makeCompactPrefs()
+        let compact = CompactMenuBarController(attachesStatusItem: false)
+        let alpha = makeController(name: "Alpha", handler: RecordingHandler(), prefs: prefs, compact: compact)
+        let empty = makeController(name: "Empty", handler: RecordingHandler(), prefs: prefs, compact: compact)
+        let beta = makeController(name: "Beta", handler: RecordingHandler(), prefs: prefs, compact: compact)
+        alpha.render(output(itemText: "Foo"))
+        empty.render(ParsedOutput(titleLines: [TitleLine(text: "x")], body: []))
+        beta.render(output(itemText: "Bar"))
+
+        let aggregated = AppController.aggregateSearchRows([("Alpha", alpha), ("Empty", empty), ("Beta", beta)])
+
+        XCTAssertEqual(aggregated.entries.count, 3, "Foo, one separator, Bar — no doubled separator for Empty's contribution-less slot")
+        XCTAssertEqual(aggregated.entries[1], .separator)
+        withExtendedLifetime((alpha, empty, beta)) {}
     }
 }
