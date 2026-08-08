@@ -7,6 +7,16 @@ All notable changes to Vee are documented here. The format is based on
 ## [Unreleased]
 
 ### Added
+- **Search panel shows menu structure.** When idle (before typing), the search panel
+  now mirrors the dropdown's structure — section headers (`header=true`), separators
+  (`---`), and non-actionable rows (plain sub-text and `disabled=true` items) appear
+  dimmed and non-selectable, just like the native menu. Section titles join the
+  breadcrumb context and are searchable, so typing a section's name surfaces its rows.
+  Nested submenus' headers/separators don't render as rows (their structure is carried
+  by breadcrumbs like `Tools › Nested`); header submenus never surface items. While
+  typing, results flatten into a ranked list and dimmed info rows match too but stay
+  non-activatable — the same filter you'd use to find rows also helps you browse
+  menu structure when you're just exploring.
 - **`vee show` — a live terminal view of a plugin's dropdown.** A new authoring
   subcommand renders what a plugin's menu-bar dropdown would look like, natively
   in the terminal, and live-refreshes it on the plugin's own filename cadence
