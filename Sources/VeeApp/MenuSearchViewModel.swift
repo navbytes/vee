@@ -2,16 +2,17 @@ import Foundation
 import VeePluginFormat
 import VeeSearch
 
-/// The state behind the search panel: the frozen row set for one plugin, the
+/// The state behind the search panel: the frozen entry set for one plugin, the
 /// live query, the ranked results, and the keyboard selection. Kept free of
 /// AppKit/SwiftUI so the filter + selection behavior is unit-tested directly.
 ///
-/// Rows are frozen at open (the plugin may re-run on its interval while the
-/// panel is up); the panel reopens against fresh rows next time.
+/// Entries are frozen at open (the plugin may re-run on its interval while the
+/// panel is up); the panel reopens against fresh entries next time.
 @MainActor
 final class MenuSearchViewModel: ObservableObject {
-    /// Every activatable row for the plugin, in original order (the idle list).
-    let allRows: [FlatRow]
+    /// Every panel-visible entry for the plugin, in original order (the idle
+    /// list) — action/info rows, section headers, and separators alike.
+    let allEntries: [SearchEntry]
 
     /// The live search text. Editing it re-filters and resets the selection to
     /// the top (best) result.
@@ -19,37 +20,70 @@ final class MenuSearchViewModel: ObservableObject {
         didSet { recompute() }
     }
 
-    /// The ranked rows for the current query (all rows when the query is empty).
-    @Published private(set) var results: [FlatRow]
+    /// The ranked entries for the current query (all entries when the query is
+    /// empty).
+    @Published private(set) var results: [SearchEntry]
 
-    /// Index into `results` of the keyboard-highlighted row. Always valid when
-    /// `results` is non-empty; `0` otherwise.
-    @Published var selection: Int = 0
+    /// Index into `results` of the keyboard-highlighted row. Headers,
+    /// separators, and `.info` rows aren't selectable, so this always sits on
+    /// an `.action` index — `-1` when `results` has none.
+    @Published var selection: Int = -1
 
-    init(rows: [FlatRow]) {
-        self.allRows = rows
-        self.results = MenuSearch.search("", in: rows)
+    init(entries: [SearchEntry]) {
+        self.allEntries = entries
+        let results = MenuSearch.search("", in: entries)
+        self.results = results
+        self.selection = Self.firstActionIndex(in: results)
     }
 
     private func recompute() {
-        results = MenuSearch.search(query, in: allRows)
-        selection = 0   // highlight the best match on every keystroke
+        results = MenuSearch.search(query, in: allEntries)
+        selection = Self.firstActionIndex(in: results)   // highlight the best match on every keystroke
     }
 
-    /// The currently highlighted row, or `nil` when there are no results.
+    /// The currently highlighted row, or `nil` when there is no `.action`
+    /// entry at `selection` (including the empty-selection `-1` case).
     func selectedRow() -> FlatRow? {
-        results.indices.contains(selection) ? results[selection] : nil
+        guard results.indices.contains(selection), case .action(let row) = results[selection] else { return nil }
+        return row
     }
 
-    /// Moves the highlight down one row, clamped to the last result.
+    /// Moves the highlight to the next `.action` entry below, clamped (no
+    /// wrap) at the last one.
     func moveDown() {
-        guard !results.isEmpty else { return }
-        selection = min(selection + 1, results.count - 1)
+        guard let next = Self.actionIndex(after: selection, in: results) else { return }
+        selection = next
     }
 
-    /// Moves the highlight up one row, clamped to the first result.
+    /// Moves the highlight to the next `.action` entry above, clamped (no
+    /// wrap) at the first one.
     func moveUp() {
-        guard !results.isEmpty else { return }
-        selection = max(selection - 1, 0)
+        guard let previous = Self.actionIndex(before: selection, in: results) else { return }
+        selection = previous
+    }
+
+    private static func firstActionIndex(in results: [SearchEntry]) -> Int {
+        results.firstIndex {
+            if case .action = $0 { return true }
+            return false
+        } ?? -1
+    }
+
+    private static func actionIndex(after index: Int, in results: [SearchEntry]) -> Int? {
+        var i = index + 1
+        while i < results.count {
+            if case .action = results[i] { return i }
+            i += 1
+        }
+        return nil
+    }
+
+    private static func actionIndex(before index: Int, in results: [SearchEntry]) -> Int? {
+        var i = index - 1
+        while i >= 0 {
+            if case .action = results[i] { return i }
+            i -= 1
+        }
+        return nil
     }
 }

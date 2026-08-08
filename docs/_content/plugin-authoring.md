@@ -77,6 +77,8 @@ Visa ···· 4242
 
 A header row is title-only: it ignores click/appearance params (`href=`, `color=`, `md=`, …) since AppKit's native section header renders plain text and never fires an action. Keep it at the same indentation as the items it introduces — like `disabled=true` today, it doesn't nest anything under itself.
 
+In the search panel, section headers render as dimmed context rows and become part of each row's breadcrumb (e.g. `Accounts › Checking`); they are searchable, so typing a section name surfaces its rows. Header submenus — a `header=true` line with child items indented under it — never surface in the search results.
+
 ## Line parameters
 
 Append `| key=value key2=value2 …` to any line to attach parameters. Quote values that contain spaces (`title="Open in browser"`), and escape quotes with `\"`.
@@ -222,6 +224,22 @@ a breadcrumb of its parent groups.
 ```
 # <vee.filter>true</vee.filter>
 ```
+
+**Before typing (idle state):** the panel mirrors your dropdown's structure — section
+headers (`header=true`), separators (`---`), and non-actionable rows (`disabled=true`,
+plain sub-text) all appear dimmed and non-selectable, just like the native menu. This
+lets users browse and orient themselves without typing. Keyboard selection skips dimmed
+rows; only actionable rows can be activated with Return or click.
+
+**While typing:** results flatten into a ranked list. Dimmed info rows match the search
+haystack and display, but stay non-activatable — you search to find what you're after,
+or just navigate structure when exploring.
+
+**Section titles as context:** headers join the breadcrumb of rows under them (e.g.
+`Accounts › Checking`), so typing a section name surfaces all its rows. Nested submenus'
+headers and separators don't render as rows themselves — their structure is carried by
+breadcrumbs like `Tools › Nested › Item`. Header submenus (a `header=true` line with
+children indented under it) never surface in search.
 
 - **Fuzzy matching** — `gh` finds `GitHub`; multiple words are ANDed together.
 - **Keyboard-driven** — ↑/↓ move the highlight, Return activates, Esc closes.

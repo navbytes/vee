@@ -214,7 +214,7 @@ public final class StatusItemController {
 
     private func presentSearch() {
         MenuSearchPanel.shared.present(
-            rows: MenuSearch.flatten(lastBody),
+            entries: MenuSearch.flattenEntries(lastBody),
             pluginName: pluginName,
             activate: { [weak self] row in self?.handler.perform(row.item) }
         )
