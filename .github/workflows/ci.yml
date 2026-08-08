@@ -20,9 +20,10 @@ jobs:
     # macos-26: the package targets .macOS("26.0") (Liquid Glass), which older
     # SDKs cannot build. All logic lives in library targets and is covered here.
     runs-on: macos-26
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
-      - uses: maxim-lobanov/setup-xcode@v1
+      - uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1
         with:
           xcode-version: latest-stable
       - name: Toolchain
@@ -35,9 +36,10 @@ jobs:
   app:
     name: Build Vee.app (xcodebuild)
     runs-on: macos-26
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
-      - uses: maxim-lobanov/setup-xcode@v1
+      - uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1
         with:
           xcode-version: latest-stable
       # The .xcodeproj is generated from project.yml, not committed.
@@ -60,9 +62,10 @@ jobs:
     # driving the real execution/refresh pipeline for a sustained window.
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: macos-26
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
-      - uses: maxim-lobanov/setup-xcode@v1
+      - uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1
         with:
           xcode-version: latest-stable
       - name: Toolchain
@@ -76,6 +79,7 @@ jobs:
   plugins:
     name: Plugin SDK (TypeScript)
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     defaults:
       run:
         working-directory: plugins
@@ -92,6 +96,7 @@ jobs:
   plugins-python:
     name: Plugin SDK (Python)
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     defaults:
       run:
         working-directory: plugins/python
@@ -108,6 +113,7 @@ jobs:
   plugins-go:
     name: Plugin SDK (Go)
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     defaults:
       run:
         working-directory: plugins/go

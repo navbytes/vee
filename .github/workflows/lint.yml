@@ -5,10 +5,16 @@ on:
     branches: [main]
   pull_request:
 
+# Cancel superseded runs on a PR; let main runs finish.
+concurrency:
+  group: lint-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   swiftlint:
     # macos-26 to match the project's macOS 26 deployment target (Liquid Glass).
     runs-on: macos-26
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
       - name: Install SwiftLint
