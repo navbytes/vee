@@ -213,6 +213,26 @@ final class ProcessRunnerIntegrationTests: XCTestCase {
         XCTAssertLessThan(Date().timeIntervalSince(start), 3.0, "killed promptly, not left to run the full 10s")
     }
 
+    /// Regression: a detached action killed by `defaultDetachedTimeout` used
+    /// to be entirely silent — `AppActionDispatcher` discards the outcome
+    /// (`_ = try? await`), and nothing else observed it either.
+    /// `terminateGroup` now logs exactly when `isDefaultTimeoutBackstop`
+    /// says so: a real timeout (not a `stop()`-driven cancellation) with no
+    /// *explicit* timeout — the default backstop's own signature. `os.Logger`
+    /// has no test seam to assert the log line itself, so this instead locks
+    /// in the exact condition that gates it, the smallest thing that fails
+    /// if that logic regresses: a cancellation must never log (it isn't a
+    /// timeout at all), an explicit timeout — a plugin refresh, which
+    /// already self-reports via `lastError`/`renderError` — must not log
+    /// either (would just double it), and only the nil-timeout/real-timeout
+    /// combination must.
+    func testDefaultTimeoutBackstopLogGateMatchesOnlyTheSilentCase() {
+        XCTAssertTrue(SystemProcessRunner.isDefaultTimeoutBackstop(markTimedOut: true, explicitTimeout: nil))
+        XCTAssertFalse(SystemProcessRunner.isDefaultTimeoutBackstop(markTimedOut: true, explicitTimeout: 90), "an explicit <vee.timeout> already self-reports elsewhere")
+        XCTAssertFalse(SystemProcessRunner.isDefaultTimeoutBackstop(markTimedOut: false, explicitTimeout: nil), "a stop()-driven cancellation is not a timeout")
+        XCTAssertFalse(SystemProcessRunner.isDefaultTimeoutBackstop(markTimedOut: false, explicitTimeout: 90))
+    }
+
     /// Regression: cancelling the *Task awaiting* `run(_:)` used to do
     /// nothing to the child — `withCheckedThrowingContinuation` alone ignores
     /// Task cancellation, so it kept running to completion regardless of

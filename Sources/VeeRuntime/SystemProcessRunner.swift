@@ -52,11 +52,18 @@ public struct SystemProcessRunner: ProcessRunning {
     /// `<vee.timeout>`), and a streaming plugin never goes through this
     /// runner at all (`SystemStreamingRunner` is a separate type) — so this
     /// only ever widens coverage for the previously-unbounded detached case.
-    /// Configurable (not a buried literal) mainly so a test can shrink it
-    /// instead of waiting out the real default.
+    ///
+    /// A backstop, not a tight budget: this only exists to eventually reap a
+    /// leaked/hung child, not to police how long a legitimate detached
+    /// action (a `shortcut=` running a multi-minute Shortcut/backup) may
+    /// run — killing one of those silently would be a regression versus the
+    /// old run-forever behavior. 10 minutes, generous enough not to bite a
+    /// real action; a kill this causes is logged (see `terminateGroup`) so
+    /// it's never silent either way. Configurable (not a buried literal)
+    /// mainly so a test can shrink it instead of waiting out the real default.
     public let defaultDetachedTimeout: TimeInterval
 
-    public init(defaultDetachedTimeout: TimeInterval = 120) {
+    public init(defaultDetachedTimeout: TimeInterval = 600) {
         self.defaultDetachedTimeout = defaultDetachedTimeout
     }
 
@@ -68,7 +75,18 @@ public struct SystemProcessRunner: ProcessRunning {
         // reload doesn't leave a duplicate live process racing the
         // replacement — rather than merely stop waiting for it.
         // `withCheckedThrowingContinuation` alone ignores cancellation.
-        final class RunBox: @unchecked Sendable { var run: ProcessRun? }
+        // Lock-guarded (not a bare `var`): `onCancel` can run concurrently
+        // with the `operation` closure's write, on a different thread —
+        // same discipline `ProcessRun` itself uses for every other piece of
+        // cross-thread state.
+        final class RunBox: @unchecked Sendable {
+            private let lock = NSLock()
+            private var _run: ProcessRun?
+            var run: ProcessRun? {
+                get { lock.withLock { _run } }
+                set { lock.withLock { _run = newValue } }
+            }
+        }
         let box = RunBox()
         return try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { continuation in
@@ -83,6 +101,19 @@ public struct SystemProcessRunner: ProcessRunning {
         } onCancel: {
             box.run?.cancelIfRunning()
         }
+    }
+
+    /// Whether a timeout escalation is the (previously-silent)
+    /// `defaultDetachedTimeout` backstop firing, as opposed to a
+    /// `PluginCoordinator.stop()`-driven cancellation or a plugin's own
+    /// *explicit* `<vee.timeout>` (which already self-reports via
+    /// `lastError`/`renderError` — logging that too would just double it).
+    /// This is what gates the log in `ProcessRun.terminateGroup`; pulled out
+    /// as its own (one-line) function so the gating logic is directly
+    /// unit-testable — `os.Logger` itself has no test seam to assert the
+    /// log line against.
+    static func isDefaultTimeoutBackstop(markTimedOut: Bool, explicitTimeout: TimeInterval?) -> Bool {
+        markTimedOut && explicitTimeout == nil
     }
 }
 
@@ -422,6 +453,13 @@ private final class ProcessRun: @unchecked Sendable {
             return pid
         }
         guard let target, target > 0 else { return }
+        // A detached shell=/shortcut= action killed by the default backstop
+        // has no other visible signal otherwise (its caller discards the
+        // outcome) — surface it. See `isDefaultTimeoutBackstop`'s doc for
+        // why an explicit timeout (a plugin refresh) doesn't also log here.
+        if SystemProcessRunner.isDefaultTimeoutBackstop(markTimedOut: markTimedOut, explicitTimeout: invocation.timeout) {
+            VeeLog.make("process").error("detached action \(self.invocation.launchPath, privacy: .public) exceeded the \(Int(self.defaultTimeout), privacy: .public)s default timeout and was terminated")
+        }
         killpg(target, SIGTERM)
         DispatchQueue.global().asyncAfter(deadline: .now() + 2) { [weak self] in
             guard let self else { return }
