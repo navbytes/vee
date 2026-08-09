@@ -92,14 +92,41 @@ public enum MenuFlattener {
                 continue
             }
 
-            if hasText {
-                let disabled = item.params.disabled ?? false
-                let row = makeRow(item, path: effectivePath)
-                entries.append(!disabled && isActionable(item) ? .action(row) : .info(row))
-            }
+            if hasText { entries.append(entry(for: item, path: effectivePath)) }
             // Always descend; empty text contributes no breadcrumb segment.
             if !item.submenu.isEmpty { walk(item.submenu, path: childPath, depth: depth + 1, into: &entries) }
+
+            // `alternate=true`: `MenuBuilder.fill` adds this as a sibling
+            // `NSMenuItem` right after `item` in the same menu (shown in place
+            // of `item` while ⌥ is held), not a submenu child — flatten it the
+            // same way, as a peer at `item`'s own level right after its
+            // subtree, instead of the silent gap today where an alternate is
+            // never shown, searched, or activatable at all.
+            if let alt = item.alternate {
+                let hasAltText = !alt.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                if hasAltText { entries.append(entry(for: alt, path: effectivePath)) }
+                if !alt.submenu.isEmpty {
+                    let altChildPath = hasAltText ? effectivePath + [alt.text] : effectivePath
+                    walk(alt.submenu, path: altChildPath, depth: depth + 1, into: &entries)
+                }
+            }
         }
+    }
+
+    /// `.action` iff `item` is enabled, actionable, AND has no submenu of its
+    /// own. `MenuBuilder.makeItem` (Sources/VeeMenu/MenuBuilder.swift) wires
+    /// EITHER a submenu OR an action, never both — an item with both children
+    /// and e.g. `shell=` is inert-on-click natively (its submenu opens
+    /// instead), so a destructive action that never fires from the menu bar
+    /// must not fire from the panel either (D2); the item still surfaces
+    /// (searchable, non-activating) and its children still descend. Shared by
+    /// an item's own row and its `alternate=true` sibling, which `makeItem`
+    /// wires up exactly the same way.
+    private static func entry(for item: MenuItem, path: [String]) -> SearchEntry {
+        let disabled = item.params.disabled ?? false
+        let hasSubmenu = !item.submenu.isEmpty
+        let row = makeRow(item, path: path)
+        return !disabled && !hasSubmenu && isActionable(item) ? .action(row) : .info(row)
     }
 
     private static func makeRow(_ item: MenuItem, path: [String]) -> FlatRow {

@@ -135,7 +135,16 @@ public final class StatusItemController {
     }()
 
     public init(pluginName: String, handler: MenuActionHandling, hasSettings: Bool = false, trustSummary: TrustSummary? = nil, refreshOnOpen: Bool = false, hideLastUpdated: Bool = false, filterEnabled: Bool = false, features: PluginFeatures = PluginFeatures(), autosaveName: String? = nil, aboutText: String? = nil, aboutURL: URL? = nil, onRefresh: @escaping () -> Void, onSettings: @escaping () -> Void = {}, onReveal: @escaping () -> Void = {}, onEdit: @escaping () -> Void = {}, onDebug: @escaping () -> Void = {}, prefs: AppPreferences = .shared, compactController: CompactMenuBarController = .shared) {
-        self.pluginName = pluginName
+        // D6: sanitize once, right here, rather than at each of the several
+        // title/label/menu-text call sites below that read `pluginName` —
+        // this is its single entry point (a `let`, never reassigned after
+        // init). Closes the fallback-path gap review found: an
+        // attacker-controlled name (e.g. `swiftbar://setephemeralplugin?
+        // name=<10k chars / control bytes>`) with empty body content has no
+        // title `frames` at all, so `apply(image:)`/`applyPresentation`/
+        // `applyTitleText` fall back to raw `pluginName` — same corruption
+        // `sanitizedTitle` already fixes for `frames`, just unreached there.
+        self.pluginName = Self.sanitizedTitleText(pluginName)
         self.handler = handler
         self.filterEnabled = filterEnabled
         self.features = features
@@ -247,7 +256,10 @@ public final class StatusItemController {
         lastUpdated = Date()
         lastBody = output.body
         let presentation = TitleRenderer.presentation(for: output.titleLines)
-        frames = presentation.frames
+        // D6: sanitize before any of this ever reaches an `attributedTitle`
+        // setter below — the single choke point every setter (standalone
+        // button, compact row, cycling frame) reads from.
+        frames = presentation.frames.map(Self.sanitizedTitle)
         frameIndex = 0
         apply(image: presentation.image)
         startCyclingIfNeeded()
@@ -389,6 +401,59 @@ public final class StatusItemController {
             apply(image: TitleRenderer.presentation(for: lastRendered.titleLines).image)
             applyMenu(buildMenu(body: lastRendered.body))
         }
+    }
+
+    // MARK: - Title sanitization (D6)
+
+    /// Longest a plugin-derived status-item title may render before Vee
+    /// forces a trailing "…" — keeps a hostile or runaway first line from
+    /// stretching the row into its neighbors (QA: accessibility frame
+    /// y=-29) instead of silently clipping mid-glyph with no ellipsis at all
+    /// (the separate MINOR report this fix also covers). `nonisolated` (not
+    /// `private`) so it's directly unit-tested from a plain (non-MainActor)
+    /// test — it's a plain constant, not main-actor state.
+    nonisolated static let maxTitleLength = 60
+
+    /// Sanitizes plugin-derived title text: repairs/validates UTF-8, strips
+    /// control and other non-printing characters (ordinary whitespace,
+    /// emoji, and RTL marks are kept), and caps the length with a trailing
+    /// "…". Pure `String -> String` so it's directly unit-tested without
+    /// building an `NSAttributedString`; see `sanitizedTitle(_:)` for the
+    /// wrapper applied at the actual choke point (`render(_:)`). `nonisolated`
+    /// since it touches no main-actor state.
+    nonisolated static func sanitizedTitleText(_ raw: String) -> String {
+        // A Swift `String` is always well-formed Unicode, so this round-trip
+        // is a defensive no-op today — it enforces the "repair" requirement
+        // explicitly rather than trusting every upstream decode stays that
+        // way.
+        let repaired = String(decoding: Array(raw.utf8), as: UTF8.self)
+        // `CharacterSet.controlCharacters` covers Unicode categories Cc *and*
+        // Cf — Cf also holds RTL/LTR marks and the ZWJ/ZWNJ that join
+        // compound emoji, which must survive (Foundation, not this call,
+        // conflates the two). Check the precise Unicode category instead so
+        // only true Cc control characters (NUL, ESC, BEL, …) are stripped;
+        // ordinary whitespace/newlines are kept even though a few of them
+        // (tab, LF, CR) are technically Cc too.
+        let kept = repaired.unicodeScalars.filter {
+            CharacterSet.whitespacesAndNewlines.contains($0) || $0.properties.generalCategory != .control
+        }
+        let stripped = String(String.UnicodeScalarView(kept))
+        guard stripped.count > maxTitleLength else { return stripped }
+        return String(stripped.prefix(maxTitleLength)) + "…"
+    }
+
+    /// Applies `sanitizedTitleText` to a rendered title. Returns `title`
+    /// untouched when sanitization is a no-op — the common case — so a
+    /// well-behaved plugin's ANSI styling/fonts survive unchanged; ponytail:
+    /// a title that actually needed stripping/capping falls back to its
+    /// first run's attributes uniformly — losing per-run styling on an
+    /// already-malformed/hostile title is an acceptable trade for the
+    /// safety win.
+    private static func sanitizedTitle(_ title: NSAttributedString) -> NSAttributedString {
+        let clean = sanitizedTitleText(title.string)
+        guard clean != title.string else { return title }
+        let attributes = title.length > 0 ? title.attributes(at: 0, effectiveRange: nil) : [:]
+        return NSAttributedString(string: clean, attributes: attributes)
     }
 
     // MARK: - Rendering helpers

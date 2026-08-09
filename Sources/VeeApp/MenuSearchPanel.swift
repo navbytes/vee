@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import VeeMenu
 import VeePluginFormat
 import VeeSearch
 
@@ -243,11 +244,27 @@ private struct MenuSearchView: View {
     }
 }
 
-/// One result row: SF Symbol (when the item declares one), the item text, and a
-/// dim breadcrumb of its ancestor groups. `enabled: false` renders an `.info`
-/// entry (a disabled item or a plain sub-text line) — same layout/metrics so
-/// the list stays visually aligned, but dimmed, never highlighted, and inert;
-/// the caller (not this view) is what leaves off the tap gesture.
+/// Which base64-decoded image (if any) a search row should show, given the
+/// item declares no `sfimage=` — that path renders via SwiftUI's
+/// `Image(systemName:)` directly instead (crisper SF Symbol scaling at the
+/// row's font size), so this only ever resolves the `image=`/
+/// `templateImage=` fallback. Decodes through `SymbolImageFactory` — the
+/// same cached path `MenuBuilder`'s native rows use — so a plugin's custom
+/// icon shows here too instead of the generic placeholder. `nil` means no
+/// declared icon at all; the caller falls back to a placeholder.
+enum SearchRowIcon {
+    static func decodedImage(for params: LineParams) -> NSImage? {
+        guard params.swiftbar.sfimage == nil else { return nil }
+        return SymbolImageFactory.image(for: params)
+    }
+}
+
+/// One result row: SF Symbol / base64 image (when the item declares one), the
+/// item text, and a dim breadcrumb of its ancestor groups. `enabled: false`
+/// renders an `.info` entry (a disabled item or a plain sub-text line) — same
+/// layout/metrics so the list stays visually aligned, but dimmed, never
+/// highlighted, and inert; the caller (not this view) is what leaves off the
+/// tap gesture.
 private struct SearchRowView: View {
     let row: FlatRow
     let selected: Bool
@@ -257,18 +274,26 @@ private struct SearchRowView: View {
         HStack(spacing: 9) {
             // `.action` always shows an icon (a placeholder when the item
             // declares none); a dimmed `.info` row only shows one when the
-            // item actually declares `sfimage=` — but keeps the 18pt frame
-            // either way, so text stays aligned across rows.
+            // item actually declares `sfimage=`/`image=`/`templateImage=` —
+            // but keeps the 18pt frame either way, so text stays aligned
+            // across rows.
             Group {
-                if enabled {
-                    Image(systemName: row.item.params.swiftbar.sfimage ?? "circle.dashed")
-                } else if let sfimage = row.item.params.swiftbar.sfimage {
+                if let sfimage = row.item.params.swiftbar.sfimage {
                     Image(systemName: sfimage)
+                } else if let nsImage = SearchRowIcon.decodedImage(for: row.item.params) {
+                    // A `templateImage=` tints with row selection like an SF
+                    // Symbol; a plain `image=` keeps its own colors.
+                    Image(nsImage: nsImage)
+                        .resizable()
+                        .renderingMode(nsImage.isTemplate ? .template : .original)
+                        .aspectRatio(contentMode: .fit)
+                } else if enabled {
+                    Image(systemName: "circle.dashed")
                 }
             }
             .font(.system(size: 13))
             .foregroundStyle(selected ? AnyShapeStyle(.white) : AnyShapeStyle(.secondary))
-            .frame(width: 18)
+            .frame(width: 18, height: 18)
             VStack(alignment: .leading, spacing: 1) {
                 Text(row.item.text)
                     .font(.system(size: 13))

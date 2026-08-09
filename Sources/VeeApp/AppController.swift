@@ -202,7 +202,7 @@ public final class AppController: NSObject, NSApplicationDelegate {
     // MARK: - URL scheme (vee:// and swiftbar://)
 
     public func application(_ application: NSApplication, open urls: [URL]) {
-        for url in urls { perform(URLActionRouter.parse(url)) }
+        for url in urls { perform(URLActionRouter.routeGated(url)) }
     }
 
     private func perform(_ action: URLAction) {
