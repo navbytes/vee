@@ -229,6 +229,12 @@ public final class AppController: NSObject, NSApplicationDelegate {
     }
 
     public func applicationWillTerminate(_ notification: Notification) {
+        // Also terminates any in-flight refresh's child process, not just the
+        // menu-bar item/schedulers — `PluginCoordinator.stop()` cancels its
+        // stored refresh Task(s), and `SystemProcessRunner` kills the child
+        // on that cancellation (see its `withTaskCancellationHandler`).
+        // Otherwise a plugin mid-run at quit would leak past the app's own
+        // exit (reparented to launchd, still running).
         coordinators.values.forEach { $0.stop() }
         ephemerals.values.forEach { $0.remove() }
         if let searchHotkeyID { GlobalHotKeys.shared.unregister(searchHotkeyID) }
@@ -415,9 +421,10 @@ public final class AppController: NSObject, NSApplicationDelegate {
             coordinator.onPublish = { [weak self] publish in
                 self?.widgetPublisher.publish(id: id, name: name, interval: interval, publish: publish)
                 // Keep an open Plugin Manager's error badge live: push this run's
-                // error state (nil on success) into the row. Cheap — setError
-                // only mutates when the value actually changed.
-                self?.currentManagerModel?.setError(self?.coordinators[id]?.lastError, id: id)
+                // error state (nil on success), or a still-unresolved hotkey
+                // collision, into the row. Cheap — setError only mutates when
+                // the value actually changed.
+                self?.currentManagerModel?.setError(self?.coordinators[id]?.displayError, id: id)
             }
             coordinators[id] = coordinator
             coordinator.start()
@@ -930,7 +937,7 @@ public final class AppController: NSObject, NSApplicationDelegate {
                 isDisabled: prefs.isDisabled(id),
                 isHotkeyDisabled: prefs.isHotkeyDisabled(id),
                 hotkeyBinding: prefs.hotkeyBinding(id),
-                lastError: coordinators[id]?.lastError
+                lastError: coordinators[id]?.displayError
             )
         }
     }

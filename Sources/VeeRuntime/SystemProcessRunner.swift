@@ -12,23 +12,108 @@ import VeeCore
 /// - the run resumes exactly once, after both reads finish *and* the process
 ///   terminates, so no trailing output is lost.
 /// - a timeout terminates the child (SIGTERM, then SIGKILL after a grace
-///   period). Each plugin is spawned as the leader of its own process group
-///   (`POSIX_SPAWN_SETPGROUP`, see `PosixSpawn.launch`), so a timeout signals
-///   the whole group (`killpg`) rather than just the direct child — anything
-///   the plugin backgrounded (`sleep 900 &`, a stray `curl`) is reaped too.
-///   This reaping is timeout-only: a plugin that exits normally but leaves a
-///   detached helper running may intend that as a daemon (see
-///   `enforceTimeout`'s doc comment).
+///   period). Every invocation has one — an explicit `timeout`, or
+///   `defaultDetachedTimeout` when it declares none. Each plugin is spawned
+///   as the leader of its own process group (`POSIX_SPAWN_SETPGROUP`, see
+///   `PosixSpawn.launch`), so a timeout signals the whole group (`killpg`)
+///   rather than just the direct child — anything the plugin backgrounded
+///   (`sleep 900 &`, a stray `curl`) is reaped too. This reaping is
+///   timeout-only: a plugin that exits normally but leaves a detached helper
+///   running may intend that as a daemon (see `enforceTimeout`'s doc comment).
+/// - cancelling the *Task awaiting* `run(_:)` terminates the child the same
+///   way a timeout does (see `cancelIfRunning`), rather than merely
+///   abandoning the child to run to completion unobserved.
 /// - if a grandchild inherits stdout and keeps the pipe open after the child
 ///   exits (so the drains never see EOF), the run still completes: a short
 ///   drain-grace force-resumes and closes the read ends.
+///
+/// ponytail: `forceResumeIfStalled` closes the read ends outright (not
+/// `dup2`-to-`/dev/null`) even though that briefly frees the fd *number* for
+/// a concurrent, unrelated `Pipe()` elsewhere to reuse before a still-parked
+/// blocking `read()` on it fully unwinds. Tried the `dup2` alternative;
+/// reverted it — a blocking `read()` already parked in the kernel is bound to
+/// the file description it resolved at syscall entry, not the fd-table slot,
+/// so `dup2`-ing the slot elsewhere does NOT wake it (confirmed by
+/// `StreamingCancelEscalationTests.testFileDescriptorsStableAcrossRepeatedCancelOfIgnoredTerm`,
+/// the analogous case, going from "stable" to "leaks one fd per cycle" under
+/// that change — the parked reader, and everything it retains, never
+/// released). `close()` is the thing that reliably unblocks it here. Properly
+/// closing the reuse-race window needs the reader off blocking raw `read()`
+/// entirely (non-blocking I/O behind a cancellable `kqueue`/`DispatchSource`
+/// multiplexer) — a bigger change than this fd-cleanup spot warrants.
 public struct SystemProcessRunner: ProcessRunning {
-    public init() {}
+    /// Applied when an invocation declares no `timeout` (`nil`) — e.g. a
+    /// detached `shell=`/`shortcut=` menu action or a control re-invocation
+    /// (`AppActionDispatcher`), which otherwise ran forever if their child
+    /// hung, eventually parking enough `DispatchQueue.global()` threads (the
+    /// drain/reap threads below) to starve the pool for every other
+    /// unrelated user of it. A plugin *refresh* already always resolves its
+    /// own timeout before reaching here (`PluginExecutor.defaultTimeout`/
+    /// `<vee.timeout>`), and a streaming plugin never goes through this
+    /// runner at all (`SystemStreamingRunner` is a separate type) — so this
+    /// only ever widens coverage for the previously-unbounded detached case.
+    ///
+    /// A backstop, not a tight budget: this only exists to eventually reap a
+    /// leaked/hung child, not to police how long a legitimate detached
+    /// action (a `shortcut=` running a multi-minute Shortcut/backup) may
+    /// run — killing one of those silently would be a regression versus the
+    /// old run-forever behavior. 10 minutes, generous enough not to bite a
+    /// real action; a kill this causes is logged (see `terminateGroup`) so
+    /// it's never silent either way. Configurable (not a buried literal)
+    /// mainly so a test can shrink it instead of waiting out the real default.
+    public let defaultDetachedTimeout: TimeInterval
+
+    public init(defaultDetachedTimeout: TimeInterval = 600) {
+        self.defaultDetachedTimeout = defaultDetachedTimeout
+    }
 
     public func run(_ invocation: ProcessInvocation) async throws -> ProcessOutcome {
-        try await withCheckedThrowingContinuation { continuation in
-            ProcessRun(invocation: invocation, continuation: continuation).start()
+        let defaultTimeout = defaultDetachedTimeout
+        // Holds the in-flight run so `onCancel` (below) can reach it. Lets a
+        // cancelled *awaiting* Task actually terminate the child — e.g.
+        // `PluginCoordinator.stop()` tearing down an in-flight refresh so a
+        // reload doesn't leave a duplicate live process racing the
+        // replacement — rather than merely stop waiting for it.
+        // `withCheckedThrowingContinuation` alone ignores cancellation.
+        // Lock-guarded (not a bare `var`): `onCancel` can run concurrently
+        // with the `operation` closure's write, on a different thread —
+        // same discipline `ProcessRun` itself uses for every other piece of
+        // cross-thread state.
+        final class RunBox: @unchecked Sendable {
+            private let lock = NSLock()
+            private var _run: ProcessRun?
+            var run: ProcessRun? {
+                get { lock.withLock { _run } }
+                set { lock.withLock { _run = newValue } }
+            }
         }
+        let box = RunBox()
+        return try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { continuation in
+                if Task.isCancelled {
+                    continuation.resume(throwing: CancellationError())
+                    return
+                }
+                let run = ProcessRun(invocation: invocation, defaultTimeout: defaultTimeout, continuation: continuation)
+                box.run = run
+                run.start()
+            }
+        } onCancel: {
+            box.run?.cancelIfRunning()
+        }
+    }
+
+    /// Whether a timeout escalation is the (previously-silent)
+    /// `defaultDetachedTimeout` backstop firing, as opposed to a
+    /// `PluginCoordinator.stop()`-driven cancellation or a plugin's own
+    /// *explicit* `<vee.timeout>` (which already self-reports via
+    /// `lastError`/`renderError` — logging that too would just double it).
+    /// This is what gates the log in `ProcessRun.terminateGroup`; pulled out
+    /// as its own (one-line) function so the gating logic is directly
+    /// unit-testable — `os.Logger` itself has no test seam to assert the
+    /// log line against.
+    static func isDefaultTimeoutBackstop(markTimedOut: Bool, explicitTimeout: TimeInterval?) -> Bool {
+        markTimedOut && explicitTimeout == nil
     }
 }
 
@@ -229,6 +314,9 @@ private enum PosixSpawn {
 /// state is guarded by `lock`.
 private final class ProcessRun: @unchecked Sendable {
     private let invocation: ProcessInvocation
+    /// Applied when `invocation.timeout` is `nil` — see
+    /// `SystemProcessRunner.defaultDetachedTimeout`.
+    private let defaultTimeout: TimeInterval
     private let continuation: CheckedContinuation<ProcessOutcome, Error>
 
     private let outPipe = Pipe()
@@ -263,8 +351,9 @@ private final class ProcessRun: @unchecked Sendable {
     /// a strong reference once `start()` returns). Cleared when we resume.
     private var selfRetain: ProcessRun?
 
-    init(invocation: ProcessInvocation, continuation: CheckedContinuation<ProcessOutcome, Error>) {
+    init(invocation: ProcessInvocation, defaultTimeout: TimeInterval, continuation: CheckedContinuation<ProcessOutcome, Error>) {
         self.invocation = invocation
+        self.defaultTimeout = defaultTimeout
         self.continuation = continuation
     }
 
@@ -320,11 +409,13 @@ private final class ProcessRun: @unchecked Sendable {
             self?.armDrainGrace()
         }
 
-        if let timeout = invocation.timeout {
-            let item = DispatchWorkItem { [weak self] in self?.enforceTimeout() }
-            lock.withLock { timeoutItem = item }
-            DispatchQueue.global().asyncAfter(deadline: .now() + timeout, execute: item)
-        }
+        // Always armed — an invocation with no explicit `timeout` still
+        // falls back to `defaultTimeout` (see `SystemProcessRunner.
+        // defaultDetachedTimeout`) rather than running unbounded.
+        let timeout = invocation.timeout ?? defaultTimeout
+        let item = DispatchWorkItem { [weak self] in self?.enforceTimeout() }
+        lock.withLock { timeoutItem = item }
+        DispatchQueue.global().asyncAfter(deadline: .now() + timeout, execute: item)
     }
 
     /// Marks the child as terminated. Read by `enforceTimeout`, on a
@@ -351,14 +442,24 @@ private final class ProcessRun: @unchecked Sendable {
     /// own group", i.e. Vee itself) or a negative value (which `kill` — not
     /// used here — would treat as "every process the caller may signal").
     /// `killpg` returning -1/ESRCH just means the group is already gone,
-    /// which is fine.
-    private func enforceTimeout() {
+    /// which is fine. Shared by `enforceTimeout` and `cancelIfRunning` (a
+    /// cancelled *awaiting* Task, e.g. `PluginCoordinator.stop()` tearing
+    /// down an in-flight refresh) — same escalation either way, only whether
+    /// the outcome gets marked `timedOut` differs.
+    private func terminateGroup(markTimedOut: Bool) {
         let target: pid_t? = lock.withLock {
             guard !exited else { return nil }
-            timedOut = true
+            if markTimedOut { timedOut = true }
             return pid
         }
         guard let target, target > 0 else { return }
+        // A detached shell=/shortcut= action killed by the default backstop
+        // has no other visible signal otherwise (its caller discards the
+        // outcome) — surface it. See `isDefaultTimeoutBackstop`'s doc for
+        // why an explicit timeout (a plugin refresh) doesn't also log here.
+        if SystemProcessRunner.isDefaultTimeoutBackstop(markTimedOut: markTimedOut, explicitTimeout: invocation.timeout) {
+            VeeLog.make("process").error("detached action \(self.invocation.launchPath, privacy: .public) exceeded the \(Int(self.defaultTimeout), privacy: .public)s default timeout and was terminated")
+        }
         killpg(target, SIGTERM)
         DispatchQueue.global().asyncAfter(deadline: .now() + 2) { [weak self] in
             guard let self else { return }
@@ -367,6 +468,16 @@ private final class ProcessRun: @unchecked Sendable {
             killpg(stillTarget, SIGKILL)
         }
     }
+
+    private func enforceTimeout() { terminateGroup(markTimedOut: true) }
+
+    /// Terminates the in-flight child when the Task awaiting `run(_:)` is
+    /// cancelled. Not marked `timedOut`: the caller (`PluginCoordinator`)
+    /// already discards a cancelled run's result via its own `stopped` guard
+    /// regardless of outcome — only that the child actually dies, and that
+    /// the continuation still resumes (via the normal exit-reaping path
+    /// below, same as a timeout), matters here.
+    func cancelIfRunning() { terminateGroup(markTimedOut: false) }
 
     /// Once the child has exited, give its drains a short grace to reach EOF; if
     /// they haven't (a grandchild is still holding the pipe open), force-complete

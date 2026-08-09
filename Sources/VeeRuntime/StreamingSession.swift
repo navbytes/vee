@@ -82,7 +82,12 @@ public final class StreamingSession {
                         onUpdate(OutputParser.parseAuto(block))
                     }
                 }
-                if let block = accumulator.flush() {
+                // A cancelled session (stop()) must not flush whatever
+                // partial, separator-less block was sitting in the
+                // accumulator when the stream ended — that's a garbled,
+                // stale render, not a real update. Mirrors the check just
+                // below for the rest of the restart/backoff handling.
+                if !Task.isCancelled, let block = accumulator.flush() {
                     onUpdate(OutputParser.parseAuto(block))
                 }
             } catch {
