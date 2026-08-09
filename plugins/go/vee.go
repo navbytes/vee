@@ -73,11 +73,28 @@ func fmtFloat(f float64) string {
 	return strconv.FormatFloat(f, 'g', -1, 64)
 }
 
-func quote(value string) string {
-	if strings.ContainsAny(value, " \t\n|") {
-		return `"` + strings.ReplaceAll(value, `"`, `\"`) + `"`
-	}
+// escapeText escapes the three characters Vee's parser
+// (LineParser.splitTextAndParams/parseParams) reads back as `\|`/`\n`/`\\`: a
+// literal `|` would otherwise be read as the text/params delimiter, and a
+// literal newline would otherwise split a plugin's single stdout line into
+// two corrupted ones. Order matters: backslashes are escaped first, or the
+// backslash inserted for `|`/newline would itself get re-escaped.
+func escapeText(value string) string {
+	value = strings.ReplaceAll(value, `\`, `\\`)
+	value = strings.ReplaceAll(value, `|`, `\|`)
+	value = strings.ReplaceAll(value, "\n", `\n`)
 	return value
+}
+
+func quote(value string) string {
+	escaped := escapeText(value)
+	// Backslash also forces quoting: an unquoted (bare) value is never
+	// unescaped by the parser, so anything containing an escape must go
+	// through the quoted path, which is.
+	if strings.ContainsAny(value, " \t\n|\\") {
+		return `"` + strings.ReplaceAll(escaped, `"`, `\"`) + `"`
+	}
+	return escaped
 }
 
 func encode(o *Options) string {
@@ -183,7 +200,7 @@ func (s Section) prefix() string { return strings.Repeat("-", s.depth*2) }
 
 // Item adds a menu item. Pass nil for opts when there are no options.
 func (s Section) Item(text string, opts *Options) Section {
-	*s.lines = append(*s.lines, s.prefix()+text+encode(opts))
+	*s.lines = append(*s.lines, s.prefix()+escapeText(text)+encode(opts))
 	return s
 }
 
@@ -207,7 +224,7 @@ type Menu struct {
 
 // Title adds a menu-bar title line. Call more than once for multiple lines.
 func (m *Menu) Title(text string, opts *Options) *Menu {
-	m.titles = append(m.titles, text+encode(opts))
+	m.titles = append(m.titles, escapeText(text)+encode(opts))
 	return m
 }
 

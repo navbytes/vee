@@ -6,6 +6,15 @@ All notable changes to Vee are documented here. The format is based on
 
 ## [Unreleased]
 
+### Changed
+- **Plugin text now honors `\|`/`\n`/`\\` escapes.** A literal `|`, backslash, or
+  newline in menu text or a quoted param value must be escaped as `\|`, `\\`, or
+  `\n` — an unescaped `|` now truncates the item and a raw newline splits it into
+  two, instead of both being passed through mostly as-is. The TypeScript/Python/Go
+  SDKs already escape automatically; hand-written (non-SDK) plugin output that
+  prints a literal backslash — e.g. a Windows path `C:\node` — must now write it
+  as `C:\\node`.
+
 ### Added
 - **Search panel shows menu structure.** When idle (before typing), the search panel
   now mirrors the dropdown's structure — section headers (`header=true`), separators

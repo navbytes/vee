@@ -46,9 +46,23 @@ export interface ItemOptions {
   progressH?: number;
 }
 
+// Vee's parser (LineParser.splitTextAndParams/parseParams) reads `\|`, `\n`,
+// and `\\` as escapes — for a literal `|` (which would otherwise be read as
+// the text/params delimiter) and a literal newline (which would otherwise
+// split a plugin's single stdout line into two corrupted ones). Order matters:
+// backslashes must be escaped first, or the backslash `escapeText` inserts for
+// `|`/newline would itself get re-escaped.
+function escapeText(value: string): string {
+  return value.replace(/\\/g, "\\\\").replace(/\|/g, "\\|").replace(/\n/g, "\\n");
+}
+
 function quote(value: string): string {
-  if (/[\s|]/.test(value)) return `"${value.replace(/"/g, '\\"')}"`;
-  return value;
+  const escaped = escapeText(value);
+  // Backslash also forces quoting: an unquoted (bare) value is never
+  // unescaped by the parser, so anything containing an escape must go through
+  // the quoted path, which is.
+  if (/[\s|\\]/.test(value)) return `"${escaped.replace(/"/g, '\\"')}"`;
+  return escaped;
 }
 
 function encode(options?: ItemOptions): string {
@@ -109,7 +123,7 @@ export class Section {
   }
 
   item(text: string, options?: ItemOptions): this {
-    this.lines.push(this.prefix() + text + encode(options));
+    this.lines.push(this.prefix() + escapeText(text) + encode(options));
     return this;
   }
 
@@ -131,7 +145,7 @@ export class Menu {
   private readonly body: string[] = [];
 
   title(text: string, options?: ItemOptions): this {
-    this.titles.push(text + encode(options));
+    this.titles.push(escapeText(text) + encode(options));
     return this;
   }
 

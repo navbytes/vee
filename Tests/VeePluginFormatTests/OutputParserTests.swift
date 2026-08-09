@@ -67,6 +67,29 @@ final class OutputParserTests: XCTestCase {
         XCTAssertTrue(out.diagnostics.contains { $0.message.contains("depth jumped") })
     }
 
+    /// Regression: a plugin emitting thousands of progressively-deeper `--`
+    /// lines must not overflow the stack (reproduced pre-fix as a SIGSEGV,
+    /// exit 139). The recursive `BuildEntry` → `MenuNode` conversion caps at
+    /// `maxDepth` (mirroring `JSONOutputParser`), so this must simply return.
+    func testDeeplyNestedSubmenuDoesNotCrash() {
+        let depth = 20000
+        var lines = ["Title", "---"]
+        for level in 0..<depth {
+            lines.append(String(repeating: "-", count: level * 2) + "Item \(level)")
+        }
+        let out = OutputParser.parse(lines.joined(separator: "\n"))
+
+        // Walk to the deepest reachable item; depth must not exceed the cap.
+        var node = out.body.first
+        var reached = 0
+        while case .item(let item)? = node, let next = item.submenu.first {
+            reached += 1
+            node = next
+        }
+        XCTAssertLessThanOrEqual(reached, 64)
+        XCTAssertTrue(out.diagnostics.contains { $0.message.contains("submenu depth exceeded; truncated") })
+    }
+
     func testParamsParsedAndTextTrimmed() {
         let out = OutputParser.parse("Title\n---\nBuild | color=red size=14 href=https://example.com")
         let item = out.body.items[0]

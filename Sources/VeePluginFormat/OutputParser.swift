@@ -77,6 +77,10 @@ public enum OutputParser {
     private static func buildTree(_ rawLines: [String], into diagnostics: inout [ParseDiagnostic]) -> [MenuNode] {
         var root: [BuildEntry] = []
         var openItems: [BuildItem] = [] // openItems[d] = current parent at depth d
+        // Dedup flag: a pathologically deep input re-hits the maxDepth ceiling on
+        // every remaining line (thousands, for a 20000-line submenu chain) — one
+        // diagnostic says it as well as thousands would.
+        var depthCapped = false
 
         func container(atDepth d: Int) -> (append: (BuildEntry) -> Void, lastItem: () -> BuildItem?) {
             if d == 0 {
@@ -90,9 +94,22 @@ public enum OutputParser {
             if line.trimmingCharacters(in: .whitespaces).isEmpty { continue }
 
             let (rawDepth, isSeparator, content) = classify(line)
-            let depth = min(rawDepth, openItems.count)
+            // Also clamp by maxDepth here, not only in convert/convertItem below:
+            // openItems nests one BuildItem *class instance* inside another per
+            // level, so without this an unbounded submenu chain builds an
+            // unbounded reference graph — which recursively deinitializes itself
+            // when `root` goes out of scope, a stack-overflow risk independent of
+            // (and in addition to) the convert-recursion one those two guard.
+            let depth = min(rawDepth, openItems.count, maxDepth)
             if depth < rawDepth {
-                diagnostics.append(.init(severity: .warning, message: "submenu depth jumped; clamped to \(depth)"))
+                if depth >= maxDepth {
+                    if !depthCapped {
+                        depthCapped = true
+                        diagnostics.append(.init(severity: .warning, message: "submenu depth exceeded; truncated"))
+                    }
+                } else {
+                    diagnostics.append(.init(severity: .warning, message: "submenu depth jumped; clamped to \(depth)"))
+                }
             }
 
             let c = container(atDepth: depth)
@@ -123,7 +140,7 @@ public enum OutputParser {
             }
         }
 
-        return root.map(convert)
+        return root.map { convert($0, depth: 0, into: &diagnostics) }
     }
 
     /// Classifies a body line: leading-dash depth, whether it's a separator, and
@@ -144,22 +161,35 @@ public enum OutputParser {
         return (depth, false, content)
     }
 
-    private static func convert(_ entry: BuildEntry) -> MenuNode {
+    /// Guards the recursive `BuildEntry` → `MenuNode` conversion against
+    /// pathologically deep submenu chains — a plugin emitting thousands of
+    /// progressively-deeper `--` lines would otherwise recurse without limit and
+    /// overflow the stack (SIGSEGV). Mirrors `JSONOutputParser`'s identical
+    /// `maxDepth` cap on its own tree mapping.
+    private static let maxDepth = 64
+
+    private static func convert(_ entry: BuildEntry, depth: Int, into diagnostics: inout [ParseDiagnostic]) -> MenuNode {
         switch entry {
         case .separator:
             return .separator
         case .item(let bi):
-            return .item(convertItem(bi))
+            return .item(convertItem(bi, depth: depth, into: &diagnostics))
         }
     }
 
-    private static func convertItem(_ bi: BuildItem) -> MenuItem {
-        MenuItem(
+    private static func convertItem(_ bi: BuildItem, depth: Int, into diagnostics: inout [ParseDiagnostic]) -> MenuItem {
+        guard depth < maxDepth else {
+            if !bi.children.isEmpty || bi.alternate != nil {
+                diagnostics.append(.init(severity: .warning, message: "submenu depth exceeded; truncated"))
+            }
+            return MenuItem(text: bi.text, params: bi.params, ansiRuns: bi.runs)
+        }
+        return MenuItem(
             text: bi.text,
             params: bi.params,
             ansiRuns: bi.runs,
-            submenu: bi.children.map(convert),
-            alternate: bi.alternate.map(convertItem)
+            submenu: bi.children.map { convert($0, depth: depth + 1, into: &diagnostics) },
+            alternate: bi.alternate.map { convertItem($0, depth: depth + 1, into: &diagnostics) }
         )
     }
 }

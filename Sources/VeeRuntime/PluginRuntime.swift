@@ -50,6 +50,10 @@ public struct PluginRuntime: Sendable {
         if outcome.outputTruncated {
             parsed.diagnostics.append(ParseDiagnostic(severity: .warning, message: "Output truncated at 8 MB"))
         }
+        // Header-level diagnostics (e.g. a scheme-blocked <xbar.abouturl>) have
+        // no surface of their own — fold them into the same stream so they
+        // reach the debug console / CLI stderr instead of dropping silently.
+        parsed.diagnostics.append(contentsOf: header?.diagnostics ?? [])
         return PluginRunResult(output: parsed, outcome: outcome)
     }
 }

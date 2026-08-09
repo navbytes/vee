@@ -15,7 +15,7 @@ from typing import Any
 
 __all__ = ["Menu", "Section", "WidgetCard", "widget_card", "Stat", "Gauge", "Trend", "List", "Board"]
 
-_NEEDS_QUOTE = re.compile(r"[\s|]")
+_NEEDS_QUOTE = re.compile(r"[\s|\\]")
 
 # Option name -> emitted key, in the exact order the TypeScript SDK emits them.
 # ``shell`` is handled specially (it pulls in param1..N), so it is not listed.
@@ -42,10 +42,25 @@ _TRAILING_KEYS: list[tuple[str, str]] = [
 ]
 
 
+def _escape_text(value: str) -> str:
+    """Escapes the three characters Vee's parser (LineParser.splitTextAndParams/
+    parseParams) reads back as `\\|`/`\\n`/`\\\\`: a literal `|` would otherwise be
+    read as the text/params delimiter, and a literal newline would otherwise
+    split a plugin's single stdout line into two corrupted ones. Order matters:
+    backslashes are escaped first, or the backslash inserted for `|`/newline
+    would itself get re-escaped.
+    """
+    return value.replace("\\", "\\\\").replace("|", "\\|").replace("\n", "\\n")
+
+
 def _quote(value: str) -> str:
+    escaped = _escape_text(value)
+    # Backslash also forces quoting: an unquoted (bare) value is never
+    # unescaped by the parser, so anything containing an escape must go
+    # through the quoted path, which is.
     if _NEEDS_QUOTE.search(value):
-        return '"' + value.replace('"', '\\"') + '"'
-    return value
+        return '"' + escaped.replace('"', '\\"') + '"'
+    return escaped
 
 
 def _fmt(value: Any) -> str:
@@ -126,7 +141,7 @@ class Section:
         return "-" * (self._depth * 2)
 
     def item(self, text: str, **options: Any) -> "Section":
-        self._lines.append(self._prefix() + text + _encode(options))
+        self._lines.append(self._prefix() + _escape_text(text) + _encode(options))
         return self
 
     def separator(self) -> "Section":
@@ -147,7 +162,7 @@ class Menu:
         self._body: list[str] = []
 
     def title(self, text: str, **options: Any) -> "Menu":
-        self._titles.append(text + _encode(options))
+        self._titles.append(_escape_text(text) + _encode(options))
         return self
 
     @property
