@@ -65,19 +65,33 @@ public struct StoreEndpoints: Sendable {
         }
     }
 
-    /// The raw source URL for a repo-relative plugin path.
+    /// The raw source URL for a repo-relative plugin path. `nil` if `path`
+    /// isn't safe to join onto `rawBase` (see
+    /// ``CatalogManifestParser/isSafeRelativePath(_:)``) or would resolve
+    /// outside it.
     public func rawURL(path: String) -> URL? {
-        guard let rawBase,
-              let encoded = path.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed)
-        else { return nil }
-        return URL(string: rawBase + encoded)
+        guard let rawBase, let url = Self.joined(rawBase, path) else { return nil }
+        return url
     }
 
     /// The optional curation manifest URL (`<root>/<manifestPath>`).
     public var manifestURL: URL? {
-        guard let rawBase,
-              let encoded = config.manifestPath.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed)
+        guard let rawBase else { return nil }
+        return Self.joined(rawBase, config.manifestPath)
+    }
+
+    /// Percent-encodes `path` and joins it onto `base` (a store root with a
+    /// trailing slash), rejecting a `path` that escapes `base` — either
+    /// syntactically (`..`, a leading `/`, or an embedded scheme) or, as a
+    /// second check, once resolved. Shared by `rawURL(path:)` and
+    /// `manifestURL`, which join a path the same way `CatalogManifestParser`
+    /// does.
+    private static func joined(_ base: String, _ path: String) -> URL? {
+        guard CatalogManifestParser.isSafeRelativePath(path),
+              let encoded = path.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed),
+              let url = URL(string: base + encoded),
+              url.absoluteString.hasPrefix(base)
         else { return nil }
-        return URL(string: rawBase + encoded)
+        return url
     }
 }

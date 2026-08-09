@@ -26,6 +26,40 @@ final class VarStoreTests: XCTestCase {
         try store.set(nil, for: "K")
         XCTAssertNil(store.value(for: "K"))
     }
+
+    // MARK: - D9: fail closed on a corrupt sidecar
+
+    /// `set()` must not clobber a sidecar it can't decode — that would
+    /// silently drop every other stored variable for the plugin.
+    func testSetDoesNotClobberCorruptSidecar() throws {
+        let store = VarStore(pluginPath: tempPlugin())
+        defer { try? FileManager.default.removeItem(atPath: store.sidecarPath) }
+        let corrupt = Data(#"["not", "a", "dict"]"#.utf8)
+        try corrupt.write(to: URL(fileURLWithPath: store.sidecarPath))
+
+        XCTAssertThrowsError(try store.set("x", for: "NEW")) {
+            XCTAssertEqual($0 as? VarStore.StoreError, .corruptSidecar)
+        }
+
+        // Untouched — not overwritten to a single-key `{"NEW":"x"}` doc.
+        let onDisk = try XCTUnwrap(FileManager.default.contents(atPath: store.sidecarPath))
+        XCTAssertEqual(onDisk, corrupt)
+    }
+
+    /// An absent or genuinely empty sidecar is not "corrupt" — `set()` still
+    /// works normally (the happy path this fix must not regress).
+    func testSetOnMissingOrEmptySidecarStillWorks() throws {
+        let missing = VarStore(pluginPath: tempPlugin())
+        defer { try? FileManager.default.removeItem(atPath: missing.sidecarPath) }
+        try missing.set("v", for: "K")
+        XCTAssertEqual(missing.value(for: "K"), "v")
+
+        let empty = VarStore(pluginPath: tempPlugin())
+        defer { try? FileManager.default.removeItem(atPath: empty.sidecarPath) }
+        FileManager.default.createFile(atPath: empty.sidecarPath, contents: Data())
+        try empty.set("v", for: "K")
+        XCTAssertEqual(empty.value(for: "K"), "v")
+    }
 }
 
 final class InMemorySecretStoreTests: XCTestCase {

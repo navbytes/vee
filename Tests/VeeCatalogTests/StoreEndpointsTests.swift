@@ -92,6 +92,34 @@ final class StoreEndpointsTests: XCTestCase {
         XCTAssertEqual(e.rawURL(path: "Oncall/pager.1m.py")?.absoluteString, "file:///opt/vee/store/Oncall/pager.1m.py")
         XCTAssertEqual(e.manifestURL?.absoluteString, "file:///opt/vee/store/vee-catalog.json")
     }
+
+    // MARK: - D7: path traversal (rawURL/manifestURL share CatalogManifest's join)
+
+    /// A `.local` store is the sharpest case: an unguarded `rawURL(path:)`
+    /// would let a traversal path read arbitrary files outside the mirror.
+    func testLocalFileStoreRawURLRejectsPathTraversal() {
+        let config = StoreConfig(
+            id: StoreID("mirror"),
+            displayName: "Mirror",
+            kind: .local,
+            baseURL: URL(string: "file:///opt/vee/store")
+        )
+        let e = StoreEndpoints(config)
+        XCTAssertNil(e.rawURL(path: "../../../../.ssh/id_rsa"))
+        XCTAssertNil(e.rawURL(path: "/etc/passwd"))
+        XCTAssertNil(e.rawURL(path: "file:///etc/passwd"))
+    }
+
+    func testManifestURLRejectsUnsafeManifestPath() {
+        let config = StoreConfig(
+            id: StoreID("static"),
+            displayName: "Static",
+            kind: .http,
+            baseURL: URL(string: "https://store.acme.corp/vee/"),
+            manifestPath: "../../etc/passwd"
+        )
+        XCTAssertNil(StoreEndpoints(config).manifestURL)
+    }
 }
 
 /// The store dimension flows through the tree parser and disambiguates entries.

@@ -1,4 +1,5 @@
 import Foundation
+import VeeCore
 
 /// A store's optional curation manifest (`vee-catalog.json`). When present it is
 /// authoritative: entries carry their own metadata, an integrity hash, and an
@@ -71,6 +72,20 @@ public enum CatalogManifestParser {
         case malformed
     }
 
+    private static let log = VeeLog.make("catalog-manifest")
+
+    /// True if `path` is safe to resolve against a store's raw-content root:
+    /// not filesystem-absolute, has no embedded URL scheme, and has no `..`
+    /// path component. A manifest is store-supplied, untrusted input — an
+    /// unchecked `path` could otherwise escape the store root entirely (e.g.
+    /// `../../../../.ssh/id_rsa` against a `.local` store's `file://` base)
+    /// or resolve to a different repo than the one a "View source" link
+    /// shows. Also used by ``StoreEndpoints`` for the same join pattern.
+    static func isSafeRelativePath(_ path: String) -> Bool {
+        guard !path.isEmpty, !path.hasPrefix("/"), !path.contains(":") else { return false }
+        return !path.split(separator: "/", omittingEmptySubsequences: false).contains("..")
+    }
+
     /// Decodes the raw manifest object.
     public static func parseManifest(_ data: Data) throws -> CatalogManifest {
         do {
@@ -93,11 +108,17 @@ public enum CatalogManifestParser {
 
         let lastUpdated = manifest.updatedDate
         return manifest.plugins.compactMap { plugin -> CatalogEntry? in
+            guard isSafeRelativePath(plugin.path) else {
+                log.error("dropping manifest entry with unsafe path \(plugin.path, privacy: .public) from store \(storeID.rawValue, privacy: .public)")
+                return nil
+            }
             let components = plugin.path.split(separator: "/").map(String.init)
             guard let filename = components.last, !filename.isEmpty else { return nil }
             let category = plugin.category ?? (components.count >= 2 ? components[0] : "Plugins")
             guard let encoded = plugin.path.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed),
-                  let rawURL = URL(string: rawBase + encoded)
+                  let rawURL = URL(string: rawBase + encoded),
+                  // Belt-and-suspenders: the resolved URL must still be inside rawBase.
+                  rawURL.absoluteString.hasPrefix(rawBase)
             else { return nil }
 
             return CatalogEntry(
