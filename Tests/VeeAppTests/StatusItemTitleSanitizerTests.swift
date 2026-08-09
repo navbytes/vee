@@ -81,4 +81,26 @@ final class StatusItemTitleSanitizationRenderTests: XCTestCase {
         XCTAssertEqual(rendered.count, StatusItemController.maxTitleLength + 1)
         XCTAssertTrue(rendered.hasSuffix("…"))
     }
+
+    /// Regression: review found `sanitizedTitle` covered `frames` but not the
+    /// `pluginName` fallback used when there are none — reachable for real
+    /// via `swiftbar://setephemeralplugin?name=…`, whose `name` is
+    /// attacker-controlled and unvalidated; an ephemeral with empty content
+    /// has no title frames at all, so the status item fell back to the raw
+    /// name. `setephemeralplugin` itself stays ungated (high-frequency
+    /// automation call); sanitizing `pluginName` once at `init` — its single
+    /// entry point — is the fix, and covers every fallback site at once.
+    func testHostilePluginNameFallsBackSanitizedWhenThereAreNoTitleFrames() {
+        let hostileName = "X\u{0000}\u{0007}" + String(repeating: "y", count: 10_000)
+        let prefs = makeCompactPrefs()
+        let compact = CompactMenuBarController(attachesStatusItem: false)
+        let controller = StatusItemController(pluginName: hostileName, handler: RecordingHandler(), onRefresh: {}, prefs: prefs, compactController: compact)
+        controller.render(ParsedOutput())   // no title lines ⇒ no frames ⇒ falls back to pluginName
+        let rendered = compact.menu.items.first?.attributedTitle?.string ?? ""
+        XCTAssertFalse(rendered.contains("\u{0000}"))
+        XCTAssertFalse(rendered.contains("\u{0007}"))
+        XCTAssertEqual(rendered.count, StatusItemController.maxTitleLength + 1, "capped length + the trailing ellipsis")
+        XCTAssertTrue(rendered.hasSuffix("…"))
+        withExtendedLifetime(controller) {}
+    }
 }

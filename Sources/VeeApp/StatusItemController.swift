@@ -135,7 +135,16 @@ public final class StatusItemController {
     }()
 
     public init(pluginName: String, handler: MenuActionHandling, hasSettings: Bool = false, trustSummary: TrustSummary? = nil, refreshOnOpen: Bool = false, hideLastUpdated: Bool = false, filterEnabled: Bool = false, features: PluginFeatures = PluginFeatures(), autosaveName: String? = nil, aboutText: String? = nil, aboutURL: URL? = nil, onRefresh: @escaping () -> Void, onSettings: @escaping () -> Void = {}, onReveal: @escaping () -> Void = {}, onEdit: @escaping () -> Void = {}, onDebug: @escaping () -> Void = {}, prefs: AppPreferences = .shared, compactController: CompactMenuBarController = .shared) {
-        self.pluginName = pluginName
+        // D6: sanitize once, right here, rather than at each of the several
+        // title/label/menu-text call sites below that read `pluginName` —
+        // this is its single entry point (a `let`, never reassigned after
+        // init). Closes the fallback-path gap review found: an
+        // attacker-controlled name (e.g. `swiftbar://setephemeralplugin?
+        // name=<10k chars / control bytes>`) with empty body content has no
+        // title `frames` at all, so `apply(image:)`/`applyPresentation`/
+        // `applyTitleText` fall back to raw `pluginName` — same corruption
+        // `sanitizedTitle` already fixes for `frames`, just unreached there.
+        self.pluginName = Self.sanitizedTitleText(pluginName)
         self.handler = handler
         self.filterEnabled = filterEnabled
         self.features = features

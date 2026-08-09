@@ -1,17 +1,19 @@
 import XCTest
 @testable import VeeApp
 
-/// D8: `disableplugin`/`toggleplugin` (toggling an enabled plugin off has the
-/// identical effect — same bypass, not a separate risk) and a `notify`
-/// carrying a click-through `href` (phishing bait a spoofed "Vee"
-/// notification can carry) must not silently reach the app's existing
-/// dispatch — see `URLActionRouter.routeGated`. `parse(_:)` itself is
-/// untouched by this fix (see `URLActionRouterTests.swift`); these tests
+/// D8: `enableplugin`/`disableplugin`/`toggleplugin` (enabling makes a plugin
+/// RUN; toggling can land on either — same bypass as both, not a separate
+/// risk) and a `notify` carrying a click-through `href` (phishing bait a
+/// spoofed "Vee" notification can carry) must not silently reach the app's
+/// existing dispatch — see `URLActionRouter.routeGated`. `parse(_:)` itself
+/// is untouched by this fix (see `URLActionRouterTests.swift`); these tests
 /// cover the new gated entry point only.
 ///
-/// `confirm` is process-global test seam standing in for a real `NSAlert`
+/// `confirm` is a process-global test seam standing in for a real `NSAlert`
 /// (which a headless test run must never pop) — every test saves/restores it
-/// so this file can't leak a stub into any other test.
+/// so this file can't leak a stub into any other test. `@MainActor` because
+/// `routeGated` now is (it gates a real `NSAlert` in production).
+@MainActor
 final class URLActionRouterGatingTests: XCTestCase {
     private var savedConfirm: ((String, String) -> Bool)!
 
@@ -27,6 +29,14 @@ final class URLActionRouterGatingTests: XCTestCase {
 
     private func route(_ string: String) -> URLAction {
         URLActionRouter.routeGated(URL(string: string)!)
+    }
+
+    func testEnablePluginProceedsOnlyWhenConfirmed() {
+        URLActionRouter.confirm = { _, _ in true }
+        XCTAssertEqual(route("swiftbar://enableplugin?name=x"), .enablePlugin(name: "x"))
+
+        URLActionRouter.confirm = { _, _ in false }
+        XCTAssertEqual(route("swiftbar://enableplugin?name=x"), .unknown, "enabling makes a plugin run — a declined confirmation must not reach the existing enable path")
     }
 
     func testDisablePluginProceedsOnlyWhenConfirmed() {
@@ -64,13 +74,13 @@ final class URLActionRouterGatingTests: XCTestCase {
         XCTAssertEqual(route("swiftbar://notify?body=Only"), .notify(title: "", subtitle: "", body: "Only", href: nil, pluginID: nil))
     }
 
-    func testEnablePluginAndRefreshNeedNoConfirmation() {
+    func testRefreshNeedsNoConfirmation() {
         URLActionRouter.confirm = { _, _ in
-            XCTFail("enable/refresh must not prompt")
+            XCTFail("refresh must not prompt")
             return false
         }
-        XCTAssertEqual(route("swiftbar://enableplugin?name=x"), .enablePlugin(name: "x"))
         XCTAssertEqual(route("swiftbar://refreshallplugins"), .refreshAll)
+        XCTAssertEqual(route("swiftbar://refreshplugin?name=x"), .refreshPlugin(name: "x"))
     }
 
     /// `addplugin` already has its own trust/capability gate downstream in
@@ -87,11 +97,11 @@ final class URLActionRouterGatingTests: XCTestCase {
     }
 
     func testNeedsConfirmationCoversExactlyTheGatedActions() {
+        XCTAssertTrue(URLActionRouter.needsConfirmation(.enablePlugin(name: "x")))
         XCTAssertTrue(URLActionRouter.needsConfirmation(.disablePlugin(name: "x")))
         XCTAssertTrue(URLActionRouter.needsConfirmation(.togglePlugin(name: "x")))
         XCTAssertTrue(URLActionRouter.needsConfirmation(.notify(title: "", subtitle: "", body: "", href: URL(string: "https://example.com"), pluginID: nil)))
 
-        XCTAssertFalse(URLActionRouter.needsConfirmation(.enablePlugin(name: "x")))
         XCTAssertFalse(URLActionRouter.needsConfirmation(.refreshAll))
         XCTAssertFalse(URLActionRouter.needsConfirmation(.refreshPlugin(name: "x")))
         XCTAssertFalse(URLActionRouter.needsConfirmation(.addPlugin(src: URL(string: "https://example.com")!)))

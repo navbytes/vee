@@ -82,22 +82,21 @@ public enum URLActionRouter {
     // `.unknown`, which the app's existing dispatch already no-ops on, so no
     // change is needed there.
     //
-    // NOT YET WIRED IN: `AppController.application(_:open:)` still calls
-    // `parse` directly. Switching that one call to `routeGated` is a
-    // one-line change in a file this fix isn't allowed to touch — flagged in
-    // the handoff instead of made here.
+    // WIRED IN: `AppController.application(_:open:)` calls `routeGated`, not
+    // `parse`, so this gate is live.
 
     /// Whether `action` is destructive/spoofable enough to need an explicit
     /// user confirmation before it's allowed to reach the app's existing
-    /// dispatch. Scoped to the concretely harmful cases: silently disabling a
-    /// plugin (`disableplugin`, and `toggleplugin` — toggling an already-
-    /// enabled plugin has the identical effect, so it's the same bypass, not
-    /// a separate risk) and a notification carrying a click-through `href`
-    /// (phishing bait a spoofed "Vee" notification can carry). A title/body-
-    /// only notification and turning a plugin ON stay frictionless.
+    /// dispatch. Scoped to the concretely harmful cases: silently
+    /// enabling/disabling a plugin (`enableplugin`/`disableplugin` — enabling
+    /// makes it RUN, a real consequence, not just a state flag — and
+    /// `toggleplugin`, which lands on one or the other, so it's the same
+    /// bypass as both, not a separate risk) and a notification carrying a
+    /// click-through `href` (phishing bait a spoofed "Vee" notification can
+    /// carry). A title/body-only notification stays frictionless.
     static func needsConfirmation(_ action: URLAction) -> Bool {
         switch action {
-        case .disablePlugin, .togglePlugin:
+        case .enablePlugin, .disablePlugin, .togglePlugin:
             return true
         case .notify(_, _, _, let href, _):
             return href != nil
@@ -109,6 +108,8 @@ public enum URLActionRouter {
     /// A human-readable confirmation prompt for a gated action.
     static func confirmationPrompt(for action: URLAction) -> (message: String, info: String) {
         switch action {
+        case .enablePlugin(let name):
+            return ("Enable “\(name)”?", "A web page or app asked Vee to enable this plugin via a deep link — it will start running.")
         case .disablePlugin(let name):
             return ("Disable “\(name)”?", "A web page or app asked Vee to disable this plugin via a deep link.")
         case .togglePlugin(let name):
@@ -133,7 +134,15 @@ public enum URLActionRouter {
     /// Parses `url`, then gates a destructive/spoofable action (D8) behind
     /// `confirm` before returning it. A declined confirmation resolves to
     /// `.unknown`; every other action (including a plain, href-less
-    /// `notify`) passes through exactly like `parse(_:)`.
+    /// `notify`) passes through exactly like `parse(_:)`. `@MainActor`: the
+    /// production `confirm` (`defaultConfirm`) pops a real `NSAlert`, which
+    /// requires the main thread — this was reachable from any actor before
+    /// (nonisolated) and would `precondition`-crash inside
+    /// `MainActor.assumeIsolated` if ever called off-main; pinning
+    /// `routeGated` itself to `@MainActor` makes that impossible instead of
+    /// latent — only caller (`AppController.application(_:open:)`) is
+    /// already `@MainActor`, so this changes nothing at the call site.
+    @MainActor
     public static func routeGated(_ url: URL) -> URLAction {
         let action = parse(url)
         guard needsConfirmation(action) else { return action }
@@ -141,13 +150,11 @@ public enum URLActionRouter {
         return confirm(message, info) ? action : .unknown
     }
 
-    /// Production default: a real, blocking `NSAlert`. `MainActor.assumeIsolated`
-    /// rather than marking this function itself `@MainActor` — it must stay
-    /// assignable to `confirm`'s plain, non-isolated closure type, and its
-    /// only caller (`routeGated`, in turn only ever called from
-    /// `AppController.application(_:open:)`) already guarantees the main
-    /// thread, the same trust `AppController`'s own Darwin-notification
-    /// callbacks place in `MainActor.assumeIsolated`.
+    /// Production default: a real, blocking `NSAlert`. Stays a plain
+    /// (non-`@MainActor`) function — it must remain assignable to `confirm`'s
+    /// non-isolated closure type — but its only caller is `routeGated`,
+    /// which is now `@MainActor` itself, so by the time this runs the main
+    /// thread is guaranteed and `MainActor.assumeIsolated` never traps.
     private static func defaultConfirm(message: String, info: String) -> Bool {
         MainActor.assumeIsolated {
             NSApp.activate(ignoringOtherApps: true)
