@@ -1,6 +1,27 @@
 import SwiftUI
 import VeeCatalog
 
+/// Maps a `StoreRegistry` mutation failure to a short, human-readable
+/// sentence for the Stores tab's Add/Remove flows — rather than showing the
+/// raw error enum (e.g. `duplicateStore("Public xbar catalog")`).
+private func storeRegistryErrorMessage(_ error: Error) -> String {
+    guard let registryError = error as? StoreRegistryError else { return error.localizedDescription }
+    switch registryError {
+    case .builtInImmutable:
+        return "The built-in catalog can't be changed."
+    case .managedImmutable:
+        return "This store is managed by your organization and can't be changed here."
+    case .duplicateID:
+        return "A store with that id already exists."
+    case .duplicateStore(let existingName):
+        return "This store is already added, as \"\(existingName)\"."
+    case .notFound:
+        return "That store is already gone."
+    case .corruptUserStores:
+        return "Your saved stores couldn't be read, so nothing was changed. Restart Vee and try again — contact support if this keeps happening."
+    }
+}
+
 /// Backing model for the Preferences **Stores** tab. Wraps the `StoreRegistry`
 /// and per-store token storage, and can test a store's connection. Token storage
 /// and client construction are injected so the model is testable without the
@@ -15,6 +36,11 @@ public final class StoresSettingsModel: ObservableObject {
     @Published public var testing = false
     @Published public var testMessage: String?
     @Published public var testSucceeded = false
+
+    /// Set when `remove(_:)` fails (e.g. a corrupt `vee.customStores` blob),
+    /// so the tab can show it instead of silently no-op'ing. Cleared on the
+    /// next successful remove.
+    @Published public var removeError: String?
 
     private let registry: StoreRegistry
     private let makeTokenStore: (StoreID) -> StoreTokenStoring
@@ -39,10 +65,17 @@ public final class StoresSettingsModel: ObservableObject {
         reload()
     }
 
-    /// Removes a user store and clears its saved token.
+    /// Removes a user store, surfacing a friendly message into `removeError`
+    /// on failure instead of silently no-op'ing. `StoreRegistry.remove`
+    /// itself drops the store's Keychain token, so every caller gets that
+    /// cleanup — not just this UI path.
     public func remove(_ store: StoreConfig) {
-        try? registry.remove(store.id)
-        makeTokenStore(store.id).set(nil)
+        do {
+            try registry.remove(store.id)
+            removeError = nil
+        } catch {
+            removeError = storeRegistryErrorMessage(error)
+        }
         reload()
     }
 
@@ -101,6 +134,9 @@ public struct StoresSettingsTab: View {
 
     public var body: some View {
         Form {
+            if let removeError = model.removeError {
+                Section { Text(removeError).foregroundStyle(.red) }
+            }
             Section {
                 ForEach(model.stores) { store in
                     StoreRow(model: model, store: store)
@@ -382,7 +418,7 @@ private struct AddStoreSheet: View {
             try model.add(config, token: kind == .local ? nil : token)
             isPresented = false
         } catch {
-            addError = "Couldn't add the store: \(error)"
+            addError = storeRegistryErrorMessage(error)
         }
     }
 }
