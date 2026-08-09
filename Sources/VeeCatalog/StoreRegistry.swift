@@ -114,15 +114,17 @@ public final class StoreRegistry: @unchecked Sendable {
     }
 
     /// Adds a user store. Rejects the built-in id, a managed id, a duplicate
-    /// id, or a store whose (kind, repo)/(kind, baseURL) identity already
-    /// matches an existing user or built-in store under a different id.
+    /// id, or a store whose (kind, repo, ref)/(kind, baseURL) identity
+    /// already matches an existing user, built-in, or managed store under a
+    /// different id.
     public func add(_ store: StoreConfig) throws {
         guard store.id != BuiltInStores.xbarID else { throw StoreRegistryError.builtInImmutable }
-        guard !managedStores().contains(where: { $0.id == store.id }) else { throw StoreRegistryError.managedImmutable }
+        let managed = managedStores()
+        guard !managed.contains(where: { $0.id == store.id }) else { throw StoreRegistryError.managedImmutable }
         var stores = try loadUserStoresOrThrow()
         guard !stores.contains(where: { $0.id == store.id }) else { throw StoreRegistryError.duplicateID(store.id.rawValue) }
         if let identity = store.storeIdentity,
-           let clash = ([BuiltInStores.xbar] + stores).first(where: { $0.storeIdentity == identity }) {
+           let clash = ([BuiltInStores.xbar] + stores + managed).first(where: { $0.storeIdentity == identity }) {
             throw StoreRegistryError.duplicateStore(clash.displayName)
         }
         var normalized = store
@@ -193,10 +195,17 @@ public final class StoreRegistry: @unchecked Sendable {
 /// A store's effective identity for add-time dedup, independent of its id —
 /// the Add-store sheet mints a random `user-<uuid>` id every time, so the
 /// same repo or root would otherwise be addable under any number of ids.
-/// `kind` is part of the identity: a GitHub and a GitHub Enterprise entry
-/// with the same owner/repo never collide.
+///
+/// `kind` is always part of the identity, so a GitHub and a GitHub
+/// Enterprise entry with the same owner/repo never collide. For
+/// `.githubEnterprise` the (normalized) API host is *also* part of the
+/// identity: orgs commonly standardize repo names across staging/prod GHE
+/// instances, so owner/repo alone would falsely dedupe two different
+/// servers. `ref` is part of the identity too — the same repo at two
+/// different refs (e.g. a stable and a beta branch) is a legitimately
+/// distinct catalog, not a duplicate.
 private enum StoreIdentity: Hashable {
-    case repo(StoreKind, owner: String, repo: String)
+    case repo(StoreKind, apiHost: String, owner: String, repo: String, ref: String)
     case root(StoreKind, baseURL: String)
 }
 
@@ -208,12 +217,22 @@ private extension StoreConfig {
     /// crashing or false-positiving.
     var storeIdentity: StoreIdentity? {
         switch kind {
-        case .github, .githubEnterprise:
+        case .github:
             guard let owner, let repo else { return nil }
-            return .repo(kind, owner: Self.normalized(owner), repo: Self.normalizedRepo(repo))
+            // No host component: `.github` always means api.github.com, so
+            // comparing the actual `apiHost` field would only make identity
+            // depend on whether a caller happened to fill it in, not on
+            // anything that actually distinguishes stores.
+            return .repo(kind, apiHost: "", owner: Self.normalized(owner), repo: Self.normalizedRepo(repo), ref: Self.normalizedRef(ref))
+        case .githubEnterprise:
+            guard let owner, let repo else { return nil }
+            return .repo(
+                kind, apiHost: apiHost.map(Self.normalizedURL) ?? "",
+                owner: Self.normalized(owner), repo: Self.normalizedRepo(repo), ref: Self.normalizedRef(ref)
+            )
         case .http, .local:
             guard let baseURL else { return nil }
-            return .root(kind, baseURL: Self.normalized(baseURL.absoluteString))
+            return .root(kind, baseURL: Self.normalizedURL(baseURL))
         }
     }
 
@@ -229,5 +248,25 @@ private extension StoreConfig {
         var t = normalized(s)
         if t.hasSuffix(".git") { t.removeLast(4) }
         return t
+    }
+
+    /// Trimmed only — unlike owner/repo, a git ref/branch name is genuinely
+    /// case-sensitive (`Release` and `release` can be two different
+    /// branches), so lowercasing it risks a false-positive dedupe.
+    private static func normalizedRef(_ s: String) -> String {
+        s.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// Host lowercased (DNS is case-insensitive) — scheme, port, and path are
+    /// preserved as-is, since a server path can be case-sensitive (e.g.
+    /// `/CatalogA` and `/cataloga` are different roots). Trailing slash(es)
+    /// stripped either way.
+    private static func normalizedURL(_ url: URL) -> String {
+        let scheme = (url.scheme ?? "").lowercased()
+        let host = (url.host() ?? "").lowercased()
+        let port = url.port.map { ":\($0)" } ?? ""
+        var path = url.path
+        while path.hasSuffix("/") { path.removeLast() }
+        return "\(scheme)://\(host)\(port)\(path)"
     }
 }
