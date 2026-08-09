@@ -167,13 +167,15 @@ final class AppPreferencesTests: XCTestCase {
     }
 
     /// `clearAllState` wipes every UserDefaults-backed preference for one id
-    /// — disabled, hotkey-off, and custom binding — and leaves every other
-    /// plugin's prefs untouched. This is disk reconciliation's mutator.
+    /// — disabled, hotkey-off, custom binding, and the has-a-secret marker —
+    /// and leaves every other plugin's prefs untouched. This is disk
+    /// reconciliation's mutator.
     func testClearAllStateClearsEveryFieldForOnlyThatID() {
         let prefs = AppPreferences(defaults: UserDefaults(suiteName: "vee-test-" + UUID().uuidString)!)
         prefs.setDisabled(true, id: "ghost")
         prefs.setHotkeyDisabled(true, id: "ghost")
         prefs.setHotkeyBinding("cmd+shift+j", id: "ghost")
+        prefs.setHasSecret(true, id: "ghost")
         prefs.setDisabled(true, id: "survivor")
 
         prefs.clearAllState(id: "ghost")
@@ -181,7 +183,22 @@ final class AppPreferencesTests: XCTestCase {
         XCTAssertFalse(prefs.isDisabled("ghost"))
         XCTAssertFalse(prefs.isHotkeyDisabled("ghost"))
         XCTAssertNil(prefs.hotkeyBinding("ghost"))
+        XCTAssertFalse(prefs.secretPluginIDs().contains("ghost"))
         XCTAssertTrue(prefs.isDisabled("survivor"), "clearing one id must never touch another's state")
+    }
+
+    /// The enumerable has-a-secret marker set — disk reconciliation's only
+    /// way to find a "secret-only" plugin (fix 1(d)).
+    func testSecretPluginIDsRoundTrip() {
+        let prefs = AppPreferences(defaults: UserDefaults(suiteName: "vee-test-" + UUID().uuidString)!)
+        XCTAssertEqual(prefs.secretPluginIDs(), [])
+
+        prefs.setHasSecret(true, id: "p1")
+        prefs.setHasSecret(true, id: "p2")
+        XCTAssertEqual(prefs.secretPluginIDs(), ["p1", "p2"])
+
+        prefs.setHasSecret(false, id: "p1")
+        XCTAssertEqual(prefs.secretPluginIDs(), ["p2"])
     }
 }
 
@@ -261,6 +278,7 @@ final class PluginPreferencesTests: XCTestCase {
     func testSecretGoesToKeychainNotSidecar() throws {
         let path = NSTemporaryDirectory() + "vee-pref-" + UUID().uuidString + ".sh"
         defer { try? FileManager.default.removeItem(atPath: path + ".vars.json") }
+        defer { AppPreferences.shared.setHasSecret(false, id: "p") }
         let secrets = InMemorySecretStore()
         let prefs = PluginPreferences(pluginPath: path, pluginID: PluginID(rawValue: "p"), declarations: decls(), secretStore: secrets)
 
@@ -276,5 +294,30 @@ final class PluginPreferencesTests: XCTestCase {
         let env = prefs.environmentValues()
         XCTAssertEqual(env["API_TOKEN"], "s3cret")
         XCTAssertEqual(env["COUNT"], "42")
+    }
+
+    /// Fix 1(d): storing a secret value must mark the plugin id in
+    /// `AppPreferences.secretPluginIDs()` — the only way disk reconciliation
+    /// can find a "secret-only" plugin (no disabled flag, vars, or
+    /// provenance) whose file has since disappeared. Uses the real
+    /// `AppPreferences.shared` (the write path has no injection seam, same
+    /// as `PluginCoordinator.registerHotKey`), so the id is UUID-unique and
+    /// cleaned up regardless of outcome.
+    func testSettingASecretMarksThePluginInAppPreferences() throws {
+        let id = "secret-marker-" + UUID().uuidString
+        let path = NSTemporaryDirectory() + id + ".sh"
+        defer { try? FileManager.default.removeItem(atPath: path + ".vars.json") }
+        defer { AppPreferences.shared.setHasSecret(false, id: id) }
+        let prefs = PluginPreferences(pluginPath: path, pluginID: PluginID(rawValue: id), declarations: decls(), secretStore: InMemorySecretStore())
+
+        XCTAssertFalse(AppPreferences.shared.secretPluginIDs().contains(id), "sanity: unmarked before any secret is set")
+
+        try prefs.setValue("s3cret", for: decls()[0]) // secret
+
+        XCTAssertTrue(AppPreferences.shared.secretPluginIDs().contains(id))
+
+        // Setting the NON-secret var must never mark it — only a secret does.
+        try prefs.setValue("42", for: decls()[1])
+        XCTAssertTrue(AppPreferences.shared.secretPluginIDs().contains(id), "still marked — unrelated var write must not unmark it")
     }
 }

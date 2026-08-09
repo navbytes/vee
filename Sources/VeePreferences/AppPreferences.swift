@@ -15,6 +15,7 @@ public final class AppPreferences: @unchecked Sendable {
     private let compactMenuBarKey = "vee.compactMenuBar"
     private let searchAllHotkeyEnabledKey = "vee.searchAllHotkeyEnabled"
     private let searchAllHotkeyComboKey = "vee.searchAllHotkeyCombo"
+    private let secretPluginIDsKey = "vee.pluginsWithSecrets"
 
     public init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
@@ -108,15 +109,42 @@ public final class AppPreferences: @unchecked Sendable {
     }
 
     /// Clears every stored preference for `id` — disabled flag, hotkey-off
-    /// flag, and custom hotkey binding — leaving every other plugin's prefs
-    /// untouched. Used when disk reconciliation confirms `id`'s file no
-    /// longer exists (a manual delete, or an in-app delete); reuses the
-    /// existing per-field mutators rather than touching `UserDefaults`
-    /// directly, so this can never drift from them.
+    /// flag, custom hotkey binding, and the has-a-secret marker — leaving
+    /// every other plugin's prefs untouched. Used when disk reconciliation
+    /// confirms `id`'s file no longer exists (a manual delete, or an in-app
+    /// delete); reuses the existing per-field mutators rather than touching
+    /// `UserDefaults` directly, so this can never drift from them.
     public func clearAllState(id: String) {
         setDisabled(false, id: id)
         setHotkeyDisabled(false, id: id)
         setHotkeyBinding(nil, id: id)
+        setHasSecret(false, id: id)
+    }
+
+    // MARK: - Has-a-secret marker
+
+    /// Every plugin id that has (or, best-effort, once had) a Keychain
+    /// secret stored through `PluginPreferences` — a lightweight marker so
+    /// disk reconciliation can find a "secret-only" plugin (no disabled
+    /// flag, vars, or provenance record — nothing else that would put it in
+    /// `reconcileDiskState`'s candidate set) whose file has since
+    /// disappeared. Not a source of truth for what's actually in the
+    /// Keychain, only for "this filename is worth checking".
+    public func secretPluginIDs() -> Set<String> {
+        Set(defaults.stringArray(forKey: secretPluginIDsKey) ?? [])
+    }
+
+    /// Marks (or unmarks) `id` as having a stored secret. `PluginPreferences
+    /// .setValue` calls this with `true` whenever it stores a non-empty
+    /// secret value; `clearAllState` is the only place that ever calls it
+    /// with `false` (once disk reconciliation has confirmed `id`'s file is
+    /// genuinely gone) — a plugin clearing ONE of several declared secret
+    /// vars must not un-mark it while another might still be set, so the
+    /// marker only ever turns off at GC time, never at a single-field clear.
+    public func setHasSecret(_ hasSecret: Bool, id: String) {
+        var ids = secretPluginIDs()
+        if hasSecret { ids.insert(id) } else { ids.remove(id) }
+        defaults.set(Array(ids), forKey: secretPluginIDsKey)
     }
 
     // MARK: - Cross-plugin "Search All Plugins" hotkey

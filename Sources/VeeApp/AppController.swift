@@ -486,39 +486,63 @@ public final class AppController: NSObject, NSApplicationDelegate {
     /// through this same path) and a manual Finder/`rm` delete (the
     /// directory watcher calls `reload()` on any change, in-app or not).
     ///
-    /// Disk-authoritative and conservative by construction:
-    /// - It only ever acts on a filename it already has independent
-    ///   evidence for (a stored pref, a `.vars.json` sidecar, or a
-    ///   provenance record) — never a blind Keychain sweep. ponytail: a
-    ///   plugin whose *only* state was ever a Keychain secret (no pref,
-    ///   sidecar, or provenance record) sits outside this net — there is no
-    ///   "list every Vee plugin's Keychain items" API, and inventing one
-    ///   for an irreversible delete is the wrong shape for the gap. Add a
-    ///   persisted "has-a-secret" marker if that gap ever bites in practice.
-    /// - It does nothing at all unless a real, successful directory listing
-    ///   confirms genuine absence. `PluginDiscovery.enumerate` silently folds
-    ///   a read failure into `[]` (`try?`), which is indistinguishable from
-    ///   "really empty" — so this takes its own raw listing instead, purely
-    ///   to keep that failure signal. A failed/unreadable listing (a
-    ///   permissions hiccup, an unmounted network volume, …) leaves every
-    ///   store untouched: deleting a Keychain secret is irreversible, so
-    ///   "can't confirm absence" must mean "don't touch it," never "assume
-    ///   it's gone." A listing that succeeds and is simply empty (the
-    ///   plugins folder legitimately has nothing in it right now) is a real,
-    ///   trustworthy signal and still GCs everything — that's the
-    ///   disk-authoritative point of this method.
-    /// - `PluginInstaller.install` (fresh install AND in-place update alike)
-    ///   writes atomically (rename over the destination — see its doc
-    ///   comment), so an update never presents a "file momentarily absent"
-    ///   window that could trip this into GC-ing a plugin mid-update.
+    /// Disk-authoritative and conservative by construction — TWO separate
+    /// hard guards, because deleting a Keychain secret is irreversible and
+    /// "can't confirm absence" must always mean "don't touch it," never
+    /// "assume it's gone":
+    /// - **A failed/unreadable listing never GCs.** `PluginDiscovery.enumerate`
+    ///   silently folds a read failure into `[]` (`try?`), which is
+    ///   indistinguishable from "really empty" — so this takes its own raw
+    ///   listing instead, purely to keep that failure signal, and bails out
+    ///   entirely on a throw (a permissions hiccup, a volume that vanished
+    ///   mid-read, …).
+    /// - **A successful but EMPTY listing never GCs either — this is NOT the
+    ///   same case as above.** A throw and an empty-but-successful result
+    ///   both "look like nothing's there", but only a throw is unambiguous.
+    ///   An empty success also happens on a plugins directory that lives on
+    ///   a not-yet-mounted network/automount volume: `PluginsDirectory
+    ///   .ensureExists` `mkdir`s an empty *local* placeholder the instant
+    ///   before the real volume mounts over it, and `UserDefaults`-backed
+    ///   candidates (`disabledIDs()` etc.) are readable regardless of
+    ///   whether the real directory has mounted yet — so without this
+    ///   guard, that split-second window would wipe every plugin's disabled
+    ///   flag and Keychain secret, then have them silently reappear
+    ///   re-enabled once the mount lands. `onDisk` (the raw listing, before
+    ///   any plugin-file filtering) is the right thing to test empty: it
+    ///   also contains Vee's own dot-prefixed ledgers
+    ///   (`.vee-provenance.json`, `.vee-catalog-snapshot.json`, any
+    ///   `.vars.json`), so a directory where the user genuinely deleted
+    ///   their *last real plugin* — but has ever installed via Discover, set
+    ///   a var, or opened Discover once — still reads non-empty and still
+    ///   GCs normally. Only a directory that has NEVER had anything written
+    ///   to it by Vee or the user skips GC, and only leaks (never wipes)
+    ///   that one plugin's state until something else populates the folder
+    ///   — safe-but-leaky beats false-wipe here.
+    ///
+    /// It also only ever acts on a filename it already has independent
+    /// evidence for (a stored pref, a `.vars.json` sidecar, a provenance
+    /// record, or the `secretPluginIDs()` marker below) — never a blind
+    /// Keychain sweep; there is no "list every Vee plugin's Keychain items"
+    /// API, and inventing one for an irreversible delete is the wrong shape.
+    ///
+    /// `PluginInstaller.install` (fresh install AND in-place update alike)
+    /// writes atomically (rename over the destination — see its doc
+    /// comment), so an update never presents a "file momentarily absent"
+    /// window that could trip this into GC-ing a plugin mid-update.
     private func reconcileDiskState() {
         guard let rawNames = try? FileManager.default.contentsOfDirectory(atPath: directory) else { return }
         let onDisk = Set(rawNames)
+        // See the guard's own explanation above: a throw and an empty
+        // success are different failure shapes, and BOTH must be treated as
+        // "can't confirm" — this is not a fallback for the throw case above,
+        // it's an independent guard against a different ambiguity.
+        guard !onDisk.isEmpty else { return }
 
         let provenanceStore = ProvenanceStore(directory: directory)
         var candidates = prefs.disabledIDs()
             .union(prefs.hotkeyDisabledIDs())
             .union(prefs.hotkeyBindingIDs())
+            .union(prefs.secretPluginIDs())
             .union(provenanceStore.all().keys)
         // `.vars.json` sidecars live on disk next to their plugin but are
         // filtered out of every plugin listing (`PluginDiscovery` skips

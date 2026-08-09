@@ -8,11 +8,13 @@ import VeePluginFormat
 /// them.
 public struct PluginPreferences {
     public let declarations: [VarDeclaration]
+    private let pluginID: PluginID
     private let varStore: VarStore
     private let secretStore: SecretStoring
 
     public init(pluginPath: String, pluginID: PluginID, declarations: [VarDeclaration], secretStore: SecretStoring? = nil) {
         self.declarations = declarations
+        self.pluginID = pluginID
         self.varStore = VarStore(pluginPath: pluginPath)
         self.secretStore = secretStore ?? KeychainSecretStore(pluginID: pluginID.rawValue)
     }
@@ -29,6 +31,13 @@ public struct PluginPreferences {
     public func setValue(_ value: String, for declaration: VarDeclaration) throws {
         if declaration.isSecret {
             secretStore.set(value, for: declaration.name)
+            // Marks this filename as worth checking for disk-reconciliation
+            // GC (AppController.reconcileDiskState) — a plugin that only
+            // ever has a secret (no disabled flag, vars, or provenance)
+            // would otherwise be invisible to it. Only ever marks true here;
+            // see `AppPreferences.setHasSecret` for why it's never unmarked
+            // on a single value clear.
+            if !value.isEmpty { AppPreferences.shared.setHasSecret(true, id: pluginID.rawValue) }
         } else {
             try varStore.set(value, for: declaration.name)
         }

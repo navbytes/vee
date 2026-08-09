@@ -142,4 +142,44 @@ final class ProvenanceStatusTests: XCTestCase {
             .installedFromAnotherSource
         )
     }
+
+    // MARK: - Origin normalization (review fix: http→https / trailing-slash false positives)
+
+    /// A store migrating its raw base from http to https (same host, same
+    /// path) recorded provenance under the old scheme — the entry it's
+    /// compared against today carries the new one. That must still read as
+    /// the SAME origin, not "installed from another source".
+    func testSchemeDifferenceAloneIsNotAnotherSource() {
+        let source = "#!/bin/bash\necho hi\n"
+        let record = PluginProvenance(filename: "x.sh", sourceURL: URL(string: "http://example.com/x.sh")!, source: source)
+        XCTAssertEqual(
+            ProvenanceStatus.evaluate(record: record, currentSource: source, entrySourceURL: URL(string: "https://example.com/x.sh")!),
+            .verified
+        )
+    }
+
+    /// A trailing-slash difference alone must not read as another source either.
+    func testTrailingSlashDifferenceAloneIsNotAnotherSource() {
+        let source = "#!/bin/bash\necho hi\n"
+        let record = PluginProvenance(filename: "x.sh", sourceURL: URL(string: "https://example.com/x.sh")!, source: source)
+        XCTAssertEqual(
+            ProvenanceStatus.evaluate(record: record, currentSource: source, entrySourceURL: URL(string: "https://example.com/x.sh/")!),
+            .verified
+        )
+    }
+
+    /// A genuinely different host, or a genuinely different path, must still
+    /// count as another source — normalization must not swallow real differences.
+    func testGenuinelyDifferentHostOrPathIsStillAnotherSource() {
+        let source = "#!/bin/bash\necho hi\n"
+        let record = PluginProvenance(filename: "x.sh", sourceURL: URL(string: "https://example.com/x.sh")!, source: source)
+        XCTAssertEqual(
+            ProvenanceStatus.evaluate(record: record, currentSource: source, entrySourceURL: URL(string: "https://mirror.example.com/x.sh")!),
+            .installedFromAnotherSource, "a different host must still count as another source"
+        )
+        XCTAssertEqual(
+            ProvenanceStatus.evaluate(record: record, currentSource: source, entrySourceURL: URL(string: "https://example.com/other/x.sh")!),
+            .installedFromAnotherSource, "a different path must still count as another source"
+        )
+    }
 }

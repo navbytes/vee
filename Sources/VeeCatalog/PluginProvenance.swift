@@ -72,15 +72,33 @@ public enum ProvenanceStatus: Sendable, Equatable {
     ///   regardless of hash — matches by origin the same way
     ///   ``CatalogUpdateCheck/pendingUpdates(installed:catalog:lastUpdated:)``
     ///   already does, so a same-filename entry from another store can never
-    ///   borrow this filename's badge.
+    ///   borrow this filename's badge. Origin is compared loosely
+    ///   (`sameOrigin`, below) so a store migrating http→https, or a
+    ///   trailing-slash difference in its raw base, doesn't itself read as
+    ///   "another source" — only a genuinely different host or path does.
     /// - Same origin, but the source can't be read → ``modified`` (the
     ///   recorded bytes are no longer present).
     /// - Same origin and matching hash → ``verified``; otherwise ``modified``.
     public static func evaluate(record: PluginProvenance?, currentSource: String?, entrySourceURL: URL) -> ProvenanceStatus {
         guard let record else { return .unknown }
-        guard record.sourceURL == entrySourceURL else { return .installedFromAnotherSource }
+        guard sameOrigin(record.sourceURL, entrySourceURL) else { return .installedFromAnotherSource }
         guard let currentSource else { return .modified }
         return PluginHash.sha256Hex(currentSource) == record.sha256 ? .verified : .modified
+    }
+
+    /// Whether two source URLs represent "the same place a plugin came
+    /// from" for provenance-attribution purposes: host compared
+    /// case-insensitively, one trailing slash on the path ignored, and —
+    /// deliberately — scheme ignored entirely, so a store's http→https
+    /// migration doesn't make its own install history look foreign. A
+    /// genuinely different host or path still counts as a different origin.
+    static func sameOrigin(_ a: URL, _ b: URL) -> Bool {
+        func normalized(_ url: URL) -> String {
+            var path = url.path
+            if path.hasSuffix("/") { path.removeLast() }
+            return (url.host ?? "").lowercased() + path
+        }
+        return normalized(a) == normalized(b)
     }
 }
 

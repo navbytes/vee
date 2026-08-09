@@ -124,6 +124,13 @@ final class PluginLifecycleReconciliationTests: XCTestCase {
         setenv("VEE_PLUGINS_DIR", dir, 1)
         defer { unsetenv("VEE_PLUGINS_DIR") }
 
+        // A permanent sibling keeps the directory non-empty throughout, so
+        // the manual delete below stays a genuine "one plugin gone, the
+        // folder isn't untouched" case — not the pathological fully-empty
+        // directory the empty-listing guard (fix 1, review round) deliberately
+        // refuses to GC against (an unmounted volume looks identical).
+        writePlugin(named: "sibling-\(UUID().uuidString).sh", in: dir)
+
         let filename = "clock-\(UUID().uuidString).5s.sh"
         let path = (dir as NSString).appendingPathComponent(filename)
 
@@ -146,5 +153,111 @@ final class PluginLifecycleReconciliationTests: XCTestCase {
 
         XCTAssertFalse(AppPreferences.shared.isDisabled(filename), "a reinstall under the same filename must not inherit the old disabled flag")
         XCTAssertTrue(controller.isLoaded(id: filename), "the reinstalled plugin must be enabled and loaded, not silently filtered out by enabledPlugins()")
+    }
+
+    // MARK: - BLOCKING review fix: a successful but EMPTY listing must never GC
+
+    /// A successful listing that's simply EMPTY is a DIFFERENT failure shape
+    /// than a throw, and must be guarded separately — it's exactly what a
+    /// plugins directory on a not-yet-mounted network/automount volume looks
+    /// like: `PluginsDirectory.ensureExists` `mkdir`s an empty LOCAL
+    /// placeholder an instant before the real volume mounts over it, and
+    /// `UserDefaults`-backed candidates (`disabledIDs()`) are readable
+    /// regardless of whether the real directory has mounted yet. Without this
+    /// guard, that split-second window wipes every plugin's disabled flag
+    /// and Keychain secret; the plugins then silently reappear re-enabled
+    /// once the mount lands, tokens gone — unrecoverable. Fails before the
+    /// `!onDisk.isEmpty` guard, passes after.
+    func testReloadDoesNotGCOnASuccessfulButEmptyListing() {
+        let dir = tempDir() // mkdir'd, but nothing ever written into it
+        setenv("VEE_PLUGINS_DIR", dir, 1)
+        defer { unsetenv("VEE_PLUGINS_DIR") }
+        defer { try? FileManager.default.removeItem(atPath: dir) }
+        XCTAssertEqual(try? FileManager.default.contentsOfDirectory(atPath: dir), [], "sanity: a real, successful listing — empty, not a throw")
+
+        let filename = "ghost-\(UUID().uuidString).5s.sh"
+        AppPreferences.shared.setDisabled(true, id: filename)
+        defer { AppPreferences.shared.setDisabled(false, id: filename) }
+        let secrets = InMemorySecretStore()
+        secrets.set("s3cret", for: "API_TOKEN")
+
+        let controller = AppController(secretStoreFactory: { _ in secrets })
+        defer { cleanup(controller) }
+
+        controller.reload()
+
+        XCTAssertTrue(AppPreferences.shared.isDisabled(filename), "an empty-but-successful listing must not be treated as genuine absence")
+        XCTAssertNotNil(secrets.get("API_TOKEN"), "the Keychain secret must survive an empty-listing reload — deleting it is irreversible")
+    }
+
+    // MARK: - Atomic in-place update never appears absent to reconcile
+
+    func testInPlaceUpdateNeverAppearsAbsentToReconcile() throws {
+        let dir = tempDir()
+        defer { try? FileManager.default.removeItem(atPath: dir) }
+        setenv("VEE_PLUGINS_DIR", dir, 1)
+        defer { unsetenv("VEE_PLUGINS_DIR") }
+
+        let filename = "clock-\(UUID().uuidString).5s.sh"
+        let path = writePlugin(named: filename, in: dir)
+
+        let secrets = InMemorySecretStore()
+        let controller = AppController(secretStoreFactory: { _ in secrets })
+        defer { cleanup(controller) }
+        controller.reload()
+
+        AppPreferences.shared.setDisabled(true, id: filename)
+        defer { AppPreferences.shared.setDisabled(false, id: filename) }
+        secrets.set("s3cret", for: "API_TOKEN")
+
+        // An in-place UPDATE — `PluginInstaller.install` again under the
+        // same filename, the exact atomic temp+rename primitive Discover's
+        // Update button uses; it never removes `path` first.
+        try PluginInstaller.install(filename: filename, source: "#!/bin/bash\n# <vee.surface>widget</vee.surface>\necho updated\n", into: dir)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: path), "sanity: atomic replace never leaves the destination momentarily missing")
+
+        controller.reload()
+
+        XCTAssertTrue(AppPreferences.shared.isDisabled(filename), "an atomic in-place update must never look like a delete to reconcile")
+        XCTAssertNotNil(secrets.get("API_TOKEN"))
+    }
+
+    // MARK: - Fix 1(d): a secret-only plugin (no other state) is still found
+
+    /// A plugin with a stored secret but no disabled flag, vars, or
+    /// provenance record used to be invisible to `reconcileDiskState`'s
+    /// candidate set entirely — closed by `AppPreferences.secretPluginIDs()`,
+    /// the marker `PluginPreferences.setValue` records (see
+    /// `VeePreferencesTests` for that write-side test). This proves the
+    /// GC/consume side directly, without needing `VarDeclaration` (a
+    /// `VeePluginFormat` type this test target doesn't depend on).
+    func testSecretOnlyPluginIsStillGCdOnDelete() {
+        let dir = tempDir()
+        defer { try? FileManager.default.removeItem(atPath: dir) }
+        setenv("VEE_PLUGINS_DIR", dir, 1)
+        defer { unsetenv("VEE_PLUGINS_DIR") }
+
+        let filename = "secret-only-\(UUID().uuidString).sh"
+        let path = writePlugin(named: filename, in: dir)
+        // A sibling keeps the directory non-empty after the target is
+        // deleted — isolates this test to the marker fix, not the separate
+        // empty-listing guard above.
+        writePlugin(named: "sibling-\(UUID().uuidString).sh", in: dir)
+
+        let secrets = InMemorySecretStore()
+        let controller = AppController(secretStoreFactory: { _ in secrets })
+        defer { cleanup(controller) }
+        controller.reload()
+
+        // No disabled flag, no vars, no provenance — a secret is the ONLY
+        // state, recorded the same way `PluginPreferences.setValue` does.
+        secrets.set("s3cret", for: "API_TOKEN")
+        AppPreferences.shared.setHasSecret(true, id: filename)
+
+        try? FileManager.default.removeItem(atPath: path)
+        controller.reload()
+
+        XCTAssertNil(secrets.get("API_TOKEN"), "a secret-only plugin must still be GC'd once genuinely absent")
+        XCTAssertFalse(AppPreferences.shared.secretPluginIDs().contains(filename), "the marker itself must be cleared too")
     }
 }
