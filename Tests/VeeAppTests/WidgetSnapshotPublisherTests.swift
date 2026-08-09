@@ -35,8 +35,11 @@ final class WidgetSnapshotPublisherTests: XCTestCase {
         writes.removeAll() // drop the empty seed write from setLoaded's own flush
 
         publisher.publish(id: "a", name: "A", interval: nil, publish: makePublish(title: "hi"))
-        try await settle(coalesce)
 
+        let deadline = Date().addingTimeInterval(3.0)
+        while writes.isEmpty, Date() < deadline {
+            try await Task.sleep(nanoseconds: 20_000_000)
+        }
         XCTAssertEqual(writes.count, 1)
         XCTAssertEqual(writes.first?.plugins.first?.title, "hi")
         XCTAssertEqual(reloads, 1)
@@ -90,7 +93,10 @@ final class WidgetSnapshotPublisherTests: XCTestCase {
         writeCount = 0 // drop the empty seed write from setLoaded's own flush
 
         publisher.publish(id: "a", name: "A", interval: nil, publish: makePublish(title: "first"))
-        try await settle(coalesce)
+        var deadline = Date().addingTimeInterval(3.0)
+        while writeCount < 1, Date() < deadline {
+            try await Task.sleep(nanoseconds: 20_000_000)
+        }
         XCTAssertEqual(writeCount, 1)
         XCTAssertEqual(reloads, 1)
 
@@ -98,12 +104,15 @@ final class WidgetSnapshotPublisherTests: XCTestCase {
         // reload floor hasn't elapsed yet — the reload itself is throttled
         // (trailing), not the write.
         publisher.publish(id: "a", name: "A", interval: nil, publish: makePublish(title: "second"))
-        try await settle(coalesce)
+        deadline = Date().addingTimeInterval(3.0)
+        while writeCount < 2, Date() < deadline {
+            try await Task.sleep(nanoseconds: 20_000_000)
+        }
         XCTAssertEqual(writeCount, 2, "changed content must write immediately once coalesced")
 
         // The trailing reload fires once the reload floor elapses; poll with a
         // deadline rather than sleeping the full floor.
-        let deadline = Date().addingTimeInterval(3.0)
+        deadline = Date().addingTimeInterval(3.0)
         while reloads < 2, Date() < deadline {
             try await Task.sleep(nanoseconds: 20_000_000)
         }
@@ -156,8 +165,11 @@ final class WidgetSnapshotPublisherTests: XCTestCase {
 
         let card = WidgetCard(template: .gauge, title: "Disk", value: "72%", progress: 0.72)
         publisher.publish(id: "a", name: "A", interval: nil, publish: WidgetPublish(title: "72%", card: card))
-        try await settle(coalesce)
 
+        let deadline = Date().addingTimeInterval(3.0)
+        while writes.isEmpty, Date() < deadline {
+            try await Task.sleep(nanoseconds: 20_000_000)
+        }
         XCTAssertEqual(writes.last?.plugins.first?.card, card)
     }
 
@@ -176,17 +188,23 @@ final class WidgetSnapshotPublisherTests: XCTestCase {
         writeCount = 0
 
         publisher.publish(id: "a", name: "A", interval: nil, publish: WidgetPublish(title: "72%", card: WidgetCard(value: "72%", progress: 0.72)))
-        try await settle(coalesce)
+        var deadline = Date().addingTimeInterval(3.0)
+        while writeCount < 1, Date() < deadline {
+            try await Task.sleep(nanoseconds: 20_000_000)
+        }
         XCTAssertEqual(writeCount, 1)
         XCTAssertEqual(reloads, 1)
 
         // Same title, but a changed card (different progress) must still count
         // as a content change: write immediately, spend a (throttled) reload.
         publisher.publish(id: "a", name: "A", interval: nil, publish: WidgetPublish(title: "72%", card: WidgetCard(value: "72%", progress: 0.9)))
-        try await settle(coalesce)
+        deadline = Date().addingTimeInterval(3.0)
+        while writeCount < 2, Date() < deadline {
+            try await Task.sleep(nanoseconds: 20_000_000)
+        }
         XCTAssertEqual(writeCount, 2, "a changed card must write immediately once coalesced")
 
-        let deadline = Date().addingTimeInterval(3.0)
+        deadline = Date().addingTimeInterval(3.0)
         while reloads < 2, Date() < deadline {
             try await Task.sleep(nanoseconds: 20_000_000)
         }
@@ -247,8 +265,11 @@ final class WidgetSnapshotPublisherTests: XCTestCase {
         )
         // The scraped `fields` are empty here — the values must come from the card.
         publisher.publish(id: "a", name: "A", interval: nil, publish: WidgetPublish(title: "$18.2k", card: card))
-        try await settle(coalesce)
 
+        let deadline = Date().addingTimeInterval(3.0)
+        while writes.isEmpty, Date() < deadline {
+            try await Task.sleep(nanoseconds: 20_000_000)
+        }
         let snapshot = try XCTUnwrap(writes.last?.plugins.first)
         XCTAssertEqual(snapshot.color, .named("green"))
         XCTAssertEqual(snapshot.symbolName, "chart.line.uptrend.xyaxis")

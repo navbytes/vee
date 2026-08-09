@@ -34,12 +34,22 @@ final class PluginCoordinator {
     private var hotKeyID: UInt32?
     private var hotkeyStatus: HotkeyStatus = .none
     private var isRefreshing = false
+    /// The in-flight one-shot `refresh()` Task, if any — stored (rather than
+    /// fire-and-forget) so `stop()` can cancel it. Cancellation reaches
+    /// `SystemProcessRunner` (see its `withTaskCancellationHandler`), which
+    /// actually terminates the child process — without this, `stop()` racing
+    /// an in-flight `refresh()` (e.g. a directory-watcher reload tearing down
+    /// and rebuilding every coordinator) left a duplicate live subprocess
+    /// racing the replacement coordinator's run of the same plugin.
+    private var refreshTask: Task<Void, Never>?
     /// The second, independent scheduler for `.both`/`.widget` plugins — see
     /// `start()`. Always `BackgroundRefreshScheduler` since the widget cadence
     /// is floored at 5 minutes regardless of source, squarely in that
     /// scheduler's energy-batched range.
     private var widgetBackground: BackgroundRefreshScheduler?
     private var isRefreshingWidget = false
+    /// The in-flight `refreshWidget()` Task — same reasoning as `refreshTask`.
+    private var refreshWidgetTask: Task<Void, Never>?
     /// Set by `stop()`. A queued timer/cron/hotkey `refresh()` that fires after
     /// `stop()` must not spawn a subprocess or render into a removed status item.
     private var stopped = false
@@ -53,6 +63,18 @@ final class PluginCoordinator {
     /// The most recent run's error message, or `nil` if the last run succeeded.
     /// The Plugin Manager reads this to flag broken plugins.
     private(set) var lastError: String?
+    /// Set when this plugin's declared `<vee.shortcut>` couldn't register —
+    /// most commonly a duplicate binding across two plugins, but also any
+    /// other combo already claimed system-wide (see `registerHotKey`).
+    /// Deliberately separate from `lastError` (a *run* outcome): a run
+    /// succeeding must not silently clear a still-true hotkey collision, the
+    /// way reusing `lastError` for this would.
+    private(set) var hotkeyRegistrationError: String?
+
+    /// The error the Plugin Manager should show for this row: the last run's
+    /// failure takes priority (more actionable/urgent), falling back to a
+    /// still-unresolved hotkey collision so that doesn't go unsurfaced either.
+    var displayError: String? { lastError ?? hotkeyRegistrationError }
 
     /// Called with the plugin's current widget state after each render (or an
     /// error marker), so `AppController` can publish it to the widget snapshot.
@@ -215,6 +237,10 @@ final class PluginCoordinator {
     /// Returns `.some(nil)` intent as distinct states via `hotkeyStatus`.
     private func registerHotKey() {
         if let hotKeyID { GlobalHotKeys.shared.unregister(hotKeyID); self.hotKeyID = nil }
+        // Reset unconditionally — every branch below either re-derives this
+        // or doesn't apply, so a stale collision from a previous resolution
+        // (e.g. before the user disabled the hotkey) must not linger.
+        hotkeyRegistrationError = nil
 
         let id = plugin.id.rawValue
         switch EffectiveHotkey.resolve(
@@ -232,6 +258,12 @@ final class PluginCoordinator {
             hotKeyID = GlobalHotKeys.shared.register(spec) { [weak self] in self?.controller?.openSearchPanel() }
             hotkeyStatus = hotKeyID != nil ? .active(spec.display) : .unavailable(spec.display)
             if hotKeyID == nil {
+                // Most commonly a duplicate <vee.shortcut> across two
+                // plugins — previously dropped with no signal beyond this
+                // log line and the (rarely-opened) per-plugin Settings
+                // status. Surface it where the Plugin Manager already shows
+                // per-plugin errors (see `displayError`).
+                hotkeyRegistrationError = "Hotkey \(spec.display) is already in use — not registered"
                 VeeLog.make("hotkey").error("hotkey \(spec.display, privacy: .public) unavailable for \(self.plugin.filename.name, privacy: .public) (already in use)")
             }
         }
@@ -272,6 +304,17 @@ final class PluginCoordinator {
         streaming = nil
         widgetBackground?.stop()
         widgetBackground = nil
+        // Cancel any in-flight one-shot refresh so its child process is
+        // actually terminated (see `SystemProcessRunner`'s cancellation
+        // handling) rather than left running to race a replacement
+        // coordinator's run of the same plugin (e.g. a directory-watcher
+        // reload). The `stopped` guard inside each Task's completion already
+        // suppresses a stale render/publish from a cancelled run — this is
+        // what stops the duplicate PROCESS.
+        refreshTask?.cancel()
+        refreshTask = nil
+        refreshWidgetTask?.cancel()
+        refreshWidgetTask = nil
         controller?.remove()
     }
 
@@ -441,7 +484,7 @@ final class PluginCoordinator {
         let header = self.header
         let runInBash = self.runInBash
 
-        Task { @MainActor [weak self] in
+        refreshTask = Task { @MainActor [weak self] in
             defer {
                 self?.isRefreshing = false
                 self?.controller?.setRefreshing(false)
@@ -550,7 +593,7 @@ final class PluginCoordinator {
         let header = self.header
         let runInBash = self.runInBash
 
-        Task { @MainActor [weak self] in
+        refreshWidgetTask = Task { @MainActor [weak self] in
             defer { self?.isRefreshingWidget = false }
             do {
                 // No explicit timeout override here: `runtime.refresh` derives it

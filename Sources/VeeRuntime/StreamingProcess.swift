@@ -185,6 +185,15 @@ private final class StreamingProc: @unchecked Sendable {
                 let stillRunning: Bool = self.lock.withLock { self.process.isRunning }
                 if stillRunning { kill(pid, SIGKILL) }
             }
+            // ponytail: closes (not `dup2`-to-`/dev/null`) despite the brief
+            // fd-number-reuse window this leaves — see the matching note atop
+            // SystemProcessRunner.swift. A blocking read() already parked in
+            // the kernel is bound to the file description it resolved at
+            // syscall entry, not the fd-table slot, so `dup2`-ing the slot
+            // elsewhere doesn't wake it; only `close()` reliably does. Tried
+            // `dup2` here first — it turned this test from stable into a
+            // one-fd-per-cycle leak (the parked reader, and everything it
+            // retains, never released), so reverted.
             try? self.outPipe.fileHandleForReading.close()
         }
 

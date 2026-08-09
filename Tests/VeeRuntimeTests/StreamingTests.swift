@@ -1,5 +1,6 @@
 import XCTest
 import VeeCore
+import VeePluginFormat
 @testable import VeeRuntime
 
 final class StreamAccumulatorTests: XCTestCase {
@@ -202,5 +203,65 @@ final class StreamingCancelEscalationTests: XCTestCase {
         for _ in 0..<15 { try await runIgnoresTermCycle(runner) }
         let after = openFDCount()
         XCTAssertLessThanOrEqual(after - before, 5, "fd count grew from \(before) to \(after) — likely a pipe/thread leak")
+    }
+}
+
+/// Thread-safe recorder for `StreamingSession.onUpdate` calls, polled from
+/// the test's main flow the same way `ReadyFlag` above is.
+private final class UpdateRecorder: @unchecked Sendable {
+    private let lock = NSLock()
+    private var titles: [String] = []
+    func record(_ output: ParsedOutput) { lock.withLock { titles.append(output.titleLines.first?.text ?? "") } }
+    var recorded: [String] { lock.withLock { titles } }
+}
+
+/// Regression: `runLoop`'s post-loop `accumulator.flush()` used to fire
+/// unconditionally, so a session cancelled mid-stream — with a buffered,
+/// separator-less partial block still sitting in the accumulator — still
+/// pushed a garbled partial menu/stale widget title through `onUpdate` after
+/// `stop()`. The flush must be gated on `!Task.isCancelled`, mirroring the
+/// in-loop check right below it.
+final class StreamingSessionCancelFlushTests: XCTestCase {
+    /// A controllable line source: the test drives it directly via the
+    /// captured continuation rather than a real process, so the buffered
+    /// partial block and the cancellation are ordered deterministically.
+    private struct FakeLineRunner: StreamingProcessRunning, @unchecked Sendable {
+        let stream: AsyncThrowingStream<String, Error>
+        func lines(_ invocation: ProcessInvocation) -> AsyncThrowingStream<String, Error> { stream }
+    }
+
+    private final class ContinuationBox: @unchecked Sendable {
+        var continuation: AsyncThrowingStream<String, Error>.Continuation?
+    }
+
+    @MainActor
+    func testCancelledSessionDoesNotFlushBufferedPartialBlock() async throws {
+        let box = ContinuationBox()
+        let stream = AsyncThrowingStream<String, Error> { box.continuation = $0 }
+        let recorder = UpdateRecorder()
+
+        let session = StreamingSession(
+            runner: FakeLineRunner(stream: stream),
+            makeInvocation: { ProcessInvocation(launchPath: "/bin/true") },
+            onUpdate: { recorder.record($0) },
+            onStopped: { _ in }
+        )
+        session.start()
+
+        // Buffer a line with no closing "~~~" — a partial block sitting in
+        // the accumulator when cancellation lands. AsyncThrowingStream
+        // preserves order, so this is guaranteed to be delivered before the
+        // `finish()` below ends iteration, regardless of scheduling.
+        box.continuation?.yield("Partial Title")
+        session.stop()
+        box.continuation?.finish()
+
+        // Negative assertion (nothing SHOULD happen) — there's no event to
+        // poll for, so give the already-cancelled run loop a generous fixed
+        // window to (wrongly) flush before checking, same convention as this
+        // suite's other identical-content/no-op assertions.
+        try await Task.sleep(nanoseconds: 300_000_000)
+
+        XCTAssertTrue(recorder.recorded.isEmpty, "a cancelled session must not flush its buffered partial block: got \(recorder.recorded)")
     }
 }
