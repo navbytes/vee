@@ -53,4 +53,28 @@ final class CatalogSnapshotStoreTests: XCTestCase {
     func testSnapshotFilenameIsDotPrefixed() {
         XCTAssertTrue(CatalogSnapshotStore.snapshotName.hasPrefix("."))
     }
+
+    // MARK: - IM11: reconciling against currently-enabled stores
+
+    /// A store being disabled/removed can legitimately bring the freshly
+    /// loaded set down to zero entries — that's a real reconciliation, not a
+    /// failure, and the snapshot must be allowed to shrink to match (else a
+    /// removed store's entries linger forever and drive a phantom "update
+    /// available").
+    func testShouldSaveWhenEmptyAndNoFailure() {
+        XCTAssertTrue(CatalogSnapshotStore.shouldSave(entries: [], hadFailure: false))
+    }
+
+    /// A successful, non-empty load always saves, failure or not.
+    func testShouldSaveWhenEntriesPresentRegardlessOfFailure() {
+        let e = [entry(filename: "a.sh")]
+        XCTAssertTrue(CatalogSnapshotStore.shouldSave(entries: e, hadFailure: false))
+        XCTAssertTrue(CatalogSnapshotStore.shouldSave(entries: e, hadFailure: true), "a partial success (some entries despite another store failing) should still save")
+    }
+
+    /// Nothing came back AND something failed: indistinguishable from a
+    /// transient outage — must not stomp the last-known-good snapshot.
+    func testShouldNotSaveWhenEmptyAndFailed() {
+        XCTAssertFalse(CatalogSnapshotStore.shouldSave(entries: [], hadFailure: true))
+    }
 }

@@ -54,4 +54,10 @@ public struct VarStore {
         values[name] = value
         try save(values)
     }
+
+    /// Deletes the sidecar file itself (not just its contents) — used when
+    /// disk reconciliation confirms the plugin it belongs to is gone.
+    public func delete() {
+        try? FileManager.default.removeItem(atPath: sidecarPath)
+    }
 }

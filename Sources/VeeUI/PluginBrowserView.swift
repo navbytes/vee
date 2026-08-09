@@ -1,4 +1,5 @@
 import SwiftUI
+import VeeCore
 import VeeCatalog
 import VeePluginFormat
 import VeeTrust
@@ -99,6 +100,7 @@ public final class PluginBrowserModel: ObservableObject {
     private let provenanceStore: ProvenanceStore
     private let freshnessStore: CatalogFreshnessStore
     private let onInstalled: () -> Void
+    private static let log = VeeLog.make("plugin-browser")
     /// Fired after every fresh catalog load: the installed, catalog-tracked
     /// plugins that now have a newer version upstream (possibly empty), plus
     /// the currently installed filename set so the app can prune its
@@ -218,31 +220,48 @@ public final class PluginBrowserModel: ObservableObject {
     }
 
     /// Loads every enabled store and merges their entries. A store that fails is
-    /// skipped; the full-screen error only shows when *nothing* loaded.
+    /// skipped; the full-screen error only shows when *nothing* loaded — a
+    /// store that fails alongside others that succeed instead gets a
+    /// dismissable `notice` banner (IM9), so it isn't silently invisible.
     public func load() async {
         isLoading = true
         errorMessage = nil
         var merged: [CatalogEntry] = []
         var firstError: Error?
+        var failedStoreNames: [String] = []
         for store in stores where store.isEnabled {
             guard let client = clients[store.id] else { continue }
             do {
                 merged += try await client.fetchIndex()
             } catch {
                 if firstError == nil { firstError = error }
+                failedStoreNames.append(store.displayName)
+                Self.log.error("store \(store.displayName, privacy: .public) failed to load: \(error.localizedDescription, privacy: .public)")
             }
         }
         entries = merged.sorted { $0.path < $1.path }
         if entries.isEmpty, let firstError {
             errorMessage = CatalogErrorPresenter.message(for: firstError)
+        } else if !failedStoreNames.isEmpty {
+            notice = CatalogNotice(kind: .failure, message: Self.storeFailureMessage(failedStoreNames))
         }
         isLoading = false
-        if !entries.isEmpty {
+        // Reconcile the on-disk snapshot even down to empty (e.g. every store
+        // just got disabled/removed) so a store's entries never linger past
+        // its own removal and drive a phantom "update available" (IM11) — but
+        // never on a total, unconfirmed failure (see `shouldSave`'s doc).
+        if CatalogSnapshotStore.shouldSave(entries: entries, hadFailure: firstError != nil) {
             // Persist the index so the app's launch-time update scan can run
             // against it with zero network — Vee never fetches at launch.
             try? CatalogSnapshotStore(directory: pluginsDirectory).save(entries)
         }
         reportPendingUpdates()
+    }
+
+    /// A short banner message for one or more stores that failed to load
+    /// while at least one other store still returned entries.
+    private static func storeFailureMessage(_ names: [String]) -> String {
+        names.count == 1 ? "Couldn't load \(names[0]) — other stores loaded fine." : "Couldn't load \(names.count) stores — other stores loaded fine."
     }
 
     /// Checks installed, catalog-provenance-tracked plugins against the
@@ -381,15 +400,19 @@ public final class PluginBrowserModel: ObservableObject {
         PluginInstaller.isInstalled(filename: entry.filename, in: pluginsDirectory)
     }
 
-    /// Provenance status of an installed plugin: `.verified` when its on-disk
-    /// source still matches what was recorded at install, `.modified` when it has
-    /// changed since (local edit or a re-install from a different source), and
-    /// `.unknown` when there's no record (e.g. a hand-authored plugin).
+    /// Provenance status of an installed plugin, from THIS entry's point of
+    /// view: `.verified` when its on-disk source still matches what was
+    /// recorded at install, `.modified` when it has changed since (a local
+    /// edit, or a re-install from a different source), `.installedFromAnotherSource`
+    /// when a same-filename entry from a DIFFERENT store is what's actually
+    /// installed (IM4 — two stores can list the same filename; installing
+    /// THIS entry would overwrite it), and `.unknown` when there's no record
+    /// at all (e.g. a hand-authored plugin).
     func provenanceStatus(for entry: CatalogEntry) -> ProvenanceStatus {
         let record = provenanceStore.record(for: entry.filename)
         let path = (pluginsDirectory as NSString).appendingPathComponent(entry.filename)
         let current = try? String(contentsOfFile: path, encoding: .utf8)
-        return ProvenanceStatus.evaluate(record: record, currentSource: current)
+        return ProvenanceStatus.evaluate(record: record, currentSource: current, entrySourceURL: entry.rawURL)
     }
 
     /// The installed plugin's source on disk, if any — used to diff against an
@@ -943,6 +966,9 @@ private struct ProvenanceBadge: View {
             TrustChip(symbol: "checkmark.seal.fill", label: "Verified", tint: .green)
         case .modified:
             TrustChip(symbol: "exclamationmark.triangle.fill", label: "Modified", tint: .orange)
+        case .installedFromAnotherSource:
+            TrustChip(symbol: "arrow.triangle.branch", label: "Other source", tint: .orange)
+                .help("Installed from another source — installing overwrites it")
         case .unknown:
             EmptyView()
         }

@@ -37,4 +37,22 @@ public struct CatalogSnapshotStore: Sendable {
         let data = try JSONEncoder().encode(entries)
         try data.write(to: URL(fileURLWithPath: path), options: .atomic)
     }
+
+    /// Whether a freshly-loaded (possibly partial) entry set should replace
+    /// the on-disk snapshot.
+    ///
+    /// - No failure at all → always save, even an empty result: a store
+    ///   being disabled/removed (or simply publishing zero plugins) is a
+    ///   legitimate reconciliation, and the snapshot must shrink to match —
+    ///   otherwise a removed store's entries linger forever and drive a
+    ///   phantom "update available" nudge for a plugin no store can even
+    ///   fetch anymore.
+    /// - Some entries despite a failure elsewhere → save (a genuine, if
+    ///   partial, refresh is still better than a stale snapshot).
+    /// - Nothing came back AND something failed → don't save: indistinguishable
+    ///   from a transient outage, and stomping the last-known-good snapshot on
+    ///   a network hiccup would be worse than leaving it stale one more cycle.
+    public static func shouldSave(entries: [CatalogEntry], hadFailure: Bool) -> Bool {
+        !hadFailure || !entries.isEmpty
+    }
 }

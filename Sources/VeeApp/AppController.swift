@@ -47,6 +47,12 @@ public final class AppController: NSObject, NSApplicationDelegate {
     private var generalSettingsModel: GeneralSettingsModel?
     private let prefs = AppPreferences.shared
     private let log = VeeLog.make("app-controller")
+    /// Builds the per-plugin secret store `reconcileDiskState()` clears a
+    /// Keychain secret through. Defaults to the real Keychain; a test injects
+    /// an in-memory fake — the same seam `VariablesEditorModel` already uses,
+    /// since real Keychain access in a plain `swift test` binary is
+    /// unreliable/prompts (there's no entitlement/signing for it there).
+    private let secretStoreFactory: (PluginID) -> SecretStoring
 
     /// Live "combine everything into one menu bar item" toggle (issue #71 —
     /// one icon total in compact mode, not two side by side). Removed at
@@ -79,7 +85,8 @@ public final class AppController: NSObject, NSApplicationDelegate {
     /// The running controller, so App Intents (Shortcuts/Spotlight) can drive it.
     public static weak var shared: AppController?
 
-    public override init() {
+    public init(secretStoreFactory: ((PluginID) -> SecretStoring)? = nil) {
+        self.secretStoreFactory = secretStoreFactory ?? { KeychainSecretStore(pluginID: $0.rawValue) }
         super.init()
         Self.shared = self
     }
@@ -284,12 +291,33 @@ public final class AppController: NSObject, NSApplicationDelegate {
                     self.log.info("addplugin cancelled at trust gate")
                     return
                 }
-                try PluginInstaller.install(filename: filename, source: source, into: directory)
+                try Self.installFromAddPlugin(filename: filename, source: source, sourceURL: url, into: directory)
                 self.reload()
             } catch {
                 self.log.error("addplugin failed: \(error.localizedDescription, privacy: .public)")
             }
         }
+    }
+
+    /// Writes the provenance record BEFORE the plugin file itself, so there
+    /// is never a window where the file is present on disk but untracked —
+    /// a bare `swiftbar://addplugin` install used to skip provenance
+    /// entirely (IM5/IM12), which let a same-filename reinstall (or a
+    /// different store's same-named catalog entry) show a misattributed
+    /// trust badge. Provenance is advisory (`try?`): a failure to record it
+    /// must never block the actual install. If the file write below throws
+    /// instead, the now-orphaned record self-heals — `reload()`'s disk
+    /// reconciliation (`reconcileDiskState`) clears any provenance record
+    /// with no matching on-disk file on its next run.
+    ///
+    /// `nonisolated static` (no instance state) and internal (not private) so
+    /// this narrow slice — the actual provenance-then-install sequencing —
+    /// is unit-testable without the network fetch or the trust-confirmation
+    /// `NSAlert` around it in `installPlugin(from:)`.
+    nonisolated static func installFromAddPlugin(filename: String, source: String, sourceURL: URL, into directory: String) throws {
+        let provenance = PluginProvenance(filename: filename, sourceURL: sourceURL, source: source)
+        try? ProvenanceStore(directory: directory).record(provenance)
+        try PluginInstaller.install(filename: filename, source: source, into: directory)
     }
 
     /// Streams a URL body with a hard byte cap, rejecting a non-2xx status or an
@@ -398,7 +426,20 @@ public final class AppController: NSObject, NSApplicationDelegate {
         PluginDiscovery.enabled(directory: directory).filter { !prefs.isDisabled($0.id.rawValue) }
     }
 
-    private func reload() {
+    /// Reloads the plugin set from disk. Internal (not private) so a test can
+    /// drive it directly — the same seam `makeLibraryModel` already is —
+    /// without going through `applicationDidFinishLaunching`, which touches
+    /// `NSApp` and is unsafe to invoke from a unit test.
+    func reload() {
+        // Runs on EVERY call, unconditionally, before the early-return below:
+        // a disabled plugin is excluded from `enabledPlugins()` (and so never
+        // enters `signature`), so deleting a *disabled* plugin's file would
+        // never change the signature at all — GC gated behind that check
+        // would then never fire for it. GC has to look at the full disk
+        // listing anyway (see `reconcileDiskState`), independent of which
+        // plugins happen to be enabled.
+        reconcileDiskState()
+
         let plugins = enabledPlugins()
         let signature = PluginChangeSnapshot.snapshot(plugins)
         // Rebuild when the effective set changes OR any plugin's file changes on
@@ -432,6 +473,72 @@ public final class AppController: NSObject, NSApplicationDelegate {
         // Drop widget entries for plugins that are no longer loaded.
         widgetPublisher.setLoaded(ids: Set(coordinators.keys))
     }
+
+    /// Garbage-collects every satellite state store — disabled flag, hotkey
+    /// prefs, `.vars.json` sidecar, Keychain secret, catalog provenance
+    /// record — for a plugin filename that has state but no file on disk.
+    /// Every one of those stores is keyed by filename (see `PluginID`), so
+    /// without this, a later plugin landing under the SAME filename inherits
+    /// a stranger's disabled flag, credential, or provenance record.
+    ///
+    /// Covers both an in-app delete (`deletePlugin`, which already calls
+    /// `reload()` right after trashing — so it GCs for free, immediately,
+    /// through this same path) and a manual Finder/`rm` delete (the
+    /// directory watcher calls `reload()` on any change, in-app or not).
+    ///
+    /// Disk-authoritative and conservative by construction:
+    /// - It only ever acts on a filename it already has independent
+    ///   evidence for (a stored pref, a `.vars.json` sidecar, or a
+    ///   provenance record) — never a blind Keychain sweep. ponytail: a
+    ///   plugin whose *only* state was ever a Keychain secret (no pref,
+    ///   sidecar, or provenance record) sits outside this net — there is no
+    ///   "list every Vee plugin's Keychain items" API, and inventing one
+    ///   for an irreversible delete is the wrong shape for the gap. Add a
+    ///   persisted "has-a-secret" marker if that gap ever bites in practice.
+    /// - It does nothing at all unless a real, successful directory listing
+    ///   confirms genuine absence. `PluginDiscovery.enumerate` silently folds
+    ///   a read failure into `[]` (`try?`), which is indistinguishable from
+    ///   "really empty" — so this takes its own raw listing instead, purely
+    ///   to keep that failure signal. A failed/unreadable listing (a
+    ///   permissions hiccup, an unmounted network volume, …) leaves every
+    ///   store untouched: deleting a Keychain secret is irreversible, so
+    ///   "can't confirm absence" must mean "don't touch it," never "assume
+    ///   it's gone." A listing that succeeds and is simply empty (the
+    ///   plugins folder legitimately has nothing in it right now) is a real,
+    ///   trustworthy signal and still GCs everything — that's the
+    ///   disk-authoritative point of this method.
+    /// - `PluginInstaller.install` (fresh install AND in-place update alike)
+    ///   writes atomically (rename over the destination — see its doc
+    ///   comment), so an update never presents a "file momentarily absent"
+    ///   window that could trip this into GC-ing a plugin mid-update.
+    private func reconcileDiskState() {
+        guard let rawNames = try? FileManager.default.contentsOfDirectory(atPath: directory) else { return }
+        let onDisk = Set(rawNames)
+
+        let provenanceStore = ProvenanceStore(directory: directory)
+        var candidates = prefs.disabledIDs()
+            .union(prefs.hotkeyDisabledIDs())
+            .union(prefs.hotkeyBindingIDs())
+            .union(provenanceStore.all().keys)
+        // `.vars.json` sidecars live on disk next to their plugin but are
+        // filtered out of every plugin listing (`PluginDiscovery` skips
+        // them), so they have to be hunted for directly by suffix rather
+        // than read off `onDisk`/`PluginDiscovery`'s output.
+        let sidecarSuffix = ".vars.json"
+        candidates.formUnion(rawNames.filter { $0.hasSuffix(sidecarSuffix) }.map { String($0.dropLast(sidecarSuffix.count)) })
+
+        for filename in candidates where !onDisk.contains(filename) {
+            prefs.clearAllState(id: filename)
+            VarStore(pluginPath: (directory as NSString).appendingPathComponent(filename)).delete()
+            try? provenanceStore.remove(filename: filename)
+            secretStoreFactory(PluginID(rawValue: filename)).deleteAll()
+        }
+    }
+
+    /// Whether `id` currently has a live coordinator — i.e. it passed the
+    /// enabled-plugins filter and was loaded by the last `reload()`. Exposed
+    /// for tests; production code has no need to enumerate this.
+    func isLoaded(id: String) -> Bool { coordinators[id] != nil }
 
     // MARK: - Control Center refresh
 
@@ -901,6 +1008,12 @@ public final class AppController: NSObject, NSApplicationDelegate {
     /// it's the change-detection baseline reload() compares against, so the
     /// now-deleted path dropping out of the fresh signature guarantees reload()
     /// sees the diff and rebuilds (clearing it here would be redundant).
+    ///
+    /// Also GCs this filename's satellite state (disabled flag, hotkey prefs,
+    /// `.vars.json`, Keychain secret, provenance) immediately, for free: the
+    /// `reload()` below runs `reconcileDiskState()` first thing, and the file
+    /// is already gone from disk by the time it does (`trashItem` isn't
+    /// async) — see `reconcileDiskState`'s doc comment.
     private func deletePlugin(_ id: String) {
         guard let plugin = PluginDiscovery.enumerate(directory: directory).first(where: { $0.id.rawValue == id }) else { return }
         try? FileManager.default.trashItem(at: URL(fileURLWithPath: plugin.path), resultingItemURL: nil)
@@ -915,7 +1028,6 @@ public final class AppController: NSObject, NSApplicationDelegate {
         let id: String
         let name: String
         let interval: RefreshInterval
-        let isExecutable: Bool
         let isDisabled: Bool
         let isHotkeyDisabled: Bool
         let hotkeyBinding: String?
@@ -933,7 +1045,6 @@ public final class AppController: NSObject, NSApplicationDelegate {
                 id: id,
                 name: plugin.filename.name,
                 interval: plugin.filename.interval,
-                isExecutable: plugin.isExecutable,
                 isDisabled: prefs.isDisabled(id),
                 isHotkeyDisabled: prefs.isHotkeyDisabled(id),
                 hotkeyBinding: prefs.hotkeyBinding(id),
@@ -969,7 +1080,13 @@ public final class AppController: NSObject, NSApplicationDelegate {
                 name: input.name,
                 interval: describe(input.interval),
                 trust: describe(level),
-                isEnabled: input.isExecutable && !input.isDisabled,
+                // `PluginDiscovery.enabled` (what `enabledPlugins()` actually
+                // loads) runs a non-executable plugin bash-wrapped, matching
+                // SwiftBar — it isn't filtered by the execute bit. The
+                // Manager toggle must reflect that reality (IM10): whether
+                // it's disabled, not whether it happens to be +x. This
+                // doesn't change WHAT runs, only what this row displays.
+                isEnabled: !input.isDisabled,
                 hasSettings: !header.vars.isEmpty || !declaredFeatures.isEmpty,
                 features: PluginFeatures(searchPanel: header.filter, hotkey: effectiveHotkey),
                 lastError: input.lastError,

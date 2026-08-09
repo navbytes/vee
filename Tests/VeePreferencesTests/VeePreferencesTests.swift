@@ -27,6 +27,29 @@ final class VarStoreTests: XCTestCase {
         XCTAssertNil(store.value(for: "K"))
     }
 
+    /// `delete()` removes the sidecar file itself — the disk-reconciliation
+    /// GC's cleanup primitive, distinct from clearing individual values.
+    func testDeleteRemovesSidecarFile() throws {
+        let store = VarStore(pluginPath: tempPlugin())
+        try store.set("dark", for: "THEME")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: store.sidecarPath))
+
+        store.delete()
+
+        XCTAssertFalse(FileManager.default.fileExists(atPath: store.sidecarPath))
+        XCTAssertTrue(store.load().isEmpty)
+    }
+
+    /// A missing sidecar is a safe no-op, not an error — GC calls this
+    /// unconditionally for every candidate filename, most of which never had
+    /// a sidecar at all.
+    func testDeleteOnMissingSidecarIsNoOp() {
+        let store = VarStore(pluginPath: tempPlugin())
+        XCTAssertFalse(FileManager.default.fileExists(atPath: store.sidecarPath))
+        store.delete() // must not throw/crash
+        XCTAssertTrue(store.load().isEmpty)
+    }
+
     // MARK: - D9: fail closed on a corrupt sidecar
 
     /// `set()` must not clobber a sidecar it can't decode — that would
@@ -71,6 +94,20 @@ final class InMemorySecretStoreTests: XCTestCase {
         store.set(nil, for: "TOKEN")
         XCTAssertNil(store.get("TOKEN"))
     }
+
+    /// `deleteAll()` clears every account in the namespace at once — a
+    /// plugin can declare several secret vars (several accounts), so
+    /// clearing one known name during disk-reconciliation GC isn't enough.
+    func testDeleteAllClearsEveryAccount() {
+        let store = InMemorySecretStore()
+        store.set("abc", for: "API_TOKEN")
+        store.set("def", for: "PASSWORD")
+
+        store.deleteAll()
+
+        XCTAssertNil(store.get("API_TOKEN"))
+        XCTAssertNil(store.get("PASSWORD"))
+    }
 }
 
 final class AppPreferencesTests: XCTestCase {
@@ -112,6 +149,39 @@ final class AppPreferencesTests: XCTestCase {
         XCTAssertNil(prefs.hotkeyBinding("p1"))
         prefs.setHotkeyBinding("", id: "p1")
         XCTAssertNil(prefs.hotkeyBinding("p1"))
+    }
+
+    /// The enumerable companions to `isHotkeyDisabled`/`hotkeyBinding` — disk
+    /// reconciliation needs the full id sets, not just per-id checks.
+    func testHotkeyDisabledAndBindingIDsEnumerateEverySetID() {
+        let prefs = AppPreferences(defaults: UserDefaults(suiteName: "vee-test-" + UUID().uuidString)!)
+        XCTAssertEqual(prefs.hotkeyDisabledIDs(), [])
+        XCTAssertEqual(prefs.hotkeyBindingIDs(), [])
+
+        prefs.setHotkeyDisabled(true, id: "p1")
+        prefs.setHotkeyDisabled(true, id: "p2")
+        prefs.setHotkeyBinding("cmd+shift+j", id: "p2")
+
+        XCTAssertEqual(prefs.hotkeyDisabledIDs(), ["p1", "p2"])
+        XCTAssertEqual(prefs.hotkeyBindingIDs(), ["p2"])
+    }
+
+    /// `clearAllState` wipes every UserDefaults-backed preference for one id
+    /// — disabled, hotkey-off, and custom binding — and leaves every other
+    /// plugin's prefs untouched. This is disk reconciliation's mutator.
+    func testClearAllStateClearsEveryFieldForOnlyThatID() {
+        let prefs = AppPreferences(defaults: UserDefaults(suiteName: "vee-test-" + UUID().uuidString)!)
+        prefs.setDisabled(true, id: "ghost")
+        prefs.setHotkeyDisabled(true, id: "ghost")
+        prefs.setHotkeyBinding("cmd+shift+j", id: "ghost")
+        prefs.setDisabled(true, id: "survivor")
+
+        prefs.clearAllState(id: "ghost")
+
+        XCTAssertFalse(prefs.isDisabled("ghost"))
+        XCTAssertFalse(prefs.isHotkeyDisabled("ghost"))
+        XCTAssertNil(prefs.hotkeyBinding("ghost"))
+        XCTAssertTrue(prefs.isDisabled("survivor"), "clearing one id must never touch another's state")
     }
 }
 

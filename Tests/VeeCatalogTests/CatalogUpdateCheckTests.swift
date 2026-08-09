@@ -62,7 +62,7 @@ final class CatalogUpdateCheckTests: XCTestCase {
         let record = PluginProvenance(filename: "x.sh", sourceURL: url, source: installedSource, installedAt: Date(timeIntervalSince1970: 1_000))
 
         let editedSource = "#!/bin/bash\necho edited-locally\n"
-        XCTAssertEqual(ProvenanceStatus.evaluate(record: record, currentSource: editedSource), .modified, "sanity: the local edit is detected")
+        XCTAssertEqual(ProvenanceStatus.evaluate(record: record, currentSource: editedSource, entrySourceURL: url), .modified, "sanity: the local edit is detected")
 
         let catalogEntry = entry(declaredSHA256: PluginHash.sha256Hex(installedSource))
         XCTAssertEqual(

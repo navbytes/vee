@@ -92,6 +92,33 @@ public final class AppPreferences: @unchecked Sendable {
         defaults.set(map, forKey: hotkeyCustomKey)
     }
 
+    /// Every plugin id with a stored hotkey-off flag — the enumerable
+    /// companion to `isHotkeyDisabled(_:)`. Used by disk reconciliation
+    /// (`AppController.reconcileDiskState`) to find candidate filenames whose
+    /// file might no longer exist; production code only ever needs the
+    /// per-id check above.
+    public func hotkeyDisabledIDs() -> Set<String> {
+        Set(defaults.stringArray(forKey: hotkeyOffKey) ?? [])
+    }
+
+    /// Every plugin id with a stored custom hotkey binding — the enumerable
+    /// companion to `hotkeyBinding(_:)`, for the same reconciliation use.
+    public func hotkeyBindingIDs() -> Set<String> {
+        Set((defaults.dictionary(forKey: hotkeyCustomKey) as? [String: String] ?? [:]).keys)
+    }
+
+    /// Clears every stored preference for `id` — disabled flag, hotkey-off
+    /// flag, and custom hotkey binding — leaving every other plugin's prefs
+    /// untouched. Used when disk reconciliation confirms `id`'s file no
+    /// longer exists (a manual delete, or an in-app delete); reuses the
+    /// existing per-field mutators rather than touching `UserDefaults`
+    /// directly, so this can never drift from them.
+    public func clearAllState(id: String) {
+        setDisabled(false, id: id)
+        setHotkeyDisabled(false, id: id)
+        setHotkeyBinding(nil, id: id)
+    }
+
     // MARK: - Cross-plugin "Search All Plugins" hotkey
 
     /// Whether the user opted into the app-level global hotkey that opens the
