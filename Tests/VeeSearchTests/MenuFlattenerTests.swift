@@ -82,20 +82,36 @@ final class MenuFlattenerTests: XCTestCase {
         XCTAssertEqual(status?.path, ["orders"])
     }
 
-    /// Regression (spec bug #3): an item with BOTH an action and a submenu must
-    /// surface its own action *and* recurse into children.
+    /// Regression (spec bug #3, REVERSED by D2 — see MenuBuilder.makeItem): an
+    /// item with BOTH an action and a submenu is inert-on-click *natively*
+    /// (its submenu opens instead of firing href=/shell=/etc.), so the panel
+    /// must match that instead of firing it — a destructive `shell=` on a
+    /// submenu-parent that never fires in the menu bar must not fire from the
+    /// panel. The parent still surfaces (searchable, non-activating) and its
+    /// children still recurse in.
     func testClickableParentEmittedAndRecursed() {
-        let rows = MenuFlattener.flatten([
+        let entries = MenuFlattener.flattenEntries([
             href("orders", "https://orders.dev", submenu: [
                 href("Child")
             ])
         ])
-        XCTAssertEqual(rows.count, 2)
-        let parent = rows.first { $0.item.text == "orders" }
-        XCTAssertEqual(parent?.path, [])                         // emitted at its own level
-        XCTAssertNotNil(parent?.item.params.href)
-        let child = rows.first { $0.item.text == "Child" }
-        XCTAssertEqual(child?.path, ["orders"])               // breadcrumb still carries the group
+        XCTAssertEqual(entries.count, 2)
+        guard case .info(let parent) = entries[0] else {
+            return XCTFail("a submenu-parent must surface as .info, not .action — it never fires from the native menu")
+        }
+        XCTAssertEqual(parent.item.text, "orders")
+        XCTAssertEqual(parent.path, [])                           // emitted at its own level
+        XCTAssertNotNil(parent.item.params.href, "the href is kept on the item — actionability is suppressed, not the data")
+        guard case .action(let child) = entries[1] else { return XCTFail("expected the child action row") }
+        XCTAssertEqual(child.item.text, "Child")
+        XCTAssertEqual(child.path, ["orders"])                    // breadcrumb still carries the group
+
+        // The .action-only view (what MenuSearch actually ranks/activates)
+        // must exclude the inert parent entirely, not just relabel it.
+        let rows = MenuFlattener.flatten([
+            href("orders", "https://orders.dev", submenu: [href("Child")])
+        ])
+        XCTAssertEqual(rows.map(\.item.text), ["Child"])
     }
 
     func testDisabledAndDropdownFalseExcluded() {
@@ -120,6 +136,58 @@ final class MenuFlattenerTests: XCTestCase {
     func testEmptyTextLeafExcluded() {
         let rows = MenuFlattener.flatten([ href("   ") ])       // whitespace-only text
         XCTAssertTrue(rows.isEmpty)
+    }
+
+    // MARK: - alternate=true (spec bug #2: OutputParser folds it into
+    // MenuItem.alternate, not a MenuNode child, so the old submenu-only walk
+    // never saw it — ⌥-items were invisible to the panel while MenuBuilder
+    // rendered them fine).
+
+    /// Regression: an `alternate=true` sibling must be flattened as its own
+    /// searchable, activatable row — both in the full entry list and in the
+    /// `.action`-only view `MenuSearch` actually ranks against.
+    func testAlternateItemFlattenedAsSearchableActivatableRow() {
+        var main = MenuItem(text: "Refresh", params: {
+            var p = LineParams(); p.href = URL(string: "https://example.com/refresh"); return p
+        }())
+        var altParams = LineParams()
+        altParams.href = URL(string: "https://example.com/force-refresh")
+        main.alternate = MenuItem(text: "Force Refresh", params: altParams)
+
+        let entries = MenuFlattener.flattenEntries([.item(main)])
+        XCTAssertEqual(entries.count, 2)
+        guard case .action(let mainRow) = entries[0] else { return XCTFail("expected the main row") }
+        XCTAssertEqual(mainRow.item.text, "Refresh")
+        guard case .action(let altRow) = entries[1] else { return XCTFail("expected the alternate row, activatable") }
+        XCTAssertEqual(altRow.item.text, "Force Refresh")
+        XCTAssertEqual(altRow.path, [], "the alternate is a peer of the main item, not nested under it")
+
+        XCTAssertEqual(
+            MenuFlattener.flatten([.item(main)]).map(\.item.text), ["Refresh", "Force Refresh"],
+            "the .action-only view (what MenuSearch ranks/activates) must include it too — it was entirely absent before"
+        )
+    }
+
+    /// The alternate goes through the exact same submenu-vs-action gate (D2)
+    /// as any other item — `MenuBuilder.makeItem` doesn't special-case
+    /// `isAlternate` there, so an alternate with children is inert-on-click
+    /// natively too, and must surface as `.info`, not `.action`, while its
+    /// children still descend under its own breadcrumb.
+    func testAlternateWithSubmenuIsInfoNotActionButChildrenDescend() {
+        var main = MenuItem(text: "Open", params: {
+            var p = LineParams(); p.href = URL(string: "https://example.com"); return p
+        }())
+        var altParams = LineParams()
+        altParams.href = URL(string: "https://example.com/alt")
+        main.alternate = MenuItem(text: "Open With", params: altParams, submenu: [href("Editor A"), href("Editor B")])
+
+        let entries = MenuFlattener.flattenEntries([.item(main)])
+        guard case .info(let alt) = entries[1] else {
+            return XCTFail("a submenu-carrying alternate must not be activatable, same as any other submenu-parent")
+        }
+        XCTAssertEqual(alt.item.text, "Open With")
+        XCTAssertEqual(flatRow("Editor A", in: entries)?.path, ["Open With"])
+        XCTAssertEqual(flatRow("Editor B", in: entries)?.path, ["Open With"])
     }
 
     // MARK: - Actionability mirrors the dispatcher
