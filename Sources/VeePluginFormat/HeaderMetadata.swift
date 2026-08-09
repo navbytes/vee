@@ -85,5 +85,10 @@ public struct HeaderMetadata: Equatable, Sendable {
     /// means no override — strictly opt-in, like every other Vee-native tag.
     public var timeout: TimeInterval?
 
+    /// Non-fatal problems found while parsing the header (e.g. a scheme-blocked
+    /// `<xbar.abouturl>`) — same "degrade, don't drop silently" contract as
+    /// `ParsedOutput.diagnostics`.
+    public var diagnostics: [ParseDiagnostic] = []
+
     public init() {}
 }

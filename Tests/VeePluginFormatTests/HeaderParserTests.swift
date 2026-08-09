@@ -36,6 +36,18 @@ final class HeaderParserTests: XCTestCase {
         XCTAssertEqual(ok.aboutURL?.absoluteString, "https://example.com")
     }
 
+    /// Regression: a scheme-blocked/unparseable `<xbar.abouturl>` used to drop
+    /// to `nil` with no signal — same diagnostic shape as menu `href=` and
+    /// `WidgetCardParser`'s identical `URLScheme.isSafeToOpen` gate.
+    func testAboutURLUnsafeSchemeEmitsDiagnostic() {
+        let m = HeaderParser.parse(source: "# <xbar.abouturl>javascript:alert(1)</xbar.abouturl>\n")
+        XCTAssertNil(m.aboutURL)
+        XCTAssertTrue(m.diagnostics.contains { $0.message.contains("missing or unsafe url") })
+
+        let ok = HeaderParser.parse(source: "# <xbar.abouturl>https://example.com</xbar.abouturl>\n")
+        XCTAssertTrue(ok.diagnostics.isEmpty)
+    }
+
     func testSwiftBarOptions() {
         let src = """
         # <swiftbar.type>streamable</swiftbar.type>

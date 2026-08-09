@@ -83,6 +83,8 @@ In the search panel, section headers render as dimmed context rows and become pa
 
 Append `| key=value key2=value2 …` to any line to attach parameters. Quote values that contain spaces (`title="Open in browser"`), and escape quotes with `\"`.
 
+A literal `|`, backslash, or newline in the display text (or in a quoted value) must be escaped as `\|`, `\\`, or `\n` — otherwise an unescaped `|` is read as the params delimiter and truncates the item, and a raw newline splits it into two corrupted lines. The bundled [TypeScript, Python, and Go SDKs](sdk.md) escape these automatically for any text/value you pass in; only hand-written plugin output needs to do it explicitly.
+
 | Parameter | Description |
 |-----------|-------------|
 | `color` | Text color — a named color (`red`, `green`, …) or a hex value like `#00ff00`. |
@@ -108,7 +110,7 @@ Append `| key=value key2=value2 …` to any line to attach parameters. Quote val
 | `sfconfig` | SF Symbol configuration as JSON — `scale` (`small`/`medium`/`large`) and `weight` (e.g. `bold`). Example: `sfconfig='{"scale":"large","weight":"bold"}'`. |
 | `symbolize` | `true` — render inline `:symbol.name:` tokens in the text as SF Symbols. |
 | `md` / `markdown` | `true` — render the text as inline Markdown (bold, italics, etc.). |
-| `ansi` | `true` — interpret ANSI color escape codes in the text. |
+| `ansi` | `true`/`false` — interpret ANSI color escape codes in the text. On by default; set `ansi=false` to disable. |
 | `emojize` | `true`/`false` — convert `:shortcode:` tokens (e.g. `:smile:`) into emoji. |
 | `tooltip` | Hover tooltip text. |
 | `checked` | `true` — show a checkmark next to the item. |
@@ -487,11 +489,13 @@ Browse names with Apple's [SF Symbols app](https://developer.apple.com/sf-symbol
 
 ## ANSI color
 
-If your tool emits ANSI escape codes (many CLIs do), pass `ansi=true` to have Vee interpret them:
+If your tool emits ANSI escape codes (many CLIs do), Vee interprets them by default — no parameter needed:
 
 ```sh
-echo -e "\033[32mOK\033[0m | ansi=true"
+echo -e "\033[32mOK\033[0m"
 ```
+
+Pass `ansi=false` to turn this off and show the raw escape codes as text instead.
 
 ## Markdown
 

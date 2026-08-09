@@ -5,23 +5,53 @@ import Foundation
 /// so it is unit-testable in isolation.
 enum LineParser {
     /// Splits a line into `(text, rawParams)`. The separator is the first
-    /// top-level `|` that is not inside a quoted parameter value. Everything
-    /// before it is display text; everything after is parsed as parameters.
+    /// top-level `|` that isn't escaped (`\|`) — a literal `|`/newline/backslash
+    /// in the display text is written as `\|`/`\n`/`\\` (the bundled TS/Python/Go
+    /// SDKs escape exactly these three characters when emitting user-supplied
+    /// text), so it survives the split instead of truncating or corrupting the
+    /// item. Everything before the delimiter is display text (unescaped here);
+    /// everything after is parsed as parameters.
     static func splitTextAndParams(_ line: String) -> (text: String, rawParams: [(key: String, value: String)], diagnostics: [ParseDiagnostic]) {
-        // The title never contains quotes in practice, so the first `|` is the
-        // separator. (Params values may contain `|`, but those come after it.)
-        guard let pipe = line.firstIndex(of: "|") else {
-            return (line, [], [])
+        let chars = Array(line)
+        var text = ""
+        var i = 0
+        while i < chars.count {
+            if chars[i] == "\\", i + 1 < chars.count, let unescaped = unescape(chars[i + 1]) {
+                text.append(unescaped)
+                i += 2
+                continue
+            }
+            if chars[i] == "|" { break }
+            text.append(chars[i])
+            i += 1
         }
-        let text = String(line[line.startIndex..<pipe])
-        let paramString = String(line[line.index(after: pipe)...])
+        guard i < chars.count else {
+            // Ran off the end without finding an unescaped `|`: no params section.
+            return (text, [], [])
+        }
+        let paramString = String(chars[(i + 1)...])
         let (pairs, diags) = parseParams(paramString)
         return (text, pairs, diags)
     }
 
+    /// `\|` → `|`, `\n` → newline, `\\` → `\` — the three escapes honored
+    /// identically by this tokenizer (here, and in the quoted-value scanner
+    /// below) and by the bundled SDKs' serializers. Any other backslash
+    /// sequence (including the per-quote-character `\"`/`\'` the value scanner
+    /// handles itself) is left untouched — permissive, matching this parser's
+    /// "never throw" stance.
+    private static func unescape(_ c: Character) -> Character? {
+        switch c {
+        case "|": return "|"
+        case "n": return "\n"
+        case "\\": return "\\"
+        default: return nil
+        }
+    }
+
     /// Parses a parameter string (`key=value key2="a b" …`) into ordered pairs.
-    /// Handles single/double quotes, escaped quotes (`\"`), and values that
-    /// contain `=` or `|`.
+    /// Handles single/double quotes, escaped quotes (`\"`), the shared `\|`/`\n`/
+    /// `\\` escapes (see `unescape` above), and values that contain `=` or `|`.
     static func parseParams(_ string: String) -> (pairs: [(key: String, value: String)], diagnostics: [ParseDiagnostic]) {
         var pairs: [(String, String)] = []
         var diagnostics: [ParseDiagnostic] = []
@@ -55,8 +85,13 @@ enum LineParser {
             if i < chars.count, chars[i] == "\"" || chars[i] == "'" {
                 let quote = chars[i]; i += 1
                 while i < chars.count {
-                    if chars[i] == "\\", i + 1 < chars.count, chars[i + 1] == quote {
-                        value.append(quote); i += 2; continue
+                    if chars[i] == "\\", i + 1 < chars.count {
+                        if chars[i + 1] == quote {
+                            value.append(quote); i += 2; continue
+                        }
+                        if let unescaped = unescape(chars[i + 1]) {
+                            value.append(unescaped); i += 2; continue
+                        }
                     }
                     if chars[i] == quote { i += 1; break }
                     value.append(chars[i]); i += 1
@@ -83,6 +118,7 @@ enum LineParser {
         var progressTrack: VeeColor?
         var progressW: Double?
         var progressH: Double?
+        var seenKeys: Set<String> = []
 
         func bool(_ v: String) -> Bool { v == "true" || v == "1" || v == "yes" }
 
@@ -96,6 +132,13 @@ enum LineParser {
         }
 
         for (key, value) in pairs {
+            // A key repeated on one line silently let the last occurrence win
+            // (still does — "last one wins" is the established rule elsewhere in
+            // this parser, e.g. duplicate header tags) but gave no signal it
+            // happened, hiding typos like a copy-pasted `color=red … color=blue`.
+            if !seenKeys.insert(key).inserted {
+                diagnostics.append(.init(severity: .warning, message: "duplicate parameter '\(key)'"))
+            }
             switch key {
             case "color": p.color = VeeColor.parse(value)
             case "font": p.font = value
@@ -106,7 +149,15 @@ enum LineParser {
             case "trim": p.trim = bool(value)
             case "ansi": p.ansi = bool(value)
             case "emojize": p.emojize = bool(value)
-            case "href": p.href = URL(string: value).flatMap { URLScheme.isSafeToOpen($0) ? $0 : nil }
+            case "href":
+                if let url = URL(string: value), URLScheme.isSafeToOpen(url) {
+                    p.href = url
+                } else {
+                    // Same gate/diagnostic shape as WidgetCardParser's href
+                    // action filter: a missing/unparseable/scheme-blocked URL
+                    // silently became `nil` with no signal it was dropped.
+                    diagnostics.append(.init(severity: .warning, message: "href= has a missing or unsafe url; dropped"))
+                }
             case "shell", "bash": shellPath = value
             case "terminal": terminal = bool(value)
             case "refresh": p.refresh = bool(value)
@@ -114,8 +165,8 @@ enum LineParser {
             case "alternate": p.alternate = bool(value)
             case "disabled": p.disabled = bool(value)
             case "key": p.key = value
-            case "image": p.image = value
-            case "templateimage": p.templateImage = value
+            case "image": p.image = validatedImage(value, param: "image", diagnostics: &diagnostics)
+            case "templateimage": p.templateImage = validatedImage(value, param: "templateImage", diagnostics: &diagnostics)
             case "sfimage": p.swiftbar.sfimage = value
             case "sfcolor": p.swiftbar.sfcolor = value.split(separator: ",").compactMap { VeeColor.parse(String($0)) }
             case "sfsize": p.swiftbar.sfsize = finite(value)
@@ -210,5 +261,28 @@ enum LineParser {
         }
 
         return (p, diagnostics)
+    }
+
+    /// Decoded-byte cap for `image=`/`templateImage=` payloads. A menu-bar/status
+    /// icon is tiny — this only guards against a pathologically large embed
+    /// (memory blowup, an unresponsive menu); legitimate icons sit far under it.
+    private static let maxImageBytes = 2 * 1024 * 1024
+
+    /// Validates a base64 image payload: it must decode, and stay under
+    /// `maxImageBytes` once decoded. Uses the same lenient
+    /// `.ignoreUnknownCharacters` decode `SymbolImageFactory` renders with, so a
+    /// value accepted here is guaranteed to decode there too. Drops (`nil`) with
+    /// a diagnostic on failure instead of forwarding a payload the renderer
+    /// would silently fail to draw.
+    private static func validatedImage(_ value: String, param: String, diagnostics: inout [ParseDiagnostic]) -> String? {
+        guard let data = Data(base64Encoded: value, options: .ignoreUnknownCharacters), !data.isEmpty else {
+            diagnostics.append(.init(severity: .warning, message: "\(param)= is not valid base64; dropped"))
+            return nil
+        }
+        guard data.count <= maxImageBytes else {
+            diagnostics.append(.init(severity: .warning, message: "\(param)= decodes to over \(maxImageBytes) bytes; dropped"))
+            return nil
+        }
+        return value
     }
 }

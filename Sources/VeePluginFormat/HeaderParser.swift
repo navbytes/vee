@@ -39,7 +39,15 @@ public enum HeaderParser {
             case "dependencies": meta.dependencies = splitList(value)
             // Plugin-declared; scheme-filtered like href= so the About dialog's
             // "Open Website" can't open file://, javascript:, etc.
-            case "abouturl": meta.aboutURL = URL(string: value).flatMap { URLScheme.isSafeToOpen($0) ? $0 : nil }
+            case "abouturl":
+                if let url = URL(string: value), URLScheme.isSafeToOpen(url) {
+                    meta.aboutURL = url
+                } else {
+                    // Same gate/diagnostic shape as menu href=/WidgetCardParser's
+                    // href action filter: a missing/unparseable/scheme-blocked
+                    // URL silently became `nil` with no signal it was dropped.
+                    meta.diagnostics.append(.init(severity: .warning, message: "abouturl has a missing or unsafe url; dropped"))
+                }
             case "schedule": meta.schedule = value.split(separator: "|").map { $0.trimmingCharacters(in: .whitespaces) }
             case "runinbash": meta.runInBash = boolValue(value)
             case "refreshonopen": meta.refreshOnOpen = boolValue(value)
