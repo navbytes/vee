@@ -5,17 +5,30 @@ final class StoreRegistryTests: XCTestCase {
     private var suiteName = ""
     private var defaults: UserDefaults!
     private var registry: StoreRegistry!
+    private var tokenStores: [StoreID: InMemoryStoreTokenStore] = [:]
 
     override func setUp() {
         super.setUp()
         suiteName = "vee.storeregistry.\(UUID().uuidString)"
         defaults = UserDefaults(suiteName: suiteName)!
-        registry = StoreRegistry(defaults: defaults)
+        tokenStores = [:]
+        // Keeps tests off the real Keychain, and returns the same instance
+        // per id so a test can read back what `remove()` did to it.
+        registry = StoreRegistry(defaults: defaults, makeTokenStore: { [weak self] id in
+            self?.tokenStore(for: id) ?? InMemoryStoreTokenStore()
+        })
     }
 
     override func tearDown() {
         defaults.removePersistentDomain(forName: suiteName)
         super.tearDown()
+    }
+
+    private func tokenStore(for id: StoreID) -> InMemoryStoreTokenStore {
+        if let existing = tokenStores[id] { return existing }
+        let store = InMemoryStoreTokenStore()
+        tokenStores[id] = store
+        return store
     }
 
     private func userStore(_ id: String, enabled: Bool = true) -> StoreConfig {
@@ -50,6 +63,68 @@ final class StoreRegistryTests: XCTestCase {
         }
     }
 
+    /// The Add-store sheet mints a random id every time, so a duplicate repo
+    /// is never caught by the id check above — dedup has to look at identity
+    /// (kind + normalized owner/repo) instead. Also covers the case- and
+    /// `.git`-suffix normalization the fix calls for.
+    func testAddRejectsSameRepoUnderADifferentID() throws {
+        try registry.add(StoreConfig(
+            id: StoreID("user-aaaaaaaa"), displayName: "Acme Plugins", kind: .github,
+            owner: "Acme", repo: "Vee-Plugins"
+        ))
+        let dup = StoreConfig(
+            id: StoreID("user-bbbbbbbb"), displayName: "Acme Plugins Again", kind: .github,
+            owner: "acme", repo: "vee-plugins.git"
+        )
+        XCTAssertThrowsError(try registry.add(dup)) { error in
+            XCTAssertEqual(error as? StoreRegistryError, .duplicateStore("Acme Plugins"))
+        }
+        XCTAssertEqual(registry.userStores().count, 1)
+    }
+
+    /// Identity dedup also has to catch a repo that duplicates the built-in
+    /// catalog, not just another user store.
+    func testAddRejectsDuplicateOfBuiltInCatalog() {
+        let dup = StoreConfig(
+            id: StoreID("user-cccccccc"), displayName: "My xbar mirror", kind: .github,
+            owner: "MATRYER", repo: "xbar-plugins"
+        )
+        XCTAssertThrowsError(try registry.add(dup)) { error in
+            XCTAssertEqual(error as? StoreRegistryError, .duplicateStore("Public xbar catalog"))
+        }
+    }
+
+    /// Same dedup, the http/local branch: identity is the normalized baseURL.
+    func testAddRejectsSameHTTPRootByNormalizedBaseURL() throws {
+        try registry.add(StoreConfig(
+            id: StoreID("user-dddddddd"), displayName: "Acme HTTP", kind: .http,
+            baseURL: URL(string: "https://store.acme.corp/vee")!
+        ))
+        let dup = StoreConfig(
+            id: StoreID("user-eeeeeeee"), displayName: "Acme HTTP Again", kind: .http,
+            baseURL: URL(string: "https://STORE.acme.corp/vee/")!
+        )
+        XCTAssertThrowsError(try registry.add(dup)) { error in
+            XCTAssertEqual(error as? StoreRegistryError, .duplicateStore("Acme HTTP"))
+        }
+    }
+
+    /// A present-but-undecodable `vee.customStores` blob (corrupt bytes, or a
+    /// schema drift missing a since-added required field) must not be
+    /// silently treated as empty and overwritten — that would wipe every
+    /// existing custom store the next time the user adds/removes/updates one.
+    func testAddRefusesToOverwriteCorruptUserStoresBlob() throws {
+        let corrupt = Data("{\"oops\":\"not a store array\"}".utf8)
+        defaults.set(corrupt, forKey: "vee.customStores")
+
+        XCTAssertThrowsError(try registry.add(userStore("new"))) { error in
+            XCTAssertEqual(error as? StoreRegistryError, .corruptUserStores)
+        }
+        // Refused to persist: the undecodable bytes are untouched, not
+        // clobbered with a fresh single-store array containing only "new".
+        XCTAssertEqual(defaults.data(forKey: "vee.customStores"), corrupt)
+    }
+
     func testCannotAddOrRemoveBuiltIn() {
         var xbar = BuiltInStores.xbar
         xbar.displayName = "hijack"
@@ -61,6 +136,19 @@ final class StoreRegistryTests: XCTestCase {
         try registry.add(userStore("temp"))
         try registry.remove(StoreID("temp"))
         XCTAssertEqual(registry.stores().map(\.id), [BuiltInStores.xbarID])
+    }
+
+    /// `remove()` used to only clear the disabled flag, despite a comment
+    /// claiming it dropped the token too — the actual cleanup lived solely in
+    /// the Settings UI's model, so any other caller orphaned the Keychain
+    /// secret. The registry itself must drop it.
+    func testRemoveDropsTheStoreToken() throws {
+        try registry.add(userStore("s"))
+        tokenStore(for: StoreID("s")).set("secret-token")
+
+        try registry.remove(StoreID("s"))
+
+        XCTAssertNil(tokenStore(for: StoreID("s")).token(), "remove() must drop the store's token, not just its disabled flag")
     }
 
     func testUpdateUserStore() throws {

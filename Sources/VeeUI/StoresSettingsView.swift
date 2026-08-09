@@ -39,10 +39,10 @@ public final class StoresSettingsModel: ObservableObject {
         reload()
     }
 
-    /// Removes a user store and clears its saved token.
+    /// Removes a user store. `StoreRegistry.remove` itself drops the store's
+    /// Keychain token, so every caller gets that cleanup — not just this UI path.
     public func remove(_ store: StoreConfig) {
         try? registry.remove(store.id)
-        makeTokenStore(store.id).set(nil)
         reload()
     }
 
