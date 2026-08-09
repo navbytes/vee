@@ -4,6 +4,16 @@ import VeeCore
 /// Installs a plugin's source into the plugins directory. The directory watcher
 /// then loads it automatically.
 public enum PluginInstaller {
+    /// Writes `source` to `filename` in `directory` — for a brand-new install
+    /// AND an in-place update alike (there is no separate "update" entry
+    /// point; Discover's Update button calls this same function). `write(
+    /// toFile:atomically:)` writes to a temp file in the same directory and
+    /// renames it over the destination, so this is a true atomic *replace*:
+    /// there is never a moment where `filename` is briefly absent for an
+    /// existing plugin being updated, which matters for
+    /// `AppController.reconcileDiskState`'s disk-authoritative GC — a
+    /// directory listing taken mid-update always shows either the old or the
+    /// new content, never "missing".
     @discardableResult
     public static func install(filename: String, source: String, into directory: String, fileManager: FileManager = .default) throws -> String {
         // A plugin filename is attacker-influenced (it can come from a

@@ -91,28 +91,95 @@ final class ProvenanceStoreTests: XCTestCase {
 
 final class ProvenanceStatusTests: XCTestCase {
     private let url = URL(string: "https://example.com/x.sh")!
+    private let otherURL = URL(string: "https://example.org/mirror/x.sh")!
 
     func testVerifiedWhenHashMatches() {
         let source = "#!/bin/bash\necho hi\n"
         let record = PluginProvenance(filename: "x.sh", sourceURL: url, source: source)
-        XCTAssertEqual(ProvenanceStatus.evaluate(record: record, currentSource: source), .verified)
+        XCTAssertEqual(ProvenanceStatus.evaluate(record: record, currentSource: source, entrySourceURL: url), .verified)
     }
 
     func testModifiedWhenSourceChanged() {
         let record = PluginProvenance(filename: "x.sh", sourceURL: url, source: "original\n")
-        XCTAssertEqual(ProvenanceStatus.evaluate(record: record, currentSource: "tampered\n"), .modified)
+        XCTAssertEqual(ProvenanceStatus.evaluate(record: record, currentSource: "tampered\n", entrySourceURL: url), .modified)
     }
 
     func testModifiedWhenSourceMissingButRecordExists() {
         let record = PluginProvenance(filename: "x.sh", sourceURL: url, source: "original\n")
-        XCTAssertEqual(ProvenanceStatus.evaluate(record: record, currentSource: nil), .modified)
+        XCTAssertEqual(ProvenanceStatus.evaluate(record: record, currentSource: nil, entrySourceURL: url), .modified)
     }
 
     func testUnknownWhenNoRecord() {
-        XCTAssertEqual(ProvenanceStatus.evaluate(record: nil, currentSource: "anything"), .unknown)
+        XCTAssertEqual(ProvenanceStatus.evaluate(record: nil, currentSource: "anything", entrySourceURL: url), .unknown)
     }
 
     func testUnknownWhenNoRecordAndNoSource() {
-        XCTAssertEqual(ProvenanceStatus.evaluate(record: nil, currentSource: nil), .unknown)
+        XCTAssertEqual(ProvenanceStatus.evaluate(record: nil, currentSource: nil, entrySourceURL: url), .unknown)
+    }
+
+    // MARK: - IM4: multi-store disambiguation
+
+    /// A same-filename entry from a DIFFERENT store (a different `rawURL`)
+    /// than the one recorded at install must never borrow the installed
+    /// plugin's Verified badge — regardless of whether the hash happens to
+    /// match (it always will here, since the file on disk *is* what got
+    /// installed from `url`; the point is entry Y must not claim it).
+    func testInstalledFromAnotherSourceWhenRecordedURLDiffersFromEntryEvenIfHashMatches() {
+        let source = "#!/bin/bash\necho hi\n"
+        let record = PluginProvenance(filename: "x.sh", sourceURL: url, source: source)
+        XCTAssertEqual(
+            ProvenanceStatus.evaluate(record: record, currentSource: source, entrySourceURL: otherURL),
+            .installedFromAnotherSource
+        )
+    }
+
+    /// Same disambiguation, independent of whether the on-disk source has
+    /// since been edited — origin mismatch is checked first and wins either way.
+    func testInstalledFromAnotherSourceTakesPriorityOverHashComparison() {
+        let record = PluginProvenance(filename: "x.sh", sourceURL: url, source: "original\n")
+        XCTAssertEqual(
+            ProvenanceStatus.evaluate(record: record, currentSource: "totally different\n", entrySourceURL: otherURL),
+            .installedFromAnotherSource
+        )
+    }
+
+    // MARK: - Origin normalization (review fix: http→https / trailing-slash false positives)
+
+    /// A store migrating its raw base from http to https (same host, same
+    /// path) recorded provenance under the old scheme — the entry it's
+    /// compared against today carries the new one. That must still read as
+    /// the SAME origin, not "installed from another source".
+    func testSchemeDifferenceAloneIsNotAnotherSource() {
+        let source = "#!/bin/bash\necho hi\n"
+        let record = PluginProvenance(filename: "x.sh", sourceURL: URL(string: "http://example.com/x.sh")!, source: source)
+        XCTAssertEqual(
+            ProvenanceStatus.evaluate(record: record, currentSource: source, entrySourceURL: URL(string: "https://example.com/x.sh")!),
+            .verified
+        )
+    }
+
+    /// A trailing-slash difference alone must not read as another source either.
+    func testTrailingSlashDifferenceAloneIsNotAnotherSource() {
+        let source = "#!/bin/bash\necho hi\n"
+        let record = PluginProvenance(filename: "x.sh", sourceURL: URL(string: "https://example.com/x.sh")!, source: source)
+        XCTAssertEqual(
+            ProvenanceStatus.evaluate(record: record, currentSource: source, entrySourceURL: URL(string: "https://example.com/x.sh/")!),
+            .verified
+        )
+    }
+
+    /// A genuinely different host, or a genuinely different path, must still
+    /// count as another source — normalization must not swallow real differences.
+    func testGenuinelyDifferentHostOrPathIsStillAnotherSource() {
+        let source = "#!/bin/bash\necho hi\n"
+        let record = PluginProvenance(filename: "x.sh", sourceURL: URL(string: "https://example.com/x.sh")!, source: source)
+        XCTAssertEqual(
+            ProvenanceStatus.evaluate(record: record, currentSource: source, entrySourceURL: URL(string: "https://mirror.example.com/x.sh")!),
+            .installedFromAnotherSource, "a different host must still count as another source"
+        )
+        XCTAssertEqual(
+            ProvenanceStatus.evaluate(record: record, currentSource: source, entrySourceURL: URL(string: "https://example.com/other/x.sh")!),
+            .installedFromAnotherSource, "a different path must still count as another source"
+        )
     }
 }

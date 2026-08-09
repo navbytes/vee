@@ -56,17 +56,49 @@ public enum ProvenanceStatus: Sendable, Equatable {
     /// No provenance record (e.g. a hand-authored plugin, or one installed
     /// before provenance tracking existed).
     case unknown
+    /// A provenance record exists for this filename, but it was recorded for
+    /// a DIFFERENT source URL than the catalog entry being displayed — e.g.
+    /// two stores publish a same-named plugin and the other store's copy is
+    /// what's actually installed. Never conflate this with `.verified`:
+    /// installing this entry would overwrite whatever is there now.
+    case installedFromAnotherSource
 
-    /// Classifies the current on-disk `currentSource` against a stored `record`.
+    /// Classifies the current on-disk `currentSource` against a stored
+    /// `record`, from the point of view of one specific catalog entry
+    /// (`entrySourceURL` — its `rawURL`).
     ///
     /// - No record → ``unknown``.
-    /// - Record but the source can't be read → ``modified`` (the recorded bytes
-    ///   are no longer present).
-    /// - Record and matching hash → ``verified``; otherwise ``modified``.
-    public static func evaluate(record: PluginProvenance?, currentSource: String?) -> ProvenanceStatus {
+    /// - A record recorded for a different source URL → ``installedFromAnotherSource``,
+    ///   regardless of hash — matches by origin the same way
+    ///   ``CatalogUpdateCheck/pendingUpdates(installed:catalog:lastUpdated:)``
+    ///   already does, so a same-filename entry from another store can never
+    ///   borrow this filename's badge. Origin is compared loosely
+    ///   (`sameOrigin`, below) so a store migrating http→https, or a
+    ///   trailing-slash difference in its raw base, doesn't itself read as
+    ///   "another source" — only a genuinely different host or path does.
+    /// - Same origin, but the source can't be read → ``modified`` (the
+    ///   recorded bytes are no longer present).
+    /// - Same origin and matching hash → ``verified``; otherwise ``modified``.
+    public static func evaluate(record: PluginProvenance?, currentSource: String?, entrySourceURL: URL) -> ProvenanceStatus {
         guard let record else { return .unknown }
+        guard sameOrigin(record.sourceURL, entrySourceURL) else { return .installedFromAnotherSource }
         guard let currentSource else { return .modified }
         return PluginHash.sha256Hex(currentSource) == record.sha256 ? .verified : .modified
+    }
+
+    /// Whether two source URLs represent "the same place a plugin came
+    /// from" for provenance-attribution purposes: host compared
+    /// case-insensitively, one trailing slash on the path ignored, and —
+    /// deliberately — scheme ignored entirely, so a store's http→https
+    /// migration doesn't make its own install history look foreign. A
+    /// genuinely different host or path still counts as a different origin.
+    static func sameOrigin(_ a: URL, _ b: URL) -> Bool {
+        func normalized(_ url: URL) -> String {
+            var path = url.path
+            if path.hasSuffix("/") { path.removeLast() }
+            return (url.host ?? "").lowercased() + path
+        }
+        return normalized(a) == normalized(b)
     }
 }
 

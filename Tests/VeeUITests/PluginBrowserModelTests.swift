@@ -28,6 +28,15 @@ private actor FakeCatalogFetcher: CatalogFetching {
     }
 }
 
+/// A `CatalogFetching` that always fails its index fetch — simulates one
+/// broken store in a multi-store `load()`.
+private struct ThrowingFetcher: CatalogFetching {
+    struct Boom: Error {}
+    func fetchIndex() async throws -> [CatalogEntry] { throw Boom() }
+    func fetchSource(_ entry: CatalogEntry) async throws -> String { throw Boom() }
+    func fetchLastUpdated(_ entry: CatalogEntry) async throws -> Date? { throw Boom() }
+}
+
 /// Covers `PluginBrowserModel` fixes: the freshness-badge key mismatch (wave
 /// 6c) and the Discover refresh affordance (wave 6i).
 @MainActor
@@ -346,5 +355,117 @@ final class PluginBrowserModelTests: XCTestCase {
 
         await model.refresh()
         XCTAssertEqual(reportCount, 2, "refresh() re-runs load(), so a still-pending update reports again — de-duping repeat reports is Notifier's job, not this model's")
+    }
+
+    // MARK: - IM4: multi-store provenance disambiguation
+
+    /// Two stores list the same filename; installing store X's copy must
+    /// never let store Y's card claim it as Verified/Installed — that would
+    /// misattribute X's install to Y and hide that clicking Y's button would
+    /// overwrite it.
+    func testProvenanceStatusDoesNotAttributeAnotherStoresInstallAsVerified() async throws {
+        let dir = tempDir()
+        let storeX = StoreConfig(id: StoreID("x"), displayName: "Store X", kind: .github)
+        let storeY = StoreConfig(id: StoreID("y"), displayName: "Store Y", kind: .github)
+        let sourceX = "#!/bin/bash\necho from-x\n"
+        let entryX = CatalogEntry(storeID: storeX.id, path: "Git/git.5s.sh", category: "Git", filename: "git.5s.sh", rawURL: URL(string: "https://x.example.com/git.5s.sh")!)
+        let entryY = CatalogEntry(storeID: storeY.id, path: "Git/git.5s.sh", category: "Git", filename: "git.5s.sh", rawURL: URL(string: "https://y.example.com/git.5s.sh")!)
+        let fetcherX = FakeCatalogFetcher(index: [entryX], source: sourceX)
+        let fetcherY = FakeCatalogFetcher(index: [entryY], source: "#!/bin/bash\necho from-y\n")
+        let model = PluginBrowserModel(
+            stores: [storeX, storeY],
+            makeClient: { $0.id == storeX.id ? fetcherX : fetcherY },
+            pluginsDirectory: dir,
+            onInstalled: {}
+        )
+        await model.load()
+        XCTAssertEqual(Set(model.entries.map(\.id)), [entryX.id, entryY.id], "sanity: both stores' same-named entries loaded side by side")
+
+        // Install store X's copy.
+        await model.requestInstall(entryX)
+        model.confirmInstall()
+
+        XCTAssertEqual(model.provenanceStatus(for: entryX), .verified, "sanity: X's own card is verified")
+        XCTAssertEqual(model.provenanceStatus(for: entryY), .installedFromAnotherSource, "store Y's same-named entry must not borrow store X's verified badge")
+        XCTAssertTrue(model.isInstalled(entryY), "a file named git.5s.sh does genuinely exist on disk (from X) — isInstalled's disk-presence check is still accurate")
+    }
+
+    // MARK: - IM11: snapshot reconciles against currently-enabled stores
+
+    /// A store's entries linger in the on-disk snapshot only as long as it
+    /// keeps being asked; once it's no longer configured, the next
+    /// successful load must reconcile it away — otherwise a removed store's
+    /// plugin drives a phantom "update available" forever.
+    func testRemovingAStoreReconcilesTheSnapshotSoItsEntriesDoNotLinger() async throws {
+        let dir = tempDir()
+        let storeA = StoreConfig(id: StoreID("a"), displayName: "Store A", kind: .github)
+        let storeB = StoreConfig(id: StoreID("b"), displayName: "Store B", kind: .github)
+        let entryA = CatalogEntry(storeID: storeA.id, path: "System/a.sh", category: "System", filename: "a.sh", rawURL: URL(string: "https://a.example.com/a.sh")!)
+        let entryB = CatalogEntry(storeID: storeB.id, path: "System/b.sh", category: "System", filename: "b.sh", rawURL: URL(string: "https://b.example.com/b.sh")!)
+
+        let both = PluginBrowserModel(
+            stores: [storeA, storeB],
+            makeClient: { $0.id == storeA.id ? FakeCatalogFetcher(index: [entryA]) : FakeCatalogFetcher(index: [entryB]) },
+            pluginsDirectory: dir,
+            onInstalled: {}
+        )
+        await both.load()
+        XCTAssertEqual(Set(CatalogSnapshotStore(directory: dir).load().map(\.filename)), ["a.sh", "b.sh"], "sanity: both stores' entries snapshotted")
+
+        // Store B removed from the registry entirely — a fresh model (as
+        // `AppController.browserModel()` builds whenever the configured store
+        // set changes) only ever sees A.
+        let onlyA = PluginBrowserModel(
+            stores: [storeA],
+            makeClient: { _ in FakeCatalogFetcher(index: [entryA]) },
+            pluginsDirectory: dir,
+            onInstalled: {}
+        )
+        await onlyA.load()
+
+        XCTAssertEqual(CatalogSnapshotStore(directory: dir).load().map(\.filename), ["a.sh"], "store B's entries must not linger in the snapshot once it's no longer configured")
+    }
+
+    // MARK: - IM9: per-store failure surfacing
+
+    /// A broken enabled store must not go silently invisible just because
+    /// another store's fetch still succeeds.
+    func testLoadSurfacesAPerStoreFailureNoticeWhenAnotherStoreStillLoads() async throws {
+        let dir = tempDir()
+        let storeA = StoreConfig(id: StoreID("a"), displayName: "Store A", kind: .github)
+        let storeBroken = StoreConfig(id: StoreID("broken"), displayName: "Broken Store", kind: .github)
+        let entryA = CatalogEntry(storeID: storeA.id, path: "System/a.sh", category: "System", filename: "a.sh", rawURL: URL(string: "https://a.example.com/a.sh")!)
+
+        let model = PluginBrowserModel(
+            stores: [storeA, storeBroken],
+            makeClient: { store -> CatalogFetching in store.id == storeA.id ? FakeCatalogFetcher(index: [entryA]) : ThrowingFetcher() },
+            pluginsDirectory: dir,
+            onInstalled: {}
+        )
+
+        await model.load()
+
+        XCTAssertEqual(model.entries.map(\.filename), ["a.sh"], "the healthy store's entries must still load")
+        XCTAssertNil(model.errorMessage, "a partial failure must not blank the whole grid with the full-screen error — that's reserved for a total failure")
+        XCTAssertNotNil(model.notice, "the broken store's failure must be surfaced (a banner), not silently invisible")
+        XCTAssertEqual(model.notice?.kind, .failure)
+    }
+
+    /// The inverse of the above: when every store fails, the existing
+    /// full-screen error still wins — this fix must not regress that.
+    func testLoadShowsFullScreenErrorWhenEveryStoreFails() async throws {
+        let dir = tempDir()
+        let storeBroken = StoreConfig(id: StoreID("broken"), displayName: "Broken Store", kind: .github)
+        let model = PluginBrowserModel(
+            stores: [storeBroken],
+            makeClient: { _ in ThrowingFetcher() },
+            pluginsDirectory: dir,
+            onInstalled: {}
+        )
+
+        await model.load()
+
+        XCTAssertTrue(model.entries.isEmpty)
+        XCTAssertNotNil(model.errorMessage, "nothing loaded at all — the full-screen error must still show")
     }
 }

@@ -7,6 +7,13 @@ import Security
 public protocol SecretStoring: Sendable {
     func get(_ account: String) -> String?
     func set(_ value: String?, for account: String)
+    /// Deletes every secret in this store's namespace, regardless of account
+    /// name — used when disk reconciliation confirms the plugin the
+    /// namespace belongs to no longer has a file on disk (see
+    /// `AppController.reconcileDiskState`). A plugin can declare several
+    /// secret vars (several accounts under the same per-plugin service), so
+    /// clearing one known account name isn't enough to fully clean up.
+    func deleteAll()
 }
 
 /// Keychain-backed secret store (`kSecClassGenericPassword`), keyed by a
@@ -52,6 +59,17 @@ public struct KeychainSecretStore: SecretStoring {
             SecItemAdd(add as CFDictionary, nil)
         }
     }
+
+    /// Deletes every item under this plugin's service, dropping the
+    /// `kSecAttrAccount` restriction `baseQuery` normally applies — so this
+    /// removes every declared secret var at once, not just one account name.
+    public func deleteAll() {
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: service
+        ]
+        SecItemDelete(query as CFDictionary)
+    }
 }
 
 /// In-memory secret store for tests. `@unchecked Sendable`: guarded by a lock.
@@ -67,5 +85,9 @@ public final class InMemorySecretStore: SecretStoring, @unchecked Sendable {
 
     public func set(_ value: String?, for account: String) {
         lock.withLock { storage[account] = value }
+    }
+
+    public func deleteAll() {
+        lock.withLock { storage.removeAll() }
     }
 }
