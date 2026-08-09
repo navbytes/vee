@@ -66,7 +66,12 @@ final class WidgetSnapshotPublisherTests: XCTestCase {
         writeCount = 0 // drop the empty seed write from setLoaded's own flush
 
         publisher.publish(id: "a", name: "A", interval: nil, publish: makePublish(title: "same"))
-        try await settle(coalesce)
+        // Poll for the coalesced flush instead of a fixed settle: a loaded CI
+        // runner can outrun the coalesce window, so a bare wait flakes here.
+        let deadline = Date().addingTimeInterval(3.0)
+        while writeCount < 1 || reloads < 1, Date() < deadline {
+            try await Task.sleep(nanoseconds: 20_000_000)
+        }
         XCTAssertEqual(writeCount, 1)
         XCTAssertEqual(reloads, 1)
 
@@ -227,7 +232,12 @@ final class WidgetSnapshotPublisherTests: XCTestCase {
 
         let card = WidgetCard(value: "72%", progress: 0.72)
         publisher.publish(id: "a", name: "A", interval: nil, publish: WidgetPublish(title: "72%", card: card))
-        try await settle(coalesce)
+        // Poll for the coalesced flush instead of a fixed settle (loaded CI can
+        // outrun the coalesce window).
+        let deadline = Date().addingTimeInterval(3.0)
+        while writeCount < 1 || reloads < 1, Date() < deadline {
+            try await Task.sleep(nanoseconds: 20_000_000)
+        }
         XCTAssertEqual(writeCount, 1)
         XCTAssertEqual(reloads, 1)
 
