@@ -26,6 +26,34 @@ final class CatalogParserTests: XCTestCase {
     func testInvalidJSONThrows() {
         XCTAssertThrowsError(try CatalogParser.parse(treeJSON: Data("nope".utf8)))
     }
+
+    /// D7 follow-up: a tree response is the primary github join site. Tree
+    /// entries carry no per-entry hash, so owner/repo/ref pinning is the only
+    /// integrity boundary — a `..` path must be dropped, not resolved into a
+    /// `rawURL` that escapes the pinned repo. A safe sibling still survives.
+    func testDropsPathTraversalEntries() throws {
+        let hostileTreeJSON = """
+        {"tree":[
+          {"path":"../../otherowner/otherrepo/ref/evil.sh","type":"blob"},
+          {"path":"System/cpu.5s.sh","type":"blob"}
+        ]}
+        """
+        let entries = try CatalogParser.parse(treeJSON: Data(hostileTreeJSON.utf8))
+        XCTAssertEqual(entries.map(\.path), ["System/cpu.5s.sh"])
+    }
+
+    /// A percent-encoded traversal vector (`%2e%2e%2f`) doesn't get a second
+    /// decode: `%` isn't in `.urlPathAllowed`, so it re-encodes to `%25...`
+    /// and lands as a literal, harmless path segment still under `repoBase`
+    /// — not an escape, so the entry is kept as-is.
+    func testPercentEncodedTraversalVectorIsNotTraversal() throws {
+        let treeJSON = #"{"tree":[{"path":"System/%2e%2e%2fpasswd.sh","type":"blob"}]}"#
+        let entries = try CatalogParser.parse(treeJSON: Data(treeJSON.utf8))
+        let entry = try XCTUnwrap(entries.first)
+        XCTAssertEqual(entry.path, "System/%2e%2e%2fpasswd.sh")
+        XCTAssertEqual(entry.rawURL.absoluteString, CatalogParser.defaultRepoBase + "System/%252e%252e%252fpasswd.sh")
+        XCTAssertTrue(entry.rawURL.absoluteString.hasPrefix(CatalogParser.defaultRepoBase))
+    }
 }
 
 final class CommitDateParserTests: XCTestCase {

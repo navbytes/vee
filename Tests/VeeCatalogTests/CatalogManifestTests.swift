@@ -68,4 +68,41 @@ final class CatalogManifestTests: XCTestCase {
             XCTAssertEqual($0 as? CatalogManifestParser.ManifestError, .malformed)
         }
     }
+
+    // MARK: - D7: path traversal
+
+    /// A `path` that escapes the store root (`..`), is filesystem-absolute
+    /// (`/…`), or embeds a scheme (`:`) must be dropped — not resolved into a
+    /// `rawURL` that reads outside `rawBase`. A safe sibling entry still
+    /// parses normally.
+    func testPathTraversalAndAbsoluteAndSchemePathsAreDropped() throws {
+        let manifest = Data("""
+        {
+          "vee_catalog": 1,
+          "plugins": [
+            { "path": "../../../../.ssh/id_rsa" },
+            { "path": "Oncall/../../../etc/passwd" },
+            { "path": "/etc/passwd" },
+            { "path": "https://evil.example.com/x.sh" },
+            { "path": "System/cpu.5s.sh" }
+          ]
+        }
+        """.utf8)
+        let entries = try CatalogManifestParser.parse(manifest, storeID: storeID, rawBase: rawBase)
+        XCTAssertEqual(entries.map(\.path), ["System/cpu.5s.sh"])
+        XCTAssertEqual(entries.first?.rawURL.absoluteString, rawBase + "System/cpu.5s.sh")
+    }
+
+    func testIsSafeRelativePath() {
+        XCTAssertTrue(CatalogManifestParser.isSafeRelativePath("System/cpu.5s.sh"))
+        XCTAssertTrue(CatalogManifestParser.isSafeRelativePath("plugin.sh"))
+        // ".." only rejected as a whole path component, not as a substring.
+        XCTAssertTrue(CatalogManifestParser.isSafeRelativePath("foo..bar/plugin.sh"))
+        XCTAssertFalse(CatalogManifestParser.isSafeRelativePath(".."))
+        XCTAssertFalse(CatalogManifestParser.isSafeRelativePath("../plugin.sh"))
+        XCTAssertFalse(CatalogManifestParser.isSafeRelativePath("a/../b"))
+        XCTAssertFalse(CatalogManifestParser.isSafeRelativePath("/etc/passwd"))
+        XCTAssertFalse(CatalogManifestParser.isSafeRelativePath("file:///etc/passwd"))
+        XCTAssertFalse(CatalogManifestParser.isSafeRelativePath(""))
+    }
 }
