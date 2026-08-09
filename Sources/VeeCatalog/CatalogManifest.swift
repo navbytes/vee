@@ -117,8 +117,10 @@ public enum CatalogManifestParser {
             let category = plugin.category ?? (components.count >= 2 ? components[0] : "Plugins")
             guard let encoded = plugin.path.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed),
                   let rawURL = URL(string: rawBase + encoded),
-                  // Belt-and-suspenders: the resolved URL must still be inside rawBase.
-                  rawURL.absoluteString.hasPrefix(rawBase)
+                  // Second, independent guard: .standardized resolves any `..`/`.`
+                  // segments, so this still catches an escape even if the string
+                  // check above somehow didn't.
+                  rawURL.standardized.absoluteString.hasPrefix(rawBase)
             else { return nil }
 
             return CatalogEntry(

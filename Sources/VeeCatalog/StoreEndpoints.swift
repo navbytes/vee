@@ -82,15 +82,16 @@ public struct StoreEndpoints: Sendable {
 
     /// Percent-encodes `path` and joins it onto `base` (a store root with a
     /// trailing slash), rejecting a `path` that escapes `base` — either
-    /// syntactically (`..`, a leading `/`, or an embedded scheme) or, as a
-    /// second check, once resolved. Shared by `rawURL(path:)` and
+    /// syntactically (`..`, a leading `/`, or an embedded scheme), or, as a
+    /// second and independent check, once `.standardized` resolves any
+    /// `..`/`.` segments in the joined URL. Shared by `rawURL(path:)` and
     /// `manifestURL`, which join a path the same way `CatalogManifestParser`
     /// does.
     private static func joined(_ base: String, _ path: String) -> URL? {
         guard CatalogManifestParser.isSafeRelativePath(path),
               let encoded = path.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed),
               let url = URL(string: base + encoded),
-              url.absoluteString.hasPrefix(base)
+              url.standardized.absoluteString.hasPrefix(base)
         else { return nil }
         return url
     }

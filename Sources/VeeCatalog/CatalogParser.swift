@@ -42,6 +42,12 @@ public enum CatalogParser {
         let tree = try JSONDecoder().decode(Tree.self, from: data)
         return tree.tree.compactMap { node -> CatalogEntry? in
             guard node.type == "blob" else { return nil }
+            // The tree is a git-trees API response, but for githubEnterprise
+            // that's a customer-run server — treat `node.path` as untrusted the
+            // same way a store manifest's `path` is. Tree entries carry no
+            // per-entry hash, so owner/repo/ref pinning is the only integrity
+            // boundary; an unchecked `..` here would escape it entirely.
+            guard CatalogManifestParser.isSafeRelativePath(node.path) else { return nil }
             let components = node.path.split(separator: "/").map(String.init)
             // A plugin lives under a category directory: at least Category/file.
             guard components.count >= 2 else { return nil }
@@ -53,7 +59,12 @@ public enum CatalogParser {
             let ext = (filename as NSString).pathExtension.lowercased()
             guard !ignoredExtensions.contains(ext) else { return nil }
             guard let encoded = node.path.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed),
-                  let rawURL = URL(string: repoBase + encoded) else { return nil }
+                  let rawURL = URL(string: repoBase + encoded),
+                  // Second, independent guard: .standardized resolves any `..`/`.`
+                  // segments, so this still catches an escape even if the string
+                  // check above somehow didn't.
+                  rawURL.standardized.absoluteString.hasPrefix(repoBase)
+            else { return nil }
 
             return CatalogEntry(storeID: storeID, path: node.path, category: category, filename: filename, rawURL: rawURL)
         }
