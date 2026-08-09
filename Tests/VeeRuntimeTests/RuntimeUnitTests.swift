@@ -199,6 +199,22 @@ final class PluginRuntimeTests: XCTestCase {
         let result = try await runtime.refresh(pluginPath: "/plugins/cpu.5s.sh", context: makeContext(pluginPath: "/plugins/cpu.5s.sh"))
         XCTAssertTrue(result.output.diagnostics.isEmpty)
     }
+
+    /// A header-level diagnostic (e.g. a scheme-blocked `<xbar.abouturl>`) has
+    /// no surface of its own — `HeaderMetadata.diagnostics` must reach the same
+    /// `ParsedOutput.diagnostics` stream the debug console/CLI already read,
+    /// not just sit unread on the header struct.
+    func testRefreshFoldsHeaderDiagnosticsIntoOutputDiagnostics() async throws {
+        let header = HeaderParser.parse(source: "# <xbar.abouturl>javascript:alert(1)</xbar.abouturl>\n")
+        XCTAssertFalse(header.diagnostics.isEmpty, "test setup: header must actually carry the diagnostic")
+
+        let stub = ProcessOutcome(standardOutput: "Title", standardError: "", exitCode: 0, timedOut: false)
+        let runtime = PluginRuntime(executor: PluginExecutor(runner: RecordingProcessRunner(stub: stub), baseEnvironment: [:]))
+        let result = try await runtime.refresh(pluginPath: "/plugins/cpu.5s.sh", context: makeContext(pluginPath: "/plugins/cpu.5s.sh"), header: header)
+        XCTAssertTrue(result.output.diagnostics.contains {
+            $0.severity == .warning && $0.message.contains("missing or unsafe url")
+        })
+    }
 }
 
 final class RefreshSchedulerTests: XCTestCase {

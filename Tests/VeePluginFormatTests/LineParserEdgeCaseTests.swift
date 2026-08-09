@@ -91,6 +91,33 @@ final class LineParserEdgeCaseTests: XCTestCase {
         XCTAssertEqual(pairs.first?.value, "a|b\nc\\d")
     }
 
+    // MARK: escape-boundary edge cases (review follow-up)
+
+    /// Boundary: an escaped backslash (`\\`) immediately followed by a REAL,
+    /// unescaped `|` — the escape pair must consume exactly its own two
+    /// characters, leaving the very next `|` free to act as the delimiter.
+    func testEscapedBackslashImmediatelyBeforeRealSeparator() {
+        let (text, pairs, _) = LineParser.splitTextAndParams(#"text\\|key=value"#)
+        XCTAssertEqual(text, #"text\"#)
+        XCTAssertEqual(Dictionary(pairs, uniquingKeysWith: { a, _ in a })["key"], "value")
+    }
+
+    /// Boundary: two consecutive escape pairs (`\\` then `\|`) must each consume
+    /// exactly their own two characters — no overlap, no dropped character.
+    func testConsecutiveEscapedBackslashThenEscapedPipeInText() {
+        let (text, pairs, _) = LineParser.splitTextAndParams(#"\\\|"#)
+        XCTAssertEqual(text, #"\|"#)
+        XCTAssertTrue(pairs.isEmpty)
+    }
+
+    /// Boundary: a trailing lone backslash (nothing left to pair with) must not
+    /// crash and is kept exactly as written.
+    func testTrailingLoneBackslashAtEndOfLineIsLiteral() {
+        let (text, pairs, _) = LineParser.splitTextAndParams(#"trailing\"#)
+        XCTAssertEqual(text, #"trailing\"#)
+        XCTAssertTrue(pairs.isEmpty)
+    }
+
     /// End-to-end: the exact line shape the bundled SDKs (plugins/src/vee.ts,
     /// plugins/python/vee.py, plugins/go/vee.go) emit for an item whose text is
     /// `Left | Right<newline>Second line` round-trips through the full parser
