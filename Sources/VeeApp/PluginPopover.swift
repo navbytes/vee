@@ -6,7 +6,8 @@ import VeeUI
 /// Presents a plugin's native Liquid Glass `NSPopover` — a read-only
 /// `sparkline=…` chart (`SparklineChartView`), a `pie=`/`donut=`/`stackedbar=`
 /// share chart (`CategoryChartView`), or an interactive `toggle=`/`slider=`
-/// control (`PluginControlView`). Like `WebViewPresenter`, this lives
+/// control (`PluginControlView`). Every kind can be torn off into a persistent
+/// window (`DetachedPopoverWindows`) via the button its view draws. Like `WebViewPresenter`, this lives
 /// *outside* the `NSMenu` — the menu that launched it has already closed — so
 /// the menu itself stays native and leak-free. Only one popover is shown at a
 /// time.
@@ -40,10 +41,15 @@ final class PluginPopover: NSObject, NSPopoverDelegate {
 
     /// Shows an interactive `toggle=`/`slider=` control. `onCommit` fires with
     /// the settled numeric value each time the user changes the control.
-    func show(control: PluginControl, title: String, onCommit: @escaping @MainActor (Double) -> Void) {
+    func show(
+        control: PluginControl,
+        title: String,
+        onDetach: (() -> Void)? = nil,
+        onCommit: @escaping @MainActor (Double) -> Void
+    ) {
         present(size: NSSize(width: 260, height: 130)) {
             NSHostingController(
-                rootView: PluginControlView(control: control, title: title, onCommit: onCommit)
+                rootView: PluginControlView(control: control, title: title, onDetach: onDetach, onCommit: onCommit)
             )
         }
     }

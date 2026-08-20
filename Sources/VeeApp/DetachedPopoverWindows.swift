@@ -9,13 +9,13 @@ import VeeUI
 /// Keyed by *position* rather than text on purpose — see `MenuItemLocator`. A
 /// row worth watching is one whose text keeps changing, so text is the one thing
 /// that can't identify it.
-struct DetachedChartKey: Hashable {
+struct DetachedPopoverKey: Hashable {
     let pluginName: String
     let path: MenuItemPath
 }
 
-/// Presents and tracks detached chart windows — the "open in a window" button on
-/// a `sparkline=`/`pie=`/`donut=`/`stackedbar=` popover.
+/// Presents and tracks detached popover windows — the "open in a window" button
+/// every popover carries.
 ///
 /// Two jobs. First, window lifetime: several windows at once (the point is to
 /// watch a few things side by side across monitors), each retained until closed,
@@ -28,15 +28,15 @@ struct DetachedChartKey: Hashable {
 /// open window's path and pushes the new values into its model. A window whose
 /// row has vanished is marked stale rather than silently freezing.
 @MainActor
-final class DetachedChartWindows {
-    static let shared = DetachedChartWindows()
+final class DetachedPopoverWindows {
+    static let shared = DetachedPopoverWindows()
 
-    private var windows: [DetachedChartKey: NSWindow] = [:]
-    private var models: [DetachedChartKey: DetachedChartModel] = [:]
+    private var windows: [DetachedPopoverKey: NSWindow] = [:]
+    private var models: [DetachedPopoverKey: DetachedPopoverModel] = [:]
     /// Close-observer tokens, keyed like `windows`. Owned here (manager state)
     /// rather than captured by the observer closure — same strict-concurrency
     /// reasoning as `DebugWindowManager`, and kept identical in shape.
-    private var observerTokens: [DetachedChartKey: NSObjectProtocol] = [:]
+    private var observerTokens: [DetachedPopoverKey: NSObjectProtocol] = [:]
     /// The most recent body per plugin, so a detach can locate the clicked row
     /// without the click path having to carry its address around.
     private var bodies: [String: [MenuNode]] = [:]
@@ -54,13 +54,20 @@ final class DetachedChartWindows {
     /// Returns `false` when the row can't be located in the plugin's current
     /// body — the caller should leave the popover alone rather than open a
     /// window that could never update.
+    /// `onCommit` re-invokes a detached `toggle=`/`slider=`. It is handed the
+    /// row as it stands *now*, not as it stood when the window was torn off, so
+    /// a detached control runs the command the plugin currently declares.
     @discardableResult
-    func detach(pluginName: String, item: MenuItem) -> Bool {
+    func detach(
+        pluginName: String,
+        item: MenuItem,
+        onCommit: @escaping @MainActor (Double, MenuItem) -> Void = { _, _ in }
+    ) -> Bool {
         guard let content = Self.content(of: item) else { return false }
         guard let body = bodies[pluginName],
               let path = MenuItemLocator.path(of: item, in: body) else { return false }
 
-        let key = DetachedChartKey(pluginName: pluginName, path: path)
+        let key = DetachedPopoverKey(pluginName: pluginName, path: path)
         if let existing = windows[key] {
             models[key]?.update(title: item.text, content: content)
             existing.makeKeyAndOrderFront(nil)
@@ -68,8 +75,14 @@ final class DetachedChartWindows {
             return true
         }
 
-        let model = DetachedChartModel(pluginName: pluginName, title: item.text, content: content)
-        let window = NSWindow(contentViewController: NSHostingController(rootView: DetachedChartView(model: model)))
+        let model = DetachedPopoverModel(pluginName: pluginName, title: item.text, content: content) { [weak self] value in
+            // Resolve the row again at commit time — the window may have been
+            // open across many refreshes since it was torn off.
+            guard let self, let body = self.bodies[pluginName],
+                  let current = MenuItemLocator.item(at: path, in: body) else { return }
+            onCommit(value, current)
+        }
+        let window = NSWindow(contentViewController: NSHostingController(rootView: DetachedPopoverView(model: model)))
         window.title = Self.windowTitle(row: item.text, plugin: pluginName)
         window.styleMask = [.titled, .closable, .resizable, .miniaturizable]
         window.isReleasedWhenClosed = false
@@ -116,12 +129,14 @@ final class DetachedChartWindows {
         return "\(clipped) — \(plugin)"
     }
 
-    private static func initialSize(for content: DetachedChartContent) -> NSSize {
+    private static func initialSize(for content: DetachedPopoverContent) -> NSSize {
         switch content {
         case .sparkline:
             return NSSize(width: 320, height: 200)
         case .chart(let chart):
             return NSSize(width: 340, height: 250 + CGFloat(chart.values.count) * 17)
+        case .control:
+            return NSSize(width: 300, height: 150)
         }
     }
 
@@ -131,10 +146,12 @@ final class DetachedChartWindows {
         content(of: item) != nil
     }
 
-    private static func content(of item: MenuItem) -> DetachedChartContent? {
-        // Mirrors `AppActionDispatcher`'s dispatch order: a row carrying both a
-        // sparkline and a chart opens the sparkline popover, so that is what
-        // detaching it must show.
+    private static func content(of item: MenuItem) -> DetachedPopoverContent? {
+        // Mirrors `AppActionDispatcher`'s dispatch order exactly, so detaching
+        // always reproduces the popover the row actually opened. A row carrying
+        // both a control and a chart opens the control, so that is what it
+        // detaches as — the button must never swap one surface for another.
+        if let control = item.params.control { return .control(control) }
         if let series = item.params.sparkline, !series.isEmpty { return .sparkline(series) }
         if let chart = item.params.swiftbar.chart { return .chart(chart) }
         return nil
@@ -150,7 +167,7 @@ final class DetachedChartWindows {
         for (key, model) in models where key.pluginName == pluginName {
             guard let item = MenuItemLocator.item(at: key.path, in: body),
                   let content = Self.content(of: item) else {
-                // The row is gone, or no longer carries a chart. Keep the last
+                // The row is gone, or no longer opens a popover. Keep the last
                 // value on screen but stop implying it is current.
                 model.markStale()
                 continue
@@ -172,7 +189,7 @@ final class DetachedChartWindows {
     /// Evicts the closed window and unregisters its close observer — a leftover
     /// registration (and the model its block retains) would otherwise accumulate
     /// once per window ever opened.
-    private func windowWillClose(_ key: DetachedChartKey) {
+    private func windowWillClose(_ key: DetachedPopoverKey) {
         windows[key] = nil
         models[key] = nil
         if let token = observerTokens.removeValue(forKey: key) {

@@ -318,7 +318,7 @@ final class PluginCoordinator {
         // Nothing will feed this plugin's detached chart windows any more, so
         // stop them implying they are live. A reload swaps in a fresh
         // coordinator whose first render clears the flag again.
-        DetachedChartWindows.shared.pluginWentAway(pluginName: plugin.filename.name)
+        DetachedPopoverWindows.shared.pluginWentAway(pluginName: plugin.filename.name)
         controller?.remove()
     }
 

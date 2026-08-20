@@ -12,7 +12,7 @@ final class AppActionDispatcher: MenuActionHandling {
     private let onRefresh: () -> Void
     /// Which plugin's menu this dispatcher serves. Only needed so a detached
     /// chart window can be tied back to the plugin whose refreshes must keep
-    /// feeding it (`DetachedChartWindows`).
+    /// feeding it (`DetachedPopoverWindows`).
     private let pluginName: String
 
     init(pluginName: String = "", runner: ProcessRunning, baseEnvironment: [String: String] = ProcessInfo.processInfo.environment, onRefresh: @escaping () -> Void) {
@@ -52,46 +52,62 @@ final class AppActionDispatcher: MenuActionHandling {
         }
     }
 
-    /// The "open in a window" action for a read-only popover, or `nil` when the
-    /// row can't be detached — no plugin name (a dispatcher built without one),
-    /// or nothing a window could keep showing. Returning `nil` is what hides the
-    /// button, so the affordance never appears where it wouldn't work.
+    /// The "open in a window" action for a popover, or `nil` when the row can't
+    /// be detached — no plugin name (a dispatcher built without one), or nothing
+    /// a window could keep showing. Returning `nil` is what hides the button, so
+    /// the affordance never appears where it wouldn't work.
+    ///
+    /// Every popover kind gets one, controls included: a detached
+    /// `toggle=`/`slider=` re-invokes through the same path the popover uses.
     private func detachHandler(for item: MenuItem) -> (() -> Void)? {
-        guard !pluginName.isEmpty, DetachedChartWindows.isDetachable(item) else { return nil }
+        guard !pluginName.isEmpty, DetachedPopoverWindows.isDetachable(item) else { return nil }
         let pluginName = self.pluginName
         // A plain `() -> Void` so SwiftUI's `Button` can take it with no
         // isolation friction; the hop is asserted inside, the same way
         // `DebugWindowManager` handles its notification callback. Button actions
         // always run on the main thread, so the assertion holds.
-        return {
+        return { [weak self] in
             MainActor.assumeIsolated {
                 PluginPopover.shared.dismissForDetach()
-                DetachedChartWindows.shared.detach(pluginName: pluginName, item: item)
+                DetachedPopoverWindows.shared.detach(pluginName: pluginName, item: item) { value, current in
+                    self?.reinvokeControl(current, value: value)
+                }
             }
         }
     }
 
-    /// Opens the interactive control popover for `item`. When the user commits
-    /// a value, re-invokes the item's `shell=`/`bash=` command carrying that
-    /// value (`VEE_CONTROL_VALUE` + trailing arg), then refreshes if requested.
-    /// A control with no `shell` still shows — it just has nothing to re-invoke.
+    /// Opens the interactive control popover for `item`.
     private func presentControl(_ control: PluginControl, item: MenuItem) {
-        let shell = item.params.shell
+        PluginPopover.shared.show(
+            control: control,
+            title: item.text,
+            onDetach: detachHandler(for: item)
+        ) { [weak self] value in
+            self?.reinvokeControl(item, value: value)
+        }
+    }
+
+    /// Re-invokes a control row's `shell=`/`bash=` command carrying the settled
+    /// value (`VEE_CONTROL_VALUE` + trailing arg), then refreshes if requested.
+    /// A control with no `shell` simply has nothing to re-invoke.
+    ///
+    /// Takes the item rather than closing over one command so a detached window
+    /// — which may have been open across many refreshes — runs whatever the row
+    /// declares now.
+    private func reinvokeControl(_ item: MenuItem, value: Double) {
+        guard let shell = item.params.shell else { return }
         let refreshAfter = item.params.refresh == true
-        PluginPopover.shared.show(control: control, title: item.text) { [weak self] value in
-            guard let self, let shell else { return }
-            let invocation = ControlReinvocation.invocation(
-                shell: shell,
-                value: value,
-                baseEnvironment: self.baseEnvironment
-            )
-            let runner = self.runner
-            let onRefresh = self.onRefresh
-            Task {
-                _ = try? await runner.run(invocation)
-                if refreshAfter {
-                    await MainActor.run { onRefresh() }
-                }
+        let invocation = ControlReinvocation.invocation(
+            shell: shell,
+            value: value,
+            baseEnvironment: baseEnvironment
+        )
+        let runner = self.runner
+        let onRefresh = self.onRefresh
+        Task {
+            _ = try? await runner.run(invocation)
+            if refreshAfter {
+                await MainActor.run { onRefresh() }
             }
         }
     }
