@@ -196,8 +196,15 @@ public enum TerminalRenderer {
         var out = ""
         for index in chart.values.indices where cells[index] > 0 {
             let block = String(repeating: "█", count: cells[index])
-            let color = chart.color(at: index, surface: .dark)
-            out += fgCodes(color).map { style(block, codes: $0, options) } ?? block
+            // Fall back to the segment's palette slot when the plugin's own
+            // color doesn't resolve — `VeeColor.parse` accepts any bare word as
+            // a name, so `chartcolors=notacolor` reaches here intact and only
+            // fails at resolution. The AppKit and SwiftUI resolvers both fall
+            // back this way; without it a segment would render uncoloured here
+            // and coloured everywhere else.
+            let codes = fgCodes(chart.color(at: index, surface: .dark))
+                ?? fgCodes(chart.paletteColor(at: index, surface: .dark))
+            out += codes.map { style(block, codes: $0, options) } ?? block
         }
         return out
     }

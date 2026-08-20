@@ -241,7 +241,7 @@ enum LineParser {
                     .map { $0.trimmingCharacters(in: .whitespaces) }
             case "chartcolors":
                 // Segment colors, positional like `chartlabels=`. Unlike
-                // `sfcolor=` this keeps blank/unparseable entries as holes
+                // `sfcolor=` this keeps blank/malformed entries as holes
                 // instead of compacting them out — dropping one would slide
                 // every later color onto the wrong segment — and each hole falls
                 // back to that segment's palette slot.
@@ -256,7 +256,7 @@ enum LineParser {
                 if unparseable {
                     diagnostics.append(.init(
                         severity: .warning,
-                        message: "chartcolors= has an unparseable color; those segments use the default palette"
+                        message: "chartcolors= has a malformed color; those segments use the default palette"
                     ))
                 }
             case "trackcolor": progressTrack = VeeColor.parse(value)
