@@ -205,7 +205,8 @@ public enum Linter {
         "sfimage", "sfcolor", "sfsize", "sfconfig", "symbolize", "tooltip",
         "md", "markdown", "checked", "badge", "webview", "webvieww",
         "webviewh", "shortcut", "sparkline", "toggle", "slider", "progress",
-        "trackcolor", "progressw", "progressh", "header", "accessory"
+        "trackcolor", "progressw", "progressh", "header", "accessory",
+        "pie", "donut", "stackedbar", "chartlabels", "chartcolors"
     ]
 
     private static func isKnownParam(_ key: String) -> Bool {

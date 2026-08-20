@@ -86,6 +86,7 @@ the `vee` executable is a thin entry point.
 | `VeeApp`          | AppKit shell: status items, coordinators, app delegate (as a library). |
 | `vee`             | Thin executable entry point: boots the app, or dispatches CLI subcommands. |
 | `plugins/`        | Typed plugin SDKs (TypeScript, Python, Go), example plugins, and golden fixtures. |
+| `docs/`           | The GitHub Pages site. Guides are authored in `docs/_content/*.md`; `docs/guide/*.html` is generated from them by `docs/scripts/build_guide.py`. |
 
 For a deeper tour of how the pieces fit together — the execution pipeline, the
 leak-free design, the trust model, and the widget channel — see
@@ -94,6 +95,21 @@ leak-free design, the trust model, and the widget channel — see
 App bundle configuration lives in `project.yml` (XcodeGen spec) and `App/`
 (Info.plist properties + entitlements). Showcase example plugins live in
 `examples/` at the repo root — see `examples/README.md`.
+
+### Docs
+
+The guides are written in `docs/_content/*.md` — **edit those, never the HTML.**
+`docs/guide/*.html` is generated output, and it is what ships: GitHub Pages
+serves `docs/` straight from `main` with no build step at deploy time. After
+changing a guide, regenerate and commit the result:
+
+```sh
+python3 docs/scripts/build_guide.py          # rewrite docs/guide/*.html
+python3 docs/scripts/build_guide.py --check  # what CI runs; fails if stale
+```
+
+Adding a new guide means adding its page to `PAGES` in that script (it drives
+the sidebar order, the prev/next pager, and each page's title/description).
 
 ### A rule of thumb for where a change goes
 

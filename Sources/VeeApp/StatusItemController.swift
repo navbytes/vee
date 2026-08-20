@@ -255,6 +255,10 @@ public final class StatusItemController {
         lastErrorDetail = nil
         lastUpdated = Date()
         lastBody = output.body
+        // Feed any detached popover windows watching this plugin. This is the one
+        // place fresh output reaches the UI, so it is the one place they can be
+        // kept live rather than frozen at the moment they were torn off.
+        DetachedPopoverWindows.shared.update(pluginName: pluginName, body: output.body)
         let presentation = TitleRenderer.presentation(for: output.titleLines)
         // D6: sanitize before any of this ever reaches an `attributedTitle`
         // setter below — the single choke point every setter (standalone
@@ -274,6 +278,11 @@ public final class StatusItemController {
 
     /// Renders an error surface (the launcher stays up; the plugin shows ⚠️).
     public func renderError(_ message: String, detail: String? = nil) {
+        // The menu is an error surface now, so nothing is feeding the detached
+        // windows watching this plugin. Say so rather than let them keep
+        // showing the last good value as if it were current — noticing that a
+        // watched thing has stopped reporting is the point of watching it.
+        DetachedPopoverWindows.shared.pluginWentAway(pluginName: pluginName)
         // A recovering plugin whose new output happens to equal its
         // pre-error output must still rebuild (the error surface replaced the
         // menu the equality check would otherwise skip re-rendering).

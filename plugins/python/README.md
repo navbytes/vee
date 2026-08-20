@@ -73,8 +73,9 @@ The `.5s` sets a 5-second refresh, exactly as with any other plugin.
 `color`, `size`, `font`, `length`, `href`, `shell` (+ `params`), `terminal`,
 `refresh`, `alternate`, `disabled`, `checked`, `key`, `tooltip`, `sfimage`,
 `md`, `badge`, `symbolize`, and the rich controls `sparkline`, `toggle`,
-`slider`, `progress` (+ `trackColor`, `progressW`, `progressH`) — matching the
-TypeScript SDK's `ItemOptions`. See the [SDK guide](../../docs/_content/sdk.md)
+`slider`, `progress` (+ `trackColor`, `progressW`, `progressH`), and `chart`
+(the `pie`/`donut`/`stackedbar` share charts) — matching the TypeScript SDK's
+`ItemOptions`. See the [SDK guide](../../docs/_content/sdk.md)
 for the rich-param details.
 
 ## Tests

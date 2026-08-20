@@ -97,6 +97,39 @@ final class JSONOutputParserTests: XCTestCase {
         XCTAssertEqual(c.params.sparkline, [1, 2])
     }
 
+    /// A `"chart"` object maps onto the same `ChartParams` the text protocol's
+    /// `pie=`/`donut=`/`stackedbar=` produce, with identical validation.
+    func testChartMapsFromJSON() throws {
+        let json = """
+        {"vee":1,"items":[
+          {"text":"Disk","chart":{"kind":"donut","values":[45,30,25],
+             "labels":["Docs","Photos","Apps"],"colors":["red","","blue"]}},
+          {"text":"Bad kind","chart":{"kind":"waffle","values":[1,2]}},
+          {"text":"Negative","chart":{"kind":"pie","values":[1,-2]}},
+          {"text":"Zeroes","chart":{"kind":"pie","values":[0,0]}}
+        ]}
+        """
+        let out = try XCTUnwrap(JSONOutputParser.parse(json))
+        func item(_ i: Int) throws -> MenuItem {
+            guard case .item(let m) = out.body[i] else { throw XCTSkip("not an item") }
+            return m
+        }
+        let chart = try XCTUnwrap(try item(0).params.swiftbar.chart)
+        XCTAssertEqual(chart.kind, .donut)
+        XCTAssertEqual(chart.values, [45, 30, 25])
+        XCTAssertEqual(chart.label(at: 1), "Photos")
+        // Colors stay positional: the blank middle entry takes its palette slot
+        // instead of sliding "blue" onto segment 2.
+        XCTAssertEqual(chart.color(at: 0), .named("red"))
+        XCTAssertEqual(chart.color(at: 1), ChartPalette.slot(at: 1))
+        XCTAssertEqual(chart.color(at: 2), .named("blue"))
+
+        XCTAssertNil(try item(1).params.swiftbar.chart)
+        XCTAssertNil(try item(2).params.swiftbar.chart)
+        XCTAssertNil(try item(3).params.swiftbar.chart)
+        XCTAssertTrue(out.diagnostics.contains { $0.message.contains("chart.kind") })
+    }
+
     /// `header=`/`accessory=` mirror the text protocol from `JSONItem`.
     func testHeaderAndAccessoryMapFromJSON() throws {
         let json = """

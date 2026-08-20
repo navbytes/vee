@@ -200,6 +200,16 @@
           <p>Opt in with <code>&lt;vee.filter&gt;true&lt;/vee.filter&gt;</code> and a plugin&rsquo;s dropdown gains a Spotlight-like search (⌘F) that fuzzy-filters every item — even those nested in submenus — flattened into one ranked, breadcrumb-tagged list. Add <code>&lt;vee.shortcut&gt;</code> for a global hotkey from anywhere. Neither xbar nor SwiftBar does this.</p>
         </div>
         <div class="card feature">
+          <div class="feature__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 12V4a8 8 0 0 1 6.93 4L12 12Z" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+          <h3>Rich, native menu rows</h3>
+          <p>A menu row can be more than text: <code>progress=</code> draws a real capsule gauge, <code>sparkline=</code> a trend, and <code>pie=</code>/<code>donut=</code>/<code>stackedbar=</code> a share chart — with <code>toggle=</code>/<code>slider=</code> opening live controls that re-run your script with the new value. All drawn with AppKit and Swift Charts, so there is no WebView in the menu. Neither xbar nor SwiftBar has these params.</p>
+        </div>
+        <div class="card feature">
+          <div class="feature__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="3" y="3" width="8" height="8" rx="2"/><rect x="13" y="3" width="8" height="8" rx="2"/><rect x="3" y="13" width="8" height="8" rx="2"/><rect x="13" y="13" width="8" height="8" rx="2"/></svg></div>
+          <h3>Widgets on your desktop</h3>
+          <p>Every plugin already has a Notification Center tile, scraped from its menu-bar line. Opt into <code>&lt;vee.surface&gt;</code> and it gets a real widget card instead — laid out per widget size, on the plugin&rsquo;s own filename cadence. Vee pushes reloads as data arrives, and the widget renders a snapshot the app produced: it never executes your plugin itself.</p>
+        </div>
+        <div class="card feature">
           <div class="feature__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M8 6H5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-3" stroke-linecap="round"/><path d="M12 3v11m0 0-3-3m3 3 3-3" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
           <h3>Config belongs to the plugin</h3>
           <p><code>&lt;xbar.var&gt;</code> declarations become an auto-generated settings form. Secret fields are masked and stored in the macOS Keychain — the app never hardcodes a service name or credential.</p>

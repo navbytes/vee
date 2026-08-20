@@ -70,50 +70,79 @@ swift run vee        # launch the menu-bar app for development</code></pre></div
 <p>While developing you can point Vee at a specific plugins folder with an environment variable, which overrides the folder chosen in the UI:</p>
 <div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">sh</span></div><pre><code>VEE_PLUGINS_DIR=~/dev/my-plugins swift run vee</code></pre></div>
 <h2 id="the-vee-command-line-tool">The <code>vee</code> command-line tool</h2>
-<p>Running <code>vee</code> with no subcommand launches the menu-bar app (that's also what happens when the bundled app is opened). Passing a subcommand instead gives you a zero-install authoring loop that reuses Vee's real parser — no app, no GUI:</p>
-<div class="table-wrap">
-<table>
-<thead><tr><th>Command</th><th>What it does</th></tr></thead>
-<tbody>
-<tr><td><code>vee render &lt;plugin&gt;</code></td><td>Runs the plugin and prints the parsed menu tree plus any parse diagnostics.</td></tr>
-<tr><td><code>vee lint &lt;plugin&gt;</code></td><td>Runs the plugin and reports problems: unknown params, a bare <code>|</code> in a title, unquoted values containing spaces, and the parser's own diagnostics. Exits non-zero if anything is flagged.</td></tr>
-<tr><td><code>vee search &lt;plugin&gt; [query…]</code></td><td>Runs the plugin, flattens its (nested) menu, and prints the items fuzzy-filtered and ranked by your query — each with its breadcrumb and the action it would fire.</td></tr>
-<tr><td><code>vee new [flags]</code></td><td>Scaffolds a new plugin file with the right filename, header tags, and a working body.</td></tr>
-</tbody>
-</table>
-</div>
+<p>Running <code>vee</code> with no subcommand launches the menu-bar app (that's also what
+happens when the bundled app is opened). Passing a subcommand instead gives you a
+zero-install authoring loop that reuses Vee's real parser — no app, no GUI:</p>
+<div class="table-scroll"><table><thead><tr><th>Command</th><th>What it does</th></tr></thead><tbody><tr><td><code>vee render &lt;plugin&gt;</code></td><td>Runs the plugin and prints the parsed menu tree plus any parse diagnostics.</td></tr><tr><td><code>vee show &lt;plugin&gt;</code></td><td>Renders the plugin's dropdown in the terminal — color, block progress bars, and sparklines — and live-refreshes it on the plugin's own cadence.</td></tr><tr><td><code>vee lint &lt;plugin&gt;</code></td><td>Runs the plugin and reports problems: unknown params, a bare `\</td><td>` in a title, unquoted values containing spaces, and the parser's own diagnostics. Exits non-zero if anything is flagged.</td></tr><tr><td><code>vee search &lt;plugin&gt; [query…]</code></td><td>Runs the plugin, flattens its (nested) menu, and prints the items fuzzy-filtered and ranked by your query — each with its breadcrumb and the action it would fire.</td></tr><tr><td><code>vee new [flags]</code></td><td>Scaffolds a new plugin file with the right filename, header tags, and a working body.</td></tr></tbody></table></div>
 <h3 id="vee-render"><code>vee render</code></h3>
-<p>Renders exactly what Vee would show, so you can see a plugin's output — text <strong>or</strong> JSON protocol — without installing it:</p>
+<p>Renders exactly what Vee would show, so you can see a plugin's output — text
+<strong>or</strong> JSON protocol — without installing it:</p>
 <div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">sh</span></div><pre><code>$ vee render ./cpu.5s.sh
 CPU 12%  [sfimage=cpu]
 ---
 Top processes  [href=https://example.com/procs]
 ───
 Refresh  [refresh]</code></pre></div>
-<p>Parse diagnostics (unknown params, malformed lines) and a non-zero exit, a timeout, or anything on stderr are surfaced too — it's the fastest way to answer "why doesn't my plugin look right?".</p>
+<p>Parse diagnostics (unknown params, malformed lines) and a non-zero exit, a
+timeout, or anything on stderr are surfaced too — it's the fastest way to answer
+"why doesn't my plugin look right?".</p>
+<h3 id="vee-show"><code>vee show</code></h3>
+<p>Where <code>vee render</code> prints one static tree, <code>vee show</code> is a live view of what the
+plugin's menu-bar dropdown would look like — rendered natively in your terminal.
+It re-runs the plugin on the cadence encoded in its filename and repaints, so you
+can edit a script and watch the result without ever installing it into the menu
+bar:</p>
+<div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">sh</span></div><pre><code>$ vee show ./cpu.10s.sh      # or an installed plugin by name: vee show cpu</code></pre></div>
+<p>The dropdown is rendered the way a terminal can: <code>color=</code>/ANSI as real color,
+<code>progress=</code> as a Unicode block gauge (<code>████████░░░░ 72%</code>), <code>sparkline=</code> as a
+block sparkline (<code>▁▂▃▅▇█</code>), and <code>toggle=</code>/<code>slider=</code> as inline state. The things a
+terminal can't draw — SF Symbols and base64 images — are shown by name (<code>[cpu]</code>,
+<code>[img]</code>) rather than dropped. A status line reports the plugin's cadence and last
+exit code; parse diagnostics and stderr surface below, exactly like <code>vee render</code>.</p>
+<p>Press <strong><code>r</code></strong> to refresh now and <strong><code>q</code></strong> (or <code>Ctrl-C</code>) to quit. A plugin with no
+interval token in its filename (<code>.manual</code>) simply renders once and waits for <code>r</code>.</p>
+<p>Flags: <code>--once</code> prints a single frame instead of watching (also what happens when
+stdout is piped); <code>--no-color</code> disables ANSI color (as does a <code>NO_COLOR</code>
+environment variable or a non-TTY stdout); <code>--dir DIR</code> sets the folder a plugin
+<em>name</em> is resolved against.</p>
+<p><code>vee show</code> is a view, not a controller — it displays a row's action (with a small
+trailing glyph: <code>↗</code> link, <code>$</code> shell, <code>⟳</code> refresh, <code>⌘</code> Shortcut) but does not fire
+it. Activating items, the interactive control popovers, and the embedded WebView
+remain the menu bar's job.</p>
 <h3 id="vee-lint"><code>vee lint</code></h3>
-<p>Catches the common authoring mistakes before you ship — especially the quoting bugs the <a href="sdk.html">SDKs</a> prevent by construction:</p>
+<p>Catches the common authoring mistakes before you ship — especially the
+quoting bugs the <a href="sdk.html">SDKs</a> prevent by construction:</p>
 <div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">sh</span></div><pre><code>$ vee lint ./broken.5s.sh
 Lint findings:
   warning [line 3]: value for 'tooltip' contains a space but isn't quoted; wrap it in quotes (e.g. tooltip="a b")
   warning [line 4]: unknown parameter 'frobnicate'</code></pre></div>
-<p><code>vee lint</code> exits <code>1</code> when it finds anything, so you can wire it into a pre-commit hook or CI.</p>
+<p><code>vee lint</code> exits <code>1</code> when it finds anything, so you can wire it into a
+pre-commit hook or CI.</p>
 <h3 id="vee-new"><code>vee new</code></h3>
-<p>Scaffolds a ready-to-run plugin. Flags: <code>--lang ts|py|sh</code>, <code>--interval</code> (e.g. <code>5s</code>, <code>10m</code>), <code>--name</code>, <code>--trust</code> (comma-separated capabilities, e.g. <code>network,secrets</code>), and <code>--out DIR</code>. When run in a terminal with flags omitted, it prompts.</p>
+<p>Scaffolds a ready-to-run plugin. Flags: <code>--lang ts|py|sh</code>, <code>--interval</code> (e.g.
+<code>5s</code>, <code>10m</code>), <code>--name</code>, <code>--trust</code> (comma-separated capabilities, e.g.
+<code>network,secrets</code>), and <code>--out DIR</code>. When run in a terminal with flags omitted,
+it prompts.</p>
 <div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">sh</span></div><pre><code>$ vee new --lang sh --interval 30s --name weather --trust network --out ~/plugins
 # writes ~/plugins/weather.30s.sh with &lt;xbar.*&gt; + &lt;vee.*&gt; headers and a working body</code></pre></div>
-<p>For <code>ts</code>/<code>py</code>, the generated body imports the corresponding <a href="sdk.html">SDK</a> so a scaffold doubles as a starting point for typed authoring.</p>
+<p>For <code>ts</code>/<code>py</code>, the generated body imports the corresponding <a href="sdk.html">SDK</a> so a
+scaffold doubles as a starting point for typed authoring.</p>
 <h3 id="vee-search"><code>vee search</code></h3>
-<p>Flattens a plugin's whole menu tree — including nested submenus — and prints the items fuzzy-filtered and ranked, so you can try the <a href="plugin-authoring.html#searchable-filter-panel">searchable filter panel</a>'s matching from the terminal before installing anything. With no query it lists every activatable item.</p>
+<p>Flattens a plugin's whole menu tree — including nested submenus — and prints the
+items fuzzy-filtered and ranked, so you can try the <a href="plugin-authoring.html#searchable-filter-panel">searchable filter
+panel</a>'s matching from the terminal
+before installing anything. With no query it lists every activatable item.</p>
 <div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">sh</span></div><pre><code>$ vee search ./dev-dashboard.5m.sh retry
 2 of 45 item(s) match "retry":
   #412 Fix retry backoff jitter  ⟨Repositories › orders › Pull Requests⟩  [href]
   feature/retry-jitter  ⟨Repositories › orders › Branches⟩  [shell]</code></pre></div>
-<p>Query words are ANDed and matched fuzzily (<code>gh</code> finds <code>GitHub</code>); a match on a parent group's name still surfaces its children. Exits <code>1</code> when nothing matches and <code>2</code> on a missing path, so it slots into scripts and CI too.</p>
+<p>Query words are ANDed and matched fuzzily (<code>gh</code> finds <code>GitHub</code>); a match on a
+parent group's name still surfaces its children. Exits <code>1</code> when nothing matches
+and <code>2</code> on a missing path, so it slots into scripts and CI too.</p>
 <h2 id="url-actions">URL actions</h2>
 <p>Vee registers two URL schemes: <code>vee://</code> and <code>swiftbar://</code>. The <code>swiftbar://</code> scheme is supported for compatibility, so plugins written for SwiftBar keep working. Both schemes accept the same actions.</p>
 <p>The <strong>action is the URL host</strong>, and parameters come from the query string. The plugin name is passed as <code>name</code> (or <code>path</code>).</p>
-<div class="table-scroll"><table><thead><tr><th>Action</th><th>Description</th><th>Example</th></tr></thead><tbody><tr><td><code>refreshallplugins</code> (alias <code>refreshall</code>)</td><td>Re-run every plugin.</td><td><code>vee://refreshallplugins</code></td></tr><tr><td><code>refreshplugin</code></td><td>Re-run one plugin by name.</td><td><code>vee://refreshplugin?name=cpu</code></td></tr><tr><td><code>enableplugin</code></td><td>Enable a plugin.</td><td><code>vee://enableplugin?name=cpu</code></td></tr><tr><td><code>disableplugin</code></td><td>Disable a plugin.</td><td><code>vee://disableplugin?name=cpu</code></td></tr><tr><td><code>toggleplugin</code></td><td>Toggle a plugin's enabled state.</td><td><code>vee://toggleplugin?name=cpu</code></td></tr><tr><td><code>notify</code></td><td>Post a system notification.</td><td><code>vee://notify?title=Done&amp;subtitle=Build&amp;body=Succeeded&amp;href=https://example.com</code></td></tr></tbody></table></div>
+<div class="table-scroll"><table><thead><tr><th>Action</th><th>Description</th><th>Example</th></tr></thead><tbody><tr><td><code>refreshallplugins</code> (alias <code>refreshall</code>)</td><td>Re-run every plugin.</td><td><code>vee://refreshallplugins</code></td></tr><tr><td><code>refreshplugin</code></td><td>Re-run one plugin by name.</td><td><code>vee://refreshplugin?name=cpu</code></td></tr><tr><td><code>enableplugin</code></td><td>Enable a plugin.</td><td><code>vee://enableplugin?name=cpu</code></td></tr><tr><td><code>disableplugin</code></td><td>Disable a plugin.</td><td><code>vee://disableplugin?name=cpu</code></td></tr><tr><td><code>toggleplugin</code></td><td>Toggle a plugin's enabled state.</td><td><code>vee://toggleplugin?name=cpu</code></td></tr><tr><td><code>addplugin</code></td><td>Download and install a plugin from a URL.</td><td><code>vee://addplugin?src=https://example.com/cpu.5s.sh</code></td></tr><tr><td><code>setephemeralplugin</code></td><td>Show transient menu content in its own status item, with no file on disk (optionally auto-removed after <code>exitafter</code> seconds).</td><td><code>vee://setephemeralplugin?name=build&amp;content=Done&amp;exitafter=5</code></td></tr><tr><td><code>notify</code></td><td>Post a system notification.</td><td><code>vee://notify?title=Done&amp;subtitle=Build&amp;body=Succeeded&amp;href=https://example.com</code></td></tr></tbody></table></div>
 <p>The same URLs work with the <code>swiftbar://</code> scheme, e.g. <code>swiftbar://refreshplugin?name=cpu</code>.</p>
 <h3 id="the-notify-action">The <code>notify</code> action</h3>
 <p><code>notify</code> posts a macOS notification. Its parameters:</p>
@@ -125,7 +154,8 @@ Lint findings:
 <li><code>plugin</code> — the originating plugin's id. When present, the alert becomes <strong>actionable</strong> — it gains <strong>Re-run</strong>, <strong>Silence</strong> (mute this plugin's alerts for the session), and <strong>Open Log</strong> buttons — and repeated alerts from the same plugin coalesce instead of stacking. Pass your own id with the injected <code>$VEE_PLUGIN_ID</code> variable.</li>
 </ul>
 <div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">text</span></div><pre><code>vee://notify?title=Backup&amp;subtitle=Nightly&amp;body=Completed%20successfully&amp;href=https://example.com</code></pre></div>
-<p>An <strong>actionable</strong> alert from a monitor plugin, tagged with its id so Re-run / Silence / Open Log resolve back to it:</p>
+<p>An <strong>actionable</strong> alert from a monitor plugin, tagged with its id so Re-run /
+Silence / Open Log resolve back to it:</p>
 <div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">bash</span></div><pre><code>open "vee://notify?plugin=$VEE_PLUGIN_ID&amp;title=Build%20failed&amp;body=exit%201"</code></pre></div>
 <p>Remember to URL-encode parameter values that contain spaces or special characters.</p>
 <h2 id="triggering-actions-from-a-plugin">Triggering actions from a plugin</h2>

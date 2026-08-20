@@ -61,19 +61,18 @@
       <p class="doc-hero-note">Vee documentation</p>
 <h1>Troubleshooting</h1>
 <p>Common issues and how to fix them. If none of these help, open an issue at <a href="https://github.com/navbytes/vee" rel="noopener">github.com/navbytes/vee</a>.</p>
-<h2 id="a-plugin-doesn-t-appear-in-the-menu-bar">A plugin doesn't appear in the menu bar</h2>
+<h2 id="a-plugin-doesnt-appear-in-the-menu-bar">A plugin doesn't appear in the menu bar</h2>
 <p>Work through these in order:</p>
 <ol>
-<li><strong>Is it executable?</strong> Vee runs plugins as programs. Mark the file executable:</li>
-</ol>
-<p>   ``<code>sh    chmod +x ~/Library/Application\ Support/Vee/plugins/mine.5s.sh    </code>`<code>    (If a file is not executable, Vee still tries its shebang interpreter and falls back to bash — but </code>chmod +x` is the reliable path.)</p>
-<ol>
+<li><strong>Is it executable?</strong> Vee runs plugins as programs. Mark the file executable:
+<div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">sh</span></div><pre><code>chmod +x ~/Library/Application\ Support/Vee/plugins/mine.5s.sh</code></pre></div>
+<p>(If a file is not executable, Vee still tries its shebang interpreter and falls back to bash — but <code>chmod +x</code> is the reliable path.)</p></li>
 <li><strong>Is it in the plugins folder?</strong> The default is <code>~/Library/Application Support/Vee/plugins</code>. Confirm the folder Vee is using in the Plugin Manager (Choose Folder), and make sure the plugin is directly inside it.</li>
 <li><strong>Is the filename valid?</strong> The interval token must sit right before the extension: <code>cpu.5s.sh</code>, not <code>cpu.sh.5s</code>. A file like <code>cpu.sh</code> with no interval runs on demand, not on a timer.</li>
 <li><strong>Is it enabled?</strong> Check the Plugin Manager — a disabled plugin stays on disk but is not run or shown.</li>
 <li><strong>Force a scan.</strong> Use <strong>Refresh all</strong> from the Vee menu, or toggle the plugin off and on.</li>
 </ol>
-<h2 id="unidentified-developer-gatekeeper-blocks-the-app">"unidentified developer" / Gatekeeper blocks the app</h2>
+<h2 id="unidentified-developer--gatekeeper-blocks-the-app">"unidentified developer" / Gatekeeper blocks the app</h2>
 <p>Vee is notarized, so a normal double-click should work. If macOS still blocks it:</p>
 <ul>
 <li>Right-click (or Control-click) <code>Vee.app</code> in <code>/Applications</code> and choose <strong>Open</strong>, then confirm the dialog. macOS remembers the choice after the first time.</li>
@@ -82,10 +81,9 @@
 <p>Make sure you downloaded <code>Vee.app</code> from the official <a href="https://github.com/navbytes/vee/releases" rel="noopener">GitHub Releases</a> page.</p>
 <h2 id="a-plugin-errors-or-shows-nothing-useful">A plugin errors or shows nothing useful</h2>
 <ul>
-<li><strong>Run it in a terminal first.</strong> A plugin is just a script — run it directly and read the output:</li>
-</ul>
-<p>  ``<code>sh   ~/Library/Application\ Support/Vee/plugins/mine.5s.sh   </code>``   If it errors there, fix it there. Vee runs the plugin with your environment plus its own injected variables (see <a href="plugin-authoring.html#environment-variables-vee-injects">authoring</a>).</p>
-<ul>
+<li><strong>Run it in a terminal first.</strong> A plugin is just a script — run it directly and read the output:
+<div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">sh</span></div><pre><code>~/Library/Application\ Support/Vee/plugins/mine.5s.sh</code></pre></div>
+<p>If it errors there, fix it there. Vee runs the plugin with your environment plus its own injected variables (see <a href="plugin-authoring.html#environment-variables-vee-injects">authoring</a>).</p></li>
 <li><strong>Check the first line before <code>---</code>.</strong> Only the text before the first <code>---</code> becomes the menu-bar title. If your title line is empty or errors, the menu-bar item looks blank.</li>
 <li><strong>Watch quoting.</strong> Line parameters after <code>|</code> must be quoted when they contain spaces (<code>title="two words"</code>), and quotes inside values escaped (<code>\"</code>).</li>
 </ul>
@@ -95,7 +93,7 @@
 <li>Make it faster, or cache results between runs (use <code>SWIFTBAR_PLUGIN_CACHE_PATH</code> / <code>SWIFTBAR_PLUGIN_DATA_PATH</code>).</li>
 <li>If it is genuinely long-running and pushes continuous updates, make it a <strong>streaming</strong> plugin instead (<code>&lt;swiftbar.type&gt;streamable&lt;/swiftbar.type&gt;</code> with <code>~~~</code> separators), which stays running rather than being re-invoked on a timer. See <a href="plugin-authoring.html#streaming">Streaming</a>.</li>
 </ul>
-<h2 id="command-not-found-a-dependency-or-interpreter-is-missing">"command not found" / a dependency or interpreter is missing</h2>
+<h2 id="command-not-found--a-dependency-or-interpreter-is-missing">"command not found" / a dependency or interpreter is missing</h2>
 <p>Vee does not install your plugin's dependencies. If a plugin needs <code>python3</code>, <code>node</code>, <code>jq</code>, <code>gh</code>, etc., that tool must be installed and on the <code>PATH</code>.</p>
 <ul>
 <li>Check the plugin's <code>&lt;xbar.dependencies&gt;</code> header for what it needs.</li>
@@ -103,7 +101,7 @@
 <li><strong>PATH:</strong> Vee resolves your login shell's <code>PATH</code> at launch (running <code>$SHELL -ilc</code>) and adds the usual Homebrew locations, so tools installed via Homebrew, pyenv, asdf, or nvm are normally found just like in Terminal. If a tool is configured somewhere unusual (or only in a non-login shell rc file) and still isn't found, use its <strong>absolute path</strong> in the plugin (e.g. <code>/opt/homebrew/bin/jq</code>), or set <code>PATH</code> explicitly at the top of the script.</li>
 <li>For a script without a shebang and without the executable bit, Vee falls back to <code>/bin/bash</code>. Add a proper shebang (<code>#!/usr/bin/env python3</code>) so the right interpreter is used.</li>
 </ul>
-<h2 id="refreshes-aren-t-happening">Refreshes aren't happening</h2>
+<h2 id="refreshes-arent-happening">Refreshes aren't happening</h2>
 <ul>
 <li><strong>Confirm the interval.</strong> The filename controls it: <code>weather.10m.sh</code> is every 10 minutes, <code>weather.sh</code> is on demand only.</li>
 <li><strong>Cron plugins</strong> use <code>&lt;swiftbar.schedule&gt;</code> (5-field cron). Double-check the expression — an invalid field means it never fires.</li>

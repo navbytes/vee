@@ -36,6 +36,7 @@ public enum MenuFlattener {
         if p.shell != nil { return true }
         if p.swiftbar.webview != nil { return true }
         if p.sparkline != nil { return true }
+        if p.swiftbar.chart != nil { return true }
         if p.href != nil { return true }
         if let shortcut = p.swiftbar.shortcut, !shortcut.isEmpty { return true }
         if p.refresh == true { return true }
