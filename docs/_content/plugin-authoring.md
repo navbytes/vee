@@ -145,6 +145,28 @@ embedded browser or cross-platform runtime. Malformed values are skipped; an
 empty list is ignored (no inline chart, no popover). A single value has no series
 to chart, so it draws as a flat centered baseline instead.
 
+### Keeping a chart on screen (detached windows)
+
+A popover is transient — it closes as soon as you click away, which is wrong when
+the thing you wanted was to *watch* a value. Every `sparkline=` and share-chart
+popover therefore carries an **open-in-a-window** button in its top-right corner.
+Press it and the same chart becomes a normal floating window you can move to
+another display, resize, and leave open. Open as many as you like — one per row —
+and re-pressing the button for a row you already detached focuses that window
+rather than opening a second one.
+
+Detached windows are **live**, not snapshots: each one keeps watching the row it
+came from, and updates on the plugin's own refresh cadence. A window tracks its
+row by position in the menu, not by text — the text of a row worth watching is
+exactly the part that keeps changing. So a plugin that emits a stable menu shape
+keeps its windows fed indefinitely; one that reorders or drops rows between
+refreshes may leave a window pointing at a different row, or at none. When the
+row goes away (or the plugin starts erroring), the window keeps showing the last
+value it saw and says so, rather than quietly freezing.
+
+Nothing is required of a plugin to support this — if a row opens a chart popover,
+it can be detached.
+
 ### Interactive controls (`toggle=` / `slider=`)
 
 Attach `toggle=` or `slider=` to a dropdown item to open an **interactive**
@@ -253,6 +275,10 @@ color onto the wrong segment.
 - `chartlabels=`/`chartcolors=` are comma-separated, so a segment name can't
   itself contain a comma. Names with spaces are fine — quote the whole list, as
   in `chartlabels="Macintosh HD,Backup,Scratch"`.
+
+Like `sparkline=`, a share-chart popover can be
+[detached into its own live window](#keeping-a-chart-on-screen-detached-windows)
+to keep on a second display.
 
 `vee show` renders all three kinds as one segmented block bar (a terminal can't
 draw sectors); `vee show --tree` names the shape.

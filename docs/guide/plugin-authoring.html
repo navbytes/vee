@@ -126,6 +126,24 @@ everything is drawn with SwiftUI + Swift Charts and AppKit, so there is no
 embedded browser or cross-platform runtime. Malformed values are skipped; an
 empty list is ignored (no inline chart, no popover). A single value has no series
 to chart, so it draws as a flat centered baseline instead.</p>
+<h3 id="keeping-a-chart-on-screen-detached-windows">Keeping a chart on screen (detached windows)</h3>
+<p>A popover is transient — it closes as soon as you click away, which is wrong when
+the thing you wanted was to <em>watch</em> a value. Every <code>sparkline=</code> and share-chart
+popover therefore carries an <strong>open-in-a-window</strong> button in its top-right corner.
+Press it and the same chart becomes a normal floating window you can move to
+another display, resize, and leave open. Open as many as you like — one per row —
+and re-pressing the button for a row you already detached focuses that window
+rather than opening a second one.</p>
+<p>Detached windows are <strong>live</strong>, not snapshots: each one keeps watching the row it
+came from, and updates on the plugin's own refresh cadence. A window tracks its
+row by position in the menu, not by text — the text of a row worth watching is
+exactly the part that keeps changing. So a plugin that emits a stable menu shape
+keeps its windows fed indefinitely; one that reorders or drops rows between
+refreshes may leave a window pointing at a different row, or at none. When the
+row goes away (or the plugin starts erroring), the window keeps showing the last
+value it saw and says so, rather than quietly freezing.</p>
+<p>Nothing is required of a plugin to support this — if a row opens a chart popover,
+it can be detached.</p>
 <h3 id="interactive-controls-toggle--slider">Interactive controls (<code>toggle=</code> / <code>slider=</code>)</h3>
 <p>Attach <code>toggle=</code> or <code>slider=</code> to a dropdown item to open an <strong>interactive</strong>
 Liquid Glass popover — a live switch or slider, again drawn natively with SwiftUI
@@ -209,6 +227,9 @@ own total.</li>
 itself contain a comma. Names with spaces are fine — quote the whole list, as
 in <code>chartlabels="Macintosh HD,Backup,Scratch"</code>.</li>
 </ul>
+<p>Like <code>sparkline=</code>, a share-chart popover can be
+<a href="#keeping-a-chart-on-screen-detached-windows">detached into its own live window</a>
+to keep on a second display.</p>
 <p><code>vee show</code> renders all three kinds as one segmented block bar (a terminal can't
 draw sectors); <code>vee show --tree</code> names the shape.</p>
 <blockquote>

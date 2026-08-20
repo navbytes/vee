@@ -107,7 +107,7 @@ final class PluginCoordinator {
         } else {
             self.controller = StatusItemController(
                 pluginName: plugin.filename.name,
-                handler: AppActionDispatcher(runner: SystemProcessRunner(), baseEnvironment: baseEnvironment) { [weak self] in self?.refresh() },
+                handler: AppActionDispatcher(pluginName: plugin.filename.name, runner: SystemProcessRunner(), baseEnvironment: baseEnvironment) { [weak self] in self?.refresh() },
                 hasSettings: !header.vars.isEmpty || !features.isEmpty,
                 trustSummary: trustSummary,
                 refreshOnOpen: header.refreshOnOpen ?? false,
@@ -315,6 +315,10 @@ final class PluginCoordinator {
         refreshTask = nil
         refreshWidgetTask?.cancel()
         refreshWidgetTask = nil
+        // Nothing will feed this plugin's detached chart windows any more, so
+        // stop them implying they are live. A reload swaps in a fresh
+        // coordinator whose first render clears the flag again.
+        DetachedChartWindows.shared.pluginWentAway(pluginName: plugin.filename.name)
         controller?.remove()
     }
 

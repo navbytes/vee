@@ -16,10 +16,15 @@ import VeePluginFormat
 public struct CategoryChartView: View {
     private let chart: ChartParams
     private let title: String
+    private let onDetach: (() -> Void)?
 
-    public init(chart: ChartParams, title: String = "") {
+    /// `onDetach` is supplied by the popover host to offer "open in a window";
+    /// the detached window renders the same view without it, since there is
+    /// nothing left to detach.
+    public init(chart: ChartParams, title: String = "", onDetach: (() -> Void)? = nil) {
         self.chart = chart
         self.title = title
+        self.onDetach = onDetach
     }
 
     public var body: some View {
@@ -36,6 +41,11 @@ public struct CategoryChartView: View {
         .accessibilityElement(children: .combine)
         .accessibilityLabel(title)
         .accessibilityValue(chart.accessibilitySummary())
+        // Outside the combined element above, so the button stays its own
+        // VoiceOver target instead of being folded into the chart's summary.
+        .overlay(alignment: .topTrailing) {
+            if let onDetach { DetachButton(action: onDetach) }
+        }
     }
 
     // MARK: - Plot

@@ -10,8 +10,13 @@ final class AppActionDispatcher: MenuActionHandling {
     private let runner: ProcessRunning
     private let baseEnvironment: [String: String]
     private let onRefresh: () -> Void
+    /// Which plugin's menu this dispatcher serves. Only needed so a detached
+    /// chart window can be tied back to the plugin whose refreshes must keep
+    /// feeding it (`DetachedChartWindows`).
+    private let pluginName: String
 
-    init(runner: ProcessRunning, baseEnvironment: [String: String] = ProcessInfo.processInfo.environment, onRefresh: @escaping () -> Void) {
+    init(pluginName: String = "", runner: ProcessRunning, baseEnvironment: [String: String] = ProcessInfo.processInfo.environment, onRefresh: @escaping () -> Void) {
+        self.pluginName = pluginName
         self.runner = runner
         self.baseEnvironment = baseEnvironment
         self.onRefresh = onRefresh
@@ -34,9 +39,9 @@ final class AppActionDispatcher: MenuActionHandling {
             WebViewPresenter.shared.show(url: webview, width: params.swiftbar.webviewWidth, height: params.swiftbar.webviewHeight)
             if params.refresh == true { onRefresh() }
         } else if let series = params.sparkline {
-            PluginPopover.shared.show(series: series, title: item.text)
+            PluginPopover.shared.show(series: series, title: item.text, onDetach: detachHandler(for: item))
         } else if let chart = params.swiftbar.chart {
-            PluginPopover.shared.show(chart: chart, title: item.text)
+            PluginPopover.shared.show(chart: chart, title: item.text, onDetach: detachHandler(for: item))
         } else if let url = params.href {
             NSWorkspace.shared.open(url)
             if params.refresh == true { onRefresh() }
@@ -44,6 +49,25 @@ final class AppActionDispatcher: MenuActionHandling {
             runShortcut(named: shortcut, refreshAfter: params.refresh == true)
         } else if params.refresh == true {
             onRefresh()
+        }
+    }
+
+    /// The "open in a window" action for a read-only popover, or `nil` when the
+    /// row can't be detached — no plugin name (a dispatcher built without one),
+    /// or nothing a window could keep showing. Returning `nil` is what hides the
+    /// button, so the affordance never appears where it wouldn't work.
+    private func detachHandler(for item: MenuItem) -> (() -> Void)? {
+        guard !pluginName.isEmpty, DetachedChartWindows.isDetachable(item) else { return nil }
+        let pluginName = self.pluginName
+        // A plain `() -> Void` so SwiftUI's `Button` can take it with no
+        // isolation friction; the hop is asserted inside, the same way
+        // `DebugWindowManager` handles its notification callback. Button actions
+        // always run on the main thread, so the assertion holds.
+        return {
+            MainActor.assumeIsolated {
+                PluginPopover.shared.dismissForDetach()
+                DetachedChartWindows.shared.detach(pluginName: pluginName, item: item)
+            }
         }
     }
 

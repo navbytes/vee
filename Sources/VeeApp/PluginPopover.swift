@@ -21,19 +21,20 @@ final class PluginPopover: NSObject, NSPopoverDelegate {
     private var anchorWindow: NSWindow?
 
     /// Shows an inline `sparkline=…` series as a Swift Charts popover.
-    func show(series: [Double], title: String) {
+    /// `onDetach`, when supplied, adds the "open in a window" button.
+    func show(series: [Double], title: String, onDetach: (() -> Void)? = nil) {
         present(size: NSSize(width: 260, height: 150)) {
-            NSHostingController(rootView: SparklineChartView(values: series, title: title))
+            NSHostingController(rootView: SparklineChartView(values: series, title: title, onDetach: onDetach))
         }
     }
 
     /// Shows a `pie=`/`donut=`/`stackedbar=` chart with its segment legend.
     /// Taller than the sparkline popover because the legend grows a row per
     /// segment (bounded by `ChartParams.maxSegments`).
-    func show(chart: ChartParams, title: String) {
+    func show(chart: ChartParams, title: String, onDetach: (() -> Void)? = nil) {
         let legendRows = CGFloat(chart.values.count)
         present(size: NSSize(width: 280, height: 190 + legendRows * 17)) {
-            NSHostingController(rootView: CategoryChartView(chart: chart, title: title))
+            NSHostingController(rootView: CategoryChartView(chart: chart, title: title, onDetach: onDetach))
         }
     }
 
@@ -83,6 +84,14 @@ final class PluginPopover: NSObject, NSPopoverDelegate {
 
         popover.show(relativeTo: anchor.bounds, of: anchor, preferredEdge: .minY)
         NSApp.activate(ignoringOtherApps: true)
+    }
+
+    /// Closes the popover because its content is being promoted to a window.
+    /// Separate from the transient auto-dismiss only for readability at the call
+    /// site — leaving the popover up behind its own detached window would be a
+    /// duplicate of the same chart.
+    func dismissForDetach() {
+        dismiss()
     }
 
     func popoverDidClose(_ notification: Notification) {
