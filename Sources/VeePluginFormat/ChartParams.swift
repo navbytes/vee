@@ -47,7 +47,7 @@ public struct ChartParams: Equatable, Sendable {
     public var labels: [String]
     /// Per-segment color overrides (`chartcolors=`), positional against
     /// `values`. May be shorter than `values`, and an entry may be `nil` —
-    /// either the plugin left that slot blank or its color didn't parse. A
+    /// either the plugin left that slot blank or its color was malformed. A
     /// missing entry takes the segment's `ChartPalette` slot, so a partial list
     /// like `chartcolors=,,red` recolors only the third segment instead of
     /// sliding every later color one position to the left.

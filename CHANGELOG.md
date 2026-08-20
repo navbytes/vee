@@ -26,8 +26,8 @@ All notable changes to Vee are documented here. The format is based on
   row opens a Liquid Glass Swift Charts popover with the chart at full size and a
   legend naming every segment with its percentage. `chartlabels=` names the
   segments and `chartcolors=` recolors them — both positional, so a blank or
-  unparseable entry keeps that segment's own default rather than sliding the next
-  color onto it. Segments otherwise take a built-in eight-slot categorical
+  entry that is blank, malformed, or names a color Vee doesn't know keeps that
+  segment's own default rather than sliding the next color onto it. Segments otherwise take a built-in eight-slot categorical
   palette, assigned by position and never cycled, with light and dark steps
   selected per surface and checked for color-blind separation. The parser refuses
   to draw a series it can't read as shares (non-finite, negative, or all-zero,

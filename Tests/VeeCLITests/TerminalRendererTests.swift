@@ -76,6 +76,28 @@ final class TerminalRendererTests: XCTestCase {
         XCTAssertEqual(TerminalRenderer.allocateCells(ChartParams(kind: .pie, values: [0, 1]), total: 4), [0, 4])
     }
 
+    /// Regression: `VeeColor.parse` accepts any bare word as a name, so
+    /// `chartcolors=notacolor` reaches the renderer intact and only fails when
+    /// it is resolved to SGR codes. The AppKit and SwiftUI resolvers fall back
+    /// to the segment's palette slot there; this one used to emit the segment
+    /// uncoloured instead, so the same chart looked different in the terminal.
+    func testChartFallsBackToThePaletteWhenAnOverrideCannotResolve() {
+        let colored = TerminalRenderer.Options(color: true, width: 80)
+        let chart = ChartParams(kind: .pie, values: [1, 1], colors: [.named("notacolor"), nil])
+        let out = TerminalRenderer.categoryChart(chart, options: colored)
+        // Slot 1's dark step (#3987e5) as truecolor SGR — what the unresolvable
+        // override must fall back to.
+        XCTAssertTrue(out.contains("38;2;57;135;229"), out)
+    }
+
+    /// A color the terminal *can* resolve still wins over the palette.
+    func testResolvableOverrideBeatsThePalette() {
+        let colored = TerminalRenderer.Options(color: true, width: 80)
+        let chart = ChartParams(kind: .pie, values: [1, 1], colors: [.named("red"), nil])
+        let out = TerminalRenderer.categoryChart(chart, options: colored)
+        XCTAssertTrue(out.contains("\u{1B}[31m"), out)
+    }
+
     func testChartRendersInlineOnTheRow() {
         var chart = LineParams()
         chart.swiftbar.chart = ChartParams(kind: .stackedBar, values: [1, 1])

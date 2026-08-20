@@ -85,10 +85,20 @@ final class ChartParamTests: XCTestCase {
     // MARK: - Labels
 
     func testLabelsAreParsedAndTrimmed() {
-        let c = chart("x | pie=1,1,1 chartlabels=Docs, Photos ,Apps")
+        let c = chart("x | pie=1,1,1 chartlabels=\"Docs, Photos ,Apps\"")
         XCTAssertEqual(c?.label(at: 0), "Docs")
         XCTAssertEqual(c?.label(at: 1), "Photos")
         XCTAssertEqual(c?.label(at: 2), "Apps")
+    }
+
+    /// A label list with spaces has to be quoted, like every other param value:
+    /// an unquoted value ends at the first space, so the rest of the list is
+    /// read as separate (unknown) params rather than as labels.
+    func testUnquotedLabelListStopsAtTheFirstSpace() {
+        let r = parse("x | pie=1,1,1 chartlabels=Docs, Photos ,Apps")
+        XCTAssertEqual(r.params.swiftbar.chart?.label(at: 0), "Docs")
+        XCTAssertNil(r.params.swiftbar.chart?.label(at: 1))
+        XCTAssertTrue(r.diagnostics.contains { $0.message.contains("unknown parameter") })
     }
 
     func testBlankLabelKeepsLaterLabelsOnTheirOwnSegments() {
@@ -125,12 +135,23 @@ final class ChartParamTests: XCTestCase {
     }
 
     func testColorsStayPositionalAcrossHoles() {
-        // The bug a `compactMap` would introduce: dropping the unparseable
-        // middle entry would slide `blue` onto segment 2.
-        let c = chart("x | pie=1,1,1 chartcolors=red,notacolor,blue")
+        // The bug a `compactMap` would introduce: dropping the middle entry
+        // would slide `blue` onto segment 2. `#zz` is used for the hole because
+        // it is the only thing `VeeColor.parse` actually rejects.
+        let c = chart("x | pie=1,1,1 chartcolors=red,#zz,blue")
         XCTAssertEqual(c?.color(at: 0), .named("red"))
         XCTAssertEqual(c?.color(at: 1), ChartPalette.slot(at: 1))
         XCTAssertEqual(c?.color(at: 2), .named("blue"))
+    }
+
+    /// `VeeColor.parse` accepts any bare word as a name, so an unknown color is
+    /// not a *parse* failure — it survives as an override and only fails when a
+    /// renderer tries to resolve it. Each renderer falls back to the segment's
+    /// palette slot at that point (`paletteColor(at:surface:)`).
+    func testUnknownColorNameSurvivesAsAnOverrideAndFallsBackAtRenderTime() {
+        let c = chart("x | pie=1,1 chartcolors=notacolor,blue")
+        XCTAssertEqual(c?.color(at: 0), .named("notacolor"))
+        XCTAssertEqual(c?.paletteColor(at: 0), ChartPalette.slot(at: 0))
     }
 
     func testBlankColorEntryTakesItsPaletteSlotSilently() {
@@ -140,7 +161,7 @@ final class ChartParamTests: XCTestCase {
         XCTAssertFalse(r.diagnostics.contains { $0.message.contains("chartcolors=") })
     }
 
-    func testUnparseableColorIsReported() {
+    func testMalformedColorIsReported() {
         let r = parse("x | pie=1,1 chartcolors=red,#zzz")
         XCTAssertTrue(r.diagnostics.contains { $0.message.contains("chartcolors=") })
     }

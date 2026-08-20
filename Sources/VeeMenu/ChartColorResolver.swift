@@ -10,10 +10,11 @@ import VeePluginFormat
 /// appearance is active when it opens.
 public enum ChartColorResolver {
     public static func nsColor(for chart: ChartParams, at index: Int) -> NSColor {
-        // An explicit override, when it names a color we understand. An
-        // unparseable one already became a hole at parse time; a name
-        // `ColorResolver` doesn't know falls through to the palette rather than
-        // rendering the segment invisible.
+        // An explicit override, when it names a color we understand. A
+        // malformed one already became a hole at parse time, but an unknown
+        // *name* survives parsing (`VeeColor.parse` accepts any bare word), so
+        // it lands here and falls through to the palette rather than rendering
+        // the segment invisible.
         if let override = chart.colorOverride(at: index),
            let resolved = ColorResolver.nsColor(for: override) {
             return resolved

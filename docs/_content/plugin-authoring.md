@@ -123,7 +123,7 @@ A literal `|`, backslash, or newline in the display text (or in a quoted value) 
 | `progress`, `trackcolor`, `progressw`, `progressh` | `progress=<0..1>` or `progress=value,max` (e.g. `progress=0.72` or `progress=23.65,100`). Draws a real capsule bar **inline in the menu row**. Fill uses `color=`; `trackcolor=` is the groove, `progressw=`/`progressh=` set the bar size in points. |
 | `pie`, `donut`, `stackedbar` | A comma-separated list of non-negative numbers read as shares of a whole (e.g. `pie=45,30,25`). Draws the chart **inline in the menu row**; clicking the item opens a fuller Swift Charts popover with a labelled legend. See [Share charts](#share-charts-pie-donut-stackedbar). |
 | `chartlabels` | Segment names for a chart, positional against its values (e.g. `chartlabels=Docs,Photos,Apps`). Shown in the popover legend and read out by VoiceOver. |
-| `chartcolors` | Segment colors for a chart, positional against its values (e.g. `chartcolors=blue,,orange`). A blank or unparseable entry keeps that segment's default palette color. |
+| `chartcolors` | Segment colors for a chart, positional against its values (e.g. `chartcolors=blue,,orange`). An entry that is blank, malformed, or names a color Vee doesn't know keeps that segment's default palette color. |
 | `accessory` | `leading` / `trailing` — which edge of the row a `progress=`/`sparkline=`/chart accessory anchors to (default `trailing`, today's rendering). See [Accessory placement](#accessory-placement-accessory). |
 
 Unknown parameters are preserved rather than dropped, so the format can evolve without breaking existing plugins.
@@ -238,8 +238,10 @@ Status  | stackedbar=8,1,3 chartcolors=,,red
 
 Leave an entry blank (as in `chartcolors=,,red` above) to recolor just one
 segment and keep the palette for the rest. Unlike `sfcolor=`, positions are never
-compacted: a blank or unparseable entry stays a hole rather than sliding the next
-color onto the wrong segment.
+compacted: a blank or malformed entry stays a hole rather than sliding the next
+color onto the wrong segment. A name Vee doesn't recognise also falls back to the
+palette, so a typo costs you one segment's color, never the alignment of the
+rest.
 
 **Rules the parser enforces**, so a chart never misrepresents its data:
 

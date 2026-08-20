@@ -154,7 +154,7 @@ The Vee-native inline controls are available in JSON too, as typed item fields:
 | `trackColor` | `string` | Progress track color (named or hex). |
 | `progressWidth` | `number` | Progress bar width in points. |
 | `progressHeight` | `number` | Progress bar height in points. |
-| `chart` | `{ "kind": "pie" \| "donut" \| "stackedbar", "values": number[], "labels"?: string[], "colors"?: string[] }` | A categorical share chart. `values` must be finite and `>= 0` with a positive total; at most 8 segments (a longer series folds its tail into "Other"). `labels`/`colors` are positional — a `null`/blank/unparseable color keeps that segment's palette slot. |
+| `chart` | `{ "kind": "pie" \| "donut" \| "stackedbar", "values": number[], "labels"?: string[], "colors"?: string[] }` | A categorical share chart. `values` must be finite and `>= 0` with a positive total; at most 8 segments (a longer series folds its tail into "Other"). `labels`/`colors` are positional — a color that is `null`, blank, malformed, or unrecognised keeps that segment's palette slot. |
 
 ```json
 {
