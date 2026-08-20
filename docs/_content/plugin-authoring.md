@@ -121,7 +121,10 @@ A literal `|`, backslash, or newline in the display text (or in a quoted value) 
 | `toggle` | `toggle=on` / `toggle=off` (also `true`/`false`/`1`/`0`). Clicking opens a Liquid Glass popover with a switch; flipping it re-invokes the item's `shell=`/`bash=` with the new value. |
 | `slider` | `slider=min,max,value` (e.g. `slider=0,100,40`). Clicking opens a Liquid Glass popover with a slider; releasing it re-invokes the item's `shell=`/`bash=` with the chosen value. |
 | `progress`, `trackcolor`, `progressw`, `progressh` | `progress=<0..1>` or `progress=value,max` (e.g. `progress=0.72` or `progress=23.65,100`). Draws a real capsule bar **inline in the menu row**. Fill uses `color=`; `trackcolor=` is the groove, `progressw=`/`progressh=` set the bar size in points. |
-| `accessory` | `leading` / `trailing` — which edge of the row a `progress=`/`sparkline=` accessory anchors to (default `trailing`, today's rendering). See [Accessory placement](#accessory-placement-accessory). |
+| `pie`, `donut`, `stackedbar` | A comma-separated list of non-negative numbers read as shares of a whole (e.g. `pie=45,30,25`). Draws the chart **inline in the menu row**; clicking the item opens a fuller Swift Charts popover with a labelled legend. See [Share charts](#share-charts-pie-donut-stackedbar). |
+| `chartlabels` | Segment names for a chart, positional against its values (e.g. `chartlabels=Docs,Photos,Apps`). Shown in the popover legend and read out by VoiceOver. |
+| `chartcolors` | Segment colors for a chart, positional against its values (e.g. `chartcolors=blue,,orange`). A blank or unparseable entry keeps that segment's default palette color. |
+| `accessory` | `leading` / `trailing` — which edge of the row a `progress=`/`sparkline=`/chart accessory anchors to (default `trailing`, today's rendering). See [Accessory placement](#accessory-placement-accessory). |
 
 Unknown parameters are preserved rather than dropped, so the format can evolve without breaking existing plugins.
 
@@ -198,16 +201,72 @@ The gauge itself is display-only (it doesn't fire a click by being a gauge), but
 the row can still carry its own `href=`/`shell=` action or a submenu, exactly
 like a plain item.
 
-If a row sets both `progress=` and `sparkline=`, the progress bar takes the
-inline view; `sparkline=`'s click-to-popover still opens as normal either way.
+If a row sets more than one inline accessory, the first of
+`progress=` → `sparkline=` → chart takes the in-row view; the click-to-popover
+that `sparkline=` and the charts opt into still opens as normal either way.
+
+### Share charts (`pie=` / `donut=` / `stackedbar=`)
+
+Where `sparkline=` shows a value *over time*, these show how a total *divides
+up*. All three take the same data — one series of non-negative numbers read as
+shares of a whole — so switching shapes means changing one word:
+
+```
+By category | pie=45,30,25 chartlabels=Documents,Photos,Apps
+By volume   | donut=512,256,128 chartlabels="Macintosh HD,Backup,Scratch"
+Budget      | stackedbar=60,25,15 chartlabels=Used,Cache,Free
+```
+
+The chart draws **inline in the menu row** (a small pie, donut, or capsule bar,
+using the same accessory slot `progress=` and `sparkline=` use). Clicking the row
+opens a Liquid Glass Swift Charts popover with the chart at full size and a
+legend naming every segment with its percentage — the popover is where
+`chartlabels=` becomes visible, since a menu row has no space for them. A donut
+also shows the series total in its hole.
+
+**Colors.** Segments take Vee's built-in categorical palette by position, so
+segment 1 is always the same hue no matter how many segments a plugin emits.
+The palette is eight fixed slots, selected separately for light and dark mode and
+checked for color-blind separation — so you don't have to pick colors at all.
+Override them positionally with `chartcolors=` when your data has its own
+conventional colors:
+
+```
+Storage | donut=512,256,128 chartcolors=blue,teal,orange
+Status  | stackedbar=8,1,3 chartcolors=,,red
+```
+
+Leave an entry blank (as in `chartcolors=,,red` above) to recolor just one
+segment and keep the palette for the rest. Unlike `sfcolor=`, positions are never
+compacted: a blank or unparseable entry stays a hole rather than sliding the next
+color onto the wrong segment.
+
+**Rules the parser enforces**, so a chart never misrepresents its data:
+
+- Every value must be a finite number and `>= 0`, and at least one must be
+  positive. A negative, non-numeric, or all-zero series is ignored (with a
+  diagnostic in `vee lint`) rather than drawn wrong.
+- At most **8 segments**. A longer series isn't truncated — that would silently
+  rescale every slice that survived — the first 7 are kept and the rest are
+  summed into a neutral **"Other"** segment, so the shares still add up to your
+  own total.
+- `chartlabels=`/`chartcolors=` are comma-separated, so a segment name can't
+  itself contain a comma. Names with spaces are fine — quote the whole list, as
+  in `chartlabels="Macintosh HD,Backup,Scratch"`.
+
+`vee show` renders all three kinds as one segmented block bar (a terminal can't
+draw sectors); `vee show --tree` names the shape.
+
+> **Proposal, subject to change.** Like `sparkline=`/`toggle=`/`slider=`, the
+> chart syntax is an early proposal; the exact convention may still evolve.
 
 ### Accessory placement (`accessory=`)
 
-Both `progress=` and `sparkline=` anchor their accessory (bar/chart) to the
-row's **trailing** edge by default, with the label filling the rest — today's
-rendering. Set `accessory=leading` to flip it: the accessory anchors to the
-row's leading edge instead, with the label filling the remaining trailing
-space.
+`progress=`, `sparkline=`, and the share charts anchor their accessory
+(bar/chart) to the row's **trailing** edge by default, with the label filling the
+rest — today's rendering. Set `accessory=leading` to flip it: the accessory
+anchors to the row's leading edge instead, with the label filling the remaining
+trailing space.
 
 ```
 Budget | progress=0.72 accessory=leading

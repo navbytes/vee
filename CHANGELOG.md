@@ -16,6 +16,27 @@ All notable changes to Vee are documented here. The format is based on
   as `C:\\node`.
 
 ### Added
+- **Share charts — `pie=`, `donut=`, and `stackedbar=`.** A new family of
+  Vee-native line params for showing how a total divides up, alongside
+  `sparkline=`'s value-over-time. All three take the same data — one series of
+  non-negative numbers read as shares of a whole (`pie=45,30,25`) — so switching
+  shapes changes one word. The chart draws **inline in the menu row** (a real
+  pie/donut/capsule bar in a custom AppKit view, in the same accessory slot
+  `progress=` and `sparkline=` use, honoring `accessory=leading`); clicking the
+  row opens a Liquid Glass Swift Charts popover with the chart at full size and a
+  legend naming every segment with its percentage. `chartlabels=` names the
+  segments and `chartcolors=` recolors them — both positional, so a blank or
+  unparseable entry keeps that segment's own default rather than sliding the next
+  color onto it. Segments otherwise take a built-in eight-slot categorical
+  palette, assigned by position and never cycled, with light and dark steps
+  selected per surface and checked for color-blind separation. The parser refuses
+  to draw a series it can't read as shares (non-finite, negative, or all-zero,
+  each with a diagnostic), and folds a series longer than eight segments into a
+  neutral "Other" tail rather than truncating it, so the shares still add up to
+  the plugin's own total. Available in the structured-JSON format as a `chart`
+  object, in all three SDKs as one typed `chart`/`Chart` builder, in `vee render`/
+  `vee show` as a segmented block bar, and in `vee show --tree` by name.
+  VoiceOver reads every segment and its share, on both the row and the popover.
 - **Search panel shows menu structure.** When idle (before typing), the search panel
   now mirrors the dropdown's structure — section headers (`header=true`), separators
   (`---`), and non-actionable rows (plain sub-text and `disabled=true` items) appear

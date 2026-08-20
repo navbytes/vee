@@ -118,6 +118,14 @@ enum LineParser {
         var progressTrack: VeeColor?
         var progressW: Double?
         var progressH: Double?
+        // Chart params are assembled after the loop: the shape (`pie=`/`donut=`/
+        // `stackedbar=`) and its `chartlabels=`/`chartcolors=` may appear on the
+        // line in any order, and a line naming more than one shape takes the
+        // last (the established "last one wins" rule).
+        var chartKind: ChartKind?
+        var chartRaw = ""
+        var chartLabels: [String] = []
+        var chartColors: [VeeColor?] = []
         var seenKeys: Set<String> = []
 
         func bool(_ v: String) -> Bool { v == "true" || v == "1" || v == "yes" }
@@ -218,6 +226,39 @@ enum LineParser {
                 } else if !value.isEmpty {
                     diagnostics.append(.init(severity: .warning, message: "progress= expects a fraction (0..1) or 'value,max'"))
                 }
+            case "pie", "donut", "stackedbar":
+                // Vee-native: a categorical share chart. All three shapes take
+                // the same data — one series of non-negative numbers — so they
+                // share a parse path and differ only in how they're drawn.
+                chartKind = ChartKind(rawValue: key)
+                chartRaw = value
+            case "chartlabels":
+                // Segment names, positional against the chart's values. Empty
+                // entries are kept so a later label still lines up with its own
+                // segment (`chartlabels=Docs,,Apps` labels segments 1 and 3).
+                chartLabels = value.isEmpty ? [] : value
+                    .split(separator: ",", omittingEmptySubsequences: false)
+                    .map { $0.trimmingCharacters(in: .whitespaces) }
+            case "chartcolors":
+                // Segment colors, positional like `chartlabels=`. Unlike
+                // `sfcolor=` this keeps blank/unparseable entries as holes
+                // instead of compacting them out — dropping one would slide
+                // every later color onto the wrong segment — and each hole falls
+                // back to that segment's palette slot.
+                let colorTokens = value.isEmpty
+                    ? []
+                    : value.split(separator: ",", omittingEmptySubsequences: false).map(String.init)
+                chartColors = colorTokens.map { VeeColor.parse($0) }
+                let unparseable = colorTokens.enumerated().contains { entry in
+                    chartColors[entry.offset] == nil
+                        && !entry.element.trimmingCharacters(in: .whitespaces).isEmpty
+                }
+                if unparseable {
+                    diagnostics.append(.init(
+                        severity: .warning,
+                        message: "chartcolors= has an unparseable color; those segments use the default palette"
+                    ))
+                }
             case "trackcolor": progressTrack = VeeColor.parse(value)
             case "progressw": progressW = finite(value)
             case "progressh": progressH = finite(value)
@@ -258,6 +299,32 @@ enum LineParser {
 
         if let fraction = progressFraction {
             p.progress = ProgressParams(fraction: fraction, trackColor: progressTrack, width: progressW, height: progressH)
+        }
+
+        if let kind = chartKind {
+            // Require *every* comma token to be a finite number, the same
+            // strictness `progress=` uses, so `pie=10,abc,30` is flagged rather
+            // than quietly charting a two-segment series the author never wrote.
+            let tokens = chartRaw.split(separator: ",").map(String.init)
+            let nums = tokens.compactMap { finite($0) }
+            if nums.count == tokens.count {
+                p.swiftbar.chart = ChartParams.make(
+                    kind: kind, values: nums, labels: chartLabels, colors: chartColors,
+                    diagnostics: &diagnostics
+                )
+            } else {
+                diagnostics.append(.init(
+                    severity: .warning,
+                    message: "\(kind.rawValue)= expects a comma-separated list of non-negative numbers"
+                ))
+            }
+        } else if !chartLabels.isEmpty || !chartColors.isEmpty {
+            // Labels/colors with nothing to attach them to: silently dropping
+            // them looked exactly like a chart that failed to render.
+            diagnostics.append(.init(
+                severity: .warning,
+                message: "chartlabels=/chartcolors= given without pie=/donut=/stackedbar="
+            ))
         }
 
         return (p, diagnostics)

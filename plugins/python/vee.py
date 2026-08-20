@@ -94,7 +94,8 @@ def _encode(options: dict[str, Any] | None) -> str:
         push(key, options.get(name))
 
     # Vee-native rich params, emitted last in a fixed order shared across SDKs:
-    # sparkline, toggle, slider, progress, trackcolor, progressw, progressh.
+    # sparkline, toggle, slider, progress, trackcolor, progressw, progressh,
+    # then the chart shape with its labels/colors.
     sparkline = options.get("sparkline")
     if sparkline is not None:
         push("sparkline", ",".join(_fmt(v) for v in sparkline))
@@ -126,6 +127,20 @@ def _encode(options: dict[str, Any] | None) -> str:
     push("trackcolor", options.get("trackColor"))
     push("progressw", options.get("progressW"))
     push("progressh", options.get("progressH"))
+
+    # Categorical share chart: `pie=`/`donut=`/`stackedbar=` plus its positional
+    # `chartlabels=`/`chartcolors=`. All three shapes take the same data, so the
+    # shape is just the key the values are pushed under. Vee reads labels and
+    # colors as comma-separated lists — keep commas out of segment names.
+    chart = options.get("chart")
+    if chart is not None:
+        push(chart["kind"], ",".join(_fmt(v) for v in chart["values"]))
+        labels = chart.get("labels")
+        if labels is not None:
+            push("chartlabels", ",".join(str(v) for v in labels))
+        colors = chart.get("colors")
+        if colors is not None:
+            push("chartcolors", ",".join(str(v) for v in colors))
 
     return " | " + " ".join(parts) if parts else ""
 

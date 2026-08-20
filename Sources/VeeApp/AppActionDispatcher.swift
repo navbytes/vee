@@ -35,6 +35,8 @@ final class AppActionDispatcher: MenuActionHandling {
             if params.refresh == true { onRefresh() }
         } else if let series = params.sparkline {
             PluginPopover.shared.show(series: series, title: item.text)
+        } else if let chart = params.swiftbar.chart {
+            PluginPopover.shared.show(chart: chart, title: item.text)
         } else if let url = params.href {
             NSWorkspace.shared.open(url)
             if params.refresh == true { onRefresh() }
