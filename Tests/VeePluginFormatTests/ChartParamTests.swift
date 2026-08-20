@@ -92,13 +92,23 @@ final class ChartParamTests: XCTestCase {
     }
 
     /// A label list with spaces has to be quoted, like every other param value:
-    /// an unquoted value ends at the first space, so the rest of the list is
-    /// read as separate (unknown) params rather than as labels.
+    /// an unquoted value ends at the first space, so the words after it become
+    /// stray tokens rather than labels.
+    ///
+    /// Reads the tokenizer's own diagnostics rather than going through `parse`,
+    /// which returns only `mapParams`'s — a stray token never becomes a key, so
+    /// it is reported at the split step and nowhere else.
     func testUnquotedLabelListStopsAtTheFirstSpace() {
-        let r = parse("x | pie=1,1,1 chartlabels=Docs, Photos ,Apps")
-        XCTAssertEqual(r.params.swiftbar.chart?.label(at: 0), "Docs")
-        XCTAssertNil(r.params.swiftbar.chart?.label(at: 1))
-        XCTAssertTrue(r.diagnostics.contains { $0.message.contains("unknown parameter") })
+        let (_, pairs, tokenizerDiagnostics) = LineParser.splitTextAndParams("x | pie=1,1,1 chartlabels=Docs, Photos ,Apps")
+        let chart = LineParser.mapParams(pairs).params.swiftbar.chart
+        XCTAssertEqual(chart?.label(at: 0), "Docs")
+        XCTAssertNil(chart?.label(at: 1))
+        // The mistake is still visible to the author in `vee lint`, just under a
+        // different diagnostic than an unknown key.
+        XCTAssertTrue(
+            tokenizerDiagnostics.contains { $0.message.contains("'Photos' has no value") },
+            "\(tokenizerDiagnostics)"
+        )
     }
 
     func testBlankLabelKeepsLaterLabelsOnTheirOwnSegments() {
