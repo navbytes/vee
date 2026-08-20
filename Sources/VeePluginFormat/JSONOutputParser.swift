@@ -82,6 +82,25 @@ public enum JSONOutputParser {
                 height: item.progressHeight.flatMap { $0.isFinite ? $0 : nil }
             )
         }
+        if let chart = item.chart {
+            if let kind = ChartKind(rawValue: chart.kind.lowercased()) {
+                p.swiftbar.chart = ChartParams.make(
+                    kind: kind,
+                    values: chart.values ?? [],
+                    labels: chart.labels ?? [],
+                    // Positional, like the text protocol's `chartcolors=`: an
+                    // entry that doesn't parse stays a hole and takes the
+                    // palette slot, rather than shifting later colors.
+                    colors: (chart.colors ?? []).map(VeeColor.parse),
+                    diagnostics: &diagnostics
+                )
+            } else {
+                diagnostics.append(.init(
+                    severity: .warning,
+                    message: "chart.kind expects 'pie', 'donut', or 'stackedbar'"
+                ))
+            }
+        }
         if let raw = item.accessory {
             if let placement = AccessoryPlacement(rawValue: raw.lowercased()) {
                 p.swiftbar.accessory = placement
@@ -147,6 +166,7 @@ private final class JSONItem: Decodable {
     let progressWidth: Double?
     let progressHeight: Double?
     let accessory: String?
+    let chart: JSONChart?
     let submenu: [JSONItem]?
     let alternate: JSONItem?
 }
@@ -155,4 +175,14 @@ private struct JSONSlider: Decodable {
     let min: Double
     let max: Double
     let value: Double
+}
+
+/// The structured-JSON spelling of `pie=`/`donut=`/`stackedbar=`. One object
+/// rather than three sibling keys, because the shape is a property of the same
+/// data — mirroring `ChartParams`, which the text protocol also collapses to.
+private struct JSONChart: Decodable {
+    let kind: String
+    let values: [Double]?
+    let labels: [String]?
+    let colors: [String]?
 }

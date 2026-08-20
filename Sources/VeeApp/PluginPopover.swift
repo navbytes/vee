@@ -3,9 +3,10 @@ import SwiftUI
 import VeePluginFormat
 import VeeUI
 
-/// Presents a plugin's native Liquid Glass `NSPopover` — either a read-only
-/// `sparkline=…` chart (`SparklineChartView`) or an interactive `toggle=`/
-/// `slider=` control (`PluginControlView`). Like `WebViewPresenter`, this lives
+/// Presents a plugin's native Liquid Glass `NSPopover` — a read-only
+/// `sparkline=…` chart (`SparklineChartView`), a `pie=`/`donut=`/`stackedbar=`
+/// share chart (`CategoryChartView`), or an interactive `toggle=`/`slider=`
+/// control (`PluginControlView`). Like `WebViewPresenter`, this lives
 /// *outside* the `NSMenu` — the menu that launched it has already closed — so
 /// the menu itself stays native and leak-free. Only one popover is shown at a
 /// time.
@@ -23,6 +24,16 @@ final class PluginPopover: NSObject, NSPopoverDelegate {
     func show(series: [Double], title: String) {
         present(size: NSSize(width: 260, height: 150)) {
             NSHostingController(rootView: SparklineChartView(values: series, title: title))
+        }
+    }
+
+    /// Shows a `pie=`/`donut=`/`stackedbar=` chart with its segment legend.
+    /// Taller than the sparkline popover because the legend grows a row per
+    /// segment (bounded by `ChartParams.maxSegments`).
+    func show(chart: ChartParams, title: String) {
+        let legendRows = CGFloat(chart.values.count)
+        present(size: NSSize(width: 280, height: 190 + legendRows * 17)) {
+            NSHostingController(rootView: CategoryChartView(chart: chart, title: title))
         }
     }
 

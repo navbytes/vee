@@ -50,6 +50,40 @@ final class TerminalRendererTests: XCTestCase {
         XCTAssertEqual(TerminalRenderer.sparkline([5, 5, 5], color: nil, options: plain), "▅▅▅")
     }
 
+    func testCategoryChartIsAnExactlyWideSegmentedBar() {
+        // 12 cells, split 50/25/25 → 6/3/3. The bar is always exactly as wide
+        // as the progress gauge so mixed accessories line up in a column.
+        let chart = ChartParams(kind: .pie, values: [50, 25, 25])
+        XCTAssertEqual(TerminalRenderer.categoryChart(chart, options: plain), String(repeating: "█", count: 12))
+    }
+
+    func testChartCellAllocationSumsExactlyAndKeepsSliversVisible() {
+        let even = ChartParams(kind: .pie, values: [1, 1, 1])
+        XCTAssertEqual(TerminalRenderer.allocateCells(even, total: 12), [4, 4, 4])
+
+        // Largest remainder: 1/3 of 10 cells can't split evenly.
+        let uneven = ChartParams(kind: .pie, values: [1, 1, 1])
+        XCTAssertEqual(TerminalRenderer.allocateCells(uneven, total: 10).reduce(0, +), 10)
+
+        // A slice far below one cell still gets one, borrowed from the widest —
+        // rounding it away would drop the segment from the chart entirely.
+        let sliver = ChartParams(kind: .pie, values: [1000, 1, 1])
+        let cells = TerminalRenderer.allocateCells(sliver, total: 12)
+        XCTAssertEqual(cells.reduce(0, +), 12)
+        XCTAssertTrue(cells.allSatisfy { $0 >= 1 })
+
+        // A genuinely zero segment gets nothing — it has no share to show.
+        XCTAssertEqual(TerminalRenderer.allocateCells(ChartParams(kind: .pie, values: [0, 1]), total: 4), [0, 4])
+    }
+
+    func testChartRendersInlineOnTheRow() {
+        var chart = LineParams()
+        chart.swiftbar.chart = ChartParams(kind: .stackedBar, values: [1, 1])
+        let r = TerminalRenderer.render(ParsedOutput(body: [.item(MenuItem(text: "Disk", params: chart))]), options: plain)
+        XCTAssertTrue(r.contains("Disk"))
+        XCTAssertTrue(r.contains("█"), "the chart should draw blocks on the row")
+    }
+
     func testProgressSparklineAndControlsRenderInline() {
         var prog = LineParams(); prog.progress = ProgressParams(fraction: 0.5)
         var spark = LineParams(); spark.sparkline = [1, 4, 8]

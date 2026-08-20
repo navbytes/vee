@@ -154,6 +154,7 @@ The Vee-native inline controls are available in JSON too, as typed item fields:
 | `trackColor` | `string` | Progress track color (named or hex). |
 | `progressWidth` | `number` | Progress bar width in points. |
 | `progressHeight` | `number` | Progress bar height in points. |
+| `chart` | `{ "kind": "pie" \| "donut" \| "stackedbar", "values": number[], "labels"?: string[], "colors"?: string[] }` | A categorical share chart. `values` must be finite and `>= 0` with a positive total; at most 8 segments (a longer series folds its tail into "Other"). `labels`/`colors` are positional — a `null`/blank/unparseable color keeps that segment's palette slot. |
 
 ```json
 {
@@ -163,13 +164,17 @@ The Vee-native inline controls are available in JSON too, as typed item fields:
     { "text": "Load history", "sparkline": [1, 2, 3, 5, 8, 13] },
     { "text": "Notifications", "toggle": true },
     { "text": "Volume", "slider": { "min": 0, "max": 100, "value": 40 } },
-    { "text": "Disk usage", "color": "green", "progress": 0.72, "trackColor": "#333333", "progressWidth": 80, "progressHeight": 6 }
+    { "text": "Disk usage", "color": "green", "progress": 0.72, "trackColor": "#333333", "progressWidth": 80, "progressHeight": 6 },
+    { "text": "By category", "chart": { "kind": "donut", "values": [45, 30, 25], "labels": ["Documents", "Photos", "Apps"] } }
   ]
 }
 ```
 
 These map to exactly the same controls as the text protocol's `sparkline=` /
-`toggle=` / `slider=` / `progress=` (see the [plugin authoring reference](plugin-authoring.md#line-parameters)),
+`toggle=` / `slider=` / `progress=` / `pie=`,`donut=`,`stackedbar=` (see the
+[plugin authoring reference](plugin-authoring.md#line-parameters)) — the JSON
+form collapses the three chart shapes into one `chart` object with a `kind`,
+since they describe the same data —
 so colors, SF Symbols, links, shell actions, submenus, alternates, checkmarks,
 tooltips, and the rich controls are all available in both formats.
 

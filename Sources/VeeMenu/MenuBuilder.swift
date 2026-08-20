@@ -49,15 +49,16 @@ public enum MenuBuilder {
         menuItem.isEnabled = !(item.params.disabled ?? false)
         if item.params.swiftbar.checked == true { menuItem.state = .on }
 
-        // `progress=`/`sparkline=`: render an inline capsule gauge / chart as a
-        // custom row view. Both views are decorative (no click handling of
-        // their own — see ProgressMenuItemView/SparklineMenuItemView), but the
-        // row can still carry a submenu or its own action (href=/shell=/…),
-        // same as any other item, so fall through to the same submenu/action
-        // wiring below instead of returning early. A row that sets both
-        // renders the progress bar (it shipped first); sparkline='s
-        // click-to-popover keeps working regardless, since the dispatcher
-        // reads `params.sparkline`, not the row's view.
+        // `progress=`/`sparkline=`/`pie=`/`donut=`/`stackedbar=`: render an
+        // inline capsule gauge / chart as a custom row view. These views are
+        // decorative (no click handling of their own — see
+        // ProgressMenuItemView/SparklineMenuItemView/CategoryChartMenuItemView),
+        // but the row can still carry a submenu or its own action
+        // (href=/shell=/…), same as any other item, so fall through to the same
+        // submenu/action wiring below instead of returning early. A row that
+        // sets several renders the first in this order (oldest param first);
+        // sparkline='s and a chart's click-to-popover keep working regardless,
+        // since the dispatcher reads the params, not the row's view.
         let accessoryLeading = item.params.swiftbar.accessory == .leading
         if let progress = item.params.progress {
             let view = ProgressMenuItemView(
@@ -77,6 +78,14 @@ public enum MenuBuilder {
                 title: menuItem.attributedTitle ?? NSAttributedString(string: item.text),
                 values: series,
                 lineColor: item.params.color.flatMap(ColorResolver.nsColor(for:)) ?? .controlAccentColor,
+                leading: accessoryLeading
+            )
+            view.toolTip = item.params.swiftbar.tooltip
+            menuItem.view = view
+        } else if let chart = item.params.swiftbar.chart {
+            let view = CategoryChartMenuItemView(
+                title: menuItem.attributedTitle ?? NSAttributedString(string: item.text),
+                chart: chart,
                 leading: accessoryLeading
             )
             view.toolTip = item.params.swiftbar.tooltip
@@ -111,6 +120,7 @@ public enum MenuBuilder {
             || item.params.swiftbar.shortcut?.isEmpty == false
             || item.params.swiftbar.webview != nil
             || item.params.sparkline != nil
+            || item.params.swiftbar.chart != nil
             || item.params.control != nil
     }
 }

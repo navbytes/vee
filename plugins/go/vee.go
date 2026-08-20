@@ -45,6 +45,23 @@ type Options struct {
 	TrackColor *string
 	ProgressW  *float64
 	ProgressH  *float64
+	Chart      *Chart
+}
+
+// Chart is a categorical share chart, emitted as `pie=`/`donut=`/`stackedbar=`
+// plus its positional `chartlabels=`/`chartcolors=`. All three shapes take the
+// same data — one series of non-negative values read as shares of a whole — so
+// switching Kind needs no other change.
+//
+// Labels and Colors are positional against Values. Vee reads both as
+// comma-separated lists, so a label containing a comma would be read as two
+// labels: keep commas out of segment names.
+type Chart struct {
+	// Kind is "pie", "donut", or "stackedbar".
+	Kind   string
+	Values []float64
+	Labels []string
+	Colors []string
 }
 
 // Slider is a continuous control bounded by Min..Max at the current Value,
@@ -182,6 +199,19 @@ func encode(o *Options) string {
 	}
 	if o.ProgressH != nil {
 		push("progressh", fmtFloat(*o.ProgressH))
+	}
+	if o.Chart != nil {
+		nums := make([]string, len(o.Chart.Values))
+		for i, v := range o.Chart.Values {
+			nums[i] = fmtFloat(v)
+		}
+		push(o.Chart.Kind, strings.Join(nums, ","))
+		if o.Chart.Labels != nil {
+			push("chartlabels", strings.Join(o.Chart.Labels, ","))
+		}
+		if o.Chart.Colors != nil {
+			push("chartcolors", strings.Join(o.Chart.Colors, ","))
+		}
 	}
 
 	if len(parts) == 0 {

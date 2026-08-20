@@ -5,7 +5,8 @@ import VeePluginFormat
 /// menu-bar dropdown would show: the title line(s), a rule, then the indented
 /// dropdown tree. Rich params are rendered the way a terminal *can* — `color=`
 /// and ANSI runs as real SGR escapes, `progress=` as a Unicode block bar,
-/// `sparkline=` as a block sparkline, `toggle=`/`slider=` as inline state — and
+/// `sparkline=` as a block sparkline, `pie=`/`donut=`/`stackedbar=` as a
+/// segmented block bar, `toggle=`/`slider=` as inline state — and
 /// the things a terminal *can't* draw (SF Symbols, base64 images) are shown by
 /// name so nothing silently disappears.
 ///
@@ -88,7 +89,7 @@ public enum TerminalRenderer {
         // The label: header → bold; disabled → dim (color suppressed); else the
         // plugin's color=/ANSI. An empty label with no accessory falls back to a
         // visible placeholder so the row isn't a blank line.
-        let hasAccessory = p.progress != nil || p.sparkline != nil || p.control != nil
+        let hasAccessory = p.progress != nil || p.sparkline != nil || p.swiftbar.chart != nil || p.control != nil
         let rawText: String
         if item.text.isEmpty {
             rawText = (leading.isEmpty && !hasAccessory) ? "(empty)" : ""
@@ -131,6 +132,9 @@ public enum TerminalRenderer {
         }
         if let series = p.sparkline, !series.isEmpty {
             return sparkline(series, color: p.color, options: options)
+        }
+        if let chart = p.swiftbar.chart {
+            return categoryChart(chart, options: options)
         }
         if let control = p.control {
             switch control {
@@ -178,6 +182,47 @@ public enum TerminalRenderer {
         }
         let s = String(glyphs)
         return color.flatMap(fgCodes).map { style(s, codes: $0, options) } ?? s
+    }
+
+    /// A `pie=`/`donut=`/`stackedbar=` chart as one segmented block bar.
+    ///
+    /// All three shapes render the same way here: a terminal's cell grid can't
+    /// draw sectors, and the *data* — each segment's share of the whole — is
+    /// what a plugin author is checking. `vee show --tree` names the shape.
+    /// Segments take their palette colors on the dark surface, the one a
+    /// terminal is overwhelmingly likely to be.
+    static func categoryChart(_ chart: ChartParams, options: Options) -> String {
+        let cells = allocateCells(chart, total: progressCells)
+        var out = ""
+        for index in chart.values.indices where cells[index] > 0 {
+            let block = String(repeating: "█", count: cells[index])
+            let color = chart.color(at: index, surface: .dark)
+            out += fgCodes(color).map { style(block, codes: $0, options) } ?? block
+        }
+        return out
+    }
+
+    /// Distributes `total` cells across a chart's segments by largest remainder,
+    /// so the bar is exactly `total` cells wide, then guarantees every non-zero
+    /// segment at least one cell by borrowing from the widest — a slice that
+    /// rounds to nothing would otherwise vanish from the chart entirely.
+    static func allocateCells(_ chart: ChartParams, total: Int) -> [Int] {
+        guard total > 0, !chart.values.isEmpty else { return Array(repeating: 0, count: chart.values.count) }
+        let exact = chart.values.indices.map { chart.fraction(at: $0) * Double(total) }
+        var cells = exact.map { Int($0) }
+        var leftover = total - cells.reduce(0, +)
+        let remainders = exact.indices.map { exact[$0] - Double(cells[$0]) }
+        for index in remainders.indices.sorted(by: { remainders[$0] > remainders[$1] }) {
+            guard leftover > 0 else { break }
+            cells[index] += 1
+            leftover -= 1
+        }
+        for index in chart.values.indices where chart.values[index] > 0 && cells[index] == 0 {
+            guard let donor = cells.indices.max(by: { cells[$0] < cells[$1] }), cells[donor] > 1 else { break }
+            cells[donor] -= 1
+            cells[index] = 1
+        }
+        return cells
     }
 
     /// A `slider=` as a 10-cell track with a knob at the current value.
