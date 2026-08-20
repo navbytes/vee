@@ -16,22 +16,6 @@ All notable changes to Vee are documented here. The format is based on
   as `C:\\node`.
 
 ### Added
-- **Detached popover windows.** Every popover — `sparkline=`, the share charts,
-  and the `toggle=`/`slider=` controls — now carries an **open-in-a-window**
-  button in its corner. Pressing it turns the popover into a normal floating
-  window that can be moved to another display, resized, and left open — several at once, one per row, with re-detaching an already-open row
-  focusing its window instead of opening a duplicate. The windows are **live**:
-  every plugin refresh flows through to them, so they are a running view of the
-  row rather than a snapshot of the moment they were torn off. A window tracks
-  its row by position in the menu rather than by text, since the text of a row
-  worth watching is the part that keeps changing; when the row disappears — or
-  the plugin starts erroring — the window keeps the last value on screen and
-  says it is stale instead of quietly freezing. A detached control stays fully
-  interactive: it re-invokes the row's `shell=`/`bash=` as the popover does,
-  using the command the row declares *now* rather than the one it carried when
-  it was torn off, and it adopts values reported by later refreshes except while
-  a drag is in flight. Nothing is required of a plugin: any row that opens a
-  popover can be detached (`webview=` already opens its own window).
 - **Share charts — `pie=`, `donut=`, and `stackedbar=`.** A new family of
   Vee-native line params for showing how a total divides up, alongside
   `sparkline=`'s value-over-time. All three take the same data — one series of

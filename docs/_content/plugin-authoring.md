@@ -145,36 +145,6 @@ embedded browser or cross-platform runtime. Malformed values are skipped; an
 empty list is ignored (no inline chart, no popover). A single value has no series
 to chart, so it draws as a flat centered baseline instead.
 
-### Keeping a popover on screen (detached windows)
-
-A popover is transient — it closes as soon as you click away, which is wrong when
-the thing you wanted was to *watch* a value. **Every** popover therefore carries
-an **open-in-a-window** button in its top-right corner: `sparkline=`, the share
-charts, and the `toggle=`/`slider=` controls alike. Press it and the popover
-becomes a normal floating window you can move to another display, resize, and
-leave open. Open as many as you like — one per row — and re-pressing the button
-for a row you already detached focuses that window rather than opening a second
-one. (`webview=` needs no button; it already opens its own window.)
-
-Detached windows are **live**, not snapshots: each one keeps watching the row it
-came from, and updates on the plugin's own refresh cadence. A window tracks its
-row by position in the menu, not by text — the text of a row worth watching is
-exactly the part that keeps changing. So a plugin that emits a stable menu shape
-keeps its windows fed indefinitely; one that reorders or drops rows between
-refreshes may leave a window pointing at a different row, or at none. When the
-row goes away (or the plugin starts erroring), the window keeps showing the last
-value it saw and says so, rather than quietly freezing.
-
-A detached **control** stays fully interactive: flipping the switch or moving the
-slider re-invokes the row's `shell=`/`bash=` exactly as it does from the popover,
-and it runs whatever command the row declares *now* — not the one it carried when
-you tore it off. The control also follows the plugin: if a refresh reports a new
-value, the window adopts it, except while you are mid-drag, so a fast-refreshing
-plugin can't yank the knob out from under you.
-
-Nothing is required of a plugin to support any of this — if a row opens a
-popover, it can be detached.
-
 ### Interactive controls (`toggle=` / `slider=`)
 
 Attach `toggle=` or `slider=` to a dropdown item to open an **interactive**
@@ -285,10 +255,6 @@ rest.
 - `chartlabels=`/`chartcolors=` are comma-separated, so a segment name can't
   itself contain a comma. Names with spaces are fine — quote the whole list, as
   in `chartlabels="Macintosh HD,Backup,Scratch"`.
-
-Like every other popover, a share chart can be
-[detached into its own live window](#keeping-a-popover-on-screen-detached-windows)
-to keep on a second display.
 
 `vee show` renders all three kinds as one segmented block bar (a terminal can't
 draw sectors); `vee show --tree` names the shape.
