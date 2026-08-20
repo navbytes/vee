@@ -69,8 +69,8 @@
 <h2 id="install">Install</h2>
 <p>Vee is distributed as a Developer-ID-signed and notarized app <strong>outside</strong> the Mac App Store.</p>
 <p><strong>Homebrew (recommended):</strong></p>
-<pre><code>brew tap navbytes/tap
-brew install --cask vee</code></pre>
+<div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">sh</span></div><pre><code>brew tap navbytes/tap
+brew install --cask vee</code></pre></div>
 <p><code>brew upgrade --cask vee</code> picks up new releases automatically.</p>
 <p><strong>Or download directly:</strong></p>
 <ol>
@@ -88,7 +88,9 @@ brew install --cask vee</code></pre>
 <p>To use a different folder (for example, an existing SwiftBar plugins directory), open the <strong>Plugin Manager</strong> and choose <strong>Choose Folder</strong>. See <a href="migrating-from-swiftbar.html">Migrating from SwiftBar/xbar</a> if you already have a plugins folder.</p>
 <h2 id="write-your-first-plugin">Write your first plugin</h2>
 <p>A plugin is just an executable file whose name encodes how often Vee re-runs it. The pattern is <code>name.INTERVAL.ext</code>, where the interval is a number plus a unit: <code>s</code> (seconds), <code>m</code> (minutes), <code>h</code> (hours), <code>d</code> (days), or <code>ms</code> (milliseconds).</p>
-<p>Create <code>hello.5s.sh</code> in your plugins folder:</p>
+<p>Vee creates the plugins folder on first launch. If you haven't launched Vee yet, create it first:</p>
+<div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">sh</span></div><pre><code>mkdir -p ~/Library/Application\ Support/Vee/plugins</code></pre></div>
+<p>Then create <code>hello.5s.sh</code> in your plugins folder:</p>
 <div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">sh</span></div><pre><code>#!/bin/bash
 echo "Hello 👋"
 echo "---"
@@ -108,6 +110,35 @@ echo "Refresh | refresh=true"</code></pre></div>
 <li><strong>Enable / disable</strong> any plugin in the <strong>Plugin Manager</strong> — a disabled plugin stays on disk but is not run or shown.</li>
 <li>Plugins can also trigger a refresh themselves via URL actions — see <a href="cli-and-urls.html">CLI and URL actions</a>.</li>
 </ul>
+<h2 id="widgets-on-your-desktop--notification-center">Widgets (on your desktop / Notification Center)</h2>
+<p>Vee ships two WidgetKit widgets and a Control Center control, in addition to the
+menu bar:</p>
+<ul>
+<li><strong>Vee Plugins</strong> — a status tile for your plugins. Long-press the widget →
+<strong>Edit Widget</strong> to choose <em>which</em> plugins it shows (leave it empty to show all).
+At the small size it renders one plugin as a dashboard tile — its SF Symbol,
+its value in the plugin's color, and a live gauge (<code>progress=</code>) or trend chart
+(<code>sparkline=</code>) when the plugin publishes one — with a freshness caption. The
+medium/large sizes show an enriched row per plugin.</li>
+<li><strong>Vee Health</strong> — an at-a-glance roll-up: "All healthy" or "N failing", with the
+failing plugins called out. It's the one view the menu bar can't give you.</li>
+<li><strong>Refresh Vee</strong> (Control Center) — re-runs every plugin; launches Vee first if
+it isn't running.</li>
+</ul>
+<p>Add them from the desktop (right-click → <strong>Edit Widgets</strong>) or Notification
+Center. Widgets update when a plugin's output changes; because the system meters
+how often widgets refresh, they suit slow-moving values (disk, battery, weather,
+build/sync status) rather than per-second counters — those stay best in the menu
+bar. The "updated N ago" caption reflects when the plugin last ran.</p>
+<p>By default a widget tile is a scrape of the menu-bar line — automatic, no
+changes needed. A plugin can opt into a <strong>richer</strong> tile instead: real data
+(a stat, gauge, trend, list, or KPI board) on its own refresh cadence, with
+up to two action buttons (refresh / open a link / run a Shortcut), via
+<code>&lt;vee.surface&gt;both&lt;/vee.surface&gt;</code> and a JSON "card" printed when Vee invokes
+it with <code>VEE_TARGET=widget</code>. A plugin can also be <strong>widget-only</strong> —
+<code>&lt;vee.surface&gt;widget&lt;/vee.surface&gt;</code> gives it no menu-bar presence at all, just
+a widget feed. See <a href="plugin-authoring.html#widgets">Widgets</a> in the authoring
+reference for the full contract.</p>
 <h2 id="next-steps">Next steps</h2>
 <ul>
 <li><a href="plugin-authoring.html">Plugin authoring reference</a> — the full output format, params, metadata, SF Symbols, ANSI, Markdown, streaming, and cron.</li>

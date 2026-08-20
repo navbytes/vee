@@ -205,7 +205,7 @@ If a row sets more than one inline accessory, the first of
 `progress=` → `sparkline=` → chart takes the in-row view; the click-to-popover
 that `sparkline=` and the charts opt into still opens as normal either way.
 
-### Share charts (`pie=` / `donut=` / `stackedbar=`)
+### Share charts (`pie=`, `donut=`, `stackedbar=`)
 
 Where `sparkline=` shows a value *over time*, these show how a total *divides
 up*. All three take the same data — one series of non-negative numbers read as
