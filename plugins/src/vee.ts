@@ -44,21 +44,6 @@ export interface ItemOptions {
   progressW?: number;
   /** Progress bar height in points → `progressh=`. */
   progressH?: number;
-  /**
-   * Categorical share chart → `pie=` / `donut=` / `stackedbar=`. All three
-   * shapes take the same data — one series of non-negative values read as
-   * shares of a whole — so switching `kind` needs no other change.
-   *
-   * `labels`/`colors` are positional against `values`. Vee reads both as
-   * comma-separated lists, so a label containing a comma would be read as two
-   * labels: keep commas out of segment names.
-   */
-  chart?: {
-    kind: "pie" | "donut" | "stackedbar";
-    values: number[];
-    labels?: string[];
-    colors?: Color[];
-  };
 }
 
 // Vee's parser (LineParser.splitTextAndParams/parseParams) reads `\|`, `\n`,
@@ -120,12 +105,6 @@ function encode(options?: ItemOptions): string {
   push("trackcolor", options.trackColor);
   push("progressw", options.progressW);
   push("progressh", options.progressH);
-  if (options.chart !== undefined) {
-    const c = options.chart;
-    push(c.kind, c.values.map(String).join(","));
-    if (c.labels !== undefined) push("chartlabels", c.labels.join(","));
-    if (c.colors !== undefined) push("chartcolors", c.colors.join(","));
-  }
   return parts.length ? " | " + parts.join(" ") : "";
 }
 

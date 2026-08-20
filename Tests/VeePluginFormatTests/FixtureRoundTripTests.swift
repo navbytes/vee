@@ -56,35 +56,6 @@ final class FixtureRoundTripTests: XCTestCase {
         XCTAssertEqual(items[2].params.swiftbar.symbolize, true)
     }
 
-    /// Closes the SDK→parser loop for the chart builders: the TS/Python/Go SDKs
-    /// emit charts.txt, and the Swift parser must recover each shape, its
-    /// values, and its labels/colors — including a quoted label list whose
-    /// spaces prove the SDK quoting round-trips through a comma-separated value.
-    func testChartsFixtureParams() throws {
-        let url = fixturesDirectory().appendingPathComponent("charts.txt")
-        let source = try String(contentsOf: url, encoding: .utf8)
-        let items = OutputParser.parse(source).body.compactMap { node -> MenuItem? in
-            if case .item(let i) = node { return i } else { return nil }
-        }
-        XCTAssertEqual(items.map(\.text), ["By category", "By volume", "Budget"])
-
-        let pie = try XCTUnwrap(items[0].params.swiftbar.chart)
-        XCTAssertEqual(pie.kind, .pie)
-        XCTAssertEqual(pie.values, [45, 30, 25])
-        XCTAssertEqual(pie.label(at: 0), "Documents")
-
-        let donut = try XCTUnwrap(items[1].params.swiftbar.chart)
-        XCTAssertEqual(donut.kind, .donut)
-        XCTAssertEqual(donut.values, [512, 256, 128])
-        XCTAssertEqual(donut.label(at: 0), "Macintosh HD")
-        XCTAssertEqual(donut.color(at: 1), .named("teal"))
-        XCTAssertEqual(items[1].params.swiftbar.tooltip, "896 GB across 3 volumes")
-
-        let bar = try XCTUnwrap(items[2].params.swiftbar.chart)
-        XCTAssertEqual(bar.kind, .stackedBar)
-        XCTAssertEqual(bar.fraction(at: 0), 0.6, accuracy: 1e-9)
-    }
-
     /// Closes the SDK→parser loop for the typed rich-param builders: the TS/
     /// Python/Go SDKs emit controls.txt, and the Swift parser must recover the
     /// progress fraction, toggle/slider controls, and sparkline series from it.

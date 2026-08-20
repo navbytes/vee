@@ -99,332 +99,31 @@ Network
 ---- Down: 120 Mbps
 ---- Up: 24 Mbps</code></pre></div>
 <p>Here <code>Network</code> is a submenu containing <code>Wi-Fi</code>, <code>IP</code>, and a further <code>Speed</code> submenu.</p>
-<h2 id="section-headers">Section headers</h2>
-<p>Mark a line <code>header=true</code> to render it as a real, non-interactive section header — AppKit's native section-header row — instead of a <code>disabled=true</code> line dressed up to look like one:</p>
-<div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">text</span></div><pre><code>---
-Accounts | header=true
-Checking
-Savings
----
-Cards | header=true
-Visa ···· 4242</code></pre></div>
-<p>A header row is title-only: it ignores click/appearance params (<code>href=</code>, <code>color=</code>, <code>md=</code>, …) since AppKit's native section header renders plain text and never fires an action. Keep it at the same indentation as the items it introduces — like <code>disabled=true</code> today, it doesn't nest anything under itself.</p>
-<p>In the search panel, section headers render as dimmed context rows and become part of each row's breadcrumb (e.g. <code>Accounts › Checking</code>); they are searchable, so typing a section name surfaces its rows. Header submenus — a <code>header=true</code> line with child items indented under it — never surface in the search results.</p>
 <h2 id="line-parameters">Line parameters</h2>
 <p>Append <code>| key=value key2=value2 …</code> to any line to attach parameters. Quote values that contain spaces (<code>title="Open in browser"</code>), and escape quotes with <code>\"</code>.</p>
-<p>A literal <code>|</code>, backslash, or newline in the display text (or in a quoted value) must be escaped as <code>\|</code>, <code>\\</code>, or <code>\n</code> — otherwise an unescaped <code>|</code> is read as the params delimiter and truncates the item, and a raw newline splits it into two corrupted lines. The bundled <a href="sdk.html">TypeScript, Python, and Go SDKs</a> escape these automatically for any text/value you pass in; only hand-written plugin output needs to do it explicitly.</p>
-<div class="table-scroll"><table><thead><tr><th>Parameter</th><th>Description</th></tr></thead><tbody><tr><td><code>color</code></td><td>Text color — a named color (<code>red</code>, <code>green</code>, …) or a hex value like <code>#00ff00</code>.</td></tr><tr><td><code>font</code></td><td>Font family name for the text.</td></tr><tr><td><code>size</code></td><td>Font point size.</td></tr><tr><td><code>length</code></td><td>Truncate the displayed text to this many characters.</td></tr><tr><td><code>trim</code></td><td><code>true</code>/<code>false</code> — trim surrounding whitespace from the text.</td></tr><tr><td><code>href</code></td><td>Open this URL when the item is clicked.</td></tr><tr><td><code>shell</code> / <code>bash</code></td><td>Run this command on click. Positional args come from <code>param0</code>, <code>param1</code>, …</td></tr><tr><td><code>param0</code>, <code>param1</code>, …</td><td>Ordered arguments passed to <code>shell</code>/<code>bash</code>.</td></tr><tr><td><code>terminal</code></td><td><code>true</code> to run the <code>shell</code> command in a visible Terminal window; <code>false</code> to run it in the background.</td></tr><tr><td><code>refresh</code></td><td><code>true</code> — re-run the plugin when the item is clicked.</td></tr><tr><td><code>dropdown</code></td><td><code>false</code> — show the line only in the menu bar, not the dropdown.</td></tr><tr><td><code>alternate</code></td><td><code>true</code> — this line is the Option-key alternate of the line above it.</td></tr><tr><td><code>disabled</code></td><td><code>true</code> — render the item greyed-out and non-clickable.</td></tr><tr><td><code>header</code></td><td><code>true</code> — render this line as a real, non-interactive <a href="#section-headers">section header</a> instead of a normal item.</td></tr><tr><td><code>key</code></td><td>Keyboard shortcut for the item, active while the menu is open (e.g. <code>key=Cmd+R</code>, <code>key=shift+F2</code>, <code>key=cmd+space</code>).</td></tr><tr><td><code>image</code></td><td>Base64-encoded image (or file reference) shown next to the text.</td></tr><tr><td><code>templateImage</code></td><td>Like <code>image</code>, but treated as a template image that adapts to light/dark.</td></tr><tr><td><code>sfimage</code></td><td>SF Symbol name to show as the item's icon (e.g. <code>sfimage=cpu</code>).</td></tr><tr><td><code>sfcolor</code></td><td>Color(s) for the SF Symbol; comma-separated for multicolor symbols.</td></tr><tr><td><code>sfsize</code></td><td>Point size for the SF Symbol.</td></tr><tr><td><code>sfconfig</code></td><td>SF Symbol configuration as JSON — <code>scale</code> (<code>small</code>/<code>medium</code>/<code>large</code>) and <code>weight</code> (e.g. <code>bold</code>). Example: <code>sfconfig='{"scale":"large","weight":"bold"}'</code>.</td></tr><tr><td><code>symbolize</code></td><td><code>true</code> — render inline <code>:symbol.name:</code> tokens in the text as SF Symbols.</td></tr><tr><td><code>md</code> / <code>markdown</code></td><td><code>true</code> — render the text as inline Markdown (bold, italics, etc.).</td></tr><tr><td><code>ansi</code></td><td><code>true</code>/<code>false</code> — interpret ANSI color escape codes in the text. On by default; set <code>ansi=false</code> to disable.</td></tr><tr><td><code>emojize</code></td><td><code>true</code>/<code>false</code> — convert <code>:shortcode:</code> tokens (e.g. <code>:smile:</code>) into emoji.</td></tr><tr><td><code>tooltip</code></td><td>Hover tooltip text.</td></tr><tr><td><code>checked</code></td><td><code>true</code> — show a checkmark next to the item.</td></tr><tr><td><code>badge</code></td><td>A short badge/chip shown after the text (e.g. <code>badge=12</code>).</td></tr><tr><td><code>shortcut</code></td><td>Run a macOS Shortcut by name when the item is clicked (e.g. <code>shortcut="Start Meeting"</code>).</td></tr><tr><td><code>webview</code>, <code>webvieww</code>, <code>webviewh</code></td><td>Open a URL in a standalone WebView window (never inside the menu), with optional width/height.</td></tr><tr><td><code>sparkline</code></td><td>A comma-separated list of numbers (e.g. <code>sparkline=1,2,3,4,5</code>). Renders as a small chart <strong>inline in the menu row</strong>; clicking the item also opens a fuller native Liquid Glass Swift Charts popover.</td></tr><tr><td><code>toggle</code></td><td><code>toggle=on</code> / <code>toggle=off</code> (also <code>true</code>/<code>false</code>/<code>1</code>/<code>0</code>). Clicking opens a Liquid Glass popover with a switch; flipping it re-invokes the item's <code>shell=</code>/<code>bash=</code> with the new value.</td></tr><tr><td><code>slider</code></td><td><code>slider=min,max,value</code> (e.g. <code>slider=0,100,40</code>). Clicking opens a Liquid Glass popover with a slider; releasing it re-invokes the item's <code>shell=</code>/<code>bash=</code> with the chosen value.</td></tr><tr><td><code>progress</code>, <code>trackcolor</code>, <code>progressw</code>, <code>progressh</code></td><td><code>progress=&lt;0..1&gt;</code> or <code>progress=value,max</code> (e.g. <code>progress=0.72</code> or <code>progress=23.65,100</code>). Draws a real capsule bar <strong>inline in the menu row</strong>. Fill uses <code>color=</code>; <code>trackcolor=</code> is the groove, <code>progressw=</code>/<code>progressh=</code> set the bar size in points.</td></tr><tr><td><code>pie</code>, <code>donut</code>, <code>stackedbar</code></td><td>A comma-separated list of non-negative numbers read as shares of a whole (e.g. <code>pie=45,30,25</code>). Draws the chart <strong>inline in the menu row</strong>; clicking the item opens a fuller Swift Charts popover with a labelled legend. See <a href="#share-charts-pie-donut-stackedbar">Share charts</a>.</td></tr><tr><td><code>chartlabels</code></td><td>Segment names for a chart, positional against its values (e.g. <code>chartlabels=Docs,Photos,Apps</code>). Shown in the popover legend and read out by VoiceOver.</td></tr><tr><td><code>chartcolors</code></td><td>Segment colors for a chart, positional against its values (e.g. <code>chartcolors=blue,,orange</code>). An entry that is blank, malformed, or names a color Vee doesn't know keeps that segment's default palette color.</td></tr><tr><td><code>accessory</code></td><td><code>leading</code> / <code>trailing</code> — which edge of the row a <code>progress=</code>/<code>sparkline=</code>/chart accessory anchors to (default <code>trailing</code>, today's rendering). See <a href="#accessory-placement-accessory">Accessory placement</a>.</td></tr></tbody></table></div>
+<div class="table-scroll"><table><thead><tr><th>Parameter</th><th>Description</th></tr></thead><tbody><tr><td><code>color</code></td><td>Text color — a named color (<code>red</code>, <code>green</code>, …) or a hex value like <code>#00ff00</code>.</td></tr><tr><td><code>font</code></td><td>Font family name for the text.</td></tr><tr><td><code>size</code></td><td>Font point size.</td></tr><tr><td><code>length</code></td><td>Truncate the displayed text to this many characters.</td></tr><tr><td><code>trim</code></td><td><code>true</code>/<code>false</code> — trim surrounding whitespace from the text.</td></tr><tr><td><code>href</code></td><td>Open this URL when the item is clicked.</td></tr><tr><td><code>shell</code> / <code>bash</code></td><td>Run this command on click. Positional args come from <code>param0</code>, <code>param1</code>, …</td></tr><tr><td><code>param0</code>, <code>param1</code>, …</td><td>Ordered arguments passed to <code>shell</code>/<code>bash</code>.</td></tr><tr><td><code>terminal</code></td><td><code>true</code> to run the <code>shell</code> command in a visible Terminal window; <code>false</code> to run it in the background.</td></tr><tr><td><code>refresh</code></td><td><code>true</code> — re-run the plugin when the item is clicked.</td></tr><tr><td><code>dropdown</code></td><td><code>false</code> — show the line only in the menu bar, not the dropdown.</td></tr><tr><td><code>alternate</code></td><td><code>true</code> — this line is the Option-key alternate of the line above it.</td></tr><tr><td><code>disabled</code></td><td><code>true</code> — render the item greyed-out and non-clickable.</td></tr><tr><td><code>key</code></td><td>Keyboard shortcut for the item (e.g. <code>key=Cmd+R</code>).</td></tr><tr><td><code>image</code></td><td>Base64-encoded image (or file reference) shown next to the text.</td></tr><tr><td><code>templateImage</code></td><td>Like <code>image</code>, but treated as a template image that adapts to light/dark.</td></tr><tr><td><code>sfimage</code></td><td>SF Symbol name to show as the item's icon (e.g. <code>sfimage=cpu</code>).</td></tr><tr><td><code>sfcolor</code></td><td>Color(s) for the SF Symbol; comma-separated for multicolor symbols.</td></tr><tr><td><code>sfsize</code></td><td>Point size for the SF Symbol.</td></tr><tr><td><code>sfconfig</code></td><td>Advanced SF Symbol configuration string.</td></tr><tr><td><code>symbolize</code></td><td><code>true</code> — render inline <code>:symbol.name:</code> tokens in the text as SF Symbols.</td></tr><tr><td><code>md</code> / <code>markdown</code></td><td><code>true</code> — render the text as inline Markdown (bold, italics, etc.).</td></tr><tr><td><code>ansi</code></td><td><code>true</code> — interpret ANSI color escape codes in the text.</td></tr><tr><td><code>emojize</code></td><td><code>true</code>/<code>false</code> — convert <code>:shortcode:</code> tokens (e.g. <code>:smile:</code>) into emoji.</td></tr><tr><td><code>tooltip</code></td><td>Hover tooltip text.</td></tr><tr><td><code>checked</code></td><td><code>true</code> — show a checkmark next to the item.</td></tr><tr><td><code>badge</code></td><td>A short badge/chip shown after the text (e.g. <code>badge=12</code>).</td></tr><tr><td><code>webview</code>, <code>webvieww</code>, <code>webviewh</code></td><td>Open a URL in a WebView popover, with optional width/height.</td></tr><tr><td><code>shortcut</code></td><td>Bind the item to a macOS Shortcut.</td></tr></tbody></table></div>
 <p>Unknown parameters are preserved rather than dropped, so the format can evolve without breaking existing plugins.</p>
-<h2 id="rich-inline-charts-liquid-glass-popovers">Rich inline charts (Liquid Glass popovers)</h2>
-<p>Attach <code>sparkline=</code> to a dropdown item to render a compact chart <strong>inline in the
-menu row</strong> — the same in-row custom view <code>progress=</code> uses:</p>
-<div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">text</span></div><pre><code>Load average | sparkline=0.4,0.6,0.9,1.2,0.8,0.5</code></pre></div>
-<p>Clicking the item still opens the richer surface: an <code>NSPopover</code> that renders the
-same numbers as a full Swift Charts line/area sparkline on a macOS 26 Liquid Glass
-background. This is Vee's answer to "rich plugin UI without a WebView" —
-everything is drawn with SwiftUI + Swift Charts and AppKit, so there is no
-embedded browser or cross-platform runtime. Malformed values are skipped; an
-empty list is ignored (no inline chart, no popover). A single value has no series
-to chart, so it draws as a flat centered baseline instead.</p>
-<h3 id="keeping-a-popover-on-screen-detached-windows">Keeping a popover on screen (detached windows)</h3>
-<p>A popover is transient — it closes as soon as you click away, which is wrong when
-the thing you wanted was to <em>watch</em> a value. <strong>Every</strong> popover therefore carries
-an <strong>open-in-a-window</strong> button in its top-right corner: <code>sparkline=</code>, the share
-charts, and the <code>toggle=</code>/<code>slider=</code> controls alike. Press it and the popover
-becomes a normal floating window you can move to another display, resize, and
-leave open. Open as many as you like — one per row — and re-pressing the button
-for a row you already detached focuses that window rather than opening a second
-one. (<code>webview=</code> needs no button; it already opens its own window.)</p>
-<p>Detached windows are <strong>live</strong>, not snapshots: each one keeps watching the row it
-came from, and updates on the plugin's own refresh cadence. A window tracks its
-row by position in the menu, not by text — the text of a row worth watching is
-exactly the part that keeps changing. So a plugin that emits a stable menu shape
-keeps its windows fed indefinitely; one that reorders or drops rows between
-refreshes may leave a window pointing at a different row, or at none. When the
-row goes away (or the plugin starts erroring), the window keeps showing the last
-value it saw and says so, rather than quietly freezing.</p>
-<p>A detached <strong>control</strong> stays fully interactive: flipping the switch or moving the
-slider re-invokes the row's <code>shell=</code>/<code>bash=</code> exactly as it does from the popover,
-and it runs whatever command the row declares <em>now</em> — not the one it carried when
-you tore it off. The control also follows the plugin: if a refresh reports a new
-value, the window adopts it, except while you are mid-drag, so a fast-refreshing
-plugin can't yank the knob out from under you.</p>
-<p>Nothing is required of a plugin to support any of this — if a row opens a
-popover, it can be detached.</p>
-<h3 id="interactive-controls-toggle--slider">Interactive controls (<code>toggle=</code> / <code>slider=</code>)</h3>
-<p>Attach <code>toggle=</code> or <code>slider=</code> to a dropdown item to open an <strong>interactive</strong>
-Liquid Glass popover — a live switch or slider, again drawn natively with SwiftUI
-and AppKit (no WebView, no embedded runtime):</p>
-<div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">text</span></div><pre><code>Wi-Fi | toggle=on shell=/usr/local/bin/wifi.sh
-Volume | slider=0,100,40 shell=/usr/local/bin/volume.sh</code></pre></div>
-<p>When you change the control, Vee re-invokes the item's <code>shell=</code>/<code>bash=</code> command
-with the new value provided two ways, so you can read whichever is convenient:</p>
-<ul>
-<li>the <code>VEE_CONTROL_VALUE</code> environment variable, and</li>
-<li>the value appended as the command's final argument.</li>
-</ul>
-<p>Toggles pass <code>1</code>/<code>0</code>; sliders pass the numeric value (integers without a trailing
-<code>.0</code>). Add <code>refresh=true</code> to re-render the menu bar after the command runs.</p>
-<div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">bash</span></div><pre><code>#!/bin/bash
-# volume.sh — called with the new slider value
-osascript -e "set volume output volume $VEE_CONTROL_VALUE"</code></pre></div>
-<p>A slider needs three numbers (<code>min,max,value</code>) with <code>min &lt; max</code>; the value is
-clamped into range. Malformed controls are ignored.</p>
-<blockquote>
-<p><strong>Proposal, subject to change.</strong> The <code>sparkline=</code>, <code>toggle=</code>, and <code>slider=</code>
-syntax (and the popover surface they opt into) are an early proposal; the exact
-convention may still evolve.</p>
-</blockquote>
-<h3 id="inline-progress-bars-progress">Inline progress bars (<code>progress=</code>)</h3>
-<p>Unlike the popover items above, <code>progress=</code> draws a <strong>real capsule bar right in
-the menu row</strong> — no click, no popover. It's the native answer to hand-drawn
-block-glyph bars:</p>
-<div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">text</span></div><pre><code>$23.65 of $100 | progress=23.65,100 color=#36C26E trackcolor=#3C4046 progressw=210
-Disk | progress=0.88 color=#F5A623</code></pre></div>
-<ul>
-<li><code>progress=&lt;0..1&gt;</code> (a fraction) <strong>or</strong> <code>progress=value,max</code> (mirrors <code>slider=</code>'s
-grammar). The result is always clamped to <code>0…1</code>.</li>
-<li>The <strong>fill</strong> color is the row's <code>color=</code>; <code>trackcolor=</code> sets the groove.</li>
-<li><code>progressw=</code> / <code>progressh=</code> set the bar's width/height in points (defaults 120×6).</li>
-<li>The row's text renders to the left of the bar; the row auto-sizes so the label
-never truncates. Unknown to xbar/SwiftBar, so plugins stay portable (they just
-ignore it).</li>
-</ul>
-<p>The gauge itself is display-only (it doesn't fire a click by being a gauge), but
-the row can still carry its own <code>href=</code>/<code>shell=</code> action or a submenu, exactly
-like a plain item.</p>
-<p>If a row sets more than one inline accessory, the first of
-<code>progress=</code> → <code>sparkline=</code> → chart takes the in-row view; the click-to-popover
-that <code>sparkline=</code> and the charts opt into still opens as normal either way.</p>
-<h3 id="share-charts-pie-donut-stackedbar">Share charts (<code>pie=</code>, <code>donut=</code>, <code>stackedbar=</code>)</h3>
-<p>Where <code>sparkline=</code> shows a value <em>over time</em>, these show how a total <em>divides
-up</em>. All three take the same data — one series of non-negative numbers read as
-shares of a whole — so switching shapes means changing one word:</p>
-<div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">text</span></div><pre><code>By category | pie=45,30,25 chartlabels=Documents,Photos,Apps
-By volume   | donut=512,256,128 chartlabels="Macintosh HD,Backup,Scratch"
-Budget      | stackedbar=60,25,15 chartlabels=Used,Cache,Free</code></pre></div>
-<p>The chart draws <strong>inline in the menu row</strong> (a small pie, donut, or capsule bar,
-using the same accessory slot <code>progress=</code> and <code>sparkline=</code> use). Clicking the row
-opens a Liquid Glass Swift Charts popover with the chart at full size and a
-legend naming every segment with its percentage — the popover is where
-<code>chartlabels=</code> becomes visible, since a menu row has no space for them. A donut
-also shows the series total in its hole.</p>
-<p><strong>Colors.</strong> Segments take Vee's built-in categorical palette by position, so
-segment 1 is always the same hue no matter how many segments a plugin emits.
-The palette is eight fixed slots, selected separately for light and dark mode and
-checked for color-blind separation — so you don't have to pick colors at all.
-Override them positionally with <code>chartcolors=</code> when your data has its own
-conventional colors:</p>
-<div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">text</span></div><pre><code>Storage | donut=512,256,128 chartcolors=blue,teal,orange
-Status  | stackedbar=8,1,3 chartcolors=,,red</code></pre></div>
-<p>Leave an entry blank (as in <code>chartcolors=,,red</code> above) to recolor just one
-segment and keep the palette for the rest. Unlike <code>sfcolor=</code>, positions are never
-compacted: a blank or malformed entry stays a hole rather than sliding the next
-color onto the wrong segment. A name Vee doesn't recognise also falls back to the
-palette, so a typo costs you one segment's color, never the alignment of the
-rest.</p>
-<p><strong>Rules the parser enforces</strong>, so a chart never misrepresents its data:</p>
-<ul>
-<li>Every value must be a finite number and <code>&gt;= 0</code>, and at least one must be
-positive. A negative, non-numeric, or all-zero series is ignored (with a
-diagnostic in <code>vee lint</code>) rather than drawn wrong.</li>
-<li>At most <strong>8 segments</strong>. A longer series isn't truncated — that would silently
-rescale every slice that survived — the first 7 are kept and the rest are
-summed into a neutral <strong>"Other"</strong> segment, so the shares still add up to your
-own total.</li>
-<li><code>chartlabels=</code>/<code>chartcolors=</code> are comma-separated, so a segment name can't
-itself contain a comma. Names with spaces are fine — quote the whole list, as
-in <code>chartlabels="Macintosh HD,Backup,Scratch"</code>.</li>
-</ul>
-<p>Like every other popover, a share chart can be
-<a href="#keeping-a-popover-on-screen-detached-windows">detached into its own live window</a>
-to keep on a second display.</p>
-<p><code>vee show</code> renders all three kinds as one segmented block bar (a terminal can't
-draw sectors); <code>vee show --tree</code> names the shape.</p>
-<blockquote>
-<p><strong>Proposal, subject to change.</strong> Like <code>sparkline=</code>/<code>toggle=</code>/<code>slider=</code>, the
-chart syntax is an early proposal; the exact convention may still evolve.</p>
-</blockquote>
-<h3 id="accessory-placement-accessory">Accessory placement (<code>accessory=</code>)</h3>
-<p><code>progress=</code>, <code>sparkline=</code>, and the share charts anchor their accessory
-(bar/chart) to the row's <strong>trailing</strong> edge by default, with the label filling the
-rest — today's rendering. Set <code>accessory=leading</code> to flip it: the accessory
-anchors to the row's leading edge instead, with the label filling the remaining
-trailing space.</p>
-<div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">text</span></div><pre><code>Budget | progress=0.72 accessory=leading</code></pre></div>
-<p>Omit <code>accessory=</code> (or set <code>accessory=trailing</code>) for today's default.</p>
 <h2 id="searchable-filter-panel">Searchable filter panel</h2>
-<p>Big menus — dozens of items across nested submenus — are slow to scan. Opt a
-plugin into a <strong>searchable filter panel</strong> and its dropdown gains a <strong>Search…</strong>
-row (⌘F) that opens a Spotlight-like popover: type to filter <em>every</em> item at once
-(including those nested inside submenus), flattened into a ranked list, each with
-a breadcrumb of its parent groups.</p>
-<div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">text</span></div><pre><code># &lt;vee.filter&gt;true&lt;/vee.filter&gt;</code></pre></div>
-<p><strong>Before typing (idle state):</strong> the panel mirrors your dropdown's structure — section
-headers (<code>header=true</code>), separators (<code>---</code>), and non-actionable rows (<code>disabled=true</code>,
-plain sub-text) all appear dimmed and non-selectable, just like the native menu. This
-lets users browse and orient themselves without typing. Keyboard selection skips dimmed
-rows; only actionable rows can be activated with Return or click.</p>
-<p><strong>While typing:</strong> results flatten into a ranked list. Dimmed info rows match the search
-haystack and display, but stay non-activatable — you search to find what you're after,
-or just navigate structure when exploring.</p>
-<p><strong>Section titles as context:</strong> headers join the breadcrumb of rows under them (e.g.
-<code>Accounts › Checking</code>), so typing a section name surfaces all its rows. Nested submenus'
-headers and separators don't render as rows themselves — their structure is carried by
-breadcrumbs like <code>Tools › Nested › Item</code>. Header submenus (a <code>header=true</code> line with
-children indented under it) never surface in search.</p>
+<p>Big menus — dozens of items across nested submenus — are slow to scan. Opt a plugin into a <strong>searchable filter panel</strong> and its dropdown gains a <strong>Search…</strong> row (⌘F) that opens a Spotlight-like popover: type to filter <em>every</em> item at once (including those nested inside submenus), flattened into a ranked list, each with a breadcrumb of its parent groups.</p>
+<div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">sh</span></div><pre><code># &lt;vee.filter&gt;true&lt;/vee.filter&gt;</code></pre></div>
 <ul>
 <li><strong>Fuzzy matching</strong> — <code>gh</code> finds <code>GitHub</code>; multiple words are ANDed together.</li>
 <li><strong>Keyboard-driven</strong> — ↑/↓ move the highlight, Return activates, Esc closes.</li>
-<li>Activating a row runs its <strong>normal action</strong> — <code>href</code>, <code>shell</code>/<code>bash</code>,
-<code>shortcut</code>, <code>refresh</code>, and the <code>toggle</code>/<code>slider</code>/<code>sparkline</code> popovers all work
-exactly as they do from the menu.</li>
+<li>Activating a row runs its <strong>normal action</strong> — <code>href</code>, <code>shell</code>/<code>bash</code>, <code>shortcut</code>, <code>refresh</code>, and the <code>toggle</code>/<code>slider</code>/<code>sparkline</code> popovers all work exactly as they do from the menu.</li>
 </ul>
-<p>The panel is an <em>addition</em>, not a replacement: the native menu, its trust row,
-and Vee's own controls all stay exactly where they are.</p>
+<p>The panel is an <em>addition</em>, not a replacement: the native menu, its trust row, and Vee's own controls all stay exactly where they are.</p>
 <h3 id="global-hotkey-veeshortcut">Global hotkey (<code>&lt;vee.shortcut&gt;</code>)</h3>
-<p>Bind a system-wide hotkey that opens the panel from anywhere — no need to open
-the menu first, and Vee doesn't have to be the active app:</p>
-<div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">text</span></div><pre><code># &lt;vee.shortcut&gt;cmd+shift+k&lt;/vee.shortcut&gt;</code></pre></div>
-<p>Modifiers are <code>cmd</code>/<code>command</code>/<code>⌘</code>, <code>shift</code>/<code>⇧</code>, <code>opt</code>/<code>option</code>/<code>alt</code>/<code>⌥</code>, and
-<code>ctrl</code>/<code>control</code>/<code>⌃</code>; the key can be a letter, a digit, <code>F1</code>–<code>F12</code>, <code>space</code>,
-<code>return</code>, <code>tab</code>, <code>escape</code>, or an arrow. Order doesn't matter and it's
-case-insensitive (<code>⌘⇧K</code> works too), but at least one modifier is required. Vee
-registers it with the system hotkey API, so <strong>no Accessibility permission is
-needed</strong>; if the combination is already taken system-wide, Vee logs it and moves
-on. The user stays in control: a plugin's hotkey can be <strong>turned off or rebound</strong>
-from the plugin's Settings, where its live status (active / in-use / invalid) is
-shown.</p>
-<p>Both tags are strictly opt-in — omit them and the plugin behaves exactly as
-before. Whatever a plugin declares, Vee surfaces under its <strong>Features</strong> — in the
-menu's capabilities area and the plugin's Settings window, and on the install
-sheet — so a global hotkey a plugin grabs is always visible and never a
-surprise. You can also preview a plugin's search from the terminal without
-installing it: see <a href="cli-and-urls.html#vee-search"><code>vee search</code></a>.</p>
-<h3 id="cross-plugin-search-search-all-plugins">Cross-plugin search ("Search All Plugins")</h3>
-<p>The panel above searches one plugin at a time. <strong>Search All Plugins…</strong>, in
-Vee's main menu-bar menu rather than any single plugin's, merges <em>every
-enabled</em> plugin's current menu into one panel — regardless of whether a
-plugin opted into <code>&lt;vee.filter&gt;</code> — with each row breadcrumb-prefixed by its
-plugin's name (itself part of the fuzzy match, so typing a plugin's name
-surfaces its rows). Selecting a row still runs that row's own plugin's
-action, never a different plugin's. It has its own opt-in global hotkey, off
-by default with no preset combination — set one in Vee's General settings.</p>
-<h2 id="widgets">Widgets</h2>
-<p>By default your plugin's widget tile is a <strong>scrape</strong> of its menu-bar line —
-whatever <code>color=</code>/<code>sfimage=</code> is on the title, plus a <code>progress=</code>/<code>sparkline=</code>
-if the first row has one. That's automatic; every plugin already has a widget
-representation with no changes.</p>
-<p>For a <strong>rich</strong> tile — real data laid out per widget size, not a caricature of
-the menu bar — opt a plugin into the widget surface contract:</p>
-<div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">text</span></div><pre><code># &lt;vee.surface&gt;both&lt;/vee.surface&gt;</code></pre></div>
-<ul>
-<li><code>&lt;vee.surface&gt;menu&lt;/vee.surface&gt;</code> (or omit the tag) — unchanged: a normal
-menu-bar plugin, scraped for its widget tile.</li>
-<li><code>&lt;vee.surface&gt;both&lt;/vee.surface&gt;</code> — served in the menu as usual, <strong>and</strong>
-invoked a second time in widget mode to produce a rich widget card.</li>
-<li><code>&lt;vee.surface&gt;widget&lt;/vee.surface&gt;</code> — <strong>widget-only</strong>: no status item, no
-menu bar presence at all. The plugin exists only to feed a widget.</li>
-</ul>
-<p>The widget-mode cadence needs no separate tag — it reuses the plugin's
-<strong>filename interval</strong> (the same field the menu bar uses), with only a small
-safety floor: <code>max(filename interval, 10s)</code>. Because Vee is an always-running
-app, it pushes widget reloads the moment new data arrives (rather than waiting
-on WidgetKit's passive budget, which only applies when an app isn't running), so
-a <code>cpu.5s.sh</code> widget can track near-real-time data straight from the menu-bar
-plugin's own cadence. A widget-only plugin whose filename carries no interval
-falls back to the 10-second floor.</p>
-<h3 id="vee_target"><code>VEE_TARGET</code></h3>
-<p>Every run gets a <code>VEE_TARGET</code> environment variable:</p>
-<ul>
-<li><code>VEE_TARGET=menu</code> — a normal run; print the usual xbar/SwiftBar text (or
-<a href="json-output.html">JSON</a>).</li>
-<li><code>VEE_TARGET=widget</code> — a widget-mode run; print <strong>one JSON object</strong> (the
-"card", schema below) to stdout and nothing else.</li>
-</ul>
-<p>Branch on it like Scriptable's <code>config.runsInWidget</code>. If your plugin ignores
-<code>VEE_TARGET=widget</code> and prints menu text anyway, Vee falls back to scraping
-that text — graceful degradation, never a crash.</p>
-<h3 id="the-card">The card</h3>
-<div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">json</span></div><pre><code>{
-  "vee_widget": 1,
-  "template": "stat",
-  "title": "Revenue",
-  "symbol": "chart.line.uptrend.xyaxis",
-  "tint": "green",
-  "value": "$18.2k",
-  "caption": "today",
-  "detail": "214 orders",
-  "status": "ok",
-
-  "progress": 0.72,
-  "trend": [12.1, 13.4, 12.9, 15.0, 18.2],
-
-  "items": [
-    { "label": "Orders",  "value": "214", "symbol": "bag",           "tint": "blue" },
-    { "label": "Refunds", "value": "3",   "symbol": "arrow.uturn.left", "tint": "red" }
-  ],
-
-  "actions": [
-    { "label": "Refresh", "kind": "refresh" },
-    { "label": "Open",    "kind": "href",     "url": "https://dash.example.com" }
-  ],
-
-  "refresh_after": 900,
-  "stale_after": 3600
-}</code></pre></div>
-<div class="table-scroll"><table><thead><tr><th>Field</th><th>Type</th><th>Meaning</th></tr></thead><tbody><tr><td><code>vee_widget</code></td><td>int</td><td>Payload schema version (currently <code>1</code>).</td></tr><tr><td><code>template</code></td><td>enum</td><td><code>stat</code> \</td><td><code>gauge</code> \</td><td><code>trend</code> \</td><td><code>list</code> \</td><td><code>board</code>. Unknown → <code>stat</code> + a Debug diagnostic.</td></tr><tr><td><code>title</code></td><td>string?</td><td>Tile heading (the plugin/metric name).</td></tr><tr><td><code>symbol</code></td><td>string?</td><td>SF Symbol name for the glyph.</td></tr><tr><td><code>tint</code></td><td>color?</td><td>Named (<code>green</code>) or <code>#rrggbbaa</code>.</td></tr><tr><td><code>value</code></td><td>string?</td><td>The headline value, already formatted by the plugin.</td></tr><tr><td><code>caption</code></td><td>string?</td><td>Small secondary line (e.g. "today").</td></tr><tr><td><code>detail</code></td><td>string?</td><td>One more line of context.</td></tr><tr><td><code>status</code></td><td>enum?</td><td><code>ok</code> \</td><td><code>warning</code> \</td><td><code>error</code> — drives styling and the health roll-up.</td></tr><tr><td><code>progress</code></td><td>double?</td><td><code>0…1</code>, clamped; the <code>gauge</code> template's fill.</td></tr><tr><td><code>trend</code></td><td>[double]?</td><td>The <code>trend</code> template's series.</td></tr><tr><td><code>items</code></td><td>[Item]?</td><td>Rows for <code>list</code>/<code>board</code>: <code>{label, value?, symbol?, tint?}</code>.</td></tr><tr><td><code>actions</code></td><td>[Action]?</td><td>Up to two rendered as buttons — see below.</td></tr><tr><td><code>refresh_after</code></td><td>int?</td><td>Seconds; a hint for the next widget reload.</td></tr><tr><td><code>stale_after</code></td><td>int?</td><td>Seconds; when the tile should show a stale treatment (else the interval-derived default).</td></tr></tbody></table></div>
-<p>Unknown top-level keys are ignored (forward-compatible); an invalid value
-(bad <code>progress</code>, a non-finite <code>trend</code> entry, an unsafe <code>href</code> URL) degrades to
-<code>nil</code>/dropped with a diagnostic, visible in the plugin's Debug console —
-never a crash.</p>
-<h3 id="templates">Templates</h3>
-<p>Five native SwiftUI templates, each adapting across the small/medium/large
-widget families — describe your data, Vee draws it:</p>
-<ul>
-<li><strong>stat</strong> — glyph, big <code>value</code> in <code>tint</code>, <code>title</code>/<code>caption</code>. The default.</li>
-<li><strong>gauge</strong> — stat + a native gauge from <code>progress</code>.</li>
-<li><strong>trend</strong> — stat + a sparkline from <code>trend</code>.</li>
-<li><strong>list</strong> — <code>title</code> header + <code>items</code> as rows, truncated per family (small
-shows the headline <code>value</code>; medium ≤3 rows; large ≤8).</li>
-<li><strong>board</strong> — a compact grid of <code>items</code> as stat cells (a KPI board); small
-collapses to the headline.</li>
-</ul>
-<h3 id="actions">Actions</h3>
-<p>Up to two <code>actions</code> render as buttons:</p>
-<ul>
-<li><code>refresh</code> — re-runs this plugin.</li>
-<li><code>href</code> — opens a URL (scheme-filtered like menu <code>href=</code>: <code>http</code>/<code>https</code>/
-custom app deep links; never <code>file</code>/<code>javascript</code>/…).</li>
-<li><code>shortcut</code> — runs a named macOS Shortcut (<code>name</code>), like menu <code>shortcut=</code>.</li>
-</ul>
-<p>There is deliberately <strong>no <code>shell</code> action</strong> — a widget button must not run an
-arbitrary command without the menu's context.</p>
-<h3 id="building-the-card-with-the-sdk">Building the card with the SDK</h3>
-<p>The <a href="sdk.html">TypeScript, Python, and Go SDKs</a> all have <code>Stat</code>/<code>Gauge</code>/<code>Trend</code>/
-<code>List</code>/<code>Board</code> builders that emit this JSON for you:</p>
-<div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">ts</span></div><pre><code>import { Stat } from "./src/vee.ts";
-
-if (process.env.VEE_TARGET === "widget") {
-  Stat({
-    title: "Revenue",
-    symbol: "chart.line.uptrend.xyaxis",
-    tint: "green",
-    value: "$18.2k",
-    status: "ok",
-    actions: [{ kind: "refresh", label: "Refresh" }],
-  }).print();
-} else {
-  // ordinary menu-bar output
-}</code></pre></div>
-<p>See <a href="sdk.html#widget-cards">Plugin SDKs</a> for the Python/Go equivalents.</p>
+<p>Bind a system-wide hotkey that opens the panel from anywhere — no need to open the menu first, and Vee doesn't have to be the active app:</p>
+<div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">sh</span></div><pre><code># &lt;vee.shortcut&gt;cmd+shift+k&lt;/vee.shortcut&gt;</code></pre></div>
+<p>Modifiers are <code>cmd</code>/<code>command</code>/<code>⌘</code>, <code>shift</code>/<code>⇧</code>, <code>opt</code>/<code>option</code>/<code>alt</code>/<code>⌥</code>, and <code>ctrl</code>/<code>control</code>/<code>⌃</code>; the key can be a letter, a digit, <code>F1</code>–<code>F12</code>, <code>space</code>, <code>return</code>, <code>tab</code>, <code>escape</code>, or an arrow. Order doesn't matter and it's case-insensitive (<code>⌘⇧K</code> works too), but at least one modifier is required. Vee registers it with the system hotkey API, so <strong>no Accessibility permission is needed</strong>; if the combination is already taken system-wide, Vee logs it and moves on. The user stays in control: a plugin's hotkey can be <strong>turned off or rebound</strong> from the plugin's Settings, where its live status (active / in-use / invalid) is shown.</p>
+<p>Both tags are strictly opt-in — omit them and the plugin behaves exactly as before. Whatever a plugin declares, Vee surfaces under its <strong>Features</strong> — in the menu's capabilities area and the plugin's Settings window, and on the install sheet — so a global hotkey a plugin grabs is always visible and never a surprise. You can also preview a plugin's search from the terminal without installing it: see <a href="cli-and-urls.html#vee-search"><code>vee search</code></a>.</p>
 <h2 id="metadata-headers">Metadata headers</h2>
 <p>Put <code>&lt;xbar.*&gt;</code> / <code>&lt;swiftbar.*&gt;</code> tags anywhere in the file (usually in a comment block near the top). They are scanned regardless of the comment syntax, so they work in any language.</p>
-<div class="table-scroll"><table><thead><tr><th>Tag</th><th>Purpose</th></tr></thead><tbody><tr><td><code>&lt;xbar.title&gt;</code></td><td>Human-readable plugin name.</td></tr><tr><td><code>&lt;xbar.version&gt;</code></td><td>Plugin version.</td></tr><tr><td><code>&lt;xbar.author&gt;</code></td><td>Author name.</td></tr><tr><td><code>&lt;xbar.author.github&gt;</code></td><td>Author's GitHub handle.</td></tr><tr><td><code>&lt;xbar.desc&gt;</code></td><td>One-line description.</td></tr><tr><td><code>&lt;xbar.image&gt;</code></td><td>Preview image URL.</td></tr><tr><td><code>&lt;xbar.dependencies&gt;</code></td><td>Comma-separated tools the plugin needs (e.g. <code>python3,jq</code>).</td></tr><tr><td><code>&lt;xbar.abouturl&gt;</code></td><td>A link to the plugin's homepage.</td></tr><tr><td><code>&lt;xbar.var&gt;</code></td><td>A typed, user-editable preference — see <a href="preferences.html">Preferences</a>.</td></tr><tr><td><code>&lt;swiftbar.schedule&gt;</code></td><td>A cron schedule (one or more, `</td><td>`-separated).</td></tr><tr><td><code>&lt;swiftbar.type&gt;streamable&lt;/swiftbar.type&gt;</code></td><td>Marks the plugin as a long-running streaming plugin.</td></tr><tr><td><code>&lt;swiftbar.runInBash&gt;</code></td><td>Whether to run the script through bash.</td></tr><tr><td><code>&lt;swiftbar.refreshOnOpen&gt;</code></td><td>Re-run the plugin each time its menu opens.</td></tr><tr><td><code>&lt;swiftbar.environment&gt;</code></td><td>Inline environment variables, e.g. <code>[VAR1=a, VAR2=b]</code>.</td></tr><tr><td><code>&lt;swiftbar.hideAbout&gt;</code></td><td>Hide the default "About" item.</td></tr><tr><td><code>&lt;swiftbar.hideRunInTerminal&gt;</code></td><td>Hide the "Run in Terminal…" item.</td></tr><tr><td><code>&lt;swiftbar.hideLastUpdated&gt;</code></td><td>Hide the "Updated…" timestamp item.</td></tr><tr><td><code>&lt;swiftbar.hideDisablePlugin&gt;</code></td><td>Hide the "Disable Plugin" item.</td></tr><tr><td><code>&lt;swiftbar.hideSwiftBar&gt;</code></td><td>Hide the app (Vee) submenu.</td></tr><tr><td><code>&lt;swiftbar.persistentWebView&gt;</code></td><td>Keep a <code>webview=</code> window alive across refreshes instead of recreating it.</td></tr></tbody></table></div>
+<div class="table-scroll"><table><thead><tr><th>Tag</th><th>Purpose</th></tr></thead><tbody><tr><td><code>&lt;xbar.title&gt;</code></td><td>Human-readable plugin name.</td></tr><tr><td><code>&lt;xbar.version&gt;</code></td><td>Plugin version.</td></tr><tr><td><code>&lt;xbar.author&gt;</code></td><td>Author name.</td></tr><tr><td><code>&lt;xbar.author.github&gt;</code></td><td>Author's GitHub handle.</td></tr><tr><td><code>&lt;xbar.desc&gt;</code></td><td>One-line description.</td></tr><tr><td><code>&lt;xbar.image&gt;</code></td><td>Preview image URL.</td></tr><tr><td><code>&lt;xbar.dependencies&gt;</code></td><td>Comma-separated tools the plugin needs (e.g. <code>python3,jq</code>).</td></tr><tr><td><code>&lt;xbar.abouturl&gt;</code></td><td>A link to the plugin's homepage.</td></tr><tr><td><code>&lt;xbar.var&gt;</code></td><td>A typed, user-editable preference — see <a href="preferences.html">Preferences</a>.</td></tr><tr><td><code>&lt;swiftbar.schedule&gt;</code></td><td>A cron schedule (one or more, `</td><td>`-separated).</td></tr><tr><td><code>&lt;swiftbar.type&gt;streamable&lt;/swiftbar.type&gt;</code></td><td>Marks the plugin as a long-running streaming plugin.</td></tr><tr><td><code>&lt;swiftbar.runInBash&gt;</code></td><td>Whether to run the script through bash.</td></tr><tr><td><code>&lt;swiftbar.refreshOnOpen&gt;</code></td><td>Re-run the plugin each time its menu opens.</td></tr><tr><td><code>&lt;swiftbar.environment&gt;</code></td><td>Inline environment variables, e.g. <code>[VAR1=a, VAR2=b]</code>.</td></tr><tr><td><code>&lt;swiftbar.hideAbout&gt;</code></td><td>Hide the default "About" item.</td></tr></tbody></table></div>
 <p>The <code>&lt;swiftbar.*&gt;</code> tags use the same names as their <code>&lt;xbar.*&gt;</code> counterparts where they overlap.</p>
 <h3 id="vee-native-tags-vee">Vee-native tags (<code>&lt;vee.*&gt;</code>)</h3>
 <p>Vee adds a few tags of its own. All are opt-in — omit them for the classic behavior.</p>
-<div class="table-scroll"><table><thead><tr><th>Tag</th><th>Purpose</th></tr></thead><tbody><tr><td><code>&lt;vee.filter&gt;</code></td><td><code>&lt;vee.filter&gt;true&lt;/vee.filter&gt;</code> opts the dropdown into the <a href="#searchable-filter-panel">searchable filter panel</a>.</td></tr><tr><td><code>&lt;vee.shortcut&gt;</code></td><td><code>&lt;vee.shortcut&gt;cmd+shift+k&lt;/vee.shortcut&gt;</code> binds a <a href="#global-hotkey-veeshortcut">global hotkey</a> that opens the search panel from anywhere.</td></tr><tr><td><code>&lt;vee.surface&gt;</code></td><td><code>menu</code> (default) / <code>both</code> / <code>widget</code> — which output surface(s) the plugin serves. See <a href="#widgets">Widgets</a>.</td></tr><tr><td><code>&lt;vee.timeout&gt;</code></td><td><code>&lt;vee.timeout&gt;90&lt;/vee.timeout&gt;</code> overrides the default 30s execution timeout for this plugin. Accepts a plain number of seconds or a duration token (<code>ms</code>/<code>s</code>/<code>m</code>/<code>h</code>/<code>d</code>, same format as <a href="#filenames-and-refresh-intervals">filename intervals</a>), e.g. <code>&lt;vee.timeout&gt;2m&lt;/vee.timeout&gt;</code>. Clamped to 1s–1h.</td></tr><tr><td><code>&lt;vee.capabilities&gt;</code>, <code>&lt;vee.network&gt;</code>, <code>&lt;vee.secrets&gt;</code>, <code>&lt;vee.filesystem.read&gt;</code> / <code>&lt;vee.filesystem.write&gt;</code>, <code>&lt;vee.exec&gt;</code></td><td>Declare the plugin's <a href="trust-model.html">trust footprint</a>.</td></tr></tbody></table></div>
+<div class="table-scroll"><table><thead><tr><th>Tag</th><th>Purpose</th></tr></thead><tbody><tr><td><code>&lt;vee.filter&gt;</code></td><td><code>&lt;vee.filter&gt;true&lt;/vee.filter&gt;</code> opts the dropdown into the <a href="#searchable-filter-panel">searchable filter panel</a>.</td></tr><tr><td><code>&lt;vee.shortcut&gt;</code></td><td><code>&lt;vee.shortcut&gt;cmd+shift+k&lt;/vee.shortcut&gt;</code> binds a <a href="#global-hotkey-veeshortcut">global hotkey</a> that opens the search panel from anywhere.</td></tr><tr><td><code>&lt;vee.capabilities&gt;</code>, <code>&lt;vee.network&gt;</code>, <code>&lt;vee.secrets&gt;</code>, <code>&lt;vee.filesystem.read&gt;</code> / <code>&lt;vee.filesystem.write&gt;</code>, <code>&lt;vee.exec&gt;</code></td><td>Declare the plugin's <a href="trust-model.html">trust footprint</a>.</td></tr></tbody></table></div>
 <h2 id="sf-symbols">SF Symbols</h2>
 <p>Use Apple's SF Symbols as icons or inline glyphs:</p>
 <ul>
@@ -434,9 +133,8 @@ if (process.env.VEE_TARGET === "widget") {
 </ul>
 <p>Browse names with Apple's <a href="https://developer.apple.com/sf-symbols/" rel="noopener">SF Symbols app</a>.</p>
 <h2 id="ansi-color">ANSI color</h2>
-<p>If your tool emits ANSI escape codes (many CLIs do), Vee interprets them by default — no parameter needed:</p>
-<div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">sh</span></div><pre><code>echo -e "\033[32mOK\033[0m"</code></pre></div>
-<p>Pass <code>ansi=false</code> to turn this off and show the raw escape codes as text instead.</p>
+<p>If your tool emits ANSI escape codes (many CLIs do), pass <code>ansi=true</code> to have Vee interpret them:</p>
+<div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">sh</span></div><pre><code>echo -e "\033[32mOK\033[0m | ansi=true"</code></pre></div>
 <h2 id="markdown">Markdown</h2>
 <p>Render inline Markdown with <code>md=true</code>:</p>
 <div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">text</span></div><pre><code>**Bold** and _italic_ | md=true</code></pre></div>
@@ -475,11 +173,10 @@ done</code></pre></div>
 <li><code>VEE_VERSION</code> — the app version.</li>
 <li><code>VEE_PLUGIN_PATH</code> — the absolute path of this plugin.</li>
 <li><code>VEE_PLUGIN_ID</code> — this plugin's id (its filename); pass it as <code>plugin=</code> to <code>swiftbar://notify</code> for an actionable alert (see <a href="cli-and-urls.html#the-notify-action">URL actions</a>).</li>
-<li><code>VEE_CONTROL_VALUE</code> — set only on a re-invocation triggered by an interactive <code>toggle=</code>/<code>slider=</code> item, carrying the committed value.</li>
 </ul>
 <p>Any values from the plugin's declared <code>&lt;xbar.var&gt;</code> <a href="preferences.html">preferences</a> are also injected as environment variables (they take precedence over the above).</p>
 <h2 id="worked-examples">Worked examples</h2>
-<h3 id="1-bash--cpu-usage-with-a-submenu">1. Bash — CPU usage with a submenu</h3>
+<h3 id="1-bash-cpu-usage-with-a-submenu">1. Bash — CPU usage with a submenu</h3>
 <p>Filename: <code>cpu.5s.sh</code></p>
 <div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">bash</span></div><pre><code>#!/bin/bash
 # &lt;xbar.title&gt;CPU&lt;/xbar.title&gt;
@@ -497,7 +194,7 @@ done
 echo "---"
 echo "Activity Monitor | bash=/usr/bin/open param0=-a param1='Activity Monitor' terminal=false"
 echo "Refresh | refresh=true"</code></pre></div>
-<h3 id="2-python--github-notifications-with-a-preference-and-a-link">2. Python — GitHub notifications with a preference and a link</h3>
+<h3 id="2-python-github-notifications-with-a-preference-and-a-link">2. Python — GitHub notifications with a preference and a link</h3>
 <p>Filename: <code>github.10m.py</code></p>
 <div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">python</span></div><pre><code>#!/usr/bin/env python3
 # &lt;xbar.title&gt;GitHub Notifications&lt;/xbar.title&gt;
@@ -530,7 +227,7 @@ for n in items[:10]:
 print("---")
 print("Refresh | refresh=true")</code></pre></div>
 <p>This example also declares a <a href="preferences.html">preference</a> (<code>&lt;xbar.var&gt;</code>) and its <a href="trust-model.html">trust</a> footprint (<code>&lt;vee.network&gt;</code>, <code>&lt;vee.secrets&gt;</code>).</p>
-<h3 id="3-bash--streaming-clock">3. Bash — streaming clock</h3>
+<h3 id="3-bash-streaming-clock">3. Bash — streaming clock</h3>
 <p>Filename: <code>clock.sh</code> (no interval — streaming drives the updates)</p>
 <div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">bash</span></div><pre><code>#!/bin/bash
 # &lt;xbar.title&gt;Clock&lt;/xbar.title&gt;

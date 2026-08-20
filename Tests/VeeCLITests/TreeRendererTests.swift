@@ -58,17 +58,4 @@ final class TreeRendererTests: XCTestCase {
         XCTAssertTrue(rendered.contains("slider=0,10,3"), rendered)
         XCTAssertTrue(rendered.contains("progress=0.72"), rendered)
     }
-
-    /// The tree view is where the chart's *shape* is visible: `vee show` draws
-    /// every kind as the same segmented bar, since a terminal can't draw sectors.
-    func testChartAnnotationNamesTheShapeAndItsData() {
-        var params = LineParams()
-        params.swiftbar.chart = ChartParams(
-            kind: .donut, values: [45, 30, 25], labels: ["Docs", "Photos", "Apps"]
-        )
-        let rendered = TreeRenderer.render(ParsedOutput(body: [.item(MenuItem(text: "Disk", params: params))]))
-        XCTAssertTrue(rendered.contains("donut=[45,30,25]"), rendered)
-        XCTAssertTrue(rendered.contains("chartlabels=[Docs,Photos,Apps]"), rendered)
-    }
-
 }

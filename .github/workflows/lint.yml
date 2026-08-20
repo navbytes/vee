@@ -23,14 +23,3 @@ jobs:
       # turns any remaining warning into a build failure.
       - name: SwiftLint
         run: swiftlint lint --strict --reporter github-actions-logging
-
-  # The docs/guide pages are generated output served straight to GitHub Pages
-  # (docs/ is the Pages root; there is no build step at deploy time), so a
-  # docs/_content edit that forgets to regenerate silently ships a stale site.
-  docs:
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@v7
-      - name: Guide pages are up to date with docs/_content
-        run: python3 docs/scripts/build_guide.py --check

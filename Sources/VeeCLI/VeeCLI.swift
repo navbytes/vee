@@ -220,7 +220,6 @@ public enum VeeCLI {
         if p.shell != nil { return "shell" }
         if p.swiftbar.webview != nil { return "webview" }
         if p.sparkline != nil { return "sparkline" }
-        if let chart = p.swiftbar.chart { return chart.kind.rawValue }
         if p.href != nil { return "href" }
         if let s = p.swiftbar.shortcut, !s.isEmpty { return "shortcut" }
         if p.refresh == true { return "refresh" }
@@ -230,8 +229,7 @@ public enum VeeCLI {
     // MARK: - show
 
     /// `vee show <plugin> [--once] [--no-color] [--dir DIR]` — render one plugin's
-    /// menu-bar dropdown in the terminal (color, block progress bars, sparklines,
-    /// segmented share charts),
+    /// menu-bar dropdown in the terminal (color, block progress bars, sparklines),
     /// live-refreshing on the plugin's own filename cadence. `<plugin>` is a path
     /// or the name of an installed plugin. On a non-interactive stdout (a pipe, or
     /// `--once`) it prints a single frame and exits — the seam tests exercise.

@@ -31,23 +31,18 @@ public struct SwiftBarParams: Equatable, Sendable {
     public var webviewHeight: Double?
     public var shortcut: String?
 
-    // NOTE: `header`/`accessory`/`chart` below are Vee-native, not SwiftBar
-    // params — they live in this struct as a workaround, not for provenance.
-    // See the comment on `LineParams.swiftbar` for why.
+    // NOTE: `header`/`accessory` below are Vee-native, not SwiftBar params —
+    // they live in this struct as a workaround, not for provenance. See the
+    // comment on `LineParams.swiftbar` for why.
 
     /// A first-class, non-interactive section-header row (`header=true`),
     /// rendered with AppKit's native `NSMenuItem.sectionHeader(title:)` — not a
     /// `disabled=true` line dressed up to look like one.
     public var header: Bool?
 
-    /// Placement of the row's `progress=`/`sparkline=`/chart accessory
-    /// (`accessory=`). `nil` (absent) means today's default: trailing.
+    /// Placement of the row's `progress=`/`sparkline=` accessory (`accessory=`).
+    /// `nil` (absent) means today's default: trailing.
     public var accessory: AccessoryPlacement?
-
-    /// A categorical share chart (`pie=`/`donut=`/`stackedbar=`). When non-nil,
-    /// the row draws the chart inline and opens a richer Swift Charts popover on
-    /// click. Stored here — see the comment on `LineParams.swiftbar` for why.
-    public var chart: ChartParams?
 
     public init() {}
 }
@@ -65,10 +60,10 @@ public enum PluginControl: Equatable, Sendable {
     case slider(min: Double, max: Double, value: Double)
 }
 
-/// Where a row's visual accessory (`progress=`/`sparkline=`/`pie=`/`donut=`/
-/// `stackedbar=`) sits relative to its label (`accessory=leading`/
-/// `accessory=trailing`). Applies uniformly to all of them, since they share the
-/// same in-row layout geometry (`ProgressBarLayout` in `VeeMenu`).
+/// Where a row's visual accessory (`progress=`/`sparkline=`) sits relative to
+/// its label (`accessory=leading`/`accessory=trailing`). Applies uniformly to
+/// both, since they share the same in-row layout geometry (`ProgressBarLayout`
+/// in `VeeMenu`).
 public enum AccessoryPlacement: String, Equatable, Sendable {
     case leading
     case trailing

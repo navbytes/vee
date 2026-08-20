@@ -205,45 +205,9 @@ d.Item("Volume", &vee.Options{Slider: &vee.Slider{Min: 0, Max: 100, Value: 40}})
 d.Item("Disk usage", &vee.Options{Color: vee.Str("green"), Progress: vee.Float(0.72), TrackColor: vee.Str("#333333"), ProgressW: vee.Float(80), ProgressH: vee.Float(6)})
 ```
 
-### Share charts
-
-The [share charts](plugin-authoring.md#share-charts-pie-donut-stackedbar)
-(`pie=`/`donut=`/`stackedbar=`) get one typed builder rather than three: the
-shapes take the same data, so `kind` is the only thing that changes between them.
-`labels` and `colors` are optional and positional.
-
-**TypeScript**
-
-```ts
-d.item("By category", { chart: { kind: "pie", values: [45, 30, 25], labels: ["Documents", "Photos", "Apps"] } });
-d.item("By volume", { chart: { kind: "donut", values: [512, 256, 128], colors: ["blue", "teal", "orange"] } });
-```
-
-**Python**
-
-```python
-d.item("By category", chart={"kind": "pie", "values": [45, 30, 25], "labels": ["Documents", "Photos", "Apps"]})
-d.item("By volume", chart={"kind": "donut", "values": [512, 256, 128], "colors": ["blue", "teal", "orange"]})
-```
-
-**Go**
-
-```go
-d.Item("By category", &vee.Options{Chart: &vee.Chart{
-    Kind: "pie", Values: []float64{45, 30, 25}, Labels: []string{"Documents", "Photos", "Apps"},
-}})
-d.Item("By volume", &vee.Options{Chart: &vee.Chart{
-    Kind: "donut", Values: []float64{512, 256, 128}, Colors: []string{"blue", "teal", "orange"},
-}})
-```
-
-Vee reads labels and colors as comma-separated lists, so a segment name can't
-contain a comma; names with spaces are quoted for you.
-
-All three emit byte-identical protocol output (there are `controls` and `charts`
-examples with shared golden fixtures proving it). See the underlying
-line-parameter grammar in the
-[plugin authoring reference](plugin-authoring.md#line-parameters).
+All three emit byte-identical protocol output (there's a `controls` example and a
+shared golden fixture proving it). See the underlying line-parameter grammar in
+the [plugin authoring reference](plugin-authoring.md#line-parameters).
 
 ## Widget cards
 

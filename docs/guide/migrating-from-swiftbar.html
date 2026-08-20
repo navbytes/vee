@@ -68,7 +68,7 @@
 <li>Vee discovers the plugins and starts running them on the intervals encoded in their filenames.</li>
 </ol>
 <p>That is the whole migration. You do not need to rename, rewrite, or re-tag anything.</p>
-<h2 id="whats-compatible">What's compatible</h2>
+<h2 id="what-s-compatible">What's compatible</h2>
 <p>Vee implements the xbar/SwiftBar plugin protocol, so the things you already rely on keep working:</p>
 <ul>
 <li><strong>Filename refresh intervals</strong> — <code>cpu.5s.sh</code>, <code>mail.10m.py</code>, <code>backup.1h.rb</code>, etc. Units: <code>ms</code>, <code>s</code>, <code>m</code>, <code>h</code>, <code>d</code>.</li>
@@ -81,7 +81,7 @@
 <li><strong>Injected environment variables</strong> — Vee sets the xbar <code>XBARDarkMode</code> variable and the SwiftBar <code>SWIFTBAR*</code>, <code>SWIFTBAR_PLUGIN_*</code>, and <code>OS_*</code> variables, so plugins that read them behave the same.</li>
 </ul>
 <p>See the <a href="plugin-authoring.html">plugin authoring reference</a> for the full list.</p>
-<h2 id="whats-different-and-better">What's different (and better)</h2>
+<h2 id="what-s-different-and-better">What's different (and better)</h2>
 <ul>
 <li><strong>Native and leak-free.</strong> Vee is pure Swift/AppKit — the menu bar is a real <code>NSStatusItem</code>/<code>NSMenu</code>, with no embedded WebView. Subprocess output is drained incrementally and processes are timed out and killed, so long-running use does not leak memory the way an old WebView-based architecture can.</li>
 <li><strong>A trust/transparency layer.</strong> Plugins can declare what they touch — network domains, filesystem paths, secrets, external binaries — with <code>&lt;vee.*&gt;</code> tags. Vee shows a plain-language summary before you install a catalog plugin and trust badges in the Manager. It is advisory, not a sandbox. See the <a href="trust-model.html">trust model</a>.</li>

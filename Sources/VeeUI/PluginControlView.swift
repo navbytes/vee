@@ -17,16 +17,8 @@ public struct PluginControlView: View {
 
     @State private var toggleOn: Bool
     @State private var sliderValue: Double
-    /// True while a slider drag is in flight. A detached control keeps
-    /// receiving the plugin's refreshes, and re-seeding the knob mid-drag would
-    /// yank it out from under the user — so incoming values wait.
-    @State private var isEditing = false
 
-    public init(
-        control: PluginControl,
-        title: String = "",
-        onCommit: @escaping @MainActor (Double) -> Void
-    ) {
+    public init(control: PluginControl, title: String = "", onCommit: @escaping @MainActor (Double) -> Void) {
         self.control = control
         self.title = title
         self.onCommit = onCommit
@@ -50,25 +42,6 @@ public struct PluginControlView: View {
         .padding(14)
         .frame(minWidth: 220)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: Corner.popover, style: .continuous))
-        // In a popover this never fires (it closes before the next refresh); in
-        // a detached window it is what keeps the control showing the plugin's
-        // real current state instead of the state it had when it was torn off.
-        .onChange(of: control) { _, updated in
-            guard !isEditing else { return }
-            reseed(from: updated)
-        }
-    }
-
-    /// Adopts a value pushed in from a refresh.
-    private func reseed(from control: PluginControl) {
-        switch control {
-        case .toggle(let on):
-            toggleOn = on
-            sliderValue = on ? 1 : 0
-        case .slider(_, _, let value):
-            toggleOn = value != 0
-            sliderValue = value
-        }
     }
 
     @ViewBuilder
@@ -91,7 +64,6 @@ public struct PluginControlView: View {
                     value: $sliderValue,
                     in: min...max,
                     onEditingChanged: { editing in
-                        isEditing = editing
                         // Commit once, when the drag settles.
                         if !editing { onCommit(sliderValue) }
                     }

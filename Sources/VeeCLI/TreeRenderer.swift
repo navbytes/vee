@@ -63,8 +63,7 @@ public enum TreeRenderer {
     // MARK: - Parameter surfacing
 
     /// Surfaces the key params (href/shell/color/progress/toggle/slider/
-    /// sparkline/pie/donut/stackedbar, …) as compact `key=value` annotations,
-    /// in a stable order.
+    /// sparkline, …) as compact `key=value` annotations, in a stable order.
     private static func paramAnnotations(_ p: LineParams) -> [String] {
         var out: [String] = []
 
@@ -89,15 +88,6 @@ public enum TreeRenderer {
         }
         if let sparkline = p.sparkline {
             out.append("sparkline=[\(sparkline.map(trim).joined(separator: ","))]")
-        }
-        if let chart = p.swiftbar.chart {
-            // Names the shape as well as the data: the terminal renderer draws
-            // every chart kind as the same segmented bar, so this is where an
-            // author confirms they got `pie=` rather than `stackedbar=`.
-            out.append("\(chart.kind.rawValue)=[\(chart.values.map(trim).joined(separator: ","))]")
-            if !chart.labels.isEmpty {
-                out.append("chartlabels=[\(chart.labels.joined(separator: ","))]")
-            }
         }
         if let sfimage = p.swiftbar.sfimage { out.append("sfimage=\(sfimage)") }
         if p.refresh == true { out.append("refresh") }

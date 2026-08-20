@@ -57,14 +57,6 @@ final class LinterTests: XCTestCase {
         XCTAssertTrue(findings.isEmpty, "\(findings)")
     }
 
-    /// The chart params (`pie=`/`donut=`/`stackedbar=` and their positional
-    /// `chartlabels=`/`chartcolors=`) are known to the linter, so a valid chart
-    /// line doesn't false-positive as "unknown parameter".
-    func testChartParamsAreKnown() {
-        let raw = "Disk | pie=45,30,25 chartlabels=Docs,Photos,Apps chartcolors=red,,blue\n"
-        XCTAssertTrue(Linter.lint(rawOutput: raw).isEmpty, "\(Linter.lint(rawOutput: raw))")
-    }
-
     /// Regression: a Windows-line-ending plugin's `---\r` must still be
     /// recognized as the title/body separator (`.whitespaces` trimming
     /// doesn't strip "\r"). Before the fix, `inBody` stayed permanently

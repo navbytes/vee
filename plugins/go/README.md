@@ -19,7 +19,6 @@ plugins/go/
 ├─ examples/cpu/cpu.go     # example plugin exposing Build() -> string
 ├─ examples/cpu/cpu_test.go# drift guard for the example
 ├─ examples/controls/      # rich controls: sparkline / toggle / slider / progress
-├─ examples/charts/        # share charts: pie / donut / stackedbar
 └─ fixtures/*.txt          # golden output (shared byte-for-byte with the TS/Python SDKs)
 ```
 

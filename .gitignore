@@ -14,4 +14,3 @@ Vee.xcodeproj/
 
 # Vee local state (never commit user data)
 *.veestate
-__pycache__/

@@ -4,19 +4,19 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>JSON output format — Vee docs</title>
-  <meta name="description" content="Vee's optional structured-JSON output format: opt in with a top-level {"vee":1} object, skip the text protocol's quoting and escaping, and get typed items and clean nesting.">
+  <meta name="description" content="Vee's optional structured-JSON output format: opt in with a top-level {\"vee\":1} object, skip the text protocol's quoting and escaping, and get typed items and clean nesting.">
   <link rel="canonical" href="https://navbytes.github.io/vee/guide/json-output.html">
   <link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
   <link rel="stylesheet" href="../assets/style.css">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Vee">
   <meta property="og:title" content="JSON output format — Vee docs">
-  <meta property="og:description" content="Vee's optional structured-JSON output format: opt in with a top-level {"vee":1} object, skip the text protocol's quoting and escaping, and get typed items and clean nesting.">
+  <meta property="og:description" content="Vee's optional structured-JSON output format: opt in with a top-level {\"vee\":1} object, skip the text protocol's quoting and escaping, and get typed items and clean nesting.">
   <meta property="og:url" content="https://navbytes.github.io/vee/guide/json-output.html">
   <meta property="og:image" content="https://navbytes.github.io/vee/assets/og-image.png">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="JSON output format — Vee docs">
-  <meta name="twitter:description" content="Vee's optional structured-JSON output format: opt in with a top-level {"vee":1} object, skip the text protocol's quoting and escaping, and get typed items and clean nesting.">
+  <meta name="twitter:description" content="Vee's optional structured-JSON output format: opt in with a top-level {\"vee\":1} object, skip the text protocol's quoting and escaping, and get typed items and clean nesting.">
   <meta name="twitter:image" content="https://navbytes.github.io/vee/assets/og-image.png">
 </head>
 <body>
@@ -140,7 +140,20 @@
 <p>The repository ships a runnable JSON plugin at <a href="https://github.com/navbytes/vee/tree/main/plugins/examples/json-demo.ts" rel="noopener"><code>plugins/examples/json-demo.ts</code></a>. It builds a <code>{"vee":1,…}</code> object with a colored title, a link, a separator, and a submenu, then prints it — a good starting point to copy.</p>
 <h2 id="rich-params">Rich params</h2>
 <p>The Vee-native inline controls are available in JSON too, as typed item fields:</p>
-<div class="table-scroll"><table><thead><tr><th>Field</th><th>Type</th><th>Notes</th></tr></thead><tbody><tr><td><code>sparkline</code></td><td><code>number[]</code></td><td>Inline chart popover data. Non-finite values are dropped.</td></tr><tr><td><code>toggle</code></td><td><code>boolean</code></td><td>On/off switch.</td></tr><tr><td><code>slider</code></td><td><code>{ "min": number, "max": number, "value": number }</code></td><td>Requires <code>min &lt; max</code>; <code>value</code> is clamped into range.</td></tr><tr><td><code>progress</code></td><td><code>number</code></td><td>A completion fraction, clamped to <code>0…1</code>. The fill uses the item's <code>color</code>.</td></tr><tr><td><code>trackColor</code></td><td><code>string</code></td><td>Progress track color (named or hex).</td></tr><tr><td><code>progressWidth</code></td><td><code>number</code></td><td>Progress bar width in points.</td></tr><tr><td><code>progressHeight</code></td><td><code>number</code></td><td>Progress bar height in points.</td></tr><tr><td><code>chart</code></td><td>`{ "kind": "pie" \</td><td>"donut" \</td><td>"stackedbar", "values": number[], "labels"?: string[], "colors"?: string[] }`</td><td>A categorical share chart. <code>values</code> must be finite and <code>&gt;= 0</code> with a positive total; at most 8 segments (a longer series folds its tail into "Other"). <code>labels</code>/<code>colors</code> are positional — a color that is <code>null</code>, blank, malformed, or unrecognised keeps that segment's palette slot.</td></tr></tbody></table></div>
+<div class="table-wrap">
+<table>
+<thead><tr><th>Field</th><th>Type</th><th>Notes</th></tr></thead>
+<tbody>
+<tr><td><code>sparkline</code></td><td><code>number[]</code></td><td>Inline chart popover data. Non-finite values are dropped.</td></tr>
+<tr><td><code>toggle</code></td><td><code>boolean</code></td><td>On/off switch.</td></tr>
+<tr><td><code>slider</code></td><td><code>{ "min": number, "max": number, "value": number }</code></td><td>Requires <code>min &lt; max</code>; <code>value</code> is clamped into range.</td></tr>
+<tr><td><code>progress</code></td><td><code>number</code></td><td>A completion fraction, clamped to <code>0…1</code>. The fill uses the item's <code>color</code>.</td></tr>
+<tr><td><code>trackColor</code></td><td><code>string</code></td><td>Progress track color (named or hex).</td></tr>
+<tr><td><code>progressWidth</code></td><td><code>number</code></td><td>Progress bar width in points.</td></tr>
+<tr><td><code>progressHeight</code></td><td><code>number</code></td><td>Progress bar height in points.</td></tr>
+</tbody>
+</table>
+</div>
 <div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">json</span></div><pre><code>{
   "vee": 1,
   "title": [{ "text": "System" }],
@@ -148,17 +161,10 @@
     { "text": "Load history", "sparkline": [1, 2, 3, 5, 8, 13] },
     { "text": "Notifications", "toggle": true },
     { "text": "Volume", "slider": { "min": 0, "max": 100, "value": 40 } },
-    { "text": "Disk usage", "color": "green", "progress": 0.72, "trackColor": "#333333", "progressWidth": 80, "progressHeight": 6 },
-    { "text": "By category", "chart": { "kind": "donut", "values": [45, 30, 25], "labels": ["Documents", "Photos", "Apps"] } }
+    { "text": "Disk usage", "color": "green", "progress": 0.72, "trackColor": "#333333", "progressWidth": 80, "progressHeight": 6 }
   ]
 }</code></pre></div>
-<p>These map to exactly the same controls as the text protocol's <code>sparkline=</code> /
-<code>toggle=</code> / <code>slider=</code> / <code>progress=</code> / <code>pie=</code>,<code>donut=</code>,<code>stackedbar=</code> (see the
-<a href="plugin-authoring.html#line-parameters">plugin authoring reference</a>) — the JSON
-form collapses the three chart shapes into one <code>chart</code> object with a <code>kind</code>,
-since they describe the same data —
-so colors, SF Symbols, links, shell actions, submenus, alternates, checkmarks,
-tooltips, and the rich controls are all available in both formats.</p>
+<p>These map to exactly the same controls as the text protocol's <code>sparkline=</code> / <code>toggle=</code> / <code>slider=</code> / <code>progress=</code> (see the <a href="plugin-authoring.html#line-parameters">plugin authoring reference</a>), so colors, SF Symbols, links, shell actions, submenus, alternates, checkmarks, tooltips, and the rich controls are all available in both formats.</p>
 <h2 id="see-also">See also</h2>
 <ul>
 <li><a href="plugin-authoring.html">Plugin authoring reference</a> — the text protocol and the full set of line parameters, including the rich params.</li>

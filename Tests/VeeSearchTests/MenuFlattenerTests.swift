@@ -200,8 +200,6 @@ final class MenuFlattenerTests: XCTestCase {
         XCTAssertTrue(MenuFlattener.isActionable(item { $0.shell = ShellCommand(launchPath: "/bin/echo", arguments: [], openInTerminal: false) }))
         XCTAssertTrue(MenuFlattener.isActionable(item { $0.swiftbar.webview = URL(string: "https://x") }))
         XCTAssertTrue(MenuFlattener.isActionable(item { $0.sparkline = [1, 2, 3] }))
-        // A chart opens its popover, so — unlike progress= — it is actionable.
-        XCTAssertTrue(MenuFlattener.isActionable(item { $0.swiftbar.chart = ChartParams(kind: .pie, values: [1, 2]) }))
         XCTAssertTrue(MenuFlattener.isActionable(item { $0.control = .toggle(on: true) }))
         XCTAssertTrue(MenuFlattener.isActionable(item { $0.swiftbar.shortcut = "Run Thing" }))
         XCTAssertTrue(MenuFlattener.isActionable(item { $0.refresh = true }))

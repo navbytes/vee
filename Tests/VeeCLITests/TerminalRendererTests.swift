@@ -50,62 +50,6 @@ final class TerminalRendererTests: XCTestCase {
         XCTAssertEqual(TerminalRenderer.sparkline([5, 5, 5], color: nil, options: plain), "▅▅▅")
     }
 
-    func testCategoryChartIsAnExactlyWideSegmentedBar() {
-        // 12 cells, split 50/25/25 → 6/3/3. The bar is always exactly as wide
-        // as the progress gauge so mixed accessories line up in a column.
-        let chart = ChartParams(kind: .pie, values: [50, 25, 25])
-        XCTAssertEqual(TerminalRenderer.categoryChart(chart, options: plain), String(repeating: "█", count: 12))
-    }
-
-    func testChartCellAllocationSumsExactlyAndKeepsSliversVisible() {
-        let even = ChartParams(kind: .pie, values: [1, 1, 1])
-        XCTAssertEqual(TerminalRenderer.allocateCells(even, total: 12), [4, 4, 4])
-
-        // Largest remainder: 1/3 of 10 cells can't split evenly.
-        let uneven = ChartParams(kind: .pie, values: [1, 1, 1])
-        XCTAssertEqual(TerminalRenderer.allocateCells(uneven, total: 10).reduce(0, +), 10)
-
-        // A slice far below one cell still gets one, borrowed from the widest —
-        // rounding it away would drop the segment from the chart entirely.
-        let sliver = ChartParams(kind: .pie, values: [1000, 1, 1])
-        let cells = TerminalRenderer.allocateCells(sliver, total: 12)
-        XCTAssertEqual(cells.reduce(0, +), 12)
-        XCTAssertTrue(cells.allSatisfy { $0 >= 1 })
-
-        // A genuinely zero segment gets nothing — it has no share to show.
-        XCTAssertEqual(TerminalRenderer.allocateCells(ChartParams(kind: .pie, values: [0, 1]), total: 4), [0, 4])
-    }
-
-    /// Regression: `VeeColor.parse` accepts any bare word as a name, so
-    /// `chartcolors=notacolor` reaches the renderer intact and only fails when
-    /// it is resolved to SGR codes. The AppKit and SwiftUI resolvers fall back
-    /// to the segment's palette slot there; this one used to emit the segment
-    /// uncoloured instead, so the same chart looked different in the terminal.
-    func testChartFallsBackToThePaletteWhenAnOverrideCannotResolve() {
-        let colored = TerminalRenderer.Options(color: true, width: 80)
-        let chart = ChartParams(kind: .pie, values: [1, 1], colors: [.named("notacolor"), nil])
-        let out = TerminalRenderer.categoryChart(chart, options: colored)
-        // Slot 1's dark step (#3987e5) as truecolor SGR — what the unresolvable
-        // override must fall back to.
-        XCTAssertTrue(out.contains("38;2;57;135;229"), out)
-    }
-
-    /// A color the terminal *can* resolve still wins over the palette.
-    func testResolvableOverrideBeatsThePalette() {
-        let colored = TerminalRenderer.Options(color: true, width: 80)
-        let chart = ChartParams(kind: .pie, values: [1, 1], colors: [.named("red"), nil])
-        let out = TerminalRenderer.categoryChart(chart, options: colored)
-        XCTAssertTrue(out.contains("\u{1B}[31m"), out)
-    }
-
-    func testChartRendersInlineOnTheRow() {
-        var chart = LineParams()
-        chart.swiftbar.chart = ChartParams(kind: .stackedBar, values: [1, 1])
-        let r = TerminalRenderer.render(ParsedOutput(body: [.item(MenuItem(text: "Disk", params: chart))]), options: plain)
-        XCTAssertTrue(r.contains("Disk"))
-        XCTAssertTrue(r.contains("█"), "the chart should draw blocks on the row")
-    }
-
     func testProgressSparklineAndControlsRenderInline() {
         var prog = LineParams(); prog.progress = ProgressParams(fraction: 0.5)
         var spark = LineParams(); spark.sparkline = [1, 4, 8]

@@ -76,7 +76,7 @@
 </ul>
 <h2 id="hello-world">Hello world</h2>
 <p>The same menu in each language. Adjust the import path to point at wherever the SDK lives relative to your plugin.</p>
-<h3 id="typescript">TypeScript</h3>
+<h3 id="hello-typescript">TypeScript</h3>
 <p>Create <code>cpu.5s.ts</code>. Node runs the <code>.ts</code> directly (type-stripping), so you drop the file straight into your plugins folder — no compile step.</p>
 <div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">ts</span></div><pre><code>#!/usr/bin/env node
 import { Menu } from "./src/vee.ts";
@@ -96,7 +96,7 @@ d.item("Refresh", { refresh: true });
 
 menu.print();</code></pre></div>
 <div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">sh</span></div><pre><code>chmod +x cpu.5s.ts</code></pre></div>
-<h3 id="python">Python</h3>
+<h3 id="hello-python">Python</h3>
 <p>Create <code>cpu.5s.py</code>. Options are passed as keyword arguments.</p>
 <div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">python</span></div><pre><code>#!/usr/bin/env python3
 import sys
@@ -118,7 +118,7 @@ d.item("Refresh", refresh=True)
 
 menu.print()</code></pre></div>
 <div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">sh</span></div><pre><code>chmod +x cpu.5s.py</code></pre></div>
-<h3 id="go">Go</h3>
+<h3 id="hello-go">Go</h3>
 <p>Options are a <code>*vee.Options</code> struct; the <code>vee.Str</code>/<code>vee.Int</code>/<code>vee.Bool</code> helpers set the optional pointer fields concisely. Build to a binary named <code>cpu.5s</code>.</p>
 <div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">go</span></div><pre><code>package main
 
@@ -152,7 +152,7 @@ func main() {
 <ul>
 <li><strong>Item</strong> — <code>item(text, options?)</code> / <code>item(text, **options)</code> / <code>Item(text, *Options)</code> adds a menu item.</li>
 <li><strong>Separator</strong> — <code>separator()</code> / <code>separator()</code> / <code>Separator()</code> adds a <code>---</code> divider.</li>
-<li><strong>Submenu</strong> — <code>submenu(text, ...)</code> / <code>Submenu(text, ...)</code> adds an item and returns a new <code>Section</code> for its children (one level deeper).</li>
+<li><strong>Submenu</strong> — <code>submenu(text, …)</code> / <code>Submenu(text, …)</code> adds an item and returns a new <code>Section</code> for its children (one level deeper).</li>
 </ul>
 <h3 id="options">Options</h3>
 <p>Options map onto the line parameters in the <a href="plugin-authoring.html#line-parameters">authoring reference</a>. The supported keys are the same in every SDK (in TypeScript they are <code>ItemOptions</code>; in Python keyword arguments; in Go the <code>Options</code> struct fields):</p>
@@ -172,13 +172,7 @@ d.Item("**Bold** text", &amp;vee.Options{MD: vee.Bool(true)})
 d.Item("Status :checkmark.circle:", &amp;vee.Options{Symbolize: vee.Bool(true)})</code></pre></div>
 <p>Values containing spaces or <code>|</code> are quoted (and embedded quotes escaped) automatically, in every SDK — you never format the protocol by hand.</p>
 <h2 id="rich-params">Rich params</h2>
-<p>All three SDKs expose <strong>typed builders</strong> for Vee's inline controls —
-<strong>sparkline</strong>, <strong>toggle</strong>, <strong>slider</strong>, and <strong>progress</strong> — plus the progress
-tuning params (<code>trackColor</code>, <code>progressW</code>, <code>progressH</code>). You pass structured
-values; the SDK formats the protocol (numbers, ranges, and quoting) for you, so
-the whole class of "I hand-formatted <code>slider=</code> wrong" bugs is impossible to
-write. (These render natively in Vee; in xbar/SwiftBar the unknown params are
-ignored, so plugins stay portable.)</p>
+<p>All three SDKs expose <strong>typed builders</strong> for Vee's inline controls — <strong>sparkline</strong>, <strong>toggle</strong>, <strong>slider</strong>, and <strong>progress</strong> — plus the progress tuning params (<code>trackColor</code>, <code>progressW</code>, <code>progressH</code>). You pass structured values; the SDK formats the protocol (numbers, ranges, and quoting) for you, so the whole class of "I hand-formatted <code>slider=</code> wrong" bugs is impossible to write. (These render natively in Vee; xbar/SwiftBar ignore the unknown params, so plugins stay portable.)</p>
 <p><strong>TypeScript</strong></p>
 <div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">ts</span></div><pre><code>d.item("Load history", { sparkline: [1, 2, 3, 5, 8, 13] });
 d.item("Notifications", { toggle: true });
@@ -187,7 +181,7 @@ d.item("Disk usage", { color: "green", progress: 0.72, trackColor: "#333333", pr
 // progress also accepts a value/max pair:
 d.item("Budget", { progress: { value: 72, max: 100 } });</code></pre></div>
 <p><strong>Python</strong></p>
-<div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">python</span></div><pre><code>d.item("Load history", sparkline=[1, 2, 3, 5, 8, 13])
+<div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">py</span></div><pre><code>d.item("Load history", sparkline=[1, 2, 3, 5, 8, 13])
 d.item("Notifications", toggle=True)
 d.item("Volume", slider={"min": 0, "max": 100, "value": 40})
 d.item("Disk usage", color="green", progress=0.72, trackColor="#333333", progressW=80, progressH=6)</code></pre></div>
@@ -196,78 +190,8 @@ d.item("Disk usage", color="green", progress=0.72, trackColor="#333333", progres
 d.Item("Notifications", &amp;vee.Options{Toggle: vee.Bool(true)})
 d.Item("Volume", &amp;vee.Options{Slider: &amp;vee.Slider{Min: 0, Max: 100, Value: 40}})
 d.Item("Disk usage", &amp;vee.Options{Color: vee.Str("green"), Progress: vee.Float(0.72), TrackColor: vee.Str("#333333"), ProgressW: vee.Float(80), ProgressH: vee.Float(6)})</code></pre></div>
-<h3 id="share-charts">Share charts</h3>
-<p>The <a href="plugin-authoring.html#share-charts-pie-donut-stackedbar">share charts</a>
-(<code>pie=</code>/<code>donut=</code>/<code>stackedbar=</code>) get one typed builder rather than three: the
-shapes take the same data, so <code>kind</code> is the only thing that changes between them.
-<code>labels</code> and <code>colors</code> are optional and positional.</p>
-<p><strong>TypeScript</strong></p>
-<div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">ts</span></div><pre><code>d.item("By category", { chart: { kind: "pie", values: [45, 30, 25], labels: ["Documents", "Photos", "Apps"] } });
-d.item("By volume", { chart: { kind: "donut", values: [512, 256, 128], colors: ["blue", "teal", "orange"] } });</code></pre></div>
-<p><strong>Python</strong></p>
-<div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">python</span></div><pre><code>d.item("By category", chart={"kind": "pie", "values": [45, 30, 25], "labels": ["Documents", "Photos", "Apps"]})
-d.item("By volume", chart={"kind": "donut", "values": [512, 256, 128], "colors": ["blue", "teal", "orange"]})</code></pre></div>
-<p><strong>Go</strong></p>
-<div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">go</span></div><pre><code>d.Item("By category", &amp;vee.Options{Chart: &amp;vee.Chart{
-    Kind: "pie", Values: []float64{45, 30, 25}, Labels: []string{"Documents", "Photos", "Apps"},
-}})
-d.Item("By volume", &amp;vee.Options{Chart: &amp;vee.Chart{
-    Kind: "donut", Values: []float64{512, 256, 128}, Colors: []string{"blue", "teal", "orange"},
-}})</code></pre></div>
-<p>Vee reads labels and colors as comma-separated lists, so a segment name can't
-contain a comma; names with spaces are quoted for you.</p>
-<p>All three emit byte-identical protocol output (there are <code>controls</code> and <code>charts</code>
-examples with shared golden fixtures proving it). See the underlying
-line-parameter grammar in the
-<a href="plugin-authoring.html#line-parameters">plugin authoring reference</a>.</p>
-<h2 id="widget-cards">Widget cards</h2>
-<p>All three SDKs also build the rich <a href="plugin-authoring.html#widgets">widget card</a>
-payload a plugin prints when invoked with <code>VEE_TARGET=widget</code> — a generic
-<code>widgetCard(...)</code>/<code>WidgetCard(...)</code> constructor, plus <code>Stat</code>/<code>Gauge</code>/<code>Trend</code>/
-<code>List</code>/<code>Board</code> convenience builders that preset the <code>template</code> field. Each
-returns/builds an object with the same <code>toString()</code>/<code>to_string()</code>/<code>String()</code>
-+ <code>print()</code> shape as <code>Menu</code>.</p>
-<p><strong>TypeScript</strong></p>
-<div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">ts</span></div><pre><code>import { Stat } from "./src/vee.ts";
-
-Stat({
-  title: "Revenue",
-  symbol: "chart.line.uptrend.xyaxis",
-  tint: "green",
-  value: "$18.2k",
-  status: "ok",
-  items: [{ label: "Orders", value: "214", symbol: "bag", tint: "blue" }],
-  actions: [{ kind: "refresh", label: "Refresh" }],
-}).print();</code></pre></div>
-<p><strong>Python</strong></p>
-<div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">python</span></div><pre><code>from vee import Stat
-
-Stat(
-    title="Revenue",
-    symbol="chart.line.uptrend.xyaxis",
-    tint="green",
-    value="$18.2k",
-    status="ok",
-    items=[{"label": "Orders", "value": "214", "symbol": "bag", "tint": "blue"}],
-    actions=[{"kind": "refresh", "label": "Refresh"}],
-).print()</code></pre></div>
-<p><strong>Go</strong></p>
-<div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">go</span></div><pre><code>c := &amp;vee.WidgetCard{
-	Template: vee.TemplateStat,
-	Title:    vee.Str("Revenue"),
-	Symbol:   vee.Str("chart.line.uptrend.xyaxis"),
-	Tint:     vee.Str("green"),
-	Value:    vee.Str("$18.2k"),
-	Status:   vee.StatusOK,
-	Items:    []vee.WidgetCardItem{{Label: "Orders", Value: vee.Str("214"), Symbol: vee.Str("bag"), Tint: vee.Str("blue")}},
-	Actions:  []vee.WidgetCardAction{{Kind: vee.ActionRefresh, Label: "Refresh"}},
-}
-c.Print()</code></pre></div>
-<p>All three emit byte-identical JSON for the same card (there's a <code>widget-card</code>
-example and a shared golden fixture proving it, also round-tripped through
-the Swift parser). See the full field/template/action reference in
-<a href="plugin-authoring.html#widgets">Widgets</a>.</p>
-<h2 id="the-no-build-step-note-typescript">The no-build-step note (TypeScript)</h2>
+<p>All three emit byte-identical protocol output (there's a <code>controls</code> example and a shared golden fixture proving it). See the underlying line-parameter grammar in the <a href="plugin-authoring.html#line-parameters">plugin authoring reference</a>.</p>
+<h2 id="the-no-build-step-note">The no-build-step note (TypeScript)</h2>
 <p>For TypeScript there is deliberately no compiler or bundler in the loop. Node 24+ strips the TypeScript types at load time and runs the file, so:</p>
 <ul>
 <li>Your plugin is a plain <code>.ts</code> file with a <code>#!/usr/bin/env node</code> shebang.</li>
