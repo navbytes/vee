@@ -6,11 +6,14 @@ import VeeUI
 /// Presents a plugin's native Liquid Glass `NSPopover` — a read-only
 /// `sparkline=…` chart (`SparklineChartView`), a `pie=`/`donut=`/`stackedbar=`
 /// share chart (`CategoryChartView`), or an interactive `toggle=`/`slider=`
-/// control (`PluginControlView`). Every kind can be torn off into a persistent
-/// window (`DetachedPopoverWindows`) via the button its view draws. Like `WebViewPresenter`, this lives
-/// *outside* the `NSMenu` — the menu that launched it has already closed — so
-/// the menu itself stays native and leak-free. Only one popover is shown at a
-/// time.
+/// control (`PluginControlView`). The content views are just content; the frame
+/// around them (`PopoverChrome`) is what offers "open in a window", so every
+/// kind can be torn off into a persistent window (`DetachedPopoverWindows`)
+/// without knowing it can be.
+///
+/// Like `WebViewPresenter`, this lives *outside* the `NSMenu` — the menu that
+/// launched it has already closed — so the menu itself stays native and
+/// leak-free. Only one popover is shown at a time.
 @MainActor
 final class PluginPopover: NSObject, NSPopoverDelegate {
     static let shared = PluginPopover()
@@ -51,33 +54,24 @@ final class PluginPopover: NSObject, NSPopoverDelegate {
         }
     }
 
-    /// Builds the transparent mouse-anchored window and shows `popover` from it,
-    /// wrapping `content` in the shared `PopoverChrome`. Every popover kind goes
-    /// through here, so positioning, leak behavior, *and* the "open in a window"
-    /// button are defined once rather than per content view.
+    /// Wraps `content` in the shared `PopoverChrome`, then builds the
+    /// transparent mouse-anchored window and shows the popover from it. Every
+    /// popover kind goes through here, so positioning, leak behavior, *and* the
+    /// "open in a window" button are defined once rather than per content view.
     private func present<Content: View>(
         size: NSSize,
         onDetach: (() -> Void)? = nil,
         @ViewBuilder content: () -> Content
     ) {
-        let controller = NSHostingController(
-            rootView: PopoverChrome(onDetach: onDetach, content: content)
-        )
-        // Explicit label: the other `present` takes a view-builder, and only an
-        // explicit argument keeps the two unambiguous at a glance.
-        present(size: size, makeContent: { controller })
-    }
-
-    /// Builds the transparent mouse-anchored window and shows `popover` from it.
-    /// Shared by every popover kind so positioning/leak behavior stays identical.
-    private func present(size: NSSize, makeContent: () -> NSViewController) {
         dismiss()
 
         let popover = NSPopover()
         popover.behavior = .transient
         popover.animates = true
         popover.contentSize = size
-        popover.contentViewController = makeContent()
+        popover.contentViewController = NSHostingController(
+            rootView: PopoverChrome(onDetach: onDetach, content: content)
+        )
         popover.delegate = self
 
         let mouse = NSEvent.mouseLocation
@@ -106,10 +100,10 @@ final class PluginPopover: NSObject, NSPopoverDelegate {
         NSApp.activate(ignoringOtherApps: true)
     }
 
-    /// Closes the popover because its content is being promoted to a window.
-    /// Separate from the transient auto-dismiss only for readability at the call
-    /// site — leaving the popover up behind its own detached window would be a
-    /// duplicate of the same chart.
+    /// Closes the popover because its content is being promoted to a window —
+    /// leaving it up behind its own detached window would show the same thing
+    /// twice. Exists because `dismiss()` is private: the detach handler lives in
+    /// `AppActionDispatcher` and needs a way in.
     func dismissForDetach() {
         dismiss()
     }

@@ -17,10 +17,9 @@ All notable changes to Vee are documented here. The format is based on
 
 ### Added
 - **Detached popover windows.** Every popover — `sparkline=`, the share charts,
-  and the `toggle=`/`slider=` controls — now carries an
-  **open-in-a-window** button in its corner. Pressing it turns the popover into a
-  normal floating window that can be moved to another display, resized, and left
-  open — several at once, one per row, with re-detaching an already-open row
+  and the `toggle=`/`slider=` controls — now carries an **open-in-a-window**
+  button in its corner. Pressing it turns the popover into a normal floating
+  window that can be moved to another display, resized, and left open — several at once, one per row, with re-detaching an already-open row
   focusing its window instead of opening a duplicate. The windows are **live**:
   every plugin refresh flows through to them, so they are a running view of the
   row rather than a snapshot of the moment they were torn off. A window tracks

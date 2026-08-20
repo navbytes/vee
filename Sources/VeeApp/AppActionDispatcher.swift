@@ -11,7 +11,7 @@ final class AppActionDispatcher: MenuActionHandling {
     private let baseEnvironment: [String: String]
     private let onRefresh: () -> Void
     /// Which plugin's menu this dispatcher serves. Only needed so a detached
-    /// chart window can be tied back to the plugin whose refreshes must keep
+    /// popover window can be tied back to the plugin whose refreshes must keep
     /// feeding it (`DetachedPopoverWindows`).
     private let pluginName: String
 

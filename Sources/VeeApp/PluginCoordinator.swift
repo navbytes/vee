@@ -315,7 +315,7 @@ final class PluginCoordinator {
         refreshTask = nil
         refreshWidgetTask?.cancel()
         refreshWidgetTask = nil
-        // Nothing will feed this plugin's detached chart windows any more, so
+        // Nothing will feed this plugin's detached popover windows any more, so
         // stop them implying they are live. A reload swaps in a fresh
         // coordinator whose first render clears the flag again.
         DetachedPopoverWindows.shared.pluginWentAway(pluginName: plugin.filename.name)

@@ -255,7 +255,7 @@ public final class StatusItemController {
         lastErrorDetail = nil
         lastUpdated = Date()
         lastBody = output.body
-        // Feed any detached chart windows watching this plugin. This is the one
+        // Feed any detached popover windows watching this plugin. This is the one
         // place fresh output reaches the UI, so it is the one place they can be
         // kept live rather than frozen at the moment they were torn off.
         DetachedPopoverWindows.shared.update(pluginName: pluginName, body: output.body)
