@@ -14,7 +14,6 @@ public struct PluginControlView: View {
     private let control: PluginControl
     private let title: String
     private let onCommit: @MainActor (Double) -> Void
-    private let onDetach: (() -> Void)?
 
     @State private var toggleOn: Bool
     @State private var sliderValue: Double
@@ -23,18 +22,13 @@ public struct PluginControlView: View {
     /// yank it out from under the user — so incoming values wait.
     @State private var isEditing = false
 
-    /// `onDetach` is supplied by the popover host to offer "open in a window";
-    /// the detached window renders the same view without it, since there is
-    /// nothing left to detach.
     public init(
         control: PluginControl,
         title: String = "",
-        onDetach: (() -> Void)? = nil,
         onCommit: @escaping @MainActor (Double) -> Void
     ) {
         self.control = control
         self.title = title
-        self.onDetach = onDetach
         self.onCommit = onCommit
         switch control {
         case .toggle(let on):
@@ -56,9 +50,6 @@ public struct PluginControlView: View {
         .padding(14)
         .frame(minWidth: 220)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: Corner.popover, style: .continuous))
-        .overlay(alignment: .topTrailing) {
-            if let onDetach { DetachButton(action: onDetach) }
-        }
         // In a popover this never fires (it closes before the next refresh); in
         // a detached window it is what keeps the control showing the plugin's
         // real current state instead of the state it had when it was torn off.

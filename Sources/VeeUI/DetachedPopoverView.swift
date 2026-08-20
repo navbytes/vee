@@ -97,22 +97,3 @@ public struct DetachedPopoverView: View {
             .fixedSize(horizontal: false, vertical: true)
     }
 }
-
-/// The corner affordance that turns a popover into a window. Shown only when a
-/// host passes a handler, so the detached window itself — which has nothing left
-/// to detach — renders without one.
-struct DetachButton: View {
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            Image(systemName: "macwindow.on.rectangle")
-        }
-        .buttonStyle(.plain)
-        .font(.callout)
-        .foregroundStyle(.secondary)
-        .padding(8)
-        .help("Open in a window")
-        .accessibilityLabel("Open in a window")
-    }
-}

@@ -10,15 +10,10 @@ import VeePluginFormat
 public struct SparklineChartView: View {
     private let values: [Double]
     private let title: String
-    private let onDetach: (() -> Void)?
 
-    /// `onDetach` is supplied by the popover host to offer "open in a window";
-    /// the detached window renders the same view without it, since there is
-    /// nothing left to detach.
-    public init(values: [Double], title: String = "", onDetach: (() -> Void)? = nil) {
+    public init(values: [Double], title: String = "") {
         self.values = values
         self.title = title
-        self.onDetach = onDetach
     }
 
     public var body: some View {
@@ -32,9 +27,6 @@ public struct SparklineChartView: View {
         .padding(14)
         .frame(minWidth: 220, minHeight: 120)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: Corner.popover, style: .continuous))
-        .overlay(alignment: .topTrailing) {
-            if let onDetach { DetachButton(action: onDetach) }
-        }
     }
 
     @ViewBuilder

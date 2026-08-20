@@ -22,10 +22,9 @@ final class PluginPopover: NSObject, NSPopoverDelegate {
     private var anchorWindow: NSWindow?
 
     /// Shows an inline `sparkline=…` series as a Swift Charts popover.
-    /// `onDetach`, when supplied, adds the "open in a window" button.
     func show(series: [Double], title: String, onDetach: (() -> Void)? = nil) {
-        present(size: NSSize(width: 260, height: 150)) {
-            NSHostingController(rootView: SparklineChartView(values: series, title: title, onDetach: onDetach))
+        present(size: NSSize(width: 260, height: 150), onDetach: onDetach) {
+            SparklineChartView(values: series, title: title)
         }
     }
 
@@ -34,8 +33,8 @@ final class PluginPopover: NSObject, NSPopoverDelegate {
     /// segment (bounded by `ChartParams.maxSegments`).
     func show(chart: ChartParams, title: String, onDetach: (() -> Void)? = nil) {
         let legendRows = CGFloat(chart.values.count)
-        present(size: NSSize(width: 280, height: 190 + legendRows * 17)) {
-            NSHostingController(rootView: CategoryChartView(chart: chart, title: title, onDetach: onDetach))
+        present(size: NSSize(width: 280, height: 190 + legendRows * 17), onDetach: onDetach) {
+            CategoryChartView(chart: chart, title: title)
         }
     }
 
@@ -47,11 +46,26 @@ final class PluginPopover: NSObject, NSPopoverDelegate {
         onDetach: (() -> Void)? = nil,
         onCommit: @escaping @MainActor (Double) -> Void
     ) {
-        present(size: NSSize(width: 260, height: 130)) {
-            NSHostingController(
-                rootView: PluginControlView(control: control, title: title, onDetach: onDetach, onCommit: onCommit)
-            )
+        present(size: NSSize(width: 260, height: 130), onDetach: onDetach) {
+            PluginControlView(control: control, title: title, onCommit: onCommit)
         }
+    }
+
+    /// Builds the transparent mouse-anchored window and shows `popover` from it,
+    /// wrapping `content` in the shared `PopoverChrome`. Every popover kind goes
+    /// through here, so positioning, leak behavior, *and* the "open in a window"
+    /// button are defined once rather than per content view.
+    private func present<Content: View>(
+        size: NSSize,
+        onDetach: (() -> Void)? = nil,
+        @ViewBuilder content: () -> Content
+    ) {
+        let controller = NSHostingController(
+            rootView: PopoverChrome(onDetach: onDetach, content: content)
+        )
+        // Explicit label: the other `present` takes a view-builder, and only an
+        // explicit argument keeps the two unambiguous at a glance.
+        present(size: size, makeContent: { controller })
     }
 
     /// Builds the transparent mouse-anchored window and shows `popover` from it.
