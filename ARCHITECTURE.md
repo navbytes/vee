@@ -87,10 +87,21 @@ RefreshTimer (per-plugin interval) ──fires──▶ PluginRuntime.refresh(pl
                                           MenuBuilder → NSMenu / NSStatusItem title
 ```
 
-`RefreshScheduler` chooses *how* a plugin refreshes based on its interval: a
-high-resolution `DispatchSourceTimer` (`RefreshTimer`) for short intervals, or
-`NSBackgroundActivityScheduler` for long ones (energy-friendly). `WakeMonitor`
-re-runs everything on wake from sleep.
+`RefreshScheduler` drives every interval with a high-resolution
+`DispatchSourceTimer` (`RefreshTimer`), sized with a leeway (~15% of the
+interval) that lets the system coalesce wake-ups. `WakeMonitor` re-runs
+everything on wake from sleep.
+
+Long intervals (≥10 min) used to go to `NSBackgroundActivityScheduler` instead,
+for OS-level energy batching. That is **deliberately no longer used anywhere**:
+it registers a repeating, *launch-on-demand* XPC activity against Vee's own
+launchd job, so launchd relaunched Vee within moments of the user quitting it
+and the app could not be closed at all. The registration lives in launchd rather
+than in the app, so it also survives the update that stops creating it —
+`VeeRuntime/LegacyBackgroundActivity.swift` invalidates the old identifiers when
+a plugin starts, to unstick installs upgrading from an affected version. Energy
+batching is a poor trade for an app the user cannot quit, and it bought little
+for a resident menu-bar app that is running anyway.
 
 ### Why it stays leak-free
 
@@ -231,7 +242,7 @@ The channel above carries more than a scrape. Every plugin run gets a
 `VEE_TARGET` environment variable (`VeeRuntime/EnvironmentBuilder.swift`,
 `RuntimeEnvironmentContext.target`); for a plugin declaring
 `<vee.surface>both</vee.surface>`/`widget`, `PluginCoordinator` also runs a
-second `BackgroundRefreshScheduler` on the plugin's widget-mode cadence
+second `RefreshTimer` on the plugin's widget-mode cadence
 (`<vee.widget.interval>`, floored at 5 minutes) that invokes it with
 `VEE_TARGET=widget` and parses stdout as a single JSON "card" object
 (`VeePluginFormat/WidgetCardParser.swift` → `VeeWidgetShared.WidgetCard`,

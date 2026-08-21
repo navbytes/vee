@@ -64,6 +64,10 @@ let package = Package(
         .testTarget(name: "VeeUITests", dependencies: ["VeeUI", "VeeCore", "VeePluginFormat", "VeePreferences", "VeeTrust", "VeeCatalog"]),
         .testTarget(name: "VeeWidgetSharedTests", dependencies: ["VeeWidgetShared"]),
         .testTarget(name: "VeeCLITests", dependencies: ["VeeCLI"]),
-        .testTarget(name: "VeeAppTests", dependencies: ["VeeApp", "VeeSearch", "VeeUI"]),
+        // Depends on VeeCLI so the `vee dev --push` URL builder can be tested
+        // against the *real* `URLActionRouter` that has to parse it. Nothing
+        // else links the two, so without this the contract between them could
+        // break silently.
+        .testTarget(name: "VeeAppTests", dependencies: ["VeeApp", "VeeSearch", "VeeUI", "VeeCLI"]),
     ]
 )

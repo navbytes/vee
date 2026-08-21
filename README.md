@@ -103,6 +103,7 @@ Point Vee at your existing plugins folder (Plugin Manager → **Choose Folder**)
 - `vee://` and `swiftbar://` URL actions
 - Desktop **widgets** (Notification Center): a configurable per-plugin status tile with gauges/sparklines, a **Vee Health** roll-up, and a Control Center **Refresh Vee** control
 - Zero-dependency typed SDKs (TypeScript, Python, Go) with golden-fixture drift guards
+- `vee dev` save-driven authoring loop: watch a file, re-render on every save, optionally preview it as a real menu-bar item
 
 ## Documentation
 
@@ -122,6 +123,15 @@ Point Vee at your existing plugins folder (Plugin Manager → **Choose Folder**)
 ## Writing plugins
 
 A plugin is any executable that prints the xbar/SwiftBar format to stdout — bash, Python, Ruby, a compiled binary, anything. See the **[plugin authoring reference](docs/_content/plugin-authoring.md)** for the full format, and [`examples/`](examples/) for ready-to-run showcase plugins.
+
+For the edit loop, keep `vee dev` in a split terminal beside your editor — it re-runs the file and repaints the menu on every save:
+
+```sh
+vee dev ./cpu.10s.sh            # run it and re-render on save
+vee dev --text menu.txt         # preview protocol text, executing nothing
+vee dev --push ./cpu.10s.sh     # also show each save as a real status item
+vee lint --format compact FILE  # diagnostics your editor can place on a line
+```
 
 ## Typed SDKs (TypeScript, Python, Go)
 

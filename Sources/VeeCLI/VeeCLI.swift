@@ -48,6 +48,8 @@ public enum VeeCLI {
                 return await runSearch(rest, runner: runner, out: &out, err: &err)
             case "show":
                 return await runShow(rest, runner: runner, out: &out, err: &err)
+            case "dev":
+                return await runDev(rest, runner: runner, out: &out, err: &err)
             default:
                 err += "vee: unknown subcommand '\(name)'\n\n"
                 err += Usage.text
@@ -59,6 +61,81 @@ public enum VeeCLI {
     // Read from the bundle so `vee --version` can't drift from the app it ships
     // inside; the literal is only the fallback for a bare binary (swift run).
     static let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.1.2"
+
+    // MARK: - dev
+
+    static let devUsage = "Usage: vee dev <path> [--text] [--push] [--no-color]\n"
+
+    /// `vee dev <path>` — watch one file and repaint the menu Vee would build
+    /// from it on every save. The interactive loop lives in `DevLoop`; this
+    /// parses arguments and decides whether a loop is even possible.
+    static func runDev(
+        _ args: [String],
+        runner: ProcessRunning,
+        out: inout String,
+        err: inout String
+    ) async -> Int32 {
+        var mode = InputMode.execute
+        var push = false
+        var noColor = false
+        var positionals: [String] = []
+
+        var i = 0
+        while i < args.count {
+            let arg = args[i]
+            switch arg {
+            case "--text": mode = .text
+            case "--push": push = true
+            case "--no-color": noColor = true
+            default:
+                if arg.hasPrefix("-") {
+                    err += "vee dev: unknown flag '\(arg)'\n"
+                    return 2
+                }
+                positionals.append(arg)
+            }
+            i += 1
+        }
+
+        guard let path = positionals.first else {
+            err += "vee dev: missing <path>\n\n" + devUsage
+            return 2
+        }
+        guard FileManager.default.fileExists(atPath: path) else {
+            err += "vee dev: no such file '\(path)'\n"
+            return 1
+        }
+
+        let stdoutIsTTY = isatty(FileHandle.standardOutput.fileDescriptor) != 0
+        let stdinIsTTY = isatty(FileHandle.standardInput.fileDescriptor) != 0
+        let colorEnabled = !noColor
+            && ProcessInfo.processInfo.environment["NO_COLOR"] == nil
+            && stdoutIsTTY
+
+        let target = push ? PushTarget(path: path) : nil
+
+        // Without both a real terminal and real keyboard input there is no loop
+        // to run: raw mode and the alternate screen would corrupt a pipe, and
+        // nothing could ever ask it to quit. Print one frame instead — the same
+        // seam `vee show` uses, and what makes this path testable.
+        guard stdoutIsTTY, stdinIsTTY else {
+            let snap = await DevLoop.snapshot(path: path, mode: mode, runner: runner)
+            var notes: [String] = []
+            if let target {
+                notes = await target.send(snapshot: snap, runner: runner, isFirstPush: true)
+                await target.teardown(runner: runner)
+            }
+            out += DevLoop.frame(
+                snap,
+                width: LiveView.terminalWidth(),
+                color: colorEnabled,
+                updatedAt: "--:--:--",
+                extraNotes: notes)
+            return DevLoop.exitCode(for: snap)
+        }
+
+        return await DevLoop.run(path: path, mode: mode, runner: runner, color: colorEnabled, push: target)
+    }
 
     // MARK: - render
 
@@ -113,29 +190,59 @@ public enum VeeCLI {
 
     // MARK: - lint
 
+    static let lintUsage = "Usage: vee lint <path> [--text] [--format human|compact]\n"
+
     static func runLint(
         _ args: [String],
         runner: ProcessRunning,
         out: inout String,
         err: inout String
     ) async -> Int32 {
-        guard let path = args.first(where: { !$0.hasPrefix("-") }) else {
-            err += "vee lint: missing <path>\n\nUsage: vee lint <path>\n"
+        var mode = InputMode.execute
+        var format = DiagnosticFormat.human
+        var positionals: [String] = []
+
+        var i = 0
+        while i < args.count {
+            let arg = args[i]
+            switch arg {
+            case "--text": mode = .text
+            case "--format":
+                i += 1
+                guard i < args.count, let parsed = DiagnosticFormat(rawValue: args[i]) else {
+                    err += "vee lint: --format expects 'human' or 'compact'\n"
+                    return 2
+                }
+                format = parsed
+            default:
+                if arg.hasPrefix("-") {
+                    err += "vee lint: unknown flag '\(arg)'\n"
+                    return 2
+                }
+                positionals.append(arg)
+            }
+            i += 1
+        }
+
+        guard let path = positionals.first else {
+            err += "vee lint: missing <path>\n\n" + lintUsage
             return 2
         }
 
-        // Run the plugin to obtain its raw output. (Reuses the same seam as
-        // render so lint sees exactly what Vee would.)
-        let raw: String
+        // Obtain the raw output: by running the plugin (the same seam render
+        // uses, so lint sees exactly what Vee would) or, under `--text`, by
+        // reading the file without executing anything.
+        let loaded: PluginInput.Loaded
         do {
-            let outcome = try await runPlugin(path: path, runner: runner)
-            raw = outcome.standardOutput
-            if outcome.exitCode != 0 {
-                err += "Note: plugin exited with code \(outcome.exitCode).\n"
-            }
+            loaded = try await PluginInput.load(path: path, mode: mode, runner: runner)
         } catch {
-            err += "vee lint: could not run '\(path)': \(error)\n"
+            let verb = mode == .text ? "read" : "run"
+            err += "vee lint: could not \(verb) '\(path)': \(error)\n"
             return 1
+        }
+        let raw = loaded.raw
+        if let outcome = loaded.outcome, outcome.exitCode != 0 {
+            err += "Note: plugin exited with code \(outcome.exitCode).\n"
         }
 
         var findings: [ParseDiagnostic] = []
@@ -156,14 +263,17 @@ public enum VeeCLI {
         }
 
         if findings.isEmpty {
-            out += "No lint findings.\n"
+            // Compact output is consumed by an editor, which wants findings and
+            // nothing else — a prose "no findings" line would be parsed as junk.
+            if format == .human { out += "No lint findings.\n" }
             return 0
         }
 
-        out += "Lint findings:\n"
-        for f in findings.sorted(by: sortDiagnostics) {
-            out += format(f) + "\n"
-        }
+        if format == .human { out += "Lint findings:\n" }
+        out += DiagnosticFormatter.render(
+            DiagnosticFormatter.sorted(findings),
+            format: format,
+            path: loaded.diagnosticPath)
         return 1
     }
 
@@ -497,12 +607,10 @@ public enum VeeCLI {
 
     // MARK: - Formatting helpers
 
+    /// The human form, delegated to `DiagnosticFormatter` so `render` and `lint`
+    /// cannot drift from each other or from the compact form's severity naming.
     private static func format(_ d: ParseDiagnostic) -> String {
-        let sev = d.severity == .error ? "error" : "warning"
-        if let line = d.line {
-            return "  \(sev) [line \(line)]: \(d.message)"
-        }
-        return "  \(sev): \(d.message)"
+        DiagnosticFormatter.line(d, format: .human, path: "")
     }
 
     private static func sortDiagnostics(_ a: ParseDiagnostic, _ b: ParseDiagnostic) -> Bool {
@@ -526,12 +634,23 @@ enum Usage {
       vee lint <path>          Run a plugin and report format/authoring problems.
       vee search <path> [q…]   Run a plugin and fuzzy-search its (nested) items.
       vee show <plugin>        Live-render a plugin's dropdown in the terminal.
+      vee dev <path>           Watch a file and re-render it on every save.
       vee new [flags]          Scaffold a new plugin.
 
     show flags:
       --once               Print a single frame instead of live-refreshing.
       --no-color           Disable ANSI color output.
       --dir DIR            Plugins folder to resolve a plugin name against.
+
+    dev flags:
+      --text               Treat the file as plugin output; do not execute it.
+      --push               Also show each save as a real Vee status item.
+      --no-color           Disable ANSI color output.
+
+    lint flags:
+      --text               Treat the file as plugin output; do not execute it.
+      --format FORMAT      human (default) or compact (path:line:col: …), which
+                           editors parse into inline diagnostics.
 
     new flags:
       --lang ts|py|sh      Source language (default: sh).
