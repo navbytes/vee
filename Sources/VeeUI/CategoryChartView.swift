@@ -50,12 +50,14 @@ public struct CategoryChartView: View {
     }
 
     /// Donut hole, as a share of the outer radius — the same ratio the inline
-    /// menu-row chart uses, so the two surfaces draw the same shape.
-    private static let donutInnerRatio: Double = 0.58
+    /// menu-row chart uses, so the two surfaces draw the same shape. Not
+    /// private: `MenuRowAccessory` draws the row-sized version from it.
+    static let donutInnerRatio: Double = 0.58
     /// Surface gap between adjacent segments, in points. Matches the inline
     /// row view: it makes the boundary legible and doubles as the secondary
-    /// encoding that keeps neighbouring hues apart.
-    private static let segmentGap: Double = 2
+    /// encoding that keeps neighbouring hues apart. Not private: shared with
+    /// `MenuRowAccessory` for the same reason as `donutInnerRatio`.
+    static let segmentGap: Double = 2
 
     private func radial(innerRadius: Double) -> some View {
         Chart(segments) { segment in
@@ -175,17 +177,30 @@ enum ChartSegmentColor {
     }
 
     private static func color(for veeColor: VeeColor) -> Color? {
+        SwiftUIColor.resolve(veeColor)
+    }
+
+    private static func nsColor(for veeColor: VeeColor) -> NSColor? {
+        guard case .rgb(let r, let g, let b, let a) = veeColor else { return nil }
+        return NSColor(srgbRed: CGFloat(r) / 255, green: CGFloat(g) / 255, blue: CGFloat(b) / 255, alpha: CGFloat(a) / 255)
+    }
+}
+
+/// Resolves a parsed `VeeColor` to a SwiftUI `Color`.
+///
+/// The SwiftUI counterpart of `ColorResolver` in `VeeMenu`, which produces
+/// `NSColor` for AppKit drawing and resolves AppKit's semantic colors. `VeeUI`
+/// does not (and should not) depend on the menu layer for a leaf color utility,
+/// so the two are deliberately parallel rather than shared — but they accept the
+/// same names, and explicit `rgb` values resolve identically on both.
+enum SwiftUIColor {
+    static func resolve(_ veeColor: VeeColor) -> Color? {
         switch veeColor {
         case .rgb(let r, let g, let b, let a):
             return Color(.sRGB, red: Double(r) / 255, green: Double(g) / 255, blue: Double(b) / 255, opacity: Double(a) / 255)
         case .named(let name):
             return named[name.replacingOccurrences(of: " ", with: "")]
         }
-    }
-
-    private static func nsColor(for veeColor: VeeColor) -> NSColor? {
-        guard case .rgb(let r, let g, let b, let a) = veeColor else { return nil }
-        return NSColor(srgbRed: CGFloat(r) / 255, green: CGFloat(g) / 255, blue: CGFloat(b) / 255, alpha: CGFloat(a) / 255)
     }
 
     /// The same names `ColorResolver` (VeeMenu) accepts, mapped onto SwiftUI's

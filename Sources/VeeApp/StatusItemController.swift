@@ -16,8 +16,9 @@ private final class ControlsTarget: NSObject, NSMenuDelegate {
     let onEdit: () -> Void
     let onDebug: () -> Void
     let onSearch: () -> Void
+    let onOpenWindow: () -> Void
     let refreshOnOpen: Bool
-    init(onRefresh: @escaping () -> Void, onSettings: @escaping () -> Void, onAbout: @escaping () -> Void, onReveal: @escaping () -> Void, onEdit: @escaping () -> Void, onDebug: @escaping () -> Void, onSearch: @escaping () -> Void, refreshOnOpen: Bool) {
+    init(onRefresh: @escaping () -> Void, onSettings: @escaping () -> Void, onAbout: @escaping () -> Void, onReveal: @escaping () -> Void, onEdit: @escaping () -> Void, onDebug: @escaping () -> Void, onSearch: @escaping () -> Void, onOpenWindow: @escaping () -> Void, refreshOnOpen: Bool) {
         self.onRefresh = onRefresh
         self.onSettings = onSettings
         self.onAbout = onAbout
@@ -25,6 +26,7 @@ private final class ControlsTarget: NSObject, NSMenuDelegate {
         self.onEdit = onEdit
         self.onDebug = onDebug
         self.onSearch = onSearch
+        self.onOpenWindow = onOpenWindow
         self.refreshOnOpen = refreshOnOpen
     }
     @objc func refresh() { onRefresh() }
@@ -34,6 +36,7 @@ private final class ControlsTarget: NSObject, NSMenuDelegate {
     @objc func edit() { onEdit() }
     @objc func debug() { onDebug() }
     @objc func search() { onSearch() }
+    @objc func openWindow() { onOpenWindow() }
     @objc func quit() { NSApp.terminate(nil) }
 
     // <swiftbar.refreshOnOpen>: re-run the plugin when its menu is opened.
@@ -177,9 +180,12 @@ public final class StatusItemController {
         self.actionTarget = MenuActionTarget(handler: handler)
         let name = pluginName
         let presentSearch: () -> Void
-        // Deferred so the closure can capture the fully-initialized controller.
+        let presentWindow: () -> Void
+        // Deferred so the closures can capture the fully-initialized controller.
         var searchPresenter: (() -> Void)?
+        var windowPresenter: (() -> Void)?
         presentSearch = { searchPresenter?() }
+        presentWindow = { windowPresenter?() }
         self.controls = ControlsTarget(
             onRefresh: onRefresh,
             onSettings: onSettings,
@@ -188,9 +194,11 @@ public final class StatusItemController {
             onEdit: onEdit,
             onDebug: onDebug,
             onSearch: presentSearch,
+            onOpenWindow: presentWindow,
             refreshOnOpen: refreshOnOpen
         )
         searchPresenter = { [weak self] in self?.presentSearch() }
+        windowPresenter = { [weak self] in self?.openDetachedWindow() }
 
         // Live mode toggle: react to Settings' "Combine all plugins into one
         // menu bar item" switch without a relaunch, for every plugin already
@@ -213,6 +221,13 @@ public final class StatusItemController {
     /// global hotkey (`<vee.shortcut>`) can open it without the menu being open.
     public func openSearchPanel() { presentSearch() }
 
+    /// Opens (or focuses) this plugin's detached window. Public for the same
+    /// reason `openSearchPanel` is: the plugin's global hotkey can be bound to
+    /// this presentation instead of the transient one.
+    public func openDetachedWindow() {
+        DetachedPluginWindows.shared.show(pluginName: pluginName, body: lastBody, handler: handler)
+    }
+
     /// Updates the Features shown in the capabilities area and rebuilds the open
     /// menu so a live hotkey change (enable/disable) is reflected immediately.
     public func setFeatures(_ features: PluginFeatures) {
@@ -225,6 +240,7 @@ public final class StatusItemController {
         MenuSearchPanel.shared.present(
             entries: MenuSearch.flattenEntries(lastBody),
             pluginName: pluginName,
+            keepOpen: { [weak self] in self?.openDetachedWindow() },
             activate: { [weak self] row in self?.handler.perform(row.item) }
         )
     }
@@ -248,6 +264,10 @@ public final class StatusItemController {
         guard output != lastRendered else {
             lastUpdated = Date()
             stampItem?.title = "Updated \(Self.timeFormatter.string(from: Date()))"
+            // Unchanged output is still output: a window marked stale by an
+            // earlier failure stops saying so, even though it has nothing new
+            // to draw.
+            DetachedPluginWindows.shared.markFresh(pluginName: pluginName)
             return
         }
         lastRendered = output
@@ -255,6 +275,10 @@ public final class StatusItemController {
         lastErrorDetail = nil
         lastUpdated = Date()
         lastBody = output.body
+        // Feed any detached window watching this plugin. This is the one place
+        // fresh output reaches the UI, so it is the one place a window can be
+        // kept live rather than frozen at the moment it was opened.
+        DetachedPluginWindows.shared.update(pluginName: pluginName, body: output.body)
         let presentation = TitleRenderer.presentation(for: output.titleLines)
         // D6: sanitize before any of this ever reaches an `attributedTitle`
         // setter below — the single choke point every setter (standalone
@@ -280,6 +304,10 @@ public final class StatusItemController {
         lastRendered = nil
         lastErrorMessage = message
         lastErrorDetail = detail
+        // Keep the window's last good output on screen, but stop implying it is
+        // current — noticing that a watched thing stopped reporting is the whole
+        // reason to be watching it.
+        DetachedPluginWindows.shared.markStale(pluginName: pluginName)
         cycleTimer?.invalidate()
         frames = []
         let image = NSImage(systemSymbolName: "exclamationmark.triangle.fill", accessibilityDescription: "error")
@@ -749,6 +777,13 @@ public final class StatusItemController {
         let debug = NSMenuItem(title: "Debug…", action: #selector(ControlsTarget.debug), keyEquivalent: "")
         debug.target = controls
         menu.addItem(debug)
+
+        // Opens this plugin's whole menu surface as a window that can be left on
+        // the desktop. Reopening focuses the existing one, so the row reads as
+        // "show me that window" whether or not it is already open.
+        let window = NSMenuItem(title: "Open in Window", action: #selector(ControlsTarget.openWindow), keyEquivalent: "")
+        window.target = controls
+        menu.addItem(window)
 
         menu.addItem(.separator())
 

@@ -39,11 +39,11 @@ only; there are no cycles.
 | `VeePluginFormat` | The pure parser. Turns plugin stdout into a `ParsedOutput` (title lines + a menu-node tree) plus `ParseDiagnostic`s. Handles the `---`/`--` menu structure, `\|`-delimited params, `<xbar.*>`/`<swiftbar.*>`/`<vee.*>` headers, ANSI, emoji `:shortcodes:`, colors, SF Symbols, and the alternative structured-JSON output. Never throws — malformed input degrades to best-effort output + diagnostics. |
 | `VeeRuntime`      | Plugin discovery, **leak-free execution**, scheduling, environment building, `PATH` resolution, and `~~~` streaming. The heart of the reliability story. |
 | `VeeMenu`         | Renders a `ParsedOutput` into an `NSMenu`: color/ANSI attribution, SF Symbol images, key equivalents, actions, and the custom in-row `progress=` view. |
-| `VeeSearch`       | Pure, AppKit-free searchable-menu core: flattens the menu-node tree into breadcrumb-annotated rows and fuzzy-filters/ranks them. Powers the `<vee.filter>` panel (`VeeApp/MenuSearchPanel.swift`) and `vee search`. |
+| `VeeSearch`       | Pure, AppKit-free searchable-menu core: flattens the menu-node tree into breadcrumb-annotated rows and fuzzy-filters/ranks them. Powers both presentations of the menu surface — the transient `<vee.filter>` panel and the detached window (`VeeApp/MenuSearchPanel.swift`, `VeeApp/DetachedPluginWindows.swift`) — and `vee search`. |
 | `VeePreferences`  | The `<xbar.var>` preferences sidecar and the Keychain-backed `SecretStore`; the cross-plugin `VariableAggregator` behind the Variables editor. |
 | `VeeTrust`        | The advisory trust layer: `SourceScan` statically scans plugin source for capability keywords and diffs detected-vs-declared; `TrustDiff` compares footprints across an update. |
 | `VeeCatalog`      | The Discover browser over `matryer/xbar-plugins`: catalog fetch/parse, freshness classification, install (with path-traversal-safe filenames), and `PluginProvenance` (source URL + content hash so later tampering is detectable). |
-| `VeeUI`           | SwiftUI windows and views: Preferences, Plugin Manager, Discover, plugin settings forms, the debug console, and the Liquid Glass sparkline/control popovers. |
+| `VeeUI`           | SwiftUI windows and views: Preferences, Plugin Manager, Discover, plugin settings forms, the debug console, the Liquid Glass sparkline/control popovers, and the compact row graphics a detached window draws inline (`MenuRowAccessory`). |
 | `VeeWidgetShared` | A tiny Foundation-only model + store shared with the WidgetKit / Control Center extension. See [The widget cross-process channel](#the-widget-cross-process-channel). |
 | `VeeApp`          | The AppKit shell: `AppController`, `PluginCoordinator`, status-item management, App Intents, the URL/action routers, and notifications. Kept as a library so it is unit-testable. |
 | `vee`             | The executable: a thin entry point that either boots the app or dispatches the `render`/`show`/`lint`/`search`/`new` authoring subcommands (`VeeCLI`). |
@@ -123,6 +123,50 @@ and not letting a runaway plugin live forever:
 The `soak` CI job (`Tests/VeeRuntimeTests/MemorySoakBenchmarkTests.swift`)
 drives this pipeline for a sustained window and asserts bounded memory growth
 *and* that refreshes keep firing.
+
+## The menu surface has two presentations
+
+A plugin's dropdown is an `NSMenu` (`VeeMenu/MenuBuilder`), and an `NSMenu`
+cannot be hosted in a window. Everything hanging off it is `NSMenuItem`-shaped —
+`AttributedTitleFactory`, the custom `NSMenuItem.view` row renderers,
+`NSMenuItem.sectionHeader`, `isAlternate`, `keyEquivalent` — so none of it
+transfers to a window.
+
+What *does* render a plugin's menu in SwiftUI is the search panel. It already
+flattens the whole tree (`MenuSearch.flattenEntries`), draws section headers and
+separators, and dispatches activations through the real
+`MenuActionHandling`. So the detached window is a **second presentation of that
+one surface**, not a fourth renderer:
+
+```
+  MenuSearchContentView  ── one view, one row renderer, one action path
+       │
+       ├─ transient   MenuSearchPanel: KeyablePanel, .popUpMenu, entries frozen
+       │              at open, dismissed by Esc / outside click / activation
+       │
+       └─ window      DetachedPluginWindows: titled + resizable, one per plugin,
+                      live entries pushed from StatusItemController.render,
+                      floating or ordinary (level and collectionBehavior always
+                      resolved together, in DetachedWindowPinning)
+```
+
+Two consequences worth knowing before changing either:
+
+- **Liveness is window-only.** The panel's model documents why its entries are
+  frozen: it is on screen for seconds while the user types and moves a selection,
+  and re-ranking underneath them would reorder rows under the cursor. Only
+  `DetachedPluginWindowModel` calls `MenuSearchViewModel.update(entries:)`.
+- **Chrome belongs to the presentation, never to the content.**
+  `MenuSearchContentView` carries no size and no background; the panel wraps it
+  in its fixed Liquid Glass card and the window lets it fill. The same rule puts
+  the *keep open* button on the panel's chrome and the pin control in the
+  window's title bar, so neither leaks into the shared view.
+
+Counting `vee show`'s `TerminalRenderer` and the WidgetKit extension's
+`WidgetNodeView`, a plugin's parsed output is rendered by four things in total.
+They all consume `ParsedOutput`, and shared leaf utilities (`SymbolImageFactory`,
+`ChartSegmentColor`, `ProgressParams`' gauge defaults, `ChartParams.color`) are
+what keep them from disagreeing.
 
 ## Parsing: text and JSON
 

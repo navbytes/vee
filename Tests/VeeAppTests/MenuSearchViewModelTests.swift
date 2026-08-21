@@ -129,4 +129,71 @@ final class MenuSearchViewModelTests: XCTestCase {
         XCTAssertEqual(vm.selection, 1, "selection lands back on the first action row, after the header")
         XCTAssertEqual(vm.selectedRow()?.item.text, "Alpha")
     }
+
+    // MARK: - Refreshed entries (the detached window's liveness path)
+
+    func testUpdateReplacesTheEntrySetWholesale() {
+        let vm = MenuSearchViewModel(entries: [action("CPU 12%"), action("Disk 68%")])
+
+        vm.update(entries: [action("CPU 15%"), action("Disk 68%"), action("Net 4 Mb/s")])
+
+        XCTAssertEqual(texts(vm.results), ["CPU 15%", "Disk 68%", "Net 4 Mb/s"])
+    }
+
+    func testUpdatePreservesTheLiveQuery() {
+        let vm = MenuSearchViewModel(entries: [action("CPU 12%"), action("Disk 68%")])
+        vm.query = "cpu"
+        XCTAssertEqual(texts(vm.results), ["CPU 12%"])
+
+        vm.update(entries: [action("CPU 15%"), action("Disk 70%")])
+
+        XCTAssertEqual(vm.query, "cpu", "a window filtered to cpu stays filtered to cpu")
+        XCTAssertEqual(texts(vm.results), ["CPU 15%"], "re-filtered against the new output")
+    }
+
+    /// A watched row is precisely one whose text keeps changing, so the
+    /// selection is carried by position. Resetting to the top on every refresh
+    /// would snap the highlight back once a second on a 1-second plugin.
+    func testUpdateKeepsTheSelectionOnTheSamePositionEvenWhenTheTextChanges() {
+        let vm = MenuSearchViewModel(entries: [action("CPU 12%"), action("Disk 68%"), action("Net 1 Mb/s")])
+        vm.moveDown()
+        XCTAssertEqual(vm.selection, 1)
+
+        vm.update(entries: [action("CPU 99%"), action("Disk 70%"), action("Net 2 Mb/s")])
+
+        XCTAssertEqual(vm.selection, 1)
+        XCTAssertEqual(vm.selectedRow()?.item.text, "Disk 70%")
+    }
+
+    func testUpdateClampsForwardWhenThePluginEmitsFewerRows() {
+        let vm = MenuSearchViewModel(entries: [action("A"), action("B"), action("C")])
+        vm.moveDown(); vm.moveDown()
+        XCTAssertEqual(vm.selection, 2)
+
+        vm.update(entries: [action("A")])
+
+        XCTAssertEqual(vm.selection, 0, "falls back to a row that exists rather than dangling")
+        XCTAssertEqual(vm.selectedRow()?.item.text, "A")
+    }
+
+    func testUpdateWithNoActionableRowsLeavesNothingSelected() {
+        let vm = MenuSearchViewModel(entries: [action("A")])
+
+        vm.update(entries: [info("just text")])
+
+        XCTAssertEqual(vm.selection, -1)
+        XCTAssertNil(vm.selectedRow())
+    }
+
+    /// The transient panel never calls `update`; its entries are frozen at open
+    /// so rows cannot reorder under the pointer mid-search. This pins that the
+    /// frozen path is still the constructor's behavior.
+    func testEntriesAreOtherwiseFrozen() {
+        let entries = [action("Alpha"), action("Beta")]
+        let vm = MenuSearchViewModel(entries: entries)
+        vm.query = "al"
+
+        XCTAssertEqual(texts(vm.results), ["Alpha"])
+        XCTAssertEqual(texts(vm.allEntries), ["Alpha", "Beta"], "the source set is untouched by filtering")
+    }
 }

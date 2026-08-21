@@ -89,6 +89,10 @@ final class MainMenuController: NSObject, NSMenuDelegate {
         // parked slice): fuzzy-searches every enabled plugin's current menu at
         // once, not just one plugin's — see `AppController.openSearchAllPanel()`.
         menu.addItem(target.item("Search All Plugins…", #selector(searchAll), key: "f"))
+        // Every open detached window, and a way back to each. Added here rather
+        // than in either caller so the standalone item and compact mode's footer
+        // get it from the same seam, like every other row.
+        menu.addItem(DetachedWindowsMenu.shared.makeItem())
         menu.addItem(.separator())
         let loginItem = target.item("Launch Vee at Login", #selector(toggleLogin), key: "")
         menu.addItem(loginItem)
@@ -100,6 +104,7 @@ final class MainMenuController: NSObject, NSMenuDelegate {
 
     func menuNeedsUpdate(_ menu: NSMenu) {
         loginItem.state = LoginItemManager.isEnabled ? .on : .off
+        DetachedWindowsMenu.shared.refreshVisibility()
     }
 
     @objc private func openPreferences() { onPreferences() }

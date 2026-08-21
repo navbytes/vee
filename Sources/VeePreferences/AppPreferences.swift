@@ -1,4 +1,5 @@
 import Foundation
+import VeePluginFormat
 
 /// App-wide (not per-plugin) preferences, backed by `UserDefaults`. Currently
 /// tracks which plugins the user has disabled.
@@ -11,6 +12,7 @@ public final class AppPreferences: @unchecked Sendable {
     private let directoryKey = "vee.pluginsDirectory"
     private let hotkeyOffKey = "vee.hotkeyDisabledPluginIDs"
     private let hotkeyCustomKey = "vee.hotkeyCustomBindings"
+    private let hotkeyPresentationKey = "vee.hotkeyPresentations"
     private let firstRunDoneKey = "vee.hasCompletedFirstRun"
     private let compactMenuBarKey = "vee.compactMenuBar"
     private let searchAllHotkeyEnabledKey = "vee.searchAllHotkeyEnabled"
@@ -104,12 +106,29 @@ public final class AppPreferences: @unchecked Sendable {
 
     /// Every plugin id with a stored custom hotkey binding — the enumerable
     /// companion to `hotkeyBinding(_:)`, for the same reconciliation use.
+    /// Which presentation this plugin's hotkey opens. Absent means the default
+    /// (the transient panel), so a plugin that declared a hotkey before this
+    /// choice existed is unaffected.
+    public func hotkeyPresentation(_ id: String) -> HotkeyPresentation {
+        HotkeyPresentation.resolve((defaults.dictionary(forKey: hotkeyPresentationKey) as? [String: String])?[id])
+    }
+
+    public func setHotkeyPresentation(_ presentation: HotkeyPresentation, id: String) {
+        var map = (defaults.dictionary(forKey: hotkeyPresentationKey) as? [String: String]) ?? [:]
+        // Store only a departure from the default, so the map stays empty for
+        // the overwhelming majority of plugins and `clearAllState` has less to
+        // undo.
+        if presentation == .default { map.removeValue(forKey: id) } else { map[id] = presentation.rawValue }
+        defaults.set(map, forKey: hotkeyPresentationKey)
+    }
+
     public func hotkeyBindingIDs() -> Set<String> {
         Set((defaults.dictionary(forKey: hotkeyCustomKey) as? [String: String] ?? [:]).keys)
     }
 
     /// Clears every stored preference for `id` — disabled flag, hotkey-off
-    /// flag, custom hotkey binding, and the has-a-secret marker — leaving
+    /// flag, custom hotkey binding, hotkey presentation, and the has-a-secret
+    /// marker — leaving
     /// every other plugin's prefs untouched. Used when disk reconciliation
     /// confirms `id`'s file no longer exists (a manual delete, or an in-app
     /// delete); reuses the existing per-field mutators rather than touching
@@ -118,6 +137,7 @@ public final class AppPreferences: @unchecked Sendable {
         setDisabled(false, id: id)
         setHotkeyDisabled(false, id: id)
         setHotkeyBinding(nil, id: id)
+        setHotkeyPresentation(.default, id: id)
         setHasSecret(false, id: id)
     }
 

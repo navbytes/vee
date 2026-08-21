@@ -332,12 +332,60 @@ on. The user stays in control: a plugin's hotkey can be **turned off or rebound*
 from the plugin's Settings, where its live status (active / in-use / invalid) is
 shown.
 
+The plugin's Settings also chooses **what the hotkey opens** — the search panel
+(the default) or the plugin's window. Nothing is given up either way: the window
+carries the same search field. With **Window** selected, pressing the hotkey when
+the window is already open brings it back to the front, which is the quickest way
+back to a window you have unpinned and covered up.
+
 Both tags are strictly opt-in — omit them and the plugin behaves exactly as
 before. Whatever a plugin declares, Vee surfaces under its **Features** — in the
 menu's capabilities area and the plugin's Settings window, and on the install
 sheet — so a global hotkey a plugin grabs is always visible and never a
 surprise. You can also preview a plugin's search from the terminal without
 installing it: see [`vee search`](cli-and-urls.md#vee-search).
+
+### Leaving a plugin open in a window
+
+The search panel closes on the next click, which is the wrong shape when what you
+wanted was to *watch* something. **Open in Window**, in a plugin's own dropdown
+beside Refresh and Debug, opens the same surface as a window you can move to
+another display and leave open — or press the panel's **keep open** button in its
+top-right corner to promote the panel already in front of you.
+
+A window is not a snapshot. It keeps updating on the plugin's own refresh
+interval, so a one-second `sparkline=` really does move once a second — something
+a Notification Center widget cannot do, since WidgetKit floors refresh at five
+minutes. It works for **any** plugin, with no `<vee.*>` declaration required.
+
+- **One window per plugin**, as many plugins at once as you like. Opening a
+  plugin that already has a window brings that window forward instead of stacking
+  a second one.
+- **Pin or unpin** with the button in the title bar. A pinned window floats above
+  other apps, follows you across Spaces, and stays visible over a full-screen
+  app; an unpinned one behaves like an ordinary window. New windows are pinned,
+  and Vee remembers your choice per plugin until it quits.
+- **Find them again** under **Detached Windows** in Vee's own menu, which lists
+  every open window and brings one to the front. (Vee has no Dock icon, so this
+  and the plugin's hotkey are the reliable ways back to a window you have
+  unpinned and covered.)
+- **When a plugin stops reporting** — disabled, removed, or erroring — its window
+  keeps the last output on screen and says it is stale, rather than quietly
+  freezing on a number that looks current.
+
+Windows are per-session: they do not reopen after you quit Vee.
+
+Everything the dropdown renders appears in the window — nested submenus,
+separators, section headers, colors and ANSI, icons, and the full rich-row family
+(`progress=`, `sparkline=`, `pie=`/`donut=`/`stackedbar=`, `toggle=`, `slider=`).
+A `toggle=` or `slider=` is live in the row: change it and the plugin's command
+runs, exactly as it does from the popover.
+
+Two things are deliberately not reproduced, because they only mean anything
+inside an open menu. An `⌥` alternate is shown as an ordinary row of its own
+rather than something you hold a modifier to reveal — so it is visible and
+clickable, which is more than the dropdown offers. Per-row `key=` equivalents are
+not bound.
 
 ### Cross-plugin search ("Search All Plugins")
 
