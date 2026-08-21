@@ -16,6 +16,28 @@ All notable changes to Vee are documented here. The format is based on
   as `C:\\node`.
 
 ### Added
+- **Chart sizing — `chartw=` / `charth=`, and `chartw=full`.** The `pie=`,
+  `donut=`, and `stackedbar=` charts now take an explicit inline size in points
+  (clamped to 8–200), instead of always drawing at one fixed size. A pie or donut
+  is a circle, so either dimension sizes both sides; a stacked bar takes width and
+  height independently. Defaults are unchanged in spirit — a 24pt circle and a
+  110×12 bar — chosen because at text line height a pie reads as a dot rather
+  than a chart.
+
+  **`chartw=full`** stretches a chart to the width the row actually has. A menu is
+  only as wide as its widest row, so a fixed `chartw=` cannot fill a menu whose
+  width some *other* row decides; this can. The chart takes the row's content
+  width, less the row's own text when it has any.
+
+  The size is resolved in the format layer (`ChartParams.inlineSize`) rather than
+  in either renderer, for the same reason `progress=`'s bar dimensions live there:
+  the AppKit menu row and the SwiftUI window row cannot see each other's modules,
+  and a chart that measured differently on the two surfaces is exactly the drift
+  that placement avoids by construction.
+
+  Available through the structured JSON output as `"w"`/`"h"` (with `"w": "full"`),
+  and in all three SDKs — TypeScript (`w?: number | "full"`), Python, and Go
+  (`FullWidth`).
 - **Detached plugin windows — leave a plugin open on the desktop.** *Open in
   Window*, in a plugin's own dropdown beside Refresh and Debug, opens that
   plugin's whole menu surface as a resizable window you can move to another

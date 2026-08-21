@@ -31,8 +31,10 @@ final class PluginPopover: NSObject, NSPopoverDelegate {
     /// Taller than the sparkline popover because the legend grows a row per
     /// segment (bounded by `ChartParams.maxSegments`).
     func show(chart: ChartParams, title: String) {
-        let legendRows = CGFloat(chart.values.count)
-        present(size: NSSize(width: 280, height: 190 + legendRows * 17)) {
+        // Height comes from the view, not a copy of its numbers: the plot is
+        // taller for a pie/donut than for a bar, and a legend grows a row per
+        // segment (bounded by `ChartParams.maxSegments`).
+        present(size: NSSize(width: 280, height: CategoryChartView.cardHeight(for: chart, hasTitle: !title.isEmpty))) {
             NSHostingController(rootView: CategoryChartView(chart: chart, title: title))
         }
     }

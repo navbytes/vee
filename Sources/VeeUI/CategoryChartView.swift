@@ -31,7 +31,7 @@ public struct CategoryChartView: View {
             legend
         }
         .padding(14)
-        .frame(minWidth: 240, minHeight: 150)
+        .frame(minWidth: 280, minHeight: Self.minCardHeight)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: Corner.popover, style: .continuous))
         .accessibilityElement(children: .combine)
         .accessibilityLabel(title)
@@ -58,6 +58,29 @@ public struct CategoryChartView: View {
     /// encoding that keeps neighbouring hues apart. Not private: shared with
     /// `MenuRowAccessory` for the same reason as `donutInnerRatio`.
     static let segmentGap: Double = 2
+    /// Height of the plot itself, by kind — a tall square-ish canvas for the
+    /// radial shapes, a bar's worth for the stacked bar. Not private: the
+    /// popover host (`PluginPopover`) sizes its window from this, and a
+    /// hard-coded copy there is exactly how a taller chart ends up clipped.
+    public static func plotHeight(for kind: ChartKind) -> CGFloat {
+        switch kind {
+        case .pie, .donut: return 168
+        case .stackedBar: return 28
+        }
+    }
+
+    /// Everything the card adds around the plot: padding, the title row, the
+    /// stack spacings, and one legend row per segment.
+    public static func cardHeight(for chart: ChartParams, hasTitle: Bool) -> CGFloat {
+        let padding: CGFloat = 28
+        let title: CGFloat = hasTitle ? 20 + 10 : 0
+        let legend = CGFloat(chart.values.count) * 17 + 10
+        return max(minCardHeight, padding + title + plotHeight(for: chart.kind) + legend)
+    }
+
+    /// The card's own floor, applied by `body`'s `minHeight` — a short chart
+    /// (a stacked bar with two segments) still gets a card, not a sliver.
+    public static let minCardHeight: CGFloat = 200
 
     private func radial(innerRadius: Double) -> some View {
         Chart(segments) { segment in
@@ -73,7 +96,7 @@ public struct CategoryChartView: View {
         // folded "Other" slice read correctly; Chart's own legend would show
         // only what a style scale knows about.
         .chartLegend(.hidden)
-        .frame(height: 108)
+        .frame(height: Self.plotHeight(for: chart.kind))
         .overlay {
             if chart.kind == .donut {
                 VStack(spacing: 0) {
@@ -102,7 +125,7 @@ public struct CategoryChartView: View {
             .frame(height: geometry.size.height, alignment: .leading)
             .clipShape(Capsule())
         }
-        .frame(height: 22)
+        .frame(height: Self.plotHeight(for: .stackedBar))
     }
 
     // MARK: - Legend

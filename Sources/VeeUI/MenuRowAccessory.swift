@@ -160,10 +160,15 @@ private struct CompactChart: View {
             .foregroundStyle(ChartSegmentColor.color(for: chart, at: index))
         }
         .chartLegend(.hidden)
-        .frame(width: MenuRowAccessory.accessoryHeight, height: MenuRowAccessory.accessoryHeight)
+        .frame(width: chart.inlineSize.width, height: chart.inlineSize.height)
     }
 
+    @ViewBuilder
     private var stackedBar: some View {
+        if chart.isFullWidth { bar.frame(maxWidth: .infinity) } else { bar.frame(width: chart.inlineSize.width) }
+    }
+
+    private var bar: some View {
         GeometryReader { geometry in
             let gaps = CategoryChartView.segmentGap * Double(max(0, chart.values.count - 1))
             let usable = max(0, Double(geometry.size.width) - gaps)
@@ -176,7 +181,7 @@ private struct CompactChart: View {
             .frame(height: geometry.size.height, alignment: .leading)
             .clipShape(Capsule())
         }
-        .frame(width: MenuRowAccessory.sparklineWidth, height: 8)
+        .frame(height: chart.inlineSize.height)
     }
 }
 

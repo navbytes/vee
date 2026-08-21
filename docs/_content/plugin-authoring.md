@@ -122,6 +122,7 @@ A literal `|`, backslash, or newline in the display text (or in a quoted value) 
 | `slider` | `slider=min,max,value` (e.g. `slider=0,100,40`). Clicking opens a Liquid Glass popover with a slider; releasing it re-invokes the item's `shell=`/`bash=` with the chosen value. |
 | `progress`, `trackcolor`, `progressw`, `progressh` | `progress=<0..1>` or `progress=value,max` (e.g. `progress=0.72` or `progress=23.65,100`). Draws a real capsule bar **inline in the menu row**. Fill uses `color=`; `trackcolor=` is the groove, `progressw=`/`progressh=` set the bar size in points. |
 | `pie`, `donut`, `stackedbar` | A comma-separated list of non-negative numbers read as shares of a whole (e.g. `pie=45,30,25`). Draws the chart **inline in the menu row**; clicking the item opens a fuller Swift Charts popover with a labelled legend. See [Share charts](#share-charts-pie-donut-stackedbar). |
+| `chartw`, `charth` | The chart's inline size in points (defaults: a 24pt circle, a 110×12 bar; clamped to 8–200). A pie or donut is a circle, so either one sizes both sides. `chartw=full` stretches the chart to the row's own width instead. |
 | `chartlabels` | Segment names for a chart, positional against its values (e.g. `chartlabels=Docs,Photos,Apps`). Shown in the popover legend and read out by VoiceOver. |
 | `chartcolors` | Segment colors for a chart, positional against its values (e.g. `chartcolors=blue,,orange`). An entry that is blank, malformed, or names a color Vee doesn't know keeps that segment's default palette color. |
 | `accessory` | `leading` / `trailing` — which edge of the row a `progress=`/`sparkline=`/chart accessory anchors to (default `trailing`, today's rendering). See [Accessory placement](#accessory-placement-accessory). |
@@ -224,6 +225,34 @@ legend naming every segment with its percentage — the popover is where
 `chartlabels=` becomes visible, since a menu row has no space for them. A donut
 also shows the series total in its hole.
 
+**Size.** An inline chart is small by default — it shares a menu row with its
+label. `chartw=`/`charth=` make it as large as the row can carry (clamped to
+8–200 points); the row grows to fit. A pie or donut is a circle, so either knob
+sizes both sides:
+
+```
+ | pie=45,30,25 charth=56 chartlabels=Documents,Photos,Apps
+Budget | stackedbar=60,25,15 chartw=200 charth=16
+```
+
+Leaving the text before `|` empty, as in the first line, gives the chart the
+whole row — useful when a legend of ordinary rows underneath already names the
+segments.
+
+`chartw=full` stretches a chart to the width the row actually has, rather than a
+number of points:
+
+```
+ | stackedbar=60,25,15 chartw=full charth=14
+By model | stackedbar=60,25,15 chartw=full
+```
+
+A menu is as wide as its widest row, so a fixed `chartw=` can't fill a menu whose
+width some *other* row decides — `full` can. A row with text keeps it, and the
+chart takes the width that remains; a row with none gives the chart everything
+between the menu's insets. A full-width chart never widens the menu itself, and
+in a menu too narrow to stretch into it falls back to its normal size.
+
 **Colors.** Segments take Vee's built-in categorical palette by position, so
 segment 1 is always the same hue no matter how many segments a plugin emits.
 The palette is eight fixed slots, selected separately for light and dark mode and
@@ -257,7 +286,7 @@ rest.
   in `chartlabels="Macintosh HD,Backup,Scratch"`.
 
 `vee show` renders all three kinds as one segmented block bar (a terminal can't
-draw sectors); `vee show --tree` names the shape.
+draw sectors); `vee render` names the shape.
 
 > **Proposal, subject to change.** Like `sparkline=`/`toggle=`/`slider=`, the
 > chart syntax is an early proposal; the exact convention may still evolve.

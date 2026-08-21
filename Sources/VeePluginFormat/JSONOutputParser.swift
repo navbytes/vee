@@ -92,6 +92,9 @@ public enum JSONOutputParser {
                     // entry that doesn't parse stays a hole and takes the
                     // palette slot, rather than shifting later colors.
                     colors: (chart.colors ?? []).map(VeeColor.parse),
+                    width: chart.w?.points.flatMap { $0.isFinite ? $0 : nil },
+                    height: chart.h.flatMap { $0.isFinite ? $0 : nil },
+                    isFullWidth: chart.w?.isFull ?? false,
                     diagnostics: &diagnostics
                 )
             } else {
@@ -185,4 +188,30 @@ private struct JSONChart: Decodable {
     let values: [Double]?
     let labels: [String]?
     let colors: [String]?
+    /// Inline size in points, the JSON spelling of `chartw=`/`charth=`. `w`
+    /// also accepts the string `"full"`, matching `chartw=full`.
+    let w: JSONChartWidth?
+    let h: Double?
+}
+
+/// `chart.w`: a number of points, or `"full"` to stretch to the row's width.
+private enum JSONChartWidth: Decodable {
+    case points(Double)
+    case full
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        if let number = try? container.decode(Double.self) {
+            self = .points(number)
+            return
+        }
+        let text = try container.decode(String.self)
+        guard text.lowercased() == "full" else {
+            throw DecodingError.dataCorruptedError(in: container, debugDescription: "chart.w expects a number or \"full\"")
+        }
+        self = .full
+    }
+
+    var points: Double? { if case .points(let value) = self { return value } else { return nil } }
+    var isFull: Bool { if case .full = self { return true } else { return false } }
 }

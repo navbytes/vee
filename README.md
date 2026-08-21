@@ -93,6 +93,8 @@ Point Vee at your existing plugins folder (Plugin Manager → **Choose Folder**)
 - Filename refresh intervals (`ms`/`s`/`m`/`h`/`d`) and `<swiftbar.schedule>` cron
 - SF Symbols, ANSI color, inline Markdown, emoji shortcodes
 - Streaming plugins (`~~~`) with restart/backoff
+- Rich menu rows: `progress=` gauges, `sparkline=` trends, `pie=`/`donut=`/`stackedbar=` share charts, and live `toggle=`/`slider=` controls — drawn with AppKit and Swift Charts, no WebView
+- Detached plugin windows: *Open in Window* leaves a plugin's whole menu open on the desktop, live on its own refresh interval
 - Searchable filter panel (opt-in `<vee.filter>`): fuzzy-search a plugin's whole nested menu from a Spotlight-like popover, with an optional global hotkey (`<vee.shortcut>`)
 - Declared typed preferences → auto-generated forms; secrets in the Keychain
 - `<vee.*>` trust declarations → plain-language trust summary + badges
@@ -123,7 +125,7 @@ A plugin is any executable that prints the xbar/SwiftBar format to stdout — ba
 
 ## Typed SDKs (TypeScript, Python, Go)
 
-Prefer typed builders to hand-formatting text? Vee ships zero-dependency SDKs in three languages, each with `Menu`/`Section` builders and typed builders for the rich params (`sparkline`/`toggle`/`slider`/`progress`) so quoting and escaping are handled for you:
+Prefer typed builders to hand-formatting text? Vee ships zero-dependency SDKs in three languages, each with `Menu`/`Section` builders and typed builders for the rich params (`sparkline`/`toggle`/`slider`/`progress`/`chart`) so quoting and escaping are handled for you:
 
 - **[TypeScript](docs/_content/sdk.md)** ([`plugins/`](plugins/)) — Node 24+ runs the `.ts` directly, no build step.
 - **[Python](plugins/python/README.md)** ([`plugins/python/`](plugins/python/)) — standard library only.

@@ -188,7 +188,7 @@ public enum TerminalRenderer {
     ///
     /// All three shapes render the same way here: a terminal's cell grid can't
     /// draw sectors, and the *data* — each segment's share of the whole — is
-    /// what a plugin author is checking. `vee show --tree` names the shape.
+    /// what a plugin author is checking. `vee render` names the shape.
     /// Segments take their palette colors on the dark surface, the one a
     /// terminal is overwhelmingly likely to be.
     static func categoryChart(_ chart: ChartParams, options: Options) -> String {

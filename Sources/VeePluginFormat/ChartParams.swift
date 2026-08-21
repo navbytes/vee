@@ -55,20 +55,67 @@ public struct ChartParams: Equatable, Sendable {
     /// True when the parser folded a too-long series into a trailing "Other"
     /// segment, so renderers can mark that slice as an aggregate.
     public var isFolded: Bool
+    /// Declared inline size (`chartw=`/`charth=`), in points, or `nil` for the
+    /// per-kind default. Clamped at parse time; see `sizeLimit`.
+    public var width: Double?
+    public var height: Double?
+    /// `chartw=full`: the chart stretches to whatever width the row actually
+    /// has, instead of a fixed number of points. A menu is as wide as its
+    /// widest row, so a fixed width can't fill a menu whose width some *other*
+    /// row decides — this can. The chart takes the row's content width, less
+    /// the row's own text when it has any.
+    public var isFullWidth: Bool
 
     public init(
         kind: ChartKind,
         values: [Double],
         labels: [String] = [],
         colors: [VeeColor?] = [],
-        isFolded: Bool = false
+        isFolded: Bool = false,
+        width: Double? = nil,
+        height: Double? = nil,
+        isFullWidth: Bool = false
     ) {
         self.kind = kind
         self.values = values
         self.labels = labels
         self.colors = colors
         self.isFolded = isFolded
+        self.width = width
+        self.height = height
+        self.isFullWidth = isFullWidth
     }
+
+    /// The inline slot a chart occupies in a menu row, in points.
+    ///
+    /// Lives here, in the format layer, for the same reason `ProgressParams`'
+    /// bar dimensions do: both the AppKit menu row (`VeeMenu`) and the SwiftUI
+    /// window row (`VeeUI`) apply it, they cannot see each other's modules, and
+    /// a chart that measured differently on the two surfaces would be exactly
+    /// the drift this avoids by construction.
+    public var inlineSize: (width: Double, height: Double) {
+        switch kind {
+        case .pie, .donut:
+            // A circle: one declared dimension sizes both, so `charth=40` on a
+            // pie does what it looks like it does.
+            let side = height ?? width ?? Self.defaultCircleSide
+            return (side, side)
+        case .stackedBar:
+            return (width ?? Self.defaultBarWidth, height ?? Self.defaultBarHeight)
+        }
+    }
+
+    /// Default inline dimensions, in points. The circle is larger than a text
+    /// row's cap height on purpose — at line height a pie reads as a dot, not a
+    /// chart — and the bar matches `progress=`'s visual weight.
+    public static let defaultCircleSide: Double = 24
+    public static let defaultBarWidth: Double = 110
+    public static let defaultBarHeight: Double = 12
+    /// `chartw=`/`charth=` are clamped to this range. A menu row grows to fit
+    /// its accessory, so an unclamped value is a plugin that can push rows off
+    /// the screen; the ceiling is generous enough for a chart that dominates a
+    /// row and still fits a dropdown.
+    public static let sizeLimit: ClosedRange<Double> = 8...200
 
     /// The sum of every segment. Guaranteed `> 0` for a parsed chart.
     public var total: Double { values.reduce(0, +) }
@@ -132,6 +179,9 @@ public struct ChartParams: Equatable, Sendable {
         values: [Double],
         labels: [String] = [],
         colors: [VeeColor?] = [],
+        width: Double? = nil,
+        height: Double? = nil,
+        isFullWidth: Bool = false,
         diagnostics: inout [ParseDiagnostic]
     ) -> ChartParams? {
         guard !values.isEmpty else {
@@ -187,7 +237,10 @@ public struct ChartParams: Equatable, Sendable {
             values: outValues,
             labels: Array(outLabels.prefix(outValues.count)),
             colors: Array(outColors.prefix(outValues.count)),
-            isFolded: folded
+            isFolded: folded,
+            width: width.map { Swift.min(Swift.max($0, sizeLimit.lowerBound), sizeLimit.upperBound) },
+            height: height.map { Swift.min(Swift.max($0, sizeLimit.lowerBound), sizeLimit.upperBound) },
+            isFullWidth: isFullWidth
         )
     }
 

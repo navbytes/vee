@@ -62,6 +62,15 @@ type Chart struct {
 	Values []float64
 	Labels []string
 	Colors []string
+	// W and H set the inline size in points (`chartw=`/`charth=`). A pie or
+	// donut is a circle, so either one sizes both sides; a stacked bar takes
+	// them independently. Nil takes the per-kind default (24pt circle,
+	// 110x12 bar).
+	W *float64
+	H *float64
+	// FullWidth emits `chartw=full`: stretch to the row's own width rather
+	// than a fixed number of points. Takes precedence over W.
+	FullWidth bool
 }
 
 // Slider is a continuous control bounded by Min..Max at the current Value,
@@ -206,6 +215,14 @@ func encode(o *Options) string {
 			nums[i] = fmtFloat(v)
 		}
 		push(o.Chart.Kind, strings.Join(nums, ","))
+		if o.Chart.FullWidth {
+			push("chartw", "full")
+		} else if o.Chart.W != nil {
+			push("chartw", fmtFloat(*o.Chart.W))
+		}
+		if o.Chart.H != nil {
+			push("charth", fmtFloat(*o.Chart.H))
+		}
 		if o.Chart.Labels != nil {
 			push("chartlabels", strings.Join(o.Chart.Labels, ","))
 		}
