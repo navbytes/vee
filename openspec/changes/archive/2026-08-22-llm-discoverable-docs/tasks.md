@@ -32,9 +32,9 @@
 - [x] 5.3 Serve the site locally and confirm `/guide/<slug>.md`, `/llms.txt`, and `/llms-full.txt` all return their expected content
 - [x] 5.4 Confirm `llms-full.txt` contains text from every page in `PAGES[]`, including the newest one
 - [x] 5.5 Fetch `/llms.txt` and follow every link in it, confirming each resolves
-- [ ] 5.6 After deploy: verify the same three paths on `vee.navbytes.io`, served with sensible content types
+- [x] 5.6 After deploy: verify the same three paths on `vee.navbytes.io`, served with sensible content types
 
 ## 6. External (not code)
 
-- [ ] 6.1 Check Cloudflare's AI Crawl Control on the `navbytes.io` zone is not blocking the crawlers this change exists to serve
-- [ ] 6.2 Enable *Enforce HTTPS* in the repo's Pages settings — currently the old `navbytes.github.io/vee` paths 301 to `http://`, not `https://`
+- [x] 6.1 Checked and resolved. The blocking was not a per-crawler policy but a single legacy zone rule, *Block AI bots* (scope: block on all pages), which locked all 32 per-crawler toggles. Cloudflare's newer per-purpose policies (Search / Agent / Training) were already set to Allow, so the legacy rule was the only thing blocking. Set it to *Do not block (allow crawlers)*. Verified: 0 of 32 crawlers blocked, 0 toggles locked. AI Labyrinth and Bot fight mode were already off. Zone-wide, so it covers every navbytes.io property
+- [x] 6.2 Enabled *Enforce HTTPS*; DNS check now reports successful. Verified: `http://vee.navbytes.io/...` and `https://navbytes.github.io/vee/...` both 301 to `https://vee.navbytes.io/...`
