@@ -94,6 +94,18 @@ public struct ProgressParams: Equatable, Sendable {
         self.width = width
         self.height = height
     }
+
+    /// Bar dimensions when the plugin declares none. They live here, in the
+    /// format layer, because more than one renderer applies them — the AppKit
+    /// menu row (`VeeMenu`) and the SwiftUI window row (`VeeUI`), which cannot
+    /// see each other's modules — and a gauge that measured differently on the
+    /// two surfaces would be the drift this avoids by construction.
+    public static let defaultWidth: Double = 120
+    public static let defaultHeight: Double = 6
+
+    /// The declared bar width/height, or the default.
+    public var effectiveWidth: Double { width ?? Self.defaultWidth }
+    public var effectiveHeight: Double { height ?? Self.defaultHeight }
 }
 
 /// Strongly-typed representation of a menu line's `|`-delimited parameters.

@@ -167,6 +167,7 @@ public final class CompactMenuBarController: NSObject, NSMenuDelegate {
     /// plugin rows above it (zero enabled plugins), so the menu doesn't open
     /// with a dangling divider at the top.
     public func menuNeedsUpdate(_ menu: NSMenu) {
+        DetachedWindowsMenu.shared.refreshVisibility()
         footerLoginItem?.state = LoginItemManager.isEnabled ? .on : .off
         footerItems.first?.isHidden = rowItems.isEmpty
     }

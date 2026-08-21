@@ -188,7 +188,10 @@ final class PluginCoordinator {
             hotkeyEnabled: !AppPreferences.shared.isHotkeyDisabled(id),
             hotkeyCombo: AppPreferences.shared.hotkeyBinding(id) ?? header.shortcut?.display ?? "",
             hotkeyStatus: hotkeyStatus,
-            onApplyHotkey: { [weak self] enabled, combo in self?.applyHotkey(enabled: enabled, combo: combo) ?? .none },
+            hotkeyPresentation: AppPreferences.shared.hotkeyPresentation(id),
+            onApplyHotkey: { [weak self] enabled, combo, presentation in
+                self?.applyHotkey(enabled: enabled, combo: combo, presentation: presentation) ?? .none
+            },
             onSaved: { [weak self] in self?.refresh() }
         )
     }
@@ -255,7 +258,18 @@ final class PluginCoordinator {
         case .invalid:
             hotkeyStatus = .invalid
         case .use(let spec):
-            hotKeyID = GlobalHotKeys.shared.register(spec) { [weak self] in self?.controller?.openSearchPanel() }
+            // The one place the hotkey's action is decided. Everything above —
+            // `EffectiveHotkey`'s precedence, the disable/rebind preferences,
+            // the collision reporting below, the trust sheet's disclosure — is
+            // indifferent to which presentation this opens, which is why adding
+            // the window costs one branch rather than a second hotkey.
+            let presentation = AppPreferences.shared.hotkeyPresentation(id)
+            hotKeyID = GlobalHotKeys.shared.register(spec) { [weak self] in
+                switch presentation {
+                case .panel: self?.controller?.openSearchPanel()
+                case .window: self?.controller?.openDetachedWindow()
+                }
+            }
             hotkeyStatus = hotKeyID != nil ? .active(spec.display) : .unavailable(spec.display)
             if hotKeyID == nil {
                 // Most commonly a duplicate <vee.shortcut> across two
@@ -272,9 +286,11 @@ final class PluginCoordinator {
 
     /// Persists a hotkey change from Settings, re-registers live, and returns the
     /// new status for immediate feedback. `enabled=false` turns it off; a `combo`
-    /// differing from the declared binding is stored as a custom override.
-    private func applyHotkey(enabled: Bool, combo: String) -> HotkeyStatus {
+    /// differing from the declared binding is stored as a custom override;
+    /// `presentation` chooses what the hotkey opens.
+    private func applyHotkey(enabled: Bool, combo: String, presentation: HotkeyPresentation) -> HotkeyStatus {
         let id = plugin.id.rawValue
+        AppPreferences.shared.setHotkeyPresentation(presentation, id: id)
         AppPreferences.shared.setHotkeyDisabled(!enabled, id: id)
         let declared = header.shortcut?.display
         let trimmed = combo.trimmingCharacters(in: .whitespaces)
@@ -315,6 +331,10 @@ final class PluginCoordinator {
         refreshTask = nil
         refreshWidgetTask?.cancel()
         refreshWidgetTask = nil
+        // Nothing will feed this plugin's detached window any more, so stop it
+        // implying it is live. A reload swaps in a fresh coordinator whose first
+        // render clears the flag again.
+        DetachedPluginWindows.shared.markStale(pluginName: plugin.filename.name)
         controller?.remove()
     }
 

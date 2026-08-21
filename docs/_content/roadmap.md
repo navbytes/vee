@@ -145,6 +145,28 @@ an embedded cross-platform runtime (see the decision note below). Menu rendering
 today is plain native `NSMenu` (`VeeMenu/MenuBuilder.swift`); none of the items
 below exist yet in `Sources/`.
 
+- ✅ **Detached plugin windows.** A plugin's whole menu surface, opened as a
+  resizable window that can be left on the desktop and keeps updating on the
+  plugin's own cadence — the gap WidgetKit cannot close (it floors refresh at
+  five minutes, is sandboxed, and needs `<vee.surface>` opt-in). Reached from
+  *Open in Window* in the plugin's dropdown, from the search panel's *keep open*
+  button, or from the plugin's `<vee.shortcut>` when its Settings point the
+  hotkey at the window. One window per plugin, pinned (floating, across Spaces
+  and over full-screen apps) or ordinary, listed under **Detached Windows** in
+  Vee's own menu — the reliable way back, since Vee has no Dock icon and App
+  Exposé is scoped to the frontmost app. Session-scoped by design.
+  - **Implemented as a second presentation of the search panel, not a new
+    renderer** (`VeeApp/DetachedPluginWindows.swift`,
+    `VeeApp/MenuSearchContentView.swift`). The panel already rendered the whole
+    flattened tree in SwiftUI and dispatched through the real handler; the window
+    reuses that view, so it carries the panel's search field and the two cannot
+    drift. The rows gained the rich family the panel omitted
+    (`VeeUI/MenuRowAccessory.swift`: gauges, sparklines, share charts, live
+    toggles/sliders), sharing colors and metrics with the menu and popover
+    renderers. See [ARCHITECTURE.md](../../ARCHITECTURE.md) — *The menu surface
+    has two presentations*. Deliberately out of scope: persistence across
+    launches, a desktop/wallpaper-level layer (WidgetKit owns that placement),
+    and one shared window with a plugin switcher.
 - ✅ **Liquid Glass `.window`-style interactive popovers** with inline
   charts/toggles/sliders, so common rich UIs no longer need a WebView. This is
   the on-brand answer to the RN/Flutter question. Two kinds ship, both kept out

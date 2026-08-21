@@ -16,6 +16,49 @@ All notable changes to Vee are documented here. The format is based on
   as `C:\\node`.
 
 ### Added
+- **Detached plugin windows — leave a plugin open on the desktop.** *Open in
+  Window*, in a plugin's own dropdown beside Refresh and Debug, opens that
+  plugin's whole menu surface as a resizable window you can move to another
+  display and leave open; the search panel gains a *keep open* button that
+  promotes the panel already in front of you. The window is not a snapshot — it
+  updates on the plugin's own refresh interval, so a one-second `sparkline=`
+  moves once a second, which a Notification Center widget cannot do (WidgetKit
+  floors refresh at five minutes). It works for any plugin with no `<vee.*>`
+  declaration required.
+
+  One window per plugin, as many plugins at once as you like; reopening a plugin
+  focuses its existing window rather than stacking a second. Each window has a
+  pin control in its title bar: pinned (the default) floats above other apps,
+  follows you across Spaces, and stays visible over a full-screen app; unpinned
+  behaves like an ordinary window. Vee remembers the choice per plugin for the
+  session. A new **Detached Windows** submenu in Vee's own menu lists every open
+  window and brings one to the front — Vee has no Dock icon, so that submenu and
+  the plugin's hotkey are the reliable ways back to a window you have unpinned
+  and covered up. When a plugin is disabled, removed, or starts erroring, its
+  window keeps the last output on screen and says it is stale rather than
+  quietly freezing on a number that looks current. Windows are per-session and
+  do not reopen after quitting.
+
+  This is the existing search panel with a second presentation rather than a new
+  surface: the same view, the same rows, the same dispatcher, so the window
+  carries the panel's search field and neither can drift from the other on what
+  a row means. The rows themselves gain the rich family the panel omitted —
+  `progress=` gauges, `sparkline=`, `pie=`/`donut=`/`stackedbar=`, and live
+  `toggle=`/`slider=` controls that run the plugin's command from the row.
+  Colors, gauge dimensions, and chart geometry come from the same sources the
+  menu and the popovers read, so the surfaces agree by construction. Two things
+  are deliberately not reproduced, both meaningful only inside an open menu: an
+  `⌥` alternate is shown as an ordinary row (visible and clickable — more than
+  the dropdown offers without the modifier held), and per-row `key=` equivalents
+  are not bound.
+- **A plugin's global hotkey can open its window.** `<vee.shortcut>` keeps its
+  single declaration and single binding; the plugin's Settings now chooses what
+  it opens — the search panel (the default, so every plugin that already
+  declares one is unaffected) or the window. Nothing is given up either way,
+  since the window carries the search field too. With *Window* selected,
+  pressing the hotkey when the window is already open brings it back to the
+  front. Rebinding, turning it off, the in-use/invalid status, and the trust
+  sheet's disclosure all work exactly as before.
 - **Share charts — `pie=`, `donut=`, and `stackedbar=`.** A new family of
   Vee-native line params for showing how a total divides up, alongside
   `sparkline=`'s value-over-time. All three take the same data — one series of

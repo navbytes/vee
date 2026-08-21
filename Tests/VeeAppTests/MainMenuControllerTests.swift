@@ -72,7 +72,7 @@ final class MainMenuControllerTests: XCTestCase {
     func testOwnMenuContainsTheExpectedRowsInOrder() {
         XCTAssertEqual(
             makeController().menu.items.map(\.title),
-            ["Preferences…", "Plugin Manager…", "Discover Plugins…", "Refresh All Plugins", "Search All Plugins…", "", "Launch Vee at Login", "Open Plugins Folder…", "", "Quit Vee"]
+            ["Preferences…", "Plugin Manager…", "Discover Plugins…", "Refresh All Plugins", "Search All Plugins…", "Detached Windows", "", "Launch Vee at Login", "Open Plugins Folder…", "", "Quit Vee"]
         )
     }
 

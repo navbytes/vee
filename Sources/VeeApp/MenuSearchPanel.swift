@@ -38,14 +38,25 @@ final class MenuSearchPanel: NSObject {
     /// ⌘V) land in the app the user invoked the panel from, not in Vee itself.
     private var frontmostRestorer = FrontmostAppRestorer()
 
-    private static let size = NSSize(width: 440, height: 380)
+    /// The transient panel's fixed content size. Not private: its own SwiftUI
+    /// wrapper below applies it, so the number stays declared once.
+    static let contentSize = NSSize(width: 440, height: 380)
 
     /// Opens the panel for `entries`, anchored near the mouse (i.e. under the
     /// just-clicked status item), routing activations through `activate`.
     /// `entries` carries the full panel-visible structure (rows, section
     /// headers, separators); only `.action` rows are ever selectable/
     /// activatable, so `activate` still deals only in `FlatRow`.
-    func present(entries: [SearchEntry], pluginName: String, activate: @escaping (FlatRow) -> Void) {
+    /// `keepOpen`, when supplied, adds the control that promotes this panel into
+    /// a detached window. Passing `nil` suppresses it — which is what the
+    /// cross-plugin "Search All Plugins" panel does, since there is no single
+    /// plugin for such a window to watch.
+    func present(
+        entries: [SearchEntry],
+        pluginName: String,
+        keepOpen: (() -> Void)? = nil,
+        activate: @escaping (FlatRow) -> Void
+    ) {
         dismiss()
         self.onActivateRow = activate
         // Capture BEFORE self-activating below — after that call, Vee itself
@@ -59,11 +70,18 @@ final class MenuSearchPanel: NSObject {
             model: model,
             pluginName: pluginName,
             onActivate: { [weak self] row in self?.activate(row) },
-            onClose: { [weak self] in self?.dismiss() }
+            onKeepOpen: keepOpen.map { promote in
+                { [weak self] in
+                    // Close first: leaving the panel up behind its own window
+                    // would show the same plugin twice.
+                    self?.dismiss()
+                    promote()
+                }
+            }
         )
 
         let panel = KeyablePanel(
-            contentRect: NSRect(origin: .zero, size: Self.size),
+            contentRect: NSRect(origin: .zero, size: Self.contentSize),
             styleMask: [.borderless, .fullSizeContentView],
             backing: .buffered,
             defer: false
@@ -143,7 +161,7 @@ final class MenuSearchPanel: NSObject {
         let mouse = NSEvent.mouseLocation
         let screen = NSScreen.screens.first { $0.frame.contains(mouse) } ?? NSScreen.main
         let visible = screen?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
-        let size = Self.size
+        let size = Self.contentSize
         var x = mouse.x - size.width / 2
         var y = mouse.y - size.height - 6
         x = min(max(visible.minX + 8, x), visible.maxX - size.width - 8)
@@ -152,175 +170,48 @@ final class MenuSearchPanel: NSObject {
     }
 }
 
-// MARK: - SwiftUI
+// MARK: - The transient panel's presentation
 
-/// The panel's content: a focused search field over a scrollable, keyboard-
-/// navigable result list with breadcrumbs. Business logic lives in the view
-/// model; this view is presentation only.
+/// Wraps the shared content in the panel's own chrome: a fixed-size Liquid Glass
+/// card. The window presentation applies none of this, which is the whole reason
+/// the chrome lives here rather than in `MenuSearchContentView`.
 private struct MenuSearchView: View {
     @ObservedObject var model: MenuSearchViewModel
     let pluginName: String
     let onActivate: (FlatRow) -> Void
-    let onClose: () -> Void
-
-    @FocusState private var searchFocused: Bool
+    let onKeepOpen: (() -> Void)?
 
     var body: some View {
-        VStack(spacing: 0) {
-            HStack(spacing: 8) {
-                Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
-                TextField("Search \(pluginName)…", text: $model.query)
-                    .textFieldStyle(.plain)
-                    .font(.system(size: 15))
-                    .focused($searchFocused)
-                    .onSubmit { if let row = model.selectedRow() { onActivate(row) } }
+        MenuSearchContentView(model: model, pluginName: pluginName, onActivate: onActivate)
+            .frame(width: MenuSearchPanel.contentSize.width, height: MenuSearchPanel.contentSize.height)
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .strokeBorder(.white.opacity(0.08), lineWidth: 1)
+            )
+            // Overlaid on the chrome rather than placed in the content, so the
+            // shared content view stays unaware there is anything to promote to
+            // — and so the button is its own VoiceOver element rather than
+            // being folded into the search field's row.
+            .overlay(alignment: .topTrailing) {
+                if let onKeepOpen { KeepOpenButton(action: onKeepOpen) }
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 11)
-
-            Divider()
-
-            if model.results.isEmpty {
-                Spacer()
-                Text("No matches").foregroundStyle(.secondary)
-                Spacer()
-            } else {
-                resultList
-            }
-        }
-        .frame(width: 440, height: 380)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .strokeBorder(.white.opacity(0.08), lineWidth: 1)
-        )
-        .onAppear { searchFocused = true }
-    }
-
-    private var resultList: some View {
-        ScrollViewReader { proxy in
-            ScrollView {
-                LazyVStack(spacing: 0) {
-                    ForEach(Array(model.results.enumerated()), id: \.offset) { index, entry in
-                        row(for: entry, index: index)
-                            .id(index)
-                    }
-                }
-                .padding(6)
-            }
-            .onChange(of: model.selection) { _, selection in
-                // `-1` (no `.action` entry in the results) has nothing to scroll to.
-                guard model.results.indices.contains(selection) else { return }
-                withAnimation(.easeOut(duration: 0.1)) { proxy.scrollTo(selection, anchor: .center) }
-            }
-        }
-    }
-
-    /// Renders one entry by kind. Only `.action` is interactive — `.info` uses
-    /// the same row view dimmed and inert, `.header`/`.separator` are plain
-    /// structural furniture.
-    @ViewBuilder
-    private func row(for entry: SearchEntry, index: Int) -> some View {
-        switch entry {
-        case .action(let flatRow):
-            SearchRowView(row: flatRow, selected: index == model.selection)
-                .contentShape(Rectangle())
-                .onTapGesture { onActivate(flatRow) }
-        case .info(let flatRow):
-            SearchRowView(row: flatRow, selected: false, enabled: false)
-        case .header(let title):
-            Text(title)
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(.secondary)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 10)
-                .padding(.top, 10)
-                .padding(.bottom, 2)
-        case .separator:
-            Divider()
-                .padding(.horizontal, 10)
-                .padding(.vertical, 4)
-        }
     }
 }
 
-/// Which base64-decoded image (if any) a search row should show, given the
-/// item declares no `sfimage=` — that path renders via SwiftUI's
-/// `Image(systemName:)` directly instead (crisper SF Symbol scaling at the
-/// row's font size), so this only ever resolves the `image=`/
-/// `templateImage=` fallback. Decodes through `SymbolImageFactory` — the
-/// same cached path `MenuBuilder`'s native rows use — so a plugin's custom
-/// icon shows here too instead of the generic placeholder. `nil` means no
-/// declared icon at all; the caller falls back to a placeholder.
-enum SearchRowIcon {
-    static func decodedImage(for params: LineParams) -> NSImage? {
-        guard params.swiftbar.sfimage == nil else { return nil }
-        return SymbolImageFactory.image(for: params)
-    }
-}
-
-/// One result row: SF Symbol / base64 image (when the item declares one), the
-/// item text, and a dim breadcrumb of its ancestor groups. `enabled: false`
-/// renders an `.info` entry (a disabled item or a plain sub-text line) — same
-/// layout/metrics so the list stays visually aligned, but dimmed, never
-/// highlighted, and inert; the caller (not this view) is what leaves off the
-/// tap gesture.
-private struct SearchRowView: View {
-    let row: FlatRow
-    let selected: Bool
-    var enabled: Bool = true
+/// Promotes the transient panel into a window that can be left on the desktop.
+private struct KeepOpenButton: View {
+    let action: () -> Void
 
     var body: some View {
-        HStack(spacing: 9) {
-            // `.action` always shows an icon (a placeholder when the item
-            // declares none); a dimmed `.info` row only shows one when the
-            // item actually declares `sfimage=`/`image=`/`templateImage=` —
-            // but keeps the 18pt frame either way, so text stays aligned
-            // across rows.
-            Group {
-                if let sfimage = row.item.params.swiftbar.sfimage {
-                    Image(systemName: sfimage)
-                } else if let nsImage = SearchRowIcon.decodedImage(for: row.item.params) {
-                    // A `templateImage=` tints with row selection like an SF
-                    // Symbol; a plain `image=` keeps its own colors.
-                    Image(nsImage: nsImage)
-                        .resizable()
-                        .renderingMode(nsImage.isTemplate ? .template : .original)
-                        .aspectRatio(contentMode: .fit)
-                } else if enabled {
-                    Image(systemName: "circle.dashed")
-                }
-            }
-            .font(.system(size: 13))
-            .foregroundStyle(selected ? AnyShapeStyle(.white) : AnyShapeStyle(.secondary))
-            .frame(width: 18, height: 18)
-            VStack(alignment: .leading, spacing: 1) {
-                Text(row.item.text)
-                    .font(.system(size: 13))
-                    .lineLimit(1)
-                    .foregroundStyle(enabled ? (selected ? AnyShapeStyle(.white) : AnyShapeStyle(.primary)) : AnyShapeStyle(.secondary))
-                if !row.breadcrumb.isEmpty {
-                    Text(row.breadcrumb)
-                        .font(.system(size: 11))
-                        .foregroundStyle(selected ? AnyShapeStyle(.white.opacity(0.7)) : AnyShapeStyle(.tertiary))
-                        .lineLimit(1)
-                }
-            }
-            Spacer(minLength: 0)
-            // Surface the plugin's own "currently selected" marker (`checked=true`)
-            // so an active choice (e.g. the current context) is visible in the panel.
-            if row.item.params.swiftbar.checked == true {
-                Image(systemName: "checkmark")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(selected ? AnyShapeStyle(.white) : AnyShapeStyle(Color.accentColor))
-            }
+        Button(action: action) {
+            Image(systemName: "macwindow.on.rectangle")
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
-        .foregroundStyle(selected ? AnyShapeStyle(.white) : AnyShapeStyle(.primary))
-        .background(
-            RoundedRectangle(cornerRadius: 7, style: .continuous)
-                .fill(enabled && selected ? AnyShapeStyle(Color.accentColor) : AnyShapeStyle(Color.clear))
-        )
+        .buttonStyle(.plain)
+        .font(.callout)
+        .foregroundStyle(.secondary)
+        .padding(10)
+        .help("Keep open in a window")
+        .accessibilityLabel("Keep open in a window")
     }
 }

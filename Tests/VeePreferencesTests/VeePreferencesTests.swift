@@ -320,4 +320,38 @@ final class PluginPreferencesTests: XCTestCase {
         try prefs.setValue("42", for: decls()[1])
         XCTAssertTrue(AppPreferences.shared.secretPluginIDs().contains(id), "still marked — unrelated var write must not unmark it")
     }
+
+    // MARK: - Hotkey presentation
+
+    func testHotkeyPresentationDefaultsToThePanel() {
+        let prefs = AppPreferences(defaults: UserDefaults(suiteName: "vee-test-" + UUID().uuidString)!)
+        XCTAssertEqual(prefs.hotkeyPresentation("sysmon"), .panel)
+    }
+
+    func testHotkeyPresentationRoundTripsPerPlugin() {
+        let prefs = AppPreferences(defaults: UserDefaults(suiteName: "vee-test-" + UUID().uuidString)!)
+
+        prefs.setHotkeyPresentation(.window, id: "sysmon")
+
+        XCTAssertEqual(prefs.hotkeyPresentation("sysmon"), .window)
+        XCTAssertEqual(prefs.hotkeyPresentation("caffeinate"), .panel, "one plugin's choice never leaks to another")
+    }
+
+    func testSettingBackToTheDefaultClearsTheStoredEntry() {
+        let prefs = AppPreferences(defaults: UserDefaults(suiteName: "vee-test-" + UUID().uuidString)!)
+        prefs.setHotkeyPresentation(.window, id: "sysmon")
+
+        prefs.setHotkeyPresentation(.panel, id: "sysmon")
+
+        XCTAssertEqual(prefs.hotkeyPresentation("sysmon"), .panel)
+    }
+
+    func testClearAllStateResetsThePresentation() {
+        let prefs = AppPreferences(defaults: UserDefaults(suiteName: "vee-test-" + UUID().uuidString)!)
+        prefs.setHotkeyPresentation(.window, id: "sysmon")
+
+        prefs.clearAllState(id: "sysmon")
+
+        XCTAssertEqual(prefs.hotkeyPresentation("sysmon"), .panel)
+    }
 }

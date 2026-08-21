@@ -15,10 +15,13 @@ public final class PluginSettingsModel: ObservableObject {
     @Published public var hotkeyEnabled: Bool
     @Published public var hotkeyCombo: String
     @Published public var hotkeyStatus: HotkeyStatus
+    /// What the hotkey opens: the transient panel (the default, and what every
+    /// plugin did before this choice existed) or the detached window.
+    @Published public var hotkeyPresentation: HotkeyPresentation
 
     private let prefs: PluginPreferences
     private let onSaved: () -> Void
-    private let onApplyHotkey: (Bool, String) -> HotkeyStatus
+    private let onApplyHotkey: (Bool, String, HotkeyPresentation) -> HotkeyStatus
 
     public init(
         pluginName: String,
@@ -28,7 +31,8 @@ public final class PluginSettingsModel: ObservableObject {
         hotkeyEnabled: Bool = true,
         hotkeyCombo: String = "",
         hotkeyStatus: HotkeyStatus = .none,
-        onApplyHotkey: @escaping (Bool, String) -> HotkeyStatus = { _, _ in .none },
+        hotkeyPresentation: HotkeyPresentation = .default,
+        onApplyHotkey: @escaping (Bool, String, HotkeyPresentation) -> HotkeyStatus = { _, _, _ in .none },
         onSaved: @escaping () -> Void
     ) {
         self.pluginName = pluginName
@@ -39,6 +43,7 @@ public final class PluginSettingsModel: ObservableObject {
         self.hotkeyEnabled = hotkeyEnabled
         self.hotkeyCombo = hotkeyCombo
         self.hotkeyStatus = hotkeyStatus
+        self.hotkeyPresentation = hotkeyPresentation
         self.onApplyHotkey = onApplyHotkey
         self.onSaved = onSaved
         var initial: [String: String] = [:]
@@ -81,7 +86,7 @@ public final class PluginSettingsModel: ObservableObject {
     /// live system resource, so it commits on change rather than on Save) and
     /// reflects the resulting status.
     func applyHotkey() {
-        hotkeyStatus = onApplyHotkey(hotkeyEnabled, hotkeyCombo)
+        hotkeyStatus = onApplyHotkey(hotkeyEnabled, hotkeyCombo, hotkeyPresentation)
     }
 }
 
@@ -177,7 +182,7 @@ public struct PluginSettingsFormContent: View {
             Label {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("Global hotkey")
-                    Text("Opens the search panel from anywhere.").font(.caption).foregroundStyle(.secondary)
+                    Text("Opens this plugin's menu from anywhere.").font(.caption).foregroundStyle(.secondary)
                 }
             } icon: {
                 Image(systemName: "keyboard")
@@ -188,6 +193,17 @@ public struct PluginSettingsFormContent: View {
         if model.hotkeyEnabled {
             TextField("Shortcut", text: $model.hotkeyCombo, prompt: Text("e.g. cmd+shift+k"))
                 .onSubmit { model.applyHotkey() }
+            Picker("Opens", selection: $model.hotkeyPresentation) {
+                Text("Search panel").tag(HotkeyPresentation.panel)
+                Text("Window").tag(HotkeyPresentation.window)
+            }
+            // A hotkey is a live system resource, so this commits on change like
+            // the enable toggle rather than waiting for Save.
+            .onChange(of: model.hotkeyPresentation) { _, _ in model.applyHotkey() }
+            Text(model.hotkeyPresentation == .panel
+                 ? "A panel that closes when you click away."
+                 : "A window you can leave open on the desktop. Press again to bring it back to the front.")
+                .font(.caption).foregroundStyle(.secondary)
             hotkeyStatusLabel
         }
     }

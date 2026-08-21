@@ -67,8 +67,8 @@ public enum MenuBuilder {
                 fillColor: item.params.color.flatMap(ColorResolver.nsColor(for:)) ?? .controlAccentColor,
                 trackColor: progress.trackColor.flatMap(ColorResolver.nsColor(for:))
                     ?? NSColor.tertiaryLabelColor.withAlphaComponent(0.25),
-                barWidth: progress.width.map { CGFloat($0) } ?? 120,
-                barHeight: progress.height.map { CGFloat($0) } ?? 6,
+                barWidth: CGFloat(progress.effectiveWidth),
+                barHeight: CGFloat(progress.effectiveHeight),
                 leading: accessoryLeading
             )
             view.toolTip = item.params.swiftbar.tooltip

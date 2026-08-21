@@ -47,27 +47,36 @@ final class AppActionDispatcher: MenuActionHandling {
         }
     }
 
-    /// Opens the interactive control popover for `item`. When the user commits
-    /// a value, re-invokes the item's `shell=`/`bash=` command carrying that
-    /// value (`VEE_CONTROL_VALUE` + trailing arg), then refreshes if requested.
-    /// A control with no `shell` still shows — it just has nothing to re-invoke.
+    /// Opens the interactive control popover for `item`. Committing a value
+    /// re-invokes through `commitControl`, the same path a detached window's
+    /// inline control uses.
     private func presentControl(_ control: PluginControl, item: MenuItem) {
-        let shell = item.params.shell
-        let refreshAfter = item.params.refresh == true
         PluginPopover.shared.show(control: control, title: item.text) { [weak self] value in
-            guard let self, let shell else { return }
-            let invocation = ControlReinvocation.invocation(
-                shell: shell,
-                value: value,
-                baseEnvironment: self.baseEnvironment
-            )
-            let runner = self.runner
-            let onRefresh = self.onRefresh
-            Task {
-                _ = try? await runner.run(invocation)
-                if refreshAfter {
-                    await MainActor.run { onRefresh() }
-                }
+            self?.commitControl(item, value: value)
+        }
+    }
+
+    /// Re-invokes `item`'s `shell=`/`bash=` command carrying the settled value
+    /// (`VEE_CONTROL_VALUE` + trailing arg), then refreshes if requested. A
+    /// control with no `shell` simply has nothing to re-invoke.
+    ///
+    /// Takes the item rather than a captured command so a detached window —
+    /// which may have been open across many refreshes — runs whatever the row
+    /// declares now, not what it declared when the window opened.
+    func commitControl(_ item: MenuItem, value: Double) {
+        guard let shell = item.params.shell else { return }
+        let refreshAfter = item.params.refresh == true
+        let invocation = ControlReinvocation.invocation(
+            shell: shell,
+            value: value,
+            baseEnvironment: baseEnvironment
+        )
+        let runner = self.runner
+        let onRefresh = self.onRefresh
+        Task {
+            _ = try? await runner.run(invocation)
+            if refreshAfter {
+                await MainActor.run { onRefresh() }
             }
         }
     }

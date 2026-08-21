@@ -6,6 +6,21 @@ import VeePluginFormat
 @MainActor
 public protocol MenuActionHandling: AnyObject {
     func perform(_ item: MenuItem)
+
+    /// Re-invokes a `toggle=`/`slider=` row's command with a settled value,
+    /// without going through the control's popover.
+    ///
+    /// `perform` opens the popover for a control row, which is right for a click
+    /// in the menu bar but wrong for a detached window that draws the control
+    /// inline and already has the value. Both paths end in the same
+    /// re-invocation, so this is the shared half rather than a second one.
+    func commitControl(_ item: MenuItem, value: Double)
+}
+
+public extension MenuActionHandling {
+    /// Default no-op so a handler that renders no controls (tests, the CLI)
+    /// need not implement it.
+    func commitControl(_ item: MenuItem, value: Double) {}
 }
 
 /// Reference wrapper so a value-type `MenuItem` can live in `representedObject`.
