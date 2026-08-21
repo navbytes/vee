@@ -1,0 +1,359 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Widgets — Vee docs</title>
+  <meta name="description" content="Render Vee plugins as native desktop and Notification Center widgets: the surface contract, the widget card schema, the five templates, and the composable layout tree.">
+  <link rel="canonical" href="https://vee.navbytes.io/guide/widgets.html">
+  <link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
+  <link rel="stylesheet" href="../assets/style.css">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Vee">
+  <meta property="og:title" content="Widgets — Vee docs">
+  <meta property="og:description" content="Render Vee plugins as native desktop and Notification Center widgets: the surface contract, the widget card schema, the five templates, and the composable layout tree.">
+  <meta property="og:url" content="https://vee.navbytes.io/guide/widgets.html">
+  <meta property="og:image" content="https://vee.navbytes.io/assets/og-image.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Widgets — Vee docs">
+  <meta name="twitter:description" content="Render Vee plugins as native desktop and Notification Center widgets: the surface contract, the widget card schema, the five templates, and the composable layout tree.">
+  <meta name="twitter:image" content="https://vee.navbytes.io/assets/og-image.png">
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="../index.html" aria-label="Vee home">
+      <img class="mark" src="../assets/favicon.svg" alt="" width="28" height="28">
+      <span><b>Vee</b></span>
+    </a>
+    <button class="nav-toggle" aria-label="Toggle navigation" aria-expanded="false" aria-controls="nav-links">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+    </button>
+    <ul class="nav-links" id="nav-links">
+      <li><a href="../index.html#features">Features</a></li>
+      <li><a href="../index.html#trust">Trust</a></li>
+      <li><a href="../compare/index.html">Compare</a></li>
+      <li><a href="./index.html" aria-current="page">Docs</a></li>
+      <li><a class="nav-cta" href="https://github.com/navbytes/vee" rel="noopener">GitHub</a></li>
+    </ul>
+  </div>
+</header>
+<div class="docs-layout">
+  <aside class="docs-side" aria-label="Documentation navigation">
+    <div id="docs-search" class="docs-search" data-pagefind-ignore></div>
+    <p class="docs-nav-title">Documentation</p>
+<ul class="docs-nav">
+<li><a href="./index.html">Overview</a></li>
+<li><a href="./getting-started.html">Getting started</a></li>
+<li><a href="./migrating-from-swiftbar.html">Migrating from SwiftBar / xbar</a></li>
+<li><a href="./plugin-authoring.html">Plugin authoring</a></li>
+<li><a href="./widgets.html" aria-current="page">Widgets</a></li>
+<li><a href="./trust-model.html">Trust model</a></li>
+<li><a href="./preferences.html">Preferences</a></li>
+<li><a href="./sdk.html">Plugin SDKs</a></li>
+<li><a href="./json-output.html">JSON output</a></li>
+<li><a href="./cli-and-urls.html">CLI &amp; URL actions</a></li>
+<li><a href="./debugging.html">Debugging &amp; testing</a></li>
+<li><a href="./enterprise-store.html">Custom plugin stores</a></li>
+<li><a href="./faq.html">FAQ</a></li>
+<li><a href="./troubleshooting.html">Troubleshooting</a></li>
+</ul>
+<nav class="docs-toc" aria-labelledby="toc-title"><p class="docs-nav-title" id="toc-title">On this page</p><ul><li><a href="#vee_target"><code>VEE_TARGET</code></a></li><li><a href="#the-card">The card</a></li><li><a href="#templates">Templates</a></li><li><a href="#the-layout-tree">The layout tree</a></li><li><a href="#actions">Actions</a></li><li><a href="#building-the-card-with-the-sdk">Building the card with the SDK</a></li><li><a href="#editor-validation-json-schema">Editor validation (JSON Schema)</a></li><li><a href="#see-also">See also</a></li></ul></nav>
+  </aside>
+  <main class="docs-main" id="main">
+    <article class="docs-content" data-pagefind-body>
+      <p class="doc-hero-note">Vee documentation</p>
+<h1>Widgets</h1>
+<p>Vee plugins can render on your desktop and in Notification Center as native
+WidgetKit tiles, not just in the menu bar. Every plugin already has a widget
+representation for free; a plugin that opts in can print a <strong>widget card</strong> — a
+JSON payload describing real data — and Vee draws it with native SwiftUI.</p>
+<p>This page covers the widget surface contract, the card schema, the five
+templates, and the composable layout tree for cards that the templates do not
+fit. For the menu-bar output format, see the <a href="plugin-authoring.html">Plugin authoring
+reference</a>.</p>
+<p>By default your plugin's widget tile is a <strong>scrape</strong> of its menu-bar line —
+whatever <code>color=</code>/<code>sfimage=</code> is on the title, plus a <code>progress=</code>/<code>sparkline=</code>
+if the first row has one. That's automatic; every plugin already has a widget
+representation with no changes.</p>
+<p>For a <strong>rich</strong> tile — real data laid out per widget size, not a caricature of
+the menu bar — opt a plugin into the widget surface contract:</p>
+<div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">text</span></div><pre><code># &lt;vee.surface&gt;both&lt;/vee.surface&gt;</code></pre></div>
+<ul>
+<li><code>&lt;vee.surface&gt;menu&lt;/vee.surface&gt;</code> (or omit the tag) — unchanged: a normal
+menu-bar plugin, scraped for its widget tile.</li>
+<li><code>&lt;vee.surface&gt;both&lt;/vee.surface&gt;</code> — served in the menu as usual, <strong>and</strong>
+invoked a second time in widget mode to produce a rich widget card.</li>
+<li><code>&lt;vee.surface&gt;widget&lt;/vee.surface&gt;</code> — <strong>widget-only</strong>: no status item, no
+menu bar presence at all. The plugin exists only to feed a widget.</li>
+</ul>
+<p>The widget-mode cadence needs no separate tag — it reuses the plugin's
+<strong>filename interval</strong> (the same field the menu bar uses), with only a small
+safety floor: <code>max(filename interval, 10s)</code>. Because Vee is an always-running
+app, it pushes widget reloads the moment new data arrives (rather than waiting
+on WidgetKit's passive budget, which only applies when an app isn't running), so
+a <code>cpu.5s.sh</code> widget can track near-real-time data straight from the menu-bar
+plugin's own cadence. A widget-only plugin whose filename carries no interval
+falls back to the 10-second floor.</p>
+<h2 id="vee_target"><code>VEE_TARGET</code></h2>
+<p>Every run gets a <code>VEE_TARGET</code> environment variable:</p>
+<ul>
+<li><code>VEE_TARGET=menu</code> — a normal run; print the usual xbar/SwiftBar text (or
+<a href="json-output.html">JSON</a>).</li>
+<li><code>VEE_TARGET=widget</code> — a widget-mode run; print <strong>one JSON object</strong> (the
+"card", schema below) to stdout and nothing else.</li>
+</ul>
+<p>Branch on it like Scriptable's <code>config.runsInWidget</code>. If your plugin ignores
+<code>VEE_TARGET=widget</code> and prints menu text anyway, Vee falls back to scraping
+that text — graceful degradation, never a crash.</p>
+<h2 id="the-card">The card</h2>
+<div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">json</span></div><pre><code>{
+  "vee_widget": 1,
+  "template": "stat",
+  "title": "Revenue",
+  "symbol": "chart.line.uptrend.xyaxis",
+  "tint": "green",
+  "value": "$18.2k",
+  "caption": "today",
+  "detail": "214 orders",
+  "status": "ok",
+
+  "progress": 0.72,
+  "trend": [12.1, 13.4, 12.9, 15.0, 18.2],
+
+  "items": [
+    { "label": "Orders",  "value": "214", "symbol": "bag",           "tint": "blue" },
+    { "label": "Refunds", "value": "3",   "symbol": "arrow.uturn.left", "tint": "red" }
+  ],
+
+  "actions": [
+    { "label": "Refresh", "kind": "refresh" },
+    { "label": "Open",    "kind": "href",     "url": "https://dash.example.com" }
+  ],
+
+  "refresh_after": 900,
+  "stale_after": 3600
+}</code></pre></div>
+<div class="table-scroll"><table><thead><tr><th>Field</th><th>Type</th><th>Meaning</th></tr></thead><tbody><tr><td><code>vee_widget</code></td><td>int</td><td>Payload schema version (currently <code>1</code>).</td></tr><tr><td><code>template</code></td><td>enum</td><td><code>stat</code> | <code>gauge</code> | <code>trend</code> | <code>list</code> | <code>board</code>. Unknown → <code>stat</code> + a Debug diagnostic.</td></tr><tr><td><code>title</code></td><td>string?</td><td>Tile heading (the plugin/metric name).</td></tr><tr><td><code>symbol</code></td><td>string?</td><td>SF Symbol name for the glyph.</td></tr><tr><td><code>tint</code></td><td>color?</td><td>Named (<code>green</code>) or <code>#rrggbbaa</code>.</td></tr><tr><td><code>value</code></td><td>string?</td><td>The headline value, already formatted by the plugin.</td></tr><tr><td><code>caption</code></td><td>string?</td><td>Small secondary line (e.g. "today").</td></tr><tr><td><code>detail</code></td><td>string?</td><td>One more line of context.</td></tr><tr><td><code>status</code></td><td>enum?</td><td><code>ok</code> | <code>warning</code> | <code>error</code> — drives styling and the health roll-up.</td></tr><tr><td><code>progress</code></td><td>double?</td><td><code>0…1</code>, clamped; the <code>gauge</code> template's fill.</td></tr><tr><td><code>trend</code></td><td>[double]?</td><td>The <code>trend</code> template's series.</td></tr><tr><td><code>items</code></td><td>[Item]?</td><td>Rows for <code>list</code>/<code>board</code>: <code>{label, value?, symbol?, tint?}</code>.</td></tr><tr><td><code>actions</code></td><td>[Action]?</td><td>Up to two rendered as buttons — see below.</td></tr><tr><td><code>refresh_after</code></td><td>int?</td><td>Seconds; a hint for the next widget reload.</td></tr><tr><td><code>stale_after</code></td><td>int?</td><td>Seconds; when the tile should show a stale treatment (else the interval-derived default).</td></tr><tr><td><code>layout</code></td><td>node?</td><td>A composable <a href="#the-layout-tree">layout tree</a>. When present, it replaces <code>template</code> entirely.</td></tr></tbody></table></div>
+<p>Unknown top-level keys are ignored (forward-compatible); an invalid value
+(bad <code>progress</code>, a non-finite <code>trend</code> entry, an unsafe <code>href</code> URL) degrades to
+<code>nil</code>/dropped with a diagnostic, visible in the plugin's Debug console —
+never a crash.</p>
+<h2 id="templates">Templates</h2>
+<p>Five native SwiftUI templates, each adapting across the small/medium/large
+widget families — describe your data, Vee draws it:</p>
+<ul>
+<li><strong>stat</strong> — glyph, big <code>value</code> in <code>tint</code>, <code>title</code>/<code>caption</code>. The default.</li>
+<li><strong>gauge</strong> — stat + a native gauge from <code>progress</code>.</li>
+<li><strong>trend</strong> — stat + a sparkline from <code>trend</code>.</li>
+<li><strong>list</strong> — <code>title</code> header + <code>items</code> as rows, truncated per family (small
+shows the headline <code>value</code>; medium ≤3 rows; large ≤8).</li>
+<li><strong>board</strong> — a compact grid of <code>items</code> as stat cells (a KPI board); small
+collapses to the headline.</li>
+</ul>
+<p>If none of the five fits your data, skip <code>template</code> and send a
+<a href="#the-layout-tree">layout tree</a> instead.</p>
+<h2 id="the-layout-tree">The layout tree</h2>
+<p>The five templates cover most tiles. When your data does not fit one — two
+columns, a header rail, a KPI grid, a ring over a label — a card can carry a
+<strong>layout tree</strong> instead: a small vocabulary of containers and leaves that Vee
+walks into native SwiftUI.</p>
+<p>A card is <strong>either a template or a tree</strong>. Set <code>layout</code> and the <code>template</code> field
+is not consulted at all.</p>
+<div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">json</span></div><pre><code>{
+  "vee_widget": 1,
+  "layout": {
+    "type": "vstack",
+    "align": "leading",
+    "spacing": 6,
+    "children": [
+      {
+        "type": "hstack",
+        "spacing": 5,
+        "children": [
+          { "type": "image", "symbol": "cpu", "style": { "tint": "blue" } },
+          { "type": "text", "text": "CPU",
+            "style": { "font": { "size": "caption", "weight": "semibold" }, "tint": "secondary" } },
+          { "type": "spacer" }
+        ]
+      },
+      { "type": "text", "text": "38%",
+        "style": { "font": { "size": "title", "design": "rounded" }, "tint": "green",
+                   "monospaced_digit": true, "min_scale": 0.6 } },
+      { "type": "gauge", "value": 0.38, "gauge_style": "circular", "style": { "tint": "green" } }
+    ]
+  }
+}</code></pre></div>
+<p>The tree is deliberately <strong>bounded, not freeform</strong>: there is no absolute
+positioning, no point frames, and no scroll views. Every node maps 1:1 to a
+SwiftUI primitive, which is what keeps the renderer small and keeps this from
+turning into the WebView canvas Vee exists to avoid.</p>
+<h3 id="node-types">Node types</h3>
+<p>Every node has a <code>type</code>. Containers hold <code>children</code>; leaves do not.</p>
+<div class="table-scroll"><table><thead><tr><th><code>type</code></th><th>Kind</th><th>Carries</th><th>Renders as</th></tr></thead><tbody><tr><td><code>vstack</code></td><td>container</td><td><code>children</code>, <code>align</code>, <code>spacing</code></td><td>A vertical stack</td></tr><tr><td><code>hstack</code></td><td>container</td><td><code>children</code>, <code>align</code>, <code>spacing</code></td><td>A horizontal stack</td></tr><tr><td><code>zstack</code></td><td>container</td><td><code>children</code>, <code>align</code></td><td>A depth stack — overlays, rings over labels</td></tr><tr><td><code>grid</code></td><td>container</td><td><code>children</code>, <code>columns</code>, <code>spacing</code></td><td>A grid, left-aligned</td></tr><tr><td><code>text</code></td><td>leaf</td><td><code>text</code></td><td>A text run</td></tr><tr><td><code>image</code></td><td>leaf</td><td><code>symbol</code></td><td>An SF Symbol glyph (v1 renders SF Symbols only)</td></tr><tr><td><code>gauge</code></td><td>leaf</td><td><code>value</code>, <code>gauge_style</code></td><td>A native gauge</td></tr><tr><td><code>sparkline</code></td><td>leaf</td><td><code>values</code></td><td>A sparkline</td></tr><tr><td><code>spacer</code></td><td>leaf</td><td><code>min_length</code></td><td>Flexible space</td></tr><tr><td><code>divider</code></td><td>leaf</td><td>—</td><td>A hairline rule</td></tr></tbody></table></div>
+<p>An unrecognised <code>type</code> renders nothing and produces a diagnostic, rather than
+failing the card.</p>
+<h3 id="node-fields">Node fields</h3>
+<div class="table-scroll"><table><thead><tr><th>Field</th><th>Type</th><th>Applies to</th><th>Meaning</th></tr></thead><tbody><tr><td><code>type</code></td><td>string</td><td>all</td><td>The node kind, from the table above. Required.</td></tr><tr><td><code>text</code></td><td>string?</td><td><code>text</code></td><td>The string to draw. Truncated at <strong>512</strong> characters.</td></tr><tr><td><code>symbol</code></td><td>string?</td><td><code>image</code></td><td>SF Symbol name.</td></tr><tr><td><code>value</code></td><td>double?</td><td><code>gauge</code></td><td>Fill, clamped to <code>0…1</code>.</td></tr><tr><td><code>values</code></td><td>[double]?</td><td><code>sparkline</code></td><td>The series. Non-finite entries are dropped; capped at <strong>256</strong> points.</td></tr><tr><td><code>gauge_style</code></td><td>string?</td><td><code>gauge</code></td><td><code>linear</code> (default) or <code>circular</code>.</td></tr><tr><td><code>align</code></td><td>string?</td><td>containers</td><td>Cross-axis alignment — see below.</td></tr><tr><td><code>spacing</code></td><td>double?</td><td>containers</td><td>Inter-child spacing in points, clamped <code>0…64</code>.</td></tr><tr><td><code>columns</code></td><td>int?</td><td><code>grid</code></td><td>Column count. Default <code>2</code>, clamped <code>1…4</code>.</td></tr><tr><td><code>min_length</code></td><td>double?</td><td><code>spacer</code></td><td>Minimum space in points, clamped <code>0…4096</code>.</td></tr><tr><td><code>families</code></td><td>[string]?</td><td>all</td><td>Which widget sizes this node appears in — see <a href="#adapting-per-widget-size-families">Adapting per widget size</a>.</td></tr><tr><td><code>style</code></td><td>object?</td><td>all</td><td>Per-element styling — see below.</td></tr><tr><td><code>children</code></td><td>[node]?</td><td>containers</td><td>Child nodes.</td></tr></tbody></table></div>
+<p><code>align</code> takes a different vocabulary per container, matching SwiftUI's own —
+anything unrecognised falls back to the default:</p>
+<div class="table-scroll"><table><thead><tr><th>Container</th><th>Accepted <code>align</code></th><th>Default</th></tr></thead><tbody><tr><td><code>vstack</code></td><td><code>leading</code>, <code>center</code>, <code>trailing</code></td><td><code>leading</code></td></tr><tr><td><code>hstack</code></td><td><code>top</code>, <code>center</code>, <code>bottom</code></td><td><code>center</code></td></tr><tr><td><code>zstack</code></td><td><code>topLeading</code>, <code>top</code>, <code>bottom</code>, <code>leading</code>, <code>trailing</code>, <code>center</code></td><td><code>center</code></td></tr></tbody></table></div>
+<h3 id="style"><code>style</code></h3>
+<p>A bounded set of modifiers. Every numeric value is clamped.</p>
+<div class="table-scroll"><table><thead><tr><th>Field</th><th>Type</th><th>Meaning</th></tr></thead><tbody><tr><td><code>font</code></td><td>object?</td><td>Text font — see below.</td></tr><tr><td><code>tint</code></td><td>color?</td><td>Named (<code>green</code>, <code>secondary</code>) or <code>#rrggbbaa</code>.</td></tr><tr><td><code>align</code></td><td>string?</td><td>Multiline text alignment: <code>leading</code> (default), <code>center</code>, <code>trailing</code>.</td></tr><tr><td><code>padding</code></td><td>double?</td><td>Uniform padding in points, clamped <code>0…64</code>.</td></tr><tr><td><code>line_limit</code></td><td>int?</td><td>Maximum text lines, clamped <code>1…20</code>.</td></tr><tr><td><code>monospaced_digit</code></td><td>bool?</td><td>Fixed-width digits — stops numeric columns jittering between refreshes.</td></tr><tr><td><code>min_scale</code></td><td>double?</td><td>Minimum scale factor, clamped <code>0.3…1.0</code>. Lets a headline shrink to fit instead of truncating.</td></tr><tr><td><code>fill</code></td><td>bool?</td><td>Grow to fill the available width. This is the <em>only</em> width control; arbitrary point frames are deliberately not exposed.</td></tr></tbody></table></div>
+<p><code>style.font</code>:</p>
+<div class="table-scroll"><table><thead><tr><th>Field</th><th>Type</th><th>Accepted values</th></tr></thead><tbody><tr><td><code>size</code></td><td>string?</td><td><code>caption2</code>, <code>caption</code>, <code>footnote</code>, <code>subheadline</code>, <code>headline</code>, <code>title3</code>, <code>title2</code>, <code>title</code>, <code>largeTitle</code>. Anything else falls back to body.</td></tr><tr><td><code>point_size</code></td><td>double?</td><td>An explicit size, clamped <code>8…96</code>. <strong>Wins over <code>size</code></strong> when both are set.</td></tr><tr><td><code>weight</code></td><td>string?</td><td><code>medium</code>, <code>semibold</code>, <code>bold</code>. Anything else is regular.</td></tr><tr><td><code>design</code></td><td>string?</td><td><code>rounded</code>, <code>monospaced</code>, <code>serif</code>. Anything else is the default face.</td></tr></tbody></table></div>
+<p>Use <code>size</code> by default — a semantic token scales with the system text size.
+Reach for <code>point_size</code> only when a token cannot hit what you need, like an
+oversized headline number or a very small legend.</p>
+<h3 id="adapting-per-widget-size-families">Adapting per widget size (<code>families</code>)</h3>
+<p>A node with <code>families</code> renders only in the widget sizes it lists; a node without
+it renders in all of them. Values are <code>small</code>, <code>medium</code>, and <code>large</code>.</p>
+<p>This lets <strong>one tree adapt by subtraction</strong> rather than making you author three
+payloads — the same way the preset templates truncate their rows per size:</p>
+<div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">json</span></div><pre><code>{ "type": "text", "text": "214 orders today", "families": ["medium", "large"] }</code></pre></div>
+<p>The small tile drops that row; the medium and large tiles keep it.</p>
+<h3 id="limits">Limits</h3>
+<p>The tree is sanitized before it is rendered. Every limit degrades — truncating,
+clamping, or dropping, with a diagnostic in the Debug console — and never fails
+the card:</p>
+<div class="table-scroll"><table><thead><tr><th>Limit</th><th>Value</th></tr></thead><tbody><tr><td>Maximum nesting depth</td><td>8 levels (deeper children are dropped)</td></tr><tr><td>Maximum nodes per tree</td><td>64 (extra nodes dropped)</td></tr><tr><td>Maximum <code>text</code> length</td><td>512 characters (truncated)</td></tr><tr><td>Maximum <code>sparkline</code> points</td><td>256 (truncated)</td></tr></tbody></table></div>
+<p>Unknown keys are ignored, so a tree stays forward-compatible.</p>
+<h3 id="building-a-tree-with-the-sdk">Building a tree with the SDK</h3>
+<p>All three SDKs expose the same namespaced builders — <code>Node.VStack</code>,
+<code>Node.HStack</code>, <code>Node.ZStack</code>, <code>Grid</code>, <code>Text</code>, <code>Image</code>, <code>Gauge</code>, <code>Sparkline</code>,
+<code>Spacer</code>, <code>Divider</code> — and emit byte-identical JSON. Each of these produces
+exactly the payload shown at the top of this section:</p>
+<p><strong>TypeScript</strong></p>
+<div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">ts</span></div><pre><code>import { widgetCard, Node } from "./src/vee.ts";
+
+widgetCard({
+  layout: Node.VStack(
+    [
+      Node.HStack([
+        Node.Image("cpu", { style: { tint: "blue" } }),
+        Node.Text("CPU", { style: { font: { size: "caption", weight: "semibold" }, tint: "secondary" } }),
+        Node.Spacer(),
+      ], { spacing: 5 }),
+      Node.Text("38%", {
+        style: { font: { size: "title", design: "rounded" }, tint: "green", monospacedDigit: true, minScale: 0.6 },
+      }),
+      Node.Gauge(0.38, { gaugeStyle: "circular", style: { tint: "green" } }),
+    ],
+    { align: "leading", spacing: 6 },
+  ),
+}).print();</code></pre></div>
+<p><strong>Python</strong></p>
+<div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">python</span></div><pre><code>from vee import widget_card, Node
+
+widget_card(
+    layout=Node.VStack(
+        [
+            Node.HStack(
+                [
+                    Node.Image("cpu", style={"tint": "blue"}),
+                    Node.Text("CPU", style={"font": {"size": "caption", "weight": "semibold"}, "tint": "secondary"}),
+                    Node.Spacer(),
+                ],
+                spacing=5,
+            ),
+            Node.Text(
+                "38%",
+                style={"font": {"size": "title", "design": "rounded"}, "tint": "green",
+                       "monospaced_digit": True, "min_scale": 0.6},
+            ),
+            Node.Gauge(0.38, gauge_style="circular", style={"tint": "green"}),
+        ],
+        align="leading",
+        spacing=6,
+    ),
+).print()</code></pre></div>
+<p><strong>Go</strong></p>
+<div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">go</span></div><pre><code>layout := vee.Node.VStack(
+	[]vee.WidgetNode{
+		vee.Node.HStack([]vee.WidgetNode{
+			vee.Node.Image("cpu", vee.Style(vee.WidgetNodeStyle{Tint: vee.Str("blue")})),
+			vee.Node.Text("CPU", vee.Style(vee.WidgetNodeStyle{
+				Font: &amp;vee.WidgetNodeFont{Size: vee.Str("caption"), Weight: vee.Str("semibold")},
+				Tint: vee.Str("secondary"),
+			})),
+			vee.Node.Spacer(),
+		}, vee.Spacing(5)),
+		vee.Node.Text("38%", vee.Style(vee.WidgetNodeStyle{
+			Font:            &amp;vee.WidgetNodeFont{Size: vee.Str("title"), Design: vee.Str("rounded")},
+			Tint:            vee.Str("green"),
+			MonospacedDigit: vee.Bool(true),
+			MinScale:        vee.Float(0.6),
+		})),
+		vee.Node.Gauge(0.38, vee.GaugeStyle("circular"), vee.Style(vee.WidgetNodeStyle{Tint: vee.Str("green")})),
+	},
+	vee.Align("leading"), vee.Spacing(6),
+)
+
+c := &amp;vee.WidgetCard{Layout: &amp;layout}
+c.Print()</code></pre></div>
+<p>Each SDK ships this as a runnable <code>widget-layout</code> example with a shared golden
+fixture, so the three implementations and the Swift parser cannot drift apart.</p>
+<h2 id="actions">Actions</h2>
+<p>Up to two <code>actions</code> render as buttons:</p>
+<ul>
+<li><code>refresh</code> — re-runs this plugin.</li>
+<li><code>href</code> — opens a URL (scheme-filtered like menu <code>href=</code>: <code>http</code>/<code>https</code>/
+custom app deep links; never <code>file</code>/<code>javascript</code>/…).</li>
+<li><code>shortcut</code> — runs a named macOS Shortcut (<code>name</code>), like menu <code>shortcut=</code>.</li>
+</ul>
+<p>There is deliberately <strong>no <code>shell</code> action</strong> — a widget button must not run an
+arbitrary command without the menu's context.</p>
+<h2 id="building-the-card-with-the-sdk">Building the card with the SDK</h2>
+<p>The <a href="sdk.html">TypeScript, Python, and Go SDKs</a> all have <code>Stat</code>/<code>Gauge</code>/<code>Trend</code>/
+<code>List</code>/<code>Board</code> builders that emit this JSON for you:</p>
+<div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">ts</span></div><pre><code>import { Stat } from "./src/vee.ts";
+
+if (process.env.VEE_TARGET === "widget") {
+  Stat({
+    title: "Revenue",
+    symbol: "chart.line.uptrend.xyaxis",
+    tint: "green",
+    value: "$18.2k",
+    status: "ok",
+    actions: [{ kind: "refresh", label: "Refresh" }],
+  }).print();
+} else {
+  // ordinary menu-bar output
+}</code></pre></div>
+<p>See <a href="sdk.html#widget-cards">Plugin SDKs</a> for the Python/Go equivalents.</p>
+<h2 id="editor-validation-json-schema">Editor validation (JSON Schema)</h2>
+<p>Vee publishes a schema for the card payload, so your editor can check a card
+while you write it — unknown fields, bad enum values, out-of-range numbers —
+against the same constraints Vee applies at runtime:</p>
+<https://vee.navbytes.io/schemas/widget-card.schema.json>
+<p>Reference it from a card you are authoring by hand:</p>
+<div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">json</span></div><pre><code>{
+  "$schema": "https://vee.navbytes.io/schemas/widget-card.schema.json",
+  "vee_widget": 1,
+  "template": "stat",
+  "title": "Revenue"
+}</code></pre></div>
+<p><code>$schema</code> is an unknown key to Vee, and unknown keys are ignored, so leaving it
+in a shipped plugin is harmless.</p>
+<p>The schema covers every field the parser reads, including the layout tree, and
+CI validates it against the SDKs' golden fixtures — so it cannot quietly drift
+from what Vee accepts.</p>
+<h2 id="see-also">See also</h2>
+<ul>
+<li><a href="plugin-authoring.html">Plugin authoring reference</a> — the menu-bar output format.</li>
+<li><a href="sdk.html#widget-cards">Plugin SDKs</a> — build cards with typed builders in TypeScript, Python, or Go.</li>
+<li><a href="json-output.html">JSON output format</a> — the structured alternative for menu output.</li>
+<li><a href="getting-started.html#widgets-on-your-desktop--notification-center">Getting started</a> — adding a widget to your desktop.</li>
+<li><a href="debugging.html">Debugging and testing plugins</a> — previewing a plugin's output while you write it.</li>
+</ul>
+    </article>
+    <nav class="doc-nextprev" aria-label="Guide pagination"><a class="prev" href="./plugin-authoring.html"><span class="dir">&larr; Previous</span><span class="lbl">Plugin authoring</span></a><a class="next" href="./trust-model.html"><span class="dir">Next &rarr;</span><span class="lbl">Trust model</span></a></nav>
+  </main>
+</div>
+<link rel="stylesheet" href="../pagefind/pagefind-ui.css">
+<script src="../pagefind/pagefind-ui.js"></script>
+<script src="../assets/app.js" defer></script>
+</body>
+</html>

@@ -194,25 +194,10 @@ public enum Linter {
         return out
     }
 
-    /// The parameter keys the parser recognises (mirrors `LineParser.mapParams`).
-    /// Hand-maintained, not derived — `LineParser`/`LineParams` are out of this
-    /// linter's scope. When `LineParser.mapParams` gains a new case, mirror its
-    /// key here too.
-    private static let knownParams: Set<String> = [
-        "color", "font", "size", "length", "trim", "ansi", "emojize",
-        "href", "shell", "bash", "terminal", "refresh", "dropdown",
-        "alternate", "disabled", "key", "image", "templateimage",
-        "sfimage", "sfcolor", "sfsize", "sfconfig", "symbolize", "tooltip",
-        "md", "markdown", "checked", "badge", "webview", "webvieww",
-        "webviewh", "shortcut", "sparkline", "toggle", "slider", "progress",
-        "trackcolor", "progressw", "progressh", "header", "accessory",
-        "pie", "donut", "stackedbar", "chartlabels", "chartcolors", "chartw", "charth"
-    ]
-
+    /// Whether the linter treats `key` as known. Delegates to
+    /// `VeePluginFormat.LineParameterKeys` rather than keeping a second copy of
+    /// the list — that mirror drifted from the published reference once already.
     private static func isKnownParam(_ key: String) -> Bool {
-        if knownParams.contains(key) { return true }
-        // Positional shell params: param1..N.
-        if key.hasPrefix("param"), Int(key.dropFirst(5)) != nil { return true }
-        return false
+        LineParameterKeys.isRecognized(key)
     }
 }

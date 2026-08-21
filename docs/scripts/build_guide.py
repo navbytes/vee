@@ -27,7 +27,9 @@ DOCS = os.path.dirname(HERE)
 CONTENT = os.path.join(DOCS, "_content")
 GUIDE = os.path.join(DOCS, "guide")
 
-SITE = "https://navbytes.github.io/vee"
+# The canonical origin. Changing this rewrites every page's canonical and
+# og:url, so it must land together with docs/CNAME and the DNS record.
+SITE = "https://vee.navbytes.io"
 
 # The guide's running order: sidebar order, and the prev/next pager. `index` is
 # hand-written (it has no Markdown source) and is only listed so it can appear
@@ -48,6 +50,11 @@ PAGES = [
         slug="plugin-authoring", nav="Plugin authoring",
         title="Plugin authoring reference — Vee docs",
         desc="The full Vee plugin reference: filenames and intervals, menu structure, line parameters, metadata headers, SF Symbols, ANSI, Markdown, streaming, and cron.",
+    ),
+    dict(
+        slug="widgets", nav="Widgets",
+        title="Widgets — Vee docs",
+        desc="Render Vee plugins as native desktop and Notification Center widgets: the surface contract, the widget card schema, the five templates, and the composable layout tree.",
     ),
     dict(
         slug="trust-model", nav="Trust model",
@@ -73,6 +80,16 @@ PAGES = [
         slug="cli-and-urls", nav="CLI &amp; URL actions",
         title="CLI and URL actions — Vee docs",
         desc="Run Vee from source with swift run vee, and drive it at runtime with vee:// and swiftbar:// URL actions — refresh, enable/disable, toggle, and notify.",
+    ),
+    dict(
+        slug="debugging", nav="Debugging &amp; testing",
+        title="Debugging and testing plugins — Vee docs",
+        desc="Preview, watch, and lint a Vee plugin without installing it: vee render, vee show, vee dev, and vee lint, plus execution timeouts, exit codes, and the Debug console.",
+    ),
+    dict(
+        slug="enterprise-store", nav="Custom plugin stores",
+        title="Custom plugin stores (enterprise) — Vee docs",
+        desc="Point Vee at your own curated plugin catalog: a GitHub repo, a static HTTP host, or an air-gapped file mirror, with integrity checks and MDM-managed configuration.",
     ),
     dict(
         slug="faq", nav="FAQ",
@@ -168,7 +185,12 @@ def table(rows):
     head, body = rows[0], rows[2:]
 
     def cells(row, tag):
-        parts = [c.strip() for c in row.strip().strip("|").split("|")]
+        # Split on unescaped pipes only: a table cell may contain a literal `|`
+        # written as `\|` (this project documents a pipe-delimited format, so
+        # that is common), and splitting on it would shatter the row into extra
+        # columns. Unescape after splitting, before inline rendering.
+        parts = [c.strip().replace("\\|", "|")
+                 for c in re.split(r"(?<!\\)\|", row.strip().strip("|"))]
         return "".join("<%s>%s</%s>" % (tag, inline(c), tag) for c in parts)
 
     out = '<div class="table-scroll"><table><thead><tr>%s</tr></thead><tbody>' % cells(head, "th")
@@ -354,32 +376,66 @@ TEMPLATE = """<!doctype html>
 </header>
 <div class="docs-layout">
   <aside class="docs-side" aria-label="Documentation navigation">
+    <div id="docs-search" class="docs-search" data-pagefind-ignore></div>
     <p class="docs-nav-title">Documentation</p>
 {sidebar}
+{toc}
   </aside>
   <main class="docs-main" id="main">
-    <article class="docs-content">
+    <article class="docs-content" data-pagefind-body>
       <p class="doc-hero-note">Vee documentation</p>
 {body}
     </article>
     {pager}
   </main>
 </div>
-<script src="../assets/app.js" defer></script>
+<link rel="stylesheet" href="../pagefind/pagefind-ui.css">\n<script src="../pagefind/pagefind-ui.js"></script>\n<script src="../assets/app.js" defer></script>
 </body>
 </html>
 """
+
+
+def toc(body_html):
+    """An "On this page" list from the h2s `render` just emitted.
+
+    Reuses the ids `slugify` already produced, so the TOC cannot disagree with
+    the anchors on the page.
+    """
+    heads = re.findall(r'<h2 id="([^"]+)">(.*?)</h2>', body_html, flags=re.S)
+    if len(heads) < 3:
+        return ""  # too few sections for a contents list to earn its space
+    rows = "".join('<li><a href="#%s">%s</a></li>' % (hid, text) for hid, text in heads)
+    return ('<nav class="docs-toc" aria-labelledby="toc-title">'
+            '<p class="docs-nav-title" id="toc-title">On this page</p>'
+            '<ul>%s</ul></nav>' % rows)
 
 
 def build(page, index):
     source = os.path.join(CONTENT, "%s.md" % page["slug"])
     with open(source, encoding="utf-8") as handle:
         body = render(handle.read().splitlines())
+    body_html = "\n".join(body)
     return TEMPLATE.format(
         title=escape(page["title"]), desc=escape(page["desc"]), site=SITE,
         slug=page["slug"], sidebar=sidebar(page["slug"]),
-        body="\n".join(body), pager=pager(index),
+        body=body_html, pager=pager(index), toc=toc(body_html),
     )
+
+
+# Static pages outside PAGES that still belong in the sitemap.
+EXTRA_URLS = ["/", "/compare/", "/compare/vee-vs-swiftbar.html", "/compare/vee-vs-xbar.html"]
+
+
+def sitemap():
+    urls = list(EXTRA_URLS) + ["/guide/%s.html" % p["slug"] for p in PAGES]
+    body = "".join("  <url><loc>%s%s</loc></url>\n" % (SITE, u) for u in urls)
+    return ('<?xml version="1.0" encoding="UTF-8"?>\n'
+            '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+            '%s</urlset>\n' % body)
+
+
+def robots():
+    return "User-agent: *\nAllow: /\n\nSitemap: %s/sitemap.xml\n" % SITE
 
 
 def main(argv):
@@ -399,6 +455,18 @@ def main(argv):
         with open(target, "w", encoding="utf-8") as handle:
             handle.write(rendered)
         print("wrote guide/%s.html" % page["slug"])
+    for name, rendered in (("sitemap.xml", sitemap()), ("robots.txt", robots())):
+        target = os.path.join(DOCS, name)
+        current = open(target, encoding="utf-8").read() if os.path.exists(target) else None
+        if current == rendered:
+            continue
+        if check:
+            stale.append(name)
+            continue
+        with open(target, "w", encoding="utf-8") as handle:
+            handle.write(rendered)
+        print("wrote %s" % name)
+
     if stale:
         print("stale (run docs/scripts/build_guide.py): %s" % ", ".join(stale), file=sys.stderr)
         return 1

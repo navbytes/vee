@@ -9,16 +9,15 @@ A store is just a place Vee can read an index and download sources from. **It ca
 be a plain GitHub repo** (public, private, or GitHub Enterprise Server), a static
 HTTP host, or a local `file://` mirror for air-gapped machines.
 
-- [Quick start: a store in one repo](#quick-start)
+- [Quick start: a store in one repo](#quick-start-a-store-in-one-repo)
 - [Two store shapes](#two-store-shapes)
 - [Private repositories](#private-repositories)
-- [GitHub Enterprise, static HTTP, and air-gapped mirrors](#other-transports)
+- [GitHub Enterprise, static HTTP, and air-gapped mirrors](#github-enterprise-static-http-and-air-gapped-mirrors)
 - [Integrity and signing](#integrity-and-signing)
 - [Managed configuration (MDM)](#managed-configuration-mdm)
 - [Adding a store by hand](#adding-a-store-by-hand)
 - [Security notes](#security-notes)
 
-<a name="quick-start"></a>
 ## Quick start: a store in one repo
 
 1. Create a repository, e.g. `acme/vee-plugins`.
@@ -42,7 +41,6 @@ HTTP host, or a local `file://` mirror for air-gapped machines.
 That's the whole thing. No manifest, no build step — the repo layout *is* the
 catalog.
 
-<a name="two-store-shapes"></a>
 ## Two store shapes
 
 ### 1. Convention (zero-config)
@@ -86,7 +84,6 @@ file is present it is authoritative; otherwise Vee falls back to the convention.
 A static HTTP host **must** publish a manifest (there's no repo to infer from); a
 Git repo or a local mirror may use either.
 
-<a name="private-repositories"></a>
 ## Private repositories
 
 For a private GitHub/GHE repo, add the store as usual and paste a **personal
@@ -99,7 +96,6 @@ Use the **Test connection** button in the Add-store sheet to confirm the token
 and repo before saving. A `401` in Discover means the token is missing or
 invalid — update it in **Preferences → Stores**.
 
-<a name="other-transports"></a>
 ## GitHub Enterprise, static HTTP, and air-gapped mirrors
 
 Vee supports four store kinds; all install through the same trust gate.
@@ -115,7 +111,6 @@ A **local mirror** is the simplest air-gapped option: clone your store repo (or
 export it) to `/opt/vee/store` on the managed machines and configure a `local`
 store pointing at it. No network required.
 
-<a name="integrity-and-signing"></a>
 ## Integrity and signing
 
 Vee offers three levels of assurance, each optional and layered on the existing
@@ -142,7 +137,6 @@ Prefer a **policy-pinned key** (`pinnedSigningKey`, delivered by MDM) over the
 manifest's own key when you can: it can't be replaced by whoever controls the
 repo.
 
-<a name="managed-configuration-mdm"></a>
 ## Managed configuration (MDM)
 
 Push stores to managed Macs with a configuration profile for the `com.vee.app`
@@ -194,7 +188,6 @@ Example profile payload (abbreviated):
 device). For a managed private store, the user enters the token once, or the
 store uses a host that authenticates through your SSO.
 
-<a name="adding-a-store-by-hand"></a>
 ## Adding a store by hand
 
 Anyone (not just enterprise) can add a store in **Preferences → Stores →
@@ -203,7 +196,6 @@ optionally mark it *internal-reviewed* or *require signature*. User-added stores
 are fully under your control — enable, disable, edit, or remove them at any time.
 The built-in public catalog can be toggled off but not removed.
 
-<a name="security-notes"></a>
 ## Security notes
 
 - **Trust stays advisory.** A store's trust policy changes how loudly the install

@@ -5,19 +5,19 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>CLI and URL actions — Vee docs</title>
   <meta name="description" content="Run Vee from source with swift run vee, and drive it at runtime with vee:// and swiftbar:// URL actions — refresh, enable/disable, toggle, and notify.">
-  <link rel="canonical" href="https://navbytes.github.io/vee/guide/cli-and-urls.html">
+  <link rel="canonical" href="https://vee.navbytes.io/guide/cli-and-urls.html">
   <link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
   <link rel="stylesheet" href="../assets/style.css">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Vee">
   <meta property="og:title" content="CLI and URL actions — Vee docs">
   <meta property="og:description" content="Run Vee from source with swift run vee, and drive it at runtime with vee:// and swiftbar:// URL actions — refresh, enable/disable, toggle, and notify.">
-  <meta property="og:url" content="https://navbytes.github.io/vee/guide/cli-and-urls.html">
-  <meta property="og:image" content="https://navbytes.github.io/vee/assets/og-image.png">
+  <meta property="og:url" content="https://vee.navbytes.io/guide/cli-and-urls.html">
+  <meta property="og:image" content="https://vee.navbytes.io/assets/og-image.png">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="CLI and URL actions — Vee docs">
   <meta name="twitter:description" content="Run Vee from source with swift run vee, and drive it at runtime with vee:// and swiftbar:// URL actions — refresh, enable/disable, toggle, and notify.">
-  <meta name="twitter:image" content="https://navbytes.github.io/vee/assets/og-image.png">
+  <meta name="twitter:image" content="https://vee.navbytes.io/assets/og-image.png">
 </head>
 <body>
 <a class="skip-link" href="#main">Skip to content</a>
@@ -41,23 +41,28 @@
 </header>
 <div class="docs-layout">
   <aside class="docs-side" aria-label="Documentation navigation">
+    <div id="docs-search" class="docs-search" data-pagefind-ignore></div>
     <p class="docs-nav-title">Documentation</p>
 <ul class="docs-nav">
 <li><a href="./index.html">Overview</a></li>
 <li><a href="./getting-started.html">Getting started</a></li>
 <li><a href="./migrating-from-swiftbar.html">Migrating from SwiftBar / xbar</a></li>
 <li><a href="./plugin-authoring.html">Plugin authoring</a></li>
+<li><a href="./widgets.html">Widgets</a></li>
 <li><a href="./trust-model.html">Trust model</a></li>
 <li><a href="./preferences.html">Preferences</a></li>
 <li><a href="./sdk.html">Plugin SDKs</a></li>
 <li><a href="./json-output.html">JSON output</a></li>
 <li><a href="./cli-and-urls.html" aria-current="page">CLI &amp; URL actions</a></li>
+<li><a href="./debugging.html">Debugging &amp; testing</a></li>
+<li><a href="./enterprise-store.html">Custom plugin stores</a></li>
 <li><a href="./faq.html">FAQ</a></li>
 <li><a href="./troubleshooting.html">Troubleshooting</a></li>
 </ul>
+<nav class="docs-toc" aria-labelledby="toc-title"><p class="docs-nav-title" id="toc-title">On this page</p><ul><li><a href="#running-from-source-swift-run-vee">Running from source (<code>swift run vee</code>)</a></li><li><a href="#the-vee-command-line-tool">The <code>vee</code> command-line tool</a></li><li><a href="#url-actions">URL actions</a></li><li><a href="#triggering-actions-from-a-plugin">Triggering actions from a plugin</a></li><li><a href="#see-also">See also</a></li></ul></nav>
   </aside>
   <main class="docs-main" id="main">
-    <article class="docs-content">
+    <article class="docs-content" data-pagefind-body>
       <p class="doc-hero-note">Vee documentation</p>
 <h1>CLI and URL actions</h1>
 <p>Vee can be driven from the command line during development and controlled at runtime through URL actions. Plugins use those same URL schemes to trigger refreshes and post notifications.</p>
@@ -73,124 +78,10 @@ swift run vee        # launch the menu-bar app for development</code></pre></div
 <p>Running <code>vee</code> with no subcommand launches the menu-bar app (that's also what
 happens when the bundled app is opened). Passing a subcommand instead gives you a
 zero-install authoring loop that reuses Vee's real parser — no app, no GUI:</p>
-<div class="table-scroll"><table><thead><tr><th>Command</th><th>What it does</th></tr></thead><tbody><tr><td><code>vee render &lt;plugin&gt;</code></td><td>Runs the plugin and prints the parsed menu tree plus any parse diagnostics.</td></tr><tr><td><code>vee show &lt;plugin&gt;</code></td><td>Renders the plugin's dropdown in the terminal — color, block progress bars, and sparklines — and live-refreshes it on the plugin's own cadence.</td></tr><tr><td><code>vee dev &lt;path&gt;</code></td><td>Watches one file and re-renders it on <strong>every save</strong>. The authoring loop: edit in your editor, save, see the menu.</td></tr><tr><td><code>vee lint &lt;plugin&gt;</code></td><td>Runs the plugin and reports problems: unknown params, a bare `\</td><td>` in a title, unquoted values containing spaces, and the parser's own diagnostics. Exits non-zero if anything is flagged.</td></tr><tr><td><code>vee search &lt;plugin&gt; [query…]</code></td><td>Runs the plugin, flattens its (nested) menu, and prints the items fuzzy-filtered and ranked by your query — each with its breadcrumb and the action it would fire.</td></tr><tr><td><code>vee new [flags]</code></td><td>Scaffolds a new plugin file with the right filename, header tags, and a working body.</td></tr></tbody></table></div>
-<h3 id="vee-render"><code>vee render</code></h3>
-<p>Renders exactly what Vee would show, so you can see a plugin's output — text
-<strong>or</strong> JSON protocol — without installing it:</p>
-<div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">sh</span></div><pre><code>$ vee render ./cpu.5s.sh
-CPU 12%  [sfimage=cpu]
----
-Top processes  [href=https://example.com/procs]
-───
-Refresh  [refresh]</code></pre></div>
-<p>Parse diagnostics (unknown params, malformed lines) and a non-zero exit, a
-timeout, or anything on stderr are surfaced too — it's the fastest way to answer
-"why doesn't my plugin look right?".</p>
-<h3 id="vee-show"><code>vee show</code></h3>
-<p>Where <code>vee render</code> prints one static tree, <code>vee show</code> is a live view of what the
-plugin's menu-bar dropdown would look like — rendered natively in your terminal.
-It re-runs the plugin on the cadence encoded in its filename and repaints, so you
-can edit a script and watch the result without ever installing it into the menu
-bar:</p>
-<div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">sh</span></div><pre><code>$ vee show ./cpu.10s.sh      # or an installed plugin by name: vee show cpu</code></pre></div>
-<p>The dropdown is rendered the way a terminal can: <code>color=</code>/ANSI as real color,
-<code>progress=</code> as a Unicode block gauge (<code>████████░░░░ 72%</code>), <code>sparkline=</code> as a
-block sparkline (<code>▁▂▃▅▇█</code>), and <code>toggle=</code>/<code>slider=</code> as inline state. The things a
-terminal can't draw — SF Symbols and base64 images — are shown by name (<code>[cpu]</code>,
-<code>[img]</code>) rather than dropped. A status line reports the plugin's cadence and last
-exit code; parse diagnostics and stderr surface below, exactly like <code>vee render</code>.</p>
-<p>Press <strong><code>r</code></strong> to refresh now and <strong><code>q</code></strong> (or <code>Ctrl-C</code>) to quit. A plugin with no
-interval token in its filename (<code>.manual</code>) simply renders once and waits for <code>r</code>.</p>
-<p>Flags: <code>--once</code> prints a single frame instead of watching (also what happens when
-stdout is piped); <code>--no-color</code> disables ANSI color (as does a <code>NO_COLOR</code>
-environment variable or a non-TTY stdout); <code>--dir DIR</code> sets the folder a plugin
-<em>name</em> is resolved against.</p>
-<p><code>vee show</code> is a view, not a controller — it displays a row's action (with a small
-trailing glyph: <code>↗</code> link, <code>$</code> shell, <code>⟳</code> refresh, <code>⌘</code> Shortcut) but does not fire
-it. Activating items, the interactive control popovers, and the embedded WebView
-remain the menu bar's job.</p>
-<h3 id="vee-dev"><code>vee dev</code></h3>
-<p>Where <code>vee show</code> re-runs on the plugin's <em>own</em> cadence — so an edit to a 5-minute
-plugin appears five minutes later — <code>vee dev</code> re-runs on <strong>save</strong>. Put it in a
-split terminal beside your editor and the loop is: edit, save, see it.</p>
-<div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">sh</span></div><pre><code>$ vee dev ./cpu.10s.sh</code></pre></div>
-<p>Each save re-runs the file and repaints the status line, the parsed menu tree,
-and any lint findings. A save that breaks the script repaints with the exit code
-and stderr and <strong>keeps watching</strong> — the loop does not exit over a typo. <code>r</code>
-re-runs now, <code>q</code> quits.</p>
-<h4 id="--text-preview-a-menu-without-running-anything"><code>--text</code>: preview a menu without running anything</h4>
-<p><code>vee dev --text &lt;path&gt;</code> treats the file as plugin <em>output</em> rather than a program.
-Nothing is executed, so the file needs no execute bit and no shebang, and a save
-carries no risk of running code:</p>
-<div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">sh</span></div><pre><code>$ cat menu.txt
-CPU 42% | color=red
----
-Open dashboard | href=https://example.com
-
-$ vee dev --text menu.txt</code></pre></div>
-<p>This is how to design a menu's <em>shape</em> before writing the script that produces
-it — and, as the next section explains, it is the only mode in which an editor
-can put a diagnostic on the right line.</p>
-<h4 id="--push-see-the-real-thing-in-the-menu-bar"><code>--push</code>: see the real thing in the menu bar</h4>
-<p>A terminal shows structure; only Vee can show Vee's render. <code>vee dev --push</code> also
-sends each save to the running app as a real status item, with <strong>no file written
-to your plugins folder</strong>:</p>
-<div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">sh</span></div><pre><code>$ vee dev --push ./cpu.10s.sh</code></pre></div>
-<p>The item updates in place on each save and disappears when you quit. It is
-opt-in — plain <code>vee dev</code> never touches your menu bar. If Vee is not running it is
-started in the background (without stealing focus), and the loop says so.</p>
-<p>One limitation, stated plainly: a pushed preview travels over the
-<code>setephemeralplugin</code> URL action, and because any web page can open a <code>vee://</code>
-URL, Vee strips <code>shell=</code>/<code>bash=</code> actions from ephemeral content. Those rows still
-<em>appear</em> in the preview so you can confirm you wrote them correctly, but clicking
-one does nothing. The loop prints a note when your menu contains one. To test an
-executable action, install the plugin normally.</p>
-<h3 id="vee-lint"><code>vee lint</code></h3>
-<p>Catches the common authoring mistakes before you ship — especially the
-quoting bugs the <a href="sdk.html">SDKs</a> prevent by construction:</p>
-<div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">sh</span></div><pre><code>$ vee lint ./broken.5s.sh
-Lint findings:
-  warning [line 3]: value for 'tooltip' contains a space but isn't quoted; wrap it in quotes (e.g. tooltip="a b")
-  warning [line 4]: unknown parameter 'frobnicate'</code></pre></div>
-<p><code>vee lint</code> exits <code>1</code> when it finds anything, so you can wire it into a
-pre-commit hook or CI.</p>
-<h4 id="diagnostics-in-your-editor---format-compact">Diagnostics in your editor (<code>--format compact</code>)</h4>
-<p><code>--format compact</code> emits <code>path:line:col: severity: message</code> — the shape VS Code,
-vim, and emacs already parse — so findings become inline diagnostics with no
-Vee-specific editor extension:</p>
-<div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">sh</span></div><pre><code>$ vee lint --text --format compact menu.txt
-menu.txt:1:1: warning: unknown parameter 'colour'
-menu.txt:4:1: warning: value for 'color' contains a space but isn't quoted; wrap it in quotes (e.g. color="a b")</code></pre></div>
-<p>VS Code — add to <code>.vscode/tasks.json</code>:</p>
-<div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">json</span></div><pre><code>{
-  "version": "2.0.0",
-  "tasks": [
-    {
-      "label": "vee lint",
-      "type": "shell",
-      "command": "vee lint --text --format compact ${file}",
-      "problemMatcher": {
-        "owner": "vee",
-        "fileLocation": ["autoDetect", "${workspaceFolder}"],
-        "pattern": {
-          "regexp": "^(.*):(\\d+):(\\d+):\\s+(warning|error):\\s+(.*)$",
-          "file": 1, "line": 2, "column": 3, "severity": 4, "message": 5
-        }
-      }
-    }
-  ]
-}</code></pre></div>
-<p>vim — <code>:set errorformat=%f:%l:%c:\ %t%*[^:]:\ %m</code> then <code>:cexpr system('vee lint --text --format compact ' . expand('%'))</code>.</p>
-<h4 id="which-file-a-finding-names-and-why">Which file a finding names, and why</h4>
-<p><strong>Lint runs over a plugin's output, not its source.</strong> That distinction decides
-what a line number can honestly refer to:</p>
-<div class="table-scroll"><table><thead><tr><th>Mode</th><th>What is linted</th><th>Path in compact output</th><th>In your editor</th></tr></thead><tbody><tr><td><code>--text</code></td><td>the file itself</td><td>the real path</td><td>diagnostics land on the correct line</td></tr><tr><td>default (executed)</td><td>the script's stdout</td><td><code>&lt;stdout&gt;</code></td><td>listed, but never placed on a line</td></tr></tbody></table></div>
-<p>A script emitting fifty rows from one <code>echo</code> inside a loop makes the
-output-line → source-line mapping many-to-one and unrecoverable. Naming the
-script would put squiggles on lines that have nothing wrong with them, so
-executed-script findings are attributed to <code>&lt;stdout&gt;</code>, which resolves to no file.
-You still see every finding; your editor just does not mark an innocent line.</p>
-<p>If you want squiggles that land exactly, lint the protocol text with <code>--text</code>.</p>
+<div class="table-scroll"><table><thead><tr><th>Command</th><th>What it does</th></tr></thead><tbody><tr><td><code>vee render &lt;plugin&gt;</code></td><td>Runs the plugin and prints the parsed menu tree plus any parse diagnostics.</td></tr><tr><td><code>vee show &lt;plugin&gt;</code></td><td>Renders the plugin's dropdown in the terminal — color, block progress bars, and sparklines — and live-refreshes it on the plugin's own cadence.</td></tr><tr><td><code>vee dev &lt;path&gt;</code></td><td>Watches one file and re-renders it on <strong>every save</strong>. The authoring loop: edit in your editor, save, see the menu.</td></tr><tr><td><code>vee lint &lt;plugin&gt;</code></td><td>Runs the plugin and reports problems: unknown params, a bare <code>|</code> in a title, unquoted values containing spaces, and the parser's own diagnostics. Exits non-zero if anything is flagged.</td></tr><tr><td><code>vee search &lt;plugin&gt; [query…]</code></td><td>Runs the plugin, flattens its (nested) menu, and prints the items fuzzy-filtered and ranked by your query — each with its breadcrumb and the action it would fire.</td></tr><tr><td><code>vee new [flags]</code></td><td>Scaffolds a new plugin file with the right filename, header tags, and a working body.</td></tr></tbody></table></div>
+<p>The four authoring and debugging commands — <code>vee render</code>, <code>vee show</code>, <code>vee dev</code>,
+and <code>vee lint</code> — have their own page: <a href="debugging.html">Debugging and testing
+plugins</a>. The remaining subcommands are documented below.</p>
 <h3 id="vee-new"><code>vee new</code></h3>
 <p>Scaffolds a ready-to-run plugin. Flags: <code>--lang ts|py|sh</code>, <code>--interval</code> (e.g.
 <code>5s</code>, <code>10m</code>), <code>--name</code>, <code>--trust</code> (comma-separated capabilities, e.g.
@@ -251,9 +142,11 @@ open "vee://refreshplugin?name=$VEE_PLUGIN_PATH"</code></pre></div>
 <li><a href="plugin-authoring.html#environment-variables-vee-injects">Plugin authoring reference</a> — <code>VEE_PLUGIN_PATH</code> and other injected variables.</li>
 </ul>
     </article>
-    <nav class="doc-nextprev" aria-label="Guide pagination"><a class="prev" href="./json-output.html"><span class="dir">&larr; Previous</span><span class="lbl">JSON output</span></a><a class="next" href="./faq.html"><span class="dir">Next &rarr;</span><span class="lbl">FAQ</span></a></nav>
+    <nav class="doc-nextprev" aria-label="Guide pagination"><a class="prev" href="./json-output.html"><span class="dir">&larr; Previous</span><span class="lbl">JSON output</span></a><a class="next" href="./debugging.html"><span class="dir">Next &rarr;</span><span class="lbl">Debugging &amp; testing</span></a></nav>
   </main>
 </div>
+<link rel="stylesheet" href="../pagefind/pagefind-ui.css">
+<script src="../pagefind/pagefind-ui.js"></script>
 <script src="../assets/app.js" defer></script>
 </body>
 </html>

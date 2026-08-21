@@ -5,19 +5,19 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Getting started with Vee — Vee docs</title>
   <meta name="description" content="Install Vee, write your first plugin, and learn where plugins live. A native macOS menu-bar script runner, xbar and SwiftBar compatible.">
-  <link rel="canonical" href="https://navbytes.github.io/vee/guide/getting-started.html">
+  <link rel="canonical" href="https://vee.navbytes.io/guide/getting-started.html">
   <link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
   <link rel="stylesheet" href="../assets/style.css">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Vee">
   <meta property="og:title" content="Getting started with Vee — Vee docs">
   <meta property="og:description" content="Install Vee, write your first plugin, and learn where plugins live. A native macOS menu-bar script runner, xbar and SwiftBar compatible.">
-  <meta property="og:url" content="https://navbytes.github.io/vee/guide/getting-started.html">
-  <meta property="og:image" content="https://navbytes.github.io/vee/assets/og-image.png">
+  <meta property="og:url" content="https://vee.navbytes.io/guide/getting-started.html">
+  <meta property="og:image" content="https://vee.navbytes.io/assets/og-image.png">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="Getting started with Vee — Vee docs">
   <meta name="twitter:description" content="Install Vee, write your first plugin, and learn where plugins live. A native macOS menu-bar script runner, xbar and SwiftBar compatible.">
-  <meta name="twitter:image" content="https://navbytes.github.io/vee/assets/og-image.png">
+  <meta name="twitter:image" content="https://vee.navbytes.io/assets/og-image.png">
 </head>
 <body>
 <a class="skip-link" href="#main">Skip to content</a>
@@ -41,23 +41,28 @@
 </header>
 <div class="docs-layout">
   <aside class="docs-side" aria-label="Documentation navigation">
+    <div id="docs-search" class="docs-search" data-pagefind-ignore></div>
     <p class="docs-nav-title">Documentation</p>
 <ul class="docs-nav">
 <li><a href="./index.html">Overview</a></li>
 <li><a href="./getting-started.html" aria-current="page">Getting started</a></li>
 <li><a href="./migrating-from-swiftbar.html">Migrating from SwiftBar / xbar</a></li>
 <li><a href="./plugin-authoring.html">Plugin authoring</a></li>
+<li><a href="./widgets.html">Widgets</a></li>
 <li><a href="./trust-model.html">Trust model</a></li>
 <li><a href="./preferences.html">Preferences</a></li>
 <li><a href="./sdk.html">Plugin SDKs</a></li>
 <li><a href="./json-output.html">JSON output</a></li>
 <li><a href="./cli-and-urls.html">CLI &amp; URL actions</a></li>
+<li><a href="./debugging.html">Debugging &amp; testing</a></li>
+<li><a href="./enterprise-store.html">Custom plugin stores</a></li>
 <li><a href="./faq.html">FAQ</a></li>
 <li><a href="./troubleshooting.html">Troubleshooting</a></li>
 </ul>
+<nav class="docs-toc" aria-labelledby="toc-title"><p class="docs-nav-title" id="toc-title">On this page</p><ul><li><a href="#requirements">Requirements</a></li><li><a href="#install">Install</a></li><li><a href="#where-plugins-live">Where plugins live</a></li><li><a href="#write-your-first-plugin">Write your first plugin</a></li><li><a href="#refresh-enable-and-disable">Refresh, enable, and disable</a></li><li><a href="#widgets-on-your-desktop--notification-center">Widgets (on your desktop / Notification Center)</a></li><li><a href="#next-steps">Next steps</a></li></ul></nav>
   </aside>
   <main class="docs-main" id="main">
-    <article class="docs-content">
+    <article class="docs-content" data-pagefind-body>
       <p class="doc-hero-note">Vee documentation</p>
 <h1>Getting started with Vee</h1>
 <p>Vee is a native macOS menu-bar script runner. It runs plugins — any executable, in any language — on a schedule and renders their standard output as menu-bar titles and dropdown menus. It is a fast, leak-free successor to <a href="https://github.com/matryer/xbar" rel="noopener">xbar</a> and <a href="https://github.com/swiftbar/SwiftBar" rel="noopener">SwiftBar</a>, and it runs their plugins unchanged.</p>
@@ -137,13 +142,15 @@ up to two action buttons (refresh / open a link / run a Shortcut), via
 <code>&lt;vee.surface&gt;both&lt;/vee.surface&gt;</code> and a JSON "card" printed when Vee invokes
 it with <code>VEE_TARGET=widget</code>. A plugin can also be <strong>widget-only</strong> —
 <code>&lt;vee.surface&gt;widget&lt;/vee.surface&gt;</code> gives it no menu-bar presence at all, just
-a widget feed. See <a href="plugin-authoring.html#widgets">Widgets</a> in the authoring
-reference for the full contract.</p>
+a widget feed. See <a href="widgets.html">Widgets</a> for the full
+contract.</p>
 <h2 id="next-steps">Next steps</h2>
 <ul>
 <li><a href="plugin-authoring.html">Plugin authoring reference</a> — the full output format, params, metadata, SF Symbols, ANSI, Markdown, streaming, and cron.</li>
 <li><a href="preferences.html">Preferences</a> — let a plugin declare typed settings that Vee turns into a form.</li>
 <li><a href="trust-model.html">Trust model</a> — how plugins declare what they access.</li>
+<li><a href="widgets.html">Widgets</a> — the full widget surface contract, card schema, and layout tree.</li>
+<li><a href="debugging.html">Debugging and testing plugins</a> — preview a plugin, watch it re-render on save, and lint it.</li>
 <li><a href="sdk.html">Plugin SDKs</a> — build plugins with typed builders (TypeScript, Python, or Go) instead of hand-formatting text.</li>
 <li><a href="json-output.html">JSON output format</a> — the optional structured-JSON alternative to the text protocol.</li>
 </ul>
@@ -151,6 +158,8 @@ reference for the full contract.</p>
     <nav class="doc-nextprev" aria-label="Guide pagination"><a class="next" href="./migrating-from-swiftbar.html"><span class="dir">Next &rarr;</span><span class="lbl">Migrating from SwiftBar / xbar</span></a></nav>
   </main>
 </div>
+<link rel="stylesheet" href="../pagefind/pagefind-ui.css">
+<script src="../pagefind/pagefind-ui.js"></script>
 <script src="../assets/app.js" defer></script>
 </body>
 </html>

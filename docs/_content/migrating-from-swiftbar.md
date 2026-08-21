@@ -25,6 +25,86 @@ Vee implements the xbar/SwiftBar plugin protocol, so the things you already rely
 
 See the [plugin authoring reference](plugin-authoring.md) for the full list.
 
+## Compatibility matrix
+
+The detail behind that list. **Vee** implements everything in the xbar and
+SwiftBar columns, and adds a column of its own.
+
+A ✓ in the **Vee-only** column means the feature does not exist in xbar or
+SwiftBar. Those tools ignore parameters and metadata tags they do not recognise,
+so a plugin that uses them still *runs* there — it just renders without the
+enhancement. If you need one plugin to look right in all three, stay in the first
+two columns.
+
+### Line parameters
+
+| Parameter | xbar | SwiftBar | Vee-only |
+|---|:--:|:--:|:--:|
+| `color`, `font`, `size`, `length`, `trim` | ✓ | ✓ | |
+| `href` | ✓ | ✓ | |
+| `shell` / `bash`, `param0…N`, `terminal` | ✓ | ✓ | |
+| `refresh` | ✓ | ✓ | |
+| `dropdown` | ✓ | ✓ | |
+| `alternate` | ✓ | ✓ | |
+| `disabled` | ✓ | ✓ | |
+| `key` | ✓ | ✓ | |
+| `image`, `templateImage` | ✓ | ✓ | |
+| `ansi`, `emojize` | ✓ | ✓ | |
+| `sfimage`, `sfcolor`, `sfsize`, `sfconfig` | | ✓ | |
+| `symbolize` | | ✓ | |
+| `md` / `markdown` | | ✓ | |
+| `tooltip` | | ✓ | |
+| `checked` | | ✓ | |
+| `badge` | | ✓ | |
+| `webview`, `webvieww`, `webviewh` | | ✓ | |
+| `shortcut` (runs a macOS Shortcut) | | ✓ | |
+| `header` — a real AppKit section header | | | ✓ |
+| `sparkline` | | | ✓ |
+| `progress`, `trackcolor`, `progressw`, `progressh` | | | ✓ |
+| `pie`, `donut`, `stackedbar` | | | ✓ |
+| `chartlabels`, `chartcolors`, `chartw`, `charth` | | | ✓ |
+| `toggle`, `slider` — interactive popover controls | | | ✓ |
+| `accessory` — which edge an accessory anchors to | | | ✓ |
+
+### Metadata headers
+
+| Tag | xbar | SwiftBar | Vee-only |
+|---|:--:|:--:|:--:|
+| `<xbar.title>`, `<xbar.version>`, `<xbar.author>`, `<xbar.author.github>` | ✓ | ✓ | |
+| `<xbar.desc>`, `<xbar.image>`, `<xbar.dependencies>`, `<xbar.abouturl>` | ✓ | ✓ | |
+| `<xbar.var>` — typed preferences | ✓ | ✓ | |
+| `<swiftbar.schedule>` — cron | | ✓ | |
+| `<swiftbar.type>streamable</swiftbar.type>` | | ✓ | |
+| `<swiftbar.runInBash>`, `<swiftbar.refreshOnOpen>` | | ✓ | |
+| `<swiftbar.environment>` | | ✓ | |
+| `<swiftbar.persistentWebView>` | | ✓ | |
+| `<swiftbar.hideAbout>`, `hideRunInTerminal`, `hideLastUpdated`, `hideDisablePlugin`, `hideSwiftBar` | | ✓ | |
+| `<vee.filter>` — searchable filter panel | | | ✓ |
+| `<vee.shortcut>` — global hotkey | | | ✓ |
+| `<vee.surface>` — [widget surface](widgets.md) | | | ✓ |
+| `<vee.timeout>` — per-plugin execution timeout | | | ✓ |
+| `<vee.capabilities>`, `<vee.network>`, `<vee.secrets>`, `<vee.filesystem.read>` / `<vee.filesystem.write>`, `<vee.exec>` — [trust declarations](trust-model.md) | | | ✓ |
+
+Vee reads both the `<xbar.*>` and `<swiftbar.*>` spellings wherever they overlap,
+and ignores any tag it does not recognise rather than erroring — so a plugin
+written for a newer xbar or SwiftBar than Vee knows about still runs.
+
+### Output formats
+
+| Format | xbar | SwiftBar | Vee-only |
+|---|:--:|:--:|:--:|
+| The text protocol (`---`, `--`, `\| key=value`) | ✓ | ✓ | |
+| Streaming with `~~~` separators | | ✓ | |
+| [JSON output](json-output.md) (`{"vee": 1}`) | | | ✓ |
+| [Widget cards](widgets.md) (`VEE_TARGET=widget`) | | | ✓ |
+
+### Portability in one line
+
+`<vee.*>` tags live inside comments, so they are inert everywhere else — a plugin
+carrying trust declarations is still a perfectly ordinary xbar plugin. Vee-only
+*line parameters* are the ones to think about: they degrade to nothing, so the
+row still appears, just plain.
+
 ## What's different (and better)
 
 - **Native and leak-free.** Vee is pure Swift/AppKit — the menu bar is a real `NSStatusItem`/`NSMenu`, with no embedded WebView. Subprocess output is drained incrementally and processes are timed out and killed, so long-running use does not leak memory the way an old WebView-based architecture can.

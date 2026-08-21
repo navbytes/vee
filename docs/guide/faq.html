@@ -5,19 +5,19 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>FAQ — Vee docs</title>
   <meta name="description" content="Answers about Vee: is it safe un-sandboxed, will my SwiftBar/xbar plugins work, macOS 26 and Apple Silicon requirements, where secrets are stored, and more.">
-  <link rel="canonical" href="https://navbytes.github.io/vee/guide/faq.html">
+  <link rel="canonical" href="https://vee.navbytes.io/guide/faq.html">
   <link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
   <link rel="stylesheet" href="../assets/style.css">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Vee">
   <meta property="og:title" content="FAQ — Vee docs">
   <meta property="og:description" content="Answers about Vee: is it safe un-sandboxed, will my SwiftBar/xbar plugins work, macOS 26 and Apple Silicon requirements, where secrets are stored, and more.">
-  <meta property="og:url" content="https://navbytes.github.io/vee/guide/faq.html">
-  <meta property="og:image" content="https://navbytes.github.io/vee/assets/og-image.png">
+  <meta property="og:url" content="https://vee.navbytes.io/guide/faq.html">
+  <meta property="og:image" content="https://vee.navbytes.io/assets/og-image.png">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="FAQ — Vee docs">
   <meta name="twitter:description" content="Answers about Vee: is it safe un-sandboxed, will my SwiftBar/xbar plugins work, macOS 26 and Apple Silicon requirements, where secrets are stored, and more.">
-  <meta name="twitter:image" content="https://navbytes.github.io/vee/assets/og-image.png">
+  <meta name="twitter:image" content="https://vee.navbytes.io/assets/og-image.png">
 </head>
 <body>
 <a class="skip-link" href="#main">Skip to content</a>
@@ -41,23 +41,28 @@
 </header>
 <div class="docs-layout">
   <aside class="docs-side" aria-label="Documentation navigation">
+    <div id="docs-search" class="docs-search" data-pagefind-ignore></div>
     <p class="docs-nav-title">Documentation</p>
 <ul class="docs-nav">
 <li><a href="./index.html">Overview</a></li>
 <li><a href="./getting-started.html">Getting started</a></li>
 <li><a href="./migrating-from-swiftbar.html">Migrating from SwiftBar / xbar</a></li>
 <li><a href="./plugin-authoring.html">Plugin authoring</a></li>
+<li><a href="./widgets.html">Widgets</a></li>
 <li><a href="./trust-model.html">Trust model</a></li>
 <li><a href="./preferences.html">Preferences</a></li>
 <li><a href="./sdk.html">Plugin SDKs</a></li>
 <li><a href="./json-output.html">JSON output</a></li>
 <li><a href="./cli-and-urls.html">CLI &amp; URL actions</a></li>
+<li><a href="./debugging.html">Debugging &amp; testing</a></li>
+<li><a href="./enterprise-store.html">Custom plugin stores</a></li>
 <li><a href="./faq.html" aria-current="page">FAQ</a></li>
 <li><a href="./troubleshooting.html">Troubleshooting</a></li>
 </ul>
+
   </aside>
   <main class="docs-main" id="main">
-    <article class="docs-content">
+    <article class="docs-content" data-pagefind-body>
       <p class="doc-hero-note">Vee documentation</p>
 <h1>FAQ</h1>
 <h3 id="is-vee-safe-if-plugins-run-un-sandboxed">Is Vee safe if plugins run un-sandboxed?</h3>
@@ -103,9 +108,11 @@
 <h3 id="a-plugin-isnt-showing-up-or-is-erroring--what-do-i-do">A plugin isn't showing up or is erroring — what do I do?</h3>
 <p>Check that it is executable (<code>chmod +x</code>), in the right folder, and that any interpreter or tool it needs is installed. See <a href="troubleshooting.html">Troubleshooting</a>.</p>
     </article>
-    <nav class="doc-nextprev" aria-label="Guide pagination"><a class="prev" href="./cli-and-urls.html"><span class="dir">&larr; Previous</span><span class="lbl">CLI &amp; URL actions</span></a><a class="next" href="./troubleshooting.html"><span class="dir">Next &rarr;</span><span class="lbl">Troubleshooting</span></a></nav>
+    <nav class="doc-nextprev" aria-label="Guide pagination"><a class="prev" href="./enterprise-store.html"><span class="dir">&larr; Previous</span><span class="lbl">Custom plugin stores</span></a><a class="next" href="./troubleshooting.html"><span class="dir">Next &rarr;</span><span class="lbl">Troubleshooting</span></a></nav>
   </main>
 </div>
+<link rel="stylesheet" href="../pagefind/pagefind-ui.css">
+<script src="../pagefind/pagefind-ui.js"></script>
 <script src="../assets/app.js" defer></script>
 </body>
 </html>

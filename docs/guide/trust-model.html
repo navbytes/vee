@@ -5,19 +5,19 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Trust model — Vee docs</title>
   <meta name="description" content="How Vee makes plugins transparent: authors declare what they touch with &lt;vee.*&gt; tags, and Vee shows a plain-language trust summary before install. Advisory, not a sandbox.">
-  <link rel="canonical" href="https://navbytes.github.io/vee/guide/trust-model.html">
+  <link rel="canonical" href="https://vee.navbytes.io/guide/trust-model.html">
   <link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
   <link rel="stylesheet" href="../assets/style.css">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Vee">
   <meta property="og:title" content="Trust model — Vee docs">
   <meta property="og:description" content="How Vee makes plugins transparent: authors declare what they touch with &lt;vee.*&gt; tags, and Vee shows a plain-language trust summary before install. Advisory, not a sandbox.">
-  <meta property="og:url" content="https://navbytes.github.io/vee/guide/trust-model.html">
-  <meta property="og:image" content="https://navbytes.github.io/vee/assets/og-image.png">
+  <meta property="og:url" content="https://vee.navbytes.io/guide/trust-model.html">
+  <meta property="og:image" content="https://vee.navbytes.io/assets/og-image.png">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="Trust model — Vee docs">
   <meta name="twitter:description" content="How Vee makes plugins transparent: authors declare what they touch with &lt;vee.*&gt; tags, and Vee shows a plain-language trust summary before install. Advisory, not a sandbox.">
-  <meta name="twitter:image" content="https://navbytes.github.io/vee/assets/og-image.png">
+  <meta name="twitter:image" content="https://vee.navbytes.io/assets/og-image.png">
 </head>
 <body>
 <a class="skip-link" href="#main">Skip to content</a>
@@ -41,23 +41,28 @@
 </header>
 <div class="docs-layout">
   <aside class="docs-side" aria-label="Documentation navigation">
+    <div id="docs-search" class="docs-search" data-pagefind-ignore></div>
     <p class="docs-nav-title">Documentation</p>
 <ul class="docs-nav">
 <li><a href="./index.html">Overview</a></li>
 <li><a href="./getting-started.html">Getting started</a></li>
 <li><a href="./migrating-from-swiftbar.html">Migrating from SwiftBar / xbar</a></li>
 <li><a href="./plugin-authoring.html">Plugin authoring</a></li>
+<li><a href="./widgets.html">Widgets</a></li>
 <li><a href="./trust-model.html" aria-current="page">Trust model</a></li>
 <li><a href="./preferences.html">Preferences</a></li>
 <li><a href="./sdk.html">Plugin SDKs</a></li>
 <li><a href="./json-output.html">JSON output</a></li>
 <li><a href="./cli-and-urls.html">CLI &amp; URL actions</a></li>
+<li><a href="./debugging.html">Debugging &amp; testing</a></li>
+<li><a href="./enterprise-store.html">Custom plugin stores</a></li>
 <li><a href="./faq.html">FAQ</a></li>
 <li><a href="./troubleshooting.html">Troubleshooting</a></li>
 </ul>
+<nav class="docs-toc" aria-labelledby="toc-title"><p class="docs-nav-title" id="toc-title">On this page</p><ul><li><a href="#why-transparency-not-a-sandbox">Why transparency, not a sandbox</a></li><li><a href="#declaring-capabilities">Declaring capabilities</a></li><li><a href="#the-install-trust-summary">The install trust summary</a></li><li><a href="#trust-levels-badges-and-warnings">Trust levels, badges, and warnings</a></li><li><a href="#what-this-does-and-does-not-guarantee">What this does and does not guarantee</a></li><li><a href="#see-also">See also</a></li></ul></nav>
   </aside>
   <main class="docs-main" id="main">
-    <article class="docs-content">
+    <article class="docs-content" data-pagefind-body>
       <p class="doc-hero-note">Vee documentation</p>
 <h1>Trust model</h1>
 <p>Vee runs plugins as ordinary executables with your full user privileges. There is no sandbox — a plugin can do anything you can do. Rather than pretend to isolate plugins, Vee makes their intentions <strong>transparent</strong>: plugins declare what they touch, and Vee surfaces that to you in plain language before you install and while you manage them.</p>
@@ -122,9 +127,11 @@
 <li><a href="faq.html">FAQ</a> — "Is it safe if it's un-sandboxed?"</li>
 </ul>
     </article>
-    <nav class="doc-nextprev" aria-label="Guide pagination"><a class="prev" href="./plugin-authoring.html"><span class="dir">&larr; Previous</span><span class="lbl">Plugin authoring</span></a><a class="next" href="./preferences.html"><span class="dir">Next &rarr;</span><span class="lbl">Preferences</span></a></nav>
+    <nav class="doc-nextprev" aria-label="Guide pagination"><a class="prev" href="./widgets.html"><span class="dir">&larr; Previous</span><span class="lbl">Widgets</span></a><a class="next" href="./preferences.html"><span class="dir">Next &rarr;</span><span class="lbl">Preferences</span></a></nav>
   </main>
 </div>
+<link rel="stylesheet" href="../pagefind/pagefind-ui.css">
+<script src="../pagefind/pagefind-ui.js"></script>
 <script src="../assets/app.js" defer></script>
 </body>
 </html>

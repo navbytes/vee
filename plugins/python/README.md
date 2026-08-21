@@ -78,6 +78,56 @@ The `.5s` sets a 5-second refresh, exactly as with any other plugin.
 `ItemOptions`. See the [SDK guide](../../docs/_content/sdk.md)
 for the rich-param details.
 
+## Widget cards
+
+Beyond menus, the SDK builds the [widget card](../../docs/_content/widgets.md)
+payload a plugin prints when Vee invokes it with `VEE_TARGET=widget`:
+
+```python
+import os
+from vee import Stat
+
+if os.environ.get("VEE_TARGET") == "widget":
+    Stat(
+        title="Revenue",
+        symbol="chart.line.uptrend.xyaxis",
+        tint="green",
+        value="$18.2k",
+        status="ok",
+        items=[{"label": "Orders", "value": "214", "symbol": "bag", "tint": "blue"}],
+        actions=[{"kind": "refresh", "label": "Refresh"}],
+    ).print()
+else:
+    ...  # ordinary menu output
+```
+
+`Stat`, `Gauge`, `Trend`, `List`, and `Board` preset the card's `template`;
+`widget_card(...)` is the generic constructor. Each returns an object with the
+same `to_string()` / `print()` shape as `Menu`.
+
+For layouts the five templates cannot express, build a **layout tree** with the
+`Node` builders and pass it as `layout=`:
+
+```python
+from vee import widget_card, Node
+
+widget_card(
+    layout=Node.VStack(
+        [
+            Node.Text("CPU", style={"font": {"size": "caption"}, "tint": "secondary"}),
+            Node.Text("38%", style={"font": {"size": "title"}, "monospaced_digit": True}),
+            Node.Gauge(0.38, gauge_style="circular"),
+        ],
+        align="leading",
+        spacing=6,
+    ),
+).print()
+```
+
+`Node.VStack`, `HStack`, `ZStack`, `Grid`, `Text`, `Image`, `Gauge`,
+`Sparkline`, `Spacer`, and `Divider` are the full vocabulary. See
+[Widgets](../../docs/_content/widgets.md) for every field and its limits.
+
 ## Tests
 
 ```sh

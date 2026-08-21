@@ -30,9 +30,9 @@ Two flags make it a design tool rather than only a debugger:
 
 For inline diagnostics in your editor, `vee lint --format compact` emits
 `path:line:col: severity: message`, which VS Code, vim, and emacs already parse —
-no extension required. See [CLI and URL actions](cli-and-urls.md) for the loop's
-full flag list, a copy-pasteable VS Code `problemMatcher`, and a note on which
-file a finding is attributed to.
+no extension required. See [Debugging and testing plugins](debugging.md) for the
+loop's full flag list, a copy-pasteable VS Code `problemMatcher`, and a note on
+which file a finding is attributed to.
 
 Editing a plugin that is already installed works too: Vee watches each plugin
 file and re-reads it shortly after you save, so the menu bar keeps up without a
@@ -463,150 +463,9 @@ by default with no preset combination — set one in Vee's General settings.
 
 ## Widgets
 
-By default your plugin's widget tile is a **scrape** of its menu-bar line —
-whatever `color=`/`sfimage=` is on the title, plus a `progress=`/`sparkline=`
-if the first row has one. That's automatic; every plugin already has a widget
-representation with no changes.
-
-For a **rich** tile — real data laid out per widget size, not a caricature of
-the menu bar — opt a plugin into the widget surface contract:
-
-```
-# <vee.surface>both</vee.surface>
-```
-
-- `<vee.surface>menu</vee.surface>` (or omit the tag) — unchanged: a normal
-  menu-bar plugin, scraped for its widget tile.
-- `<vee.surface>both</vee.surface>` — served in the menu as usual, **and**
-  invoked a second time in widget mode to produce a rich widget card.
-- `<vee.surface>widget</vee.surface>` — **widget-only**: no status item, no
-  menu bar presence at all. The plugin exists only to feed a widget.
-
-The widget-mode cadence needs no separate tag — it reuses the plugin's
-**filename interval** (the same field the menu bar uses), with only a small
-safety floor: `max(filename interval, 10s)`. Because Vee is an always-running
-app, it pushes widget reloads the moment new data arrives (rather than waiting
-on WidgetKit's passive budget, which only applies when an app isn't running), so
-a `cpu.5s.sh` widget can track near-real-time data straight from the menu-bar
-plugin's own cadence. A widget-only plugin whose filename carries no interval
-falls back to the 10-second floor.
-
-### `VEE_TARGET`
-
-Every run gets a `VEE_TARGET` environment variable:
-
-- `VEE_TARGET=menu` — a normal run; print the usual xbar/SwiftBar text (or
-  [JSON](json-output.md)).
-- `VEE_TARGET=widget` — a widget-mode run; print **one JSON object** (the
-  "card", schema below) to stdout and nothing else.
-
-Branch on it like Scriptable's `config.runsInWidget`. If your plugin ignores
-`VEE_TARGET=widget` and prints menu text anyway, Vee falls back to scraping
-that text — graceful degradation, never a crash.
-
-### The card
-
-```json
-{
-  "vee_widget": 1,
-  "template": "stat",
-  "title": "Revenue",
-  "symbol": "chart.line.uptrend.xyaxis",
-  "tint": "green",
-  "value": "$18.2k",
-  "caption": "today",
-  "detail": "214 orders",
-  "status": "ok",
-
-  "progress": 0.72,
-  "trend": [12.1, 13.4, 12.9, 15.0, 18.2],
-
-  "items": [
-    { "label": "Orders",  "value": "214", "symbol": "bag",           "tint": "blue" },
-    { "label": "Refunds", "value": "3",   "symbol": "arrow.uturn.left", "tint": "red" }
-  ],
-
-  "actions": [
-    { "label": "Refresh", "kind": "refresh" },
-    { "label": "Open",    "kind": "href",     "url": "https://dash.example.com" }
-  ],
-
-  "refresh_after": 900,
-  "stale_after": 3600
-}
-```
-
-| Field | Type | Meaning |
-|---|---|---|
-| `vee_widget` | int | Payload schema version (currently `1`). |
-| `template` | enum | `stat` \| `gauge` \| `trend` \| `list` \| `board`. Unknown → `stat` + a Debug diagnostic. |
-| `title` | string? | Tile heading (the plugin/metric name). |
-| `symbol` | string? | SF Symbol name for the glyph. |
-| `tint` | color? | Named (`green`) or `#rrggbbaa`. |
-| `value` | string? | The headline value, already formatted by the plugin. |
-| `caption` | string? | Small secondary line (e.g. "today"). |
-| `detail` | string? | One more line of context. |
-| `status` | enum? | `ok` \| `warning` \| `error` — drives styling and the health roll-up. |
-| `progress` | double? | `0…1`, clamped; the `gauge` template's fill. |
-| `trend` | [double]? | The `trend` template's series. |
-| `items` | [Item]? | Rows for `list`/`board`: `{label, value?, symbol?, tint?}`. |
-| `actions` | [Action]? | Up to two rendered as buttons — see below. |
-| `refresh_after` | int? | Seconds; a hint for the next widget reload. |
-| `stale_after` | int? | Seconds; when the tile should show a stale treatment (else the interval-derived default). |
-
-Unknown top-level keys are ignored (forward-compatible); an invalid value
-(bad `progress`, a non-finite `trend` entry, an unsafe `href` URL) degrades to
-`nil`/dropped with a diagnostic, visible in the plugin's Debug console —
-never a crash.
-
-### Templates
-
-Five native SwiftUI templates, each adapting across the small/medium/large
-widget families — describe your data, Vee draws it:
-
-- **stat** — glyph, big `value` in `tint`, `title`/`caption`. The default.
-- **gauge** — stat + a native gauge from `progress`.
-- **trend** — stat + a sparkline from `trend`.
-- **list** — `title` header + `items` as rows, truncated per family (small
-  shows the headline `value`; medium ≤3 rows; large ≤8).
-- **board** — a compact grid of `items` as stat cells (a KPI board); small
-  collapses to the headline.
-
-### Actions
-
-Up to two `actions` render as buttons:
-
-- `refresh` — re-runs this plugin.
-- `href` — opens a URL (scheme-filtered like menu `href=`: `http`/`https`/
-  custom app deep links; never `file`/`javascript`/…).
-- `shortcut` — runs a named macOS Shortcut (`name`), like menu `shortcut=`.
-
-There is deliberately **no `shell` action** — a widget button must not run an
-arbitrary command without the menu's context.
-
-### Building the card with the SDK
-
-The [TypeScript, Python, and Go SDKs](sdk.md) all have `Stat`/`Gauge`/`Trend`/
-`List`/`Board` builders that emit this JSON for you:
-
-```ts
-import { Stat } from "./src/vee.ts";
-
-if (process.env.VEE_TARGET === "widget") {
-  Stat({
-    title: "Revenue",
-    symbol: "chart.line.uptrend.xyaxis",
-    tint: "green",
-    value: "$18.2k",
-    status: "ok",
-    actions: [{ kind: "refresh", label: "Refresh" }],
-  }).print();
-} else {
-  // ordinary menu-bar output
-}
-```
-
-See [Plugin SDKs](sdk.md#widget-cards) for the Python/Go equivalents.
+Plugins can also render as native desktop and Notification Center widgets —
+automatically from their menu-bar line, or as a rich **widget card** they print
+themselves. That surface has its own page: [Widgets](widgets.md).
 
 ## Metadata headers
 
@@ -811,9 +670,73 @@ while true; do
 done
 ```
 
+## Publishing your plugin
+
+Vee reads plugins from a folder, so "distributing" one can be as simple as
+sending someone a file. There are three routes, in increasing order of reach.
+
+### 1. Share the file
+
+Any executable with an interval in its filename is a complete, self-contained
+plugin. Someone drops it in their plugins folder and it runs — no packaging, no
+manifest, no install step.
+
+Two courtesies make a shared plugin pleasant to receive:
+
+- **Ship it without the executable bit**, so the recipient reads the source
+  before marking it `+x`. The bundled [examples](https://github.com/navbytes/vee/tree/main/examples)
+  do exactly this.
+- **Fill in the metadata.** `<xbar.title>`, `<xbar.desc>`, `<xbar.author>`, and
+  `<xbar.dependencies>` are what Vee shows about your plugin, and
+  `<xbar.dependencies>` is what tells someone why it does not work on their
+  machine.
+
+### 2. Submit it to the catalog
+
+Vee's **Discover** window browses the shared
+[`matryer/xbar-plugins`](https://github.com/matryer/xbar-plugins) catalog, so a
+plugin accepted there reaches xbar, SwiftBar, and Vee users alike.
+
+To propose one for Vee's own catalog and gallery, open an issue using the
+**Plugin submission** template in the
+[Vee repository](https://github.com/navbytes/vee/issues/new/choose). Include what
+the plugin does, its language and dependencies, its declared `<vee.*>`
+capabilities, and a link to the source.
+
+Submissions are reviewed against the trust model, and this is the part worth
+taking seriously: **declarations must match behavior.** A plugin whose
+`<vee.network>` list omits a domain it actually contacts will be declined, because
+the whole point of the declaration is that a user can rely on it when deciding
+whether to run un-sandboxed code. Declaring more than you use is fine; declaring
+less is not. See the [trust model](trust-model.md).
+
+### 3. Run your own store
+
+For internal or team plugins that should not be public, Vee can read a **custom
+store** — a GitHub repo, a static HTTP host, or an air-gapped `file://` mirror —
+and show it in Discover alongside (or instead of) the public catalog, installing
+through the same trust gate.
+
+That is the enterprise path, including private repositories, integrity checks,
+and MDM-managed configuration: see
+[Custom plugin stores](enterprise-store.md).
+
+### Before you publish, whichever route
+
+- `vee lint` exits non-zero on authoring mistakes — wire it into CI if the plugin
+  lives in a repository. See [Debugging and testing plugins](debugging.md).
+- Check the plugin degrades gracefully with no token, no network, and a missing
+  dependency. A plugin that prints a useful "not configured" row beats one that
+  prints a stack trace into someone's menu bar.
+- Declare your `<vee.*>` capabilities honestly, even outside the catalog — they
+  are what the [trust summary](trust-model.md) shows at install.
+
 ## See also
 
 - [Trust model](trust-model.md) — declare what your plugin accesses.
 - [Preferences](preferences.md) — declare typed settings and secrets.
+- [Custom plugin stores](enterprise-store.md) — host your own catalog of internal plugins.
+- [Widgets](widgets.md) — render a plugin on the desktop and in Notification Center.
+- [Debugging and testing plugins](debugging.md) — preview, watch, and lint a plugin while you write it.
 - [CLI and URL actions](cli-and-urls.md) — trigger refresh/notify from a plugin.
 - [Troubleshooting](troubleshooting.md) — when a plugin does not appear or errors.

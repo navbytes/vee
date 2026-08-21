@@ -5,19 +5,19 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Plugin SDKs — Vee docs</title>
   <meta name="description" content="Zero-dependency Vee plugin SDKs for TypeScript, Python, and Go — the same typed Menu/Section builders in every language, producing byte-identical output.">
-  <link rel="canonical" href="https://navbytes.github.io/vee/guide/sdk.html">
+  <link rel="canonical" href="https://vee.navbytes.io/guide/sdk.html">
   <link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
   <link rel="stylesheet" href="../assets/style.css">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Vee">
   <meta property="og:title" content="Plugin SDKs — Vee docs">
   <meta property="og:description" content="Zero-dependency Vee plugin SDKs for TypeScript, Python, and Go — the same typed Menu/Section builders in every language, producing byte-identical output.">
-  <meta property="og:url" content="https://navbytes.github.io/vee/guide/sdk.html">
-  <meta property="og:image" content="https://navbytes.github.io/vee/assets/og-image.png">
+  <meta property="og:url" content="https://vee.navbytes.io/guide/sdk.html">
+  <meta property="og:image" content="https://vee.navbytes.io/assets/og-image.png">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="Plugin SDKs — Vee docs">
   <meta name="twitter:description" content="Zero-dependency Vee plugin SDKs for TypeScript, Python, and Go — the same typed Menu/Section builders in every language, producing byte-identical output.">
-  <meta name="twitter:image" content="https://navbytes.github.io/vee/assets/og-image.png">
+  <meta name="twitter:image" content="https://vee.navbytes.io/assets/og-image.png">
 </head>
 <body>
 <a class="skip-link" href="#main">Skip to content</a>
@@ -41,23 +41,28 @@
 </header>
 <div class="docs-layout">
   <aside class="docs-side" aria-label="Documentation navigation">
+    <div id="docs-search" class="docs-search" data-pagefind-ignore></div>
     <p class="docs-nav-title">Documentation</p>
 <ul class="docs-nav">
 <li><a href="./index.html">Overview</a></li>
 <li><a href="./getting-started.html">Getting started</a></li>
 <li><a href="./migrating-from-swiftbar.html">Migrating from SwiftBar / xbar</a></li>
 <li><a href="./plugin-authoring.html">Plugin authoring</a></li>
+<li><a href="./widgets.html">Widgets</a></li>
 <li><a href="./trust-model.html">Trust model</a></li>
 <li><a href="./preferences.html">Preferences</a></li>
 <li><a href="./sdk.html" aria-current="page">Plugin SDKs</a></li>
 <li><a href="./json-output.html">JSON output</a></li>
 <li><a href="./cli-and-urls.html">CLI &amp; URL actions</a></li>
+<li><a href="./debugging.html">Debugging &amp; testing</a></li>
+<li><a href="./enterprise-store.html">Custom plugin stores</a></li>
 <li><a href="./faq.html">FAQ</a></li>
 <li><a href="./troubleshooting.html">Troubleshooting</a></li>
 </ul>
+<nav class="docs-toc" aria-labelledby="toc-title"><p class="docs-nav-title" id="toc-title">On this page</p><ul><li><a href="#requirements">Requirements</a></li><li><a href="#hello-world">Hello world</a></li><li><a href="#the-api">The API</a></li><li><a href="#rich-params">Rich params</a></li><li><a href="#widget-cards">Widget cards</a></li><li><a href="#the-no-build-step-note-typescript">The no-build-step note (TypeScript)</a></li><li><a href="#drift-guard-and-fixtures">Drift guard and fixtures</a></li><li><a href="#see-also">See also</a></li></ul></nav>
   </aside>
   <main class="docs-main" id="main">
-    <article class="docs-content">
+    <article class="docs-content" data-pagefind-body>
       <p class="doc-hero-note">Vee documentation</p>
 <h1>Plugin SDKs</h1>
 <p>Vee ships tiny, zero-dependency SDKs for writing plugins with typed builders instead of hand-formatting the xbar/SwiftBar text protocol. There are three, one per language — <strong>TypeScript</strong>, <strong>Python</strong>, and <strong>Go</strong> — and they mirror each other exactly: the same builder shape, option names, encoding order, and quoting, so a plugin reads the same in any language and all three produce <strong>byte-identical</strong> output for the same menu.</p>
@@ -223,7 +228,7 @@ examples with shared golden fixtures proving it). See the underlying
 line-parameter grammar in the
 <a href="plugin-authoring.html#line-parameters">plugin authoring reference</a>.</p>
 <h2 id="widget-cards">Widget cards</h2>
-<p>All three SDKs also build the rich <a href="plugin-authoring.html#widgets">widget card</a>
+<p>All three SDKs also build the rich <a href="widgets.html">widget card</a>
 payload a plugin prints when invoked with <code>VEE_TARGET=widget</code> — a generic
 <code>widgetCard(...)</code>/<code>WidgetCard(...)</code> constructor, plus <code>Stat</code>/<code>Gauge</code>/<code>Trend</code>/
 <code>List</code>/<code>Board</code> convenience builders that preset the <code>template</code> field. Each
@@ -268,7 +273,7 @@ c.Print()</code></pre></div>
 <p>All three emit byte-identical JSON for the same card (there's a <code>widget-card</code>
 example and a shared golden fixture proving it, also round-tripped through
 the Swift parser). See the full field/template/action reference in
-<a href="plugin-authoring.html#widgets">Widgets</a>.</p>
+<a href="widgets.html">Widgets</a>.</p>
 <h2 id="the-no-build-step-note-typescript">The no-build-step note (TypeScript)</h2>
 <p>For TypeScript there is deliberately no compiler or bundler in the loop. Node 24+ strips the TypeScript types at load time and runs the file, so:</p>
 <ul>
@@ -307,6 +312,8 @@ go test ./...</code></pre></div>
     <nav class="doc-nextprev" aria-label="Guide pagination"><a class="prev" href="./preferences.html"><span class="dir">&larr; Previous</span><span class="lbl">Preferences</span></a><a class="next" href="./json-output.html"><span class="dir">Next &rarr;</span><span class="lbl">JSON output</span></a></nav>
   </main>
 </div>
+<link rel="stylesheet" href="../pagefind/pagefind-ui.css">
+<script src="../pagefind/pagefind-ui.js"></script>
 <script src="../assets/app.js" defer></script>
 </body>
 </html>

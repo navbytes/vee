@@ -5,19 +5,19 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Migrating from SwiftBar / xbar — Vee docs</title>
   <meta name="description" content="Move to Vee from SwiftBar or xbar in one step: point it at your existing plugins folder. Full protocol compatibility, plus a trust layer and typed SDK.">
-  <link rel="canonical" href="https://navbytes.github.io/vee/guide/migrating-from-swiftbar.html">
+  <link rel="canonical" href="https://vee.navbytes.io/guide/migrating-from-swiftbar.html">
   <link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
   <link rel="stylesheet" href="../assets/style.css">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Vee">
   <meta property="og:title" content="Migrating from SwiftBar / xbar — Vee docs">
   <meta property="og:description" content="Move to Vee from SwiftBar or xbar in one step: point it at your existing plugins folder. Full protocol compatibility, plus a trust layer and typed SDK.">
-  <meta property="og:url" content="https://navbytes.github.io/vee/guide/migrating-from-swiftbar.html">
-  <meta property="og:image" content="https://navbytes.github.io/vee/assets/og-image.png">
+  <meta property="og:url" content="https://vee.navbytes.io/guide/migrating-from-swiftbar.html">
+  <meta property="og:image" content="https://vee.navbytes.io/assets/og-image.png">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="Migrating from SwiftBar / xbar — Vee docs">
   <meta name="twitter:description" content="Move to Vee from SwiftBar or xbar in one step: point it at your existing plugins folder. Full protocol compatibility, plus a trust layer and typed SDK.">
-  <meta name="twitter:image" content="https://navbytes.github.io/vee/assets/og-image.png">
+  <meta name="twitter:image" content="https://vee.navbytes.io/assets/og-image.png">
 </head>
 <body>
 <a class="skip-link" href="#main">Skip to content</a>
@@ -41,23 +41,28 @@
 </header>
 <div class="docs-layout">
   <aside class="docs-side" aria-label="Documentation navigation">
+    <div id="docs-search" class="docs-search" data-pagefind-ignore></div>
     <p class="docs-nav-title">Documentation</p>
 <ul class="docs-nav">
 <li><a href="./index.html">Overview</a></li>
 <li><a href="./getting-started.html">Getting started</a></li>
 <li><a href="./migrating-from-swiftbar.html" aria-current="page">Migrating from SwiftBar / xbar</a></li>
 <li><a href="./plugin-authoring.html">Plugin authoring</a></li>
+<li><a href="./widgets.html">Widgets</a></li>
 <li><a href="./trust-model.html">Trust model</a></li>
 <li><a href="./preferences.html">Preferences</a></li>
 <li><a href="./sdk.html">Plugin SDKs</a></li>
 <li><a href="./json-output.html">JSON output</a></li>
 <li><a href="./cli-and-urls.html">CLI &amp; URL actions</a></li>
+<li><a href="./debugging.html">Debugging &amp; testing</a></li>
+<li><a href="./enterprise-store.html">Custom plugin stores</a></li>
 <li><a href="./faq.html">FAQ</a></li>
 <li><a href="./troubleshooting.html">Troubleshooting</a></li>
 </ul>
+<nav class="docs-toc" aria-labelledby="toc-title"><p class="docs-nav-title" id="toc-title">On this page</p><ul><li><a href="#point-vee-at-your-existing-plugins-folder">Point Vee at your existing plugins folder</a></li><li><a href="#whats-compatible">What's compatible</a></li><li><a href="#compatibility-matrix">Compatibility matrix</a></li><li><a href="#whats-different-and-better">What's different (and better)</a></li><li><a href="#a-note-for-xbar-users">A note for xbar users</a></li><li><a href="#caveats">Caveats</a></li></ul></nav>
   </aside>
   <main class="docs-main" id="main">
-    <article class="docs-content">
+    <article class="docs-content" data-pagefind-body>
       <p class="doc-hero-note">Vee documentation</p>
 <h1>Migrating from SwiftBar / xbar</h1>
 <p>Vee is designed as a drop-in successor to <a href="https://github.com/swiftbar/SwiftBar" rel="noopener">SwiftBar</a> and <a href="https://github.com/matryer/xbar" rel="noopener">xbar</a>. Your existing plugins run unchanged — migration is usually just pointing Vee at the folder you already have.</p>
@@ -81,6 +86,28 @@
 <li><strong>Injected environment variables</strong> — Vee sets the xbar <code>XBARDarkMode</code> variable and the SwiftBar <code>SWIFTBAR*</code>, <code>SWIFTBAR_PLUGIN_*</code>, and <code>OS_*</code> variables, so plugins that read them behave the same.</li>
 </ul>
 <p>See the <a href="plugin-authoring.html">plugin authoring reference</a> for the full list.</p>
+<h2 id="compatibility-matrix">Compatibility matrix</h2>
+<p>The detail behind that list. <strong>Vee</strong> implements everything in the xbar and
+SwiftBar columns, and adds a column of its own.</p>
+<p>A ✓ in the <strong>Vee-only</strong> column means the feature does not exist in xbar or
+SwiftBar. Those tools ignore parameters and metadata tags they do not recognise,
+so a plugin that uses them still <em>runs</em> there — it just renders without the
+enhancement. If you need one plugin to look right in all three, stay in the first
+two columns.</p>
+<h3 id="line-parameters">Line parameters</h3>
+<div class="table-scroll"><table><thead><tr><th>Parameter</th><th>xbar</th><th>SwiftBar</th><th>Vee-only</th></tr></thead><tbody><tr><td><code>color</code>, <code>font</code>, <code>size</code>, <code>length</code>, <code>trim</code></td><td>✓</td><td>✓</td><td></td></tr><tr><td><code>href</code></td><td>✓</td><td>✓</td><td></td></tr><tr><td><code>shell</code> / <code>bash</code>, <code>param0…N</code>, <code>terminal</code></td><td>✓</td><td>✓</td><td></td></tr><tr><td><code>refresh</code></td><td>✓</td><td>✓</td><td></td></tr><tr><td><code>dropdown</code></td><td>✓</td><td>✓</td><td></td></tr><tr><td><code>alternate</code></td><td>✓</td><td>✓</td><td></td></tr><tr><td><code>disabled</code></td><td>✓</td><td>✓</td><td></td></tr><tr><td><code>key</code></td><td>✓</td><td>✓</td><td></td></tr><tr><td><code>image</code>, <code>templateImage</code></td><td>✓</td><td>✓</td><td></td></tr><tr><td><code>ansi</code>, <code>emojize</code></td><td>✓</td><td>✓</td><td></td></tr><tr><td><code>sfimage</code>, <code>sfcolor</code>, <code>sfsize</code>, <code>sfconfig</code></td><td></td><td>✓</td><td></td></tr><tr><td><code>symbolize</code></td><td></td><td>✓</td><td></td></tr><tr><td><code>md</code> / <code>markdown</code></td><td></td><td>✓</td><td></td></tr><tr><td><code>tooltip</code></td><td></td><td>✓</td><td></td></tr><tr><td><code>checked</code></td><td></td><td>✓</td><td></td></tr><tr><td><code>badge</code></td><td></td><td>✓</td><td></td></tr><tr><td><code>webview</code>, <code>webvieww</code>, <code>webviewh</code></td><td></td><td>✓</td><td></td></tr><tr><td><code>shortcut</code> (runs a macOS Shortcut)</td><td></td><td>✓</td><td></td></tr><tr><td><code>header</code> — a real AppKit section header</td><td></td><td></td><td>✓</td></tr><tr><td><code>sparkline</code></td><td></td><td></td><td>✓</td></tr><tr><td><code>progress</code>, <code>trackcolor</code>, <code>progressw</code>, <code>progressh</code></td><td></td><td></td><td>✓</td></tr><tr><td><code>pie</code>, <code>donut</code>, <code>stackedbar</code></td><td></td><td></td><td>✓</td></tr><tr><td><code>chartlabels</code>, <code>chartcolors</code>, <code>chartw</code>, <code>charth</code></td><td></td><td></td><td>✓</td></tr><tr><td><code>toggle</code>, <code>slider</code> — interactive popover controls</td><td></td><td></td><td>✓</td></tr><tr><td><code>accessory</code> — which edge an accessory anchors to</td><td></td><td></td><td>✓</td></tr></tbody></table></div>
+<h3 id="metadata-headers">Metadata headers</h3>
+<div class="table-scroll"><table><thead><tr><th>Tag</th><th>xbar</th><th>SwiftBar</th><th>Vee-only</th></tr></thead><tbody><tr><td><code>&lt;xbar.title&gt;</code>, <code>&lt;xbar.version&gt;</code>, <code>&lt;xbar.author&gt;</code>, <code>&lt;xbar.author.github&gt;</code></td><td>✓</td><td>✓</td><td></td></tr><tr><td><code>&lt;xbar.desc&gt;</code>, <code>&lt;xbar.image&gt;</code>, <code>&lt;xbar.dependencies&gt;</code>, <code>&lt;xbar.abouturl&gt;</code></td><td>✓</td><td>✓</td><td></td></tr><tr><td><code>&lt;xbar.var&gt;</code> — typed preferences</td><td>✓</td><td>✓</td><td></td></tr><tr><td><code>&lt;swiftbar.schedule&gt;</code> — cron</td><td></td><td>✓</td><td></td></tr><tr><td><code>&lt;swiftbar.type&gt;streamable&lt;/swiftbar.type&gt;</code></td><td></td><td>✓</td><td></td></tr><tr><td><code>&lt;swiftbar.runInBash&gt;</code>, <code>&lt;swiftbar.refreshOnOpen&gt;</code></td><td></td><td>✓</td><td></td></tr><tr><td><code>&lt;swiftbar.environment&gt;</code></td><td></td><td>✓</td><td></td></tr><tr><td><code>&lt;swiftbar.persistentWebView&gt;</code></td><td></td><td>✓</td><td></td></tr><tr><td><code>&lt;swiftbar.hideAbout&gt;</code>, <code>hideRunInTerminal</code>, <code>hideLastUpdated</code>, <code>hideDisablePlugin</code>, <code>hideSwiftBar</code></td><td></td><td>✓</td><td></td></tr><tr><td><code>&lt;vee.filter&gt;</code> — searchable filter panel</td><td></td><td></td><td>✓</td></tr><tr><td><code>&lt;vee.shortcut&gt;</code> — global hotkey</td><td></td><td></td><td>✓</td></tr><tr><td><code>&lt;vee.surface&gt;</code> — <a href="widgets.html">widget surface</a></td><td></td><td></td><td>✓</td></tr><tr><td><code>&lt;vee.timeout&gt;</code> — per-plugin execution timeout</td><td></td><td></td><td>✓</td></tr><tr><td><code>&lt;vee.capabilities&gt;</code>, <code>&lt;vee.network&gt;</code>, <code>&lt;vee.secrets&gt;</code>, <code>&lt;vee.filesystem.read&gt;</code> / <code>&lt;vee.filesystem.write&gt;</code>, <code>&lt;vee.exec&gt;</code> — <a href="trust-model.html">trust declarations</a></td><td></td><td></td><td>✓</td></tr></tbody></table></div>
+<p>Vee reads both the <code>&lt;xbar.*&gt;</code> and <code>&lt;swiftbar.*&gt;</code> spellings wherever they overlap,
+and ignores any tag it does not recognise rather than erroring — so a plugin
+written for a newer xbar or SwiftBar than Vee knows about still runs.</p>
+<h3 id="output-formats">Output formats</h3>
+<div class="table-scroll"><table><thead><tr><th>Format</th><th>xbar</th><th>SwiftBar</th><th>Vee-only</th></tr></thead><tbody><tr><td>The text protocol (<code>---</code>, <code>--</code>, <code>| key=value</code>)</td><td>✓</td><td>✓</td><td></td></tr><tr><td>Streaming with <code>~~~</code> separators</td><td></td><td>✓</td><td></td></tr><tr><td><a href="json-output.html">JSON output</a> (<code>{"vee": 1}</code>)</td><td></td><td></td><td>✓</td></tr><tr><td><a href="widgets.html">Widget cards</a> (<code>VEE_TARGET=widget</code>)</td><td></td><td></td><td>✓</td></tr></tbody></table></div>
+<h3 id="portability-in-one-line">Portability in one line</h3>
+<p><code>&lt;vee.*&gt;</code> tags live inside comments, so they are inert everywhere else — a plugin
+carrying trust declarations is still a perfectly ordinary xbar plugin. Vee-only
+<em>line parameters</em> are the ones to think about: they degrade to nothing, so the
+row still appears, just plain.</p>
 <h2 id="whats-different-and-better">What's different (and better)</h2>
 <ul>
 <li><strong>Native and leak-free.</strong> Vee is pure Swift/AppKit — the menu bar is a real <code>NSStatusItem</code>/<code>NSMenu</code>, with no embedded WebView. Subprocess output is drained incrementally and processes are timed out and killed, so long-running use does not leak memory the way an old WebView-based architecture can.</li>
@@ -102,6 +129,8 @@
     <nav class="doc-nextprev" aria-label="Guide pagination"><a class="prev" href="./getting-started.html"><span class="dir">&larr; Previous</span><span class="lbl">Getting started</span></a><a class="next" href="./plugin-authoring.html"><span class="dir">Next &rarr;</span><span class="lbl">Plugin authoring</span></a></nav>
   </main>
 </div>
+<link rel="stylesheet" href="../pagefind/pagefind-ui.css">
+<script src="../pagefind/pagefind-ui.js"></script>
 <script src="../assets/app.js" defer></script>
 </body>
 </html>

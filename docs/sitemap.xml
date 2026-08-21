@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>https://vee.navbytes.io/</loc></url>
+  <url><loc>https://vee.navbytes.io/compare/</loc></url>
+  <url><loc>https://vee.navbytes.io/compare/vee-vs-swiftbar.html</loc></url>
+  <url><loc>https://vee.navbytes.io/compare/vee-vs-xbar.html</loc></url>
+  <url><loc>https://vee.navbytes.io/guide/index.html</loc></url>
+  <url><loc>https://vee.navbytes.io/guide/getting-started.html</loc></url>
+  <url><loc>https://vee.navbytes.io/guide/migrating-from-swiftbar.html</loc></url>
+  <url><loc>https://vee.navbytes.io/guide/plugin-authoring.html</loc></url>
+  <url><loc>https://vee.navbytes.io/guide/widgets.html</loc></url>
+  <url><loc>https://vee.navbytes.io/guide/trust-model.html</loc></url>
+  <url><loc>https://vee.navbytes.io/guide/preferences.html</loc></url>
+  <url><loc>https://vee.navbytes.io/guide/sdk.html</loc></url>
+  <url><loc>https://vee.navbytes.io/guide/json-output.html</loc></url>
+  <url><loc>https://vee.navbytes.io/guide/cli-and-urls.html</loc></url>
+  <url><loc>https://vee.navbytes.io/guide/debugging.html</loc></url>
+  <url><loc>https://vee.navbytes.io/guide/enterprise-store.html</loc></url>
+  <url><loc>https://vee.navbytes.io/guide/faq.html</loc></url>
+  <url><loc>https://vee.navbytes.io/guide/troubleshooting.html</loc></url>
+</urlset>

@@ -5,19 +5,19 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Plugin authoring reference — Vee docs</title>
   <meta name="description" content="The full Vee plugin reference: filenames and intervals, menu structure, line parameters, metadata headers, SF Symbols, ANSI, Markdown, streaming, and cron.">
-  <link rel="canonical" href="https://navbytes.github.io/vee/guide/plugin-authoring.html">
+  <link rel="canonical" href="https://vee.navbytes.io/guide/plugin-authoring.html">
   <link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
   <link rel="stylesheet" href="../assets/style.css">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Vee">
   <meta property="og:title" content="Plugin authoring reference — Vee docs">
   <meta property="og:description" content="The full Vee plugin reference: filenames and intervals, menu structure, line parameters, metadata headers, SF Symbols, ANSI, Markdown, streaming, and cron.">
-  <meta property="og:url" content="https://navbytes.github.io/vee/guide/plugin-authoring.html">
-  <meta property="og:image" content="https://navbytes.github.io/vee/assets/og-image.png">
+  <meta property="og:url" content="https://vee.navbytes.io/guide/plugin-authoring.html">
+  <meta property="og:image" content="https://vee.navbytes.io/assets/og-image.png">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="Plugin authoring reference — Vee docs">
   <meta name="twitter:description" content="The full Vee plugin reference: filenames and intervals, menu structure, line parameters, metadata headers, SF Symbols, ANSI, Markdown, streaming, and cron.">
-  <meta name="twitter:image" content="https://navbytes.github.io/vee/assets/og-image.png">
+  <meta name="twitter:image" content="https://vee.navbytes.io/assets/og-image.png">
 </head>
 <body>
 <a class="skip-link" href="#main">Skip to content</a>
@@ -41,23 +41,28 @@
 </header>
 <div class="docs-layout">
   <aside class="docs-side" aria-label="Documentation navigation">
+    <div id="docs-search" class="docs-search" data-pagefind-ignore></div>
     <p class="docs-nav-title">Documentation</p>
 <ul class="docs-nav">
 <li><a href="./index.html">Overview</a></li>
 <li><a href="./getting-started.html">Getting started</a></li>
 <li><a href="./migrating-from-swiftbar.html">Migrating from SwiftBar / xbar</a></li>
 <li><a href="./plugin-authoring.html" aria-current="page">Plugin authoring</a></li>
+<li><a href="./widgets.html">Widgets</a></li>
 <li><a href="./trust-model.html">Trust model</a></li>
 <li><a href="./preferences.html">Preferences</a></li>
 <li><a href="./sdk.html">Plugin SDKs</a></li>
 <li><a href="./json-output.html">JSON output</a></li>
 <li><a href="./cli-and-urls.html">CLI &amp; URL actions</a></li>
+<li><a href="./debugging.html">Debugging &amp; testing</a></li>
+<li><a href="./enterprise-store.html">Custom plugin stores</a></li>
 <li><a href="./faq.html">FAQ</a></li>
 <li><a href="./troubleshooting.html">Troubleshooting</a></li>
 </ul>
+<nav class="docs-toc" aria-labelledby="toc-title"><p class="docs-nav-title" id="toc-title">On this page</p><ul><li><a href="#the-authoring-loop">The authoring loop</a></li><li><a href="#filenames-and-refresh-intervals">Filenames and refresh intervals</a></li><li><a href="#title-vs-dropdown">Title vs. dropdown</a></li><li><a href="#separators-and-submenus">Separators and submenus</a></li><li><a href="#section-headers">Section headers</a></li><li><a href="#line-parameters">Line parameters</a></li><li><a href="#rich-inline-charts-liquid-glass-popovers">Rich inline charts (Liquid Glass popovers)</a></li><li><a href="#searchable-filter-panel">Searchable filter panel</a></li><li><a href="#widgets">Widgets</a></li><li><a href="#metadata-headers">Metadata headers</a></li><li><a href="#sf-symbols">SF Symbols</a></li><li><a href="#ansi-color">ANSI color</a></li><li><a href="#markdown">Markdown</a></li><li><a href="#streaming">Streaming</a></li><li><a href="#cron-schedules">Cron schedules</a></li><li><a href="#environment-variables-vee-injects">Environment variables Vee injects</a></li><li><a href="#worked-examples">Worked examples</a></li><li><a href="#publishing-your-plugin">Publishing your plugin</a></li><li><a href="#see-also">See also</a></li></ul></nav>
   </aside>
   <main class="docs-main" id="main">
-    <article class="docs-content">
+    <article class="docs-content" data-pagefind-body>
       <p class="doc-hero-note">Vee documentation</p>
 <h1>Plugin authoring reference</h1>
 <p>A Vee plugin is any executable that prints text to standard output in the xbar/SwiftBar format. This page is the full reference: filenames, menu structure, the parameter table, metadata headers, and the richer features (SF Symbols, ANSI, Markdown, streaming, cron).</p>
@@ -82,9 +87,9 @@ shows you the structure; the menu bar shows you Vee's actual render.</li>
 </ul>
 <p>For inline diagnostics in your editor, <code>vee lint --format compact</code> emits
 <code>path:line:col: severity: message</code>, which VS Code, vim, and emacs already parse —
-no extension required. See <a href="cli-and-urls.html">CLI and URL actions</a> for the loop's
-full flag list, a copy-pasteable VS Code <code>problemMatcher</code>, and a note on which
-file a finding is attributed to.</p>
+no extension required. See <a href="debugging.html">Debugging and testing plugins</a> for the
+loop's full flag list, a copy-pasteable VS Code <code>problemMatcher</code>, and a note on
+which file a finding is attributed to.</p>
 <p>Editing a plugin that is already installed works too: Vee watches each plugin
 file and re-reads it shortly after you save, so the menu bar keeps up without a
 relaunch.</p>
@@ -369,113 +374,9 @@ surfaces its rows). Selecting a row still runs that row's own plugin's
 action, never a different plugin's. It has its own opt-in global hotkey, off
 by default with no preset combination — set one in Vee's General settings.</p>
 <h2 id="widgets">Widgets</h2>
-<p>By default your plugin's widget tile is a <strong>scrape</strong> of its menu-bar line —
-whatever <code>color=</code>/<code>sfimage=</code> is on the title, plus a <code>progress=</code>/<code>sparkline=</code>
-if the first row has one. That's automatic; every plugin already has a widget
-representation with no changes.</p>
-<p>For a <strong>rich</strong> tile — real data laid out per widget size, not a caricature of
-the menu bar — opt a plugin into the widget surface contract:</p>
-<div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">text</span></div><pre><code># &lt;vee.surface&gt;both&lt;/vee.surface&gt;</code></pre></div>
-<ul>
-<li><code>&lt;vee.surface&gt;menu&lt;/vee.surface&gt;</code> (or omit the tag) — unchanged: a normal
-menu-bar plugin, scraped for its widget tile.</li>
-<li><code>&lt;vee.surface&gt;both&lt;/vee.surface&gt;</code> — served in the menu as usual, <strong>and</strong>
-invoked a second time in widget mode to produce a rich widget card.</li>
-<li><code>&lt;vee.surface&gt;widget&lt;/vee.surface&gt;</code> — <strong>widget-only</strong>: no status item, no
-menu bar presence at all. The plugin exists only to feed a widget.</li>
-</ul>
-<p>The widget-mode cadence needs no separate tag — it reuses the plugin's
-<strong>filename interval</strong> (the same field the menu bar uses), with only a small
-safety floor: <code>max(filename interval, 10s)</code>. Because Vee is an always-running
-app, it pushes widget reloads the moment new data arrives (rather than waiting
-on WidgetKit's passive budget, which only applies when an app isn't running), so
-a <code>cpu.5s.sh</code> widget can track near-real-time data straight from the menu-bar
-plugin's own cadence. A widget-only plugin whose filename carries no interval
-falls back to the 10-second floor.</p>
-<h3 id="vee_target"><code>VEE_TARGET</code></h3>
-<p>Every run gets a <code>VEE_TARGET</code> environment variable:</p>
-<ul>
-<li><code>VEE_TARGET=menu</code> — a normal run; print the usual xbar/SwiftBar text (or
-<a href="json-output.html">JSON</a>).</li>
-<li><code>VEE_TARGET=widget</code> — a widget-mode run; print <strong>one JSON object</strong> (the
-"card", schema below) to stdout and nothing else.</li>
-</ul>
-<p>Branch on it like Scriptable's <code>config.runsInWidget</code>. If your plugin ignores
-<code>VEE_TARGET=widget</code> and prints menu text anyway, Vee falls back to scraping
-that text — graceful degradation, never a crash.</p>
-<h3 id="the-card">The card</h3>
-<div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">json</span></div><pre><code>{
-  "vee_widget": 1,
-  "template": "stat",
-  "title": "Revenue",
-  "symbol": "chart.line.uptrend.xyaxis",
-  "tint": "green",
-  "value": "$18.2k",
-  "caption": "today",
-  "detail": "214 orders",
-  "status": "ok",
-
-  "progress": 0.72,
-  "trend": [12.1, 13.4, 12.9, 15.0, 18.2],
-
-  "items": [
-    { "label": "Orders",  "value": "214", "symbol": "bag",           "tint": "blue" },
-    { "label": "Refunds", "value": "3",   "symbol": "arrow.uturn.left", "tint": "red" }
-  ],
-
-  "actions": [
-    { "label": "Refresh", "kind": "refresh" },
-    { "label": "Open",    "kind": "href",     "url": "https://dash.example.com" }
-  ],
-
-  "refresh_after": 900,
-  "stale_after": 3600
-}</code></pre></div>
-<div class="table-scroll"><table><thead><tr><th>Field</th><th>Type</th><th>Meaning</th></tr></thead><tbody><tr><td><code>vee_widget</code></td><td>int</td><td>Payload schema version (currently <code>1</code>).</td></tr><tr><td><code>template</code></td><td>enum</td><td><code>stat</code> \</td><td><code>gauge</code> \</td><td><code>trend</code> \</td><td><code>list</code> \</td><td><code>board</code>. Unknown → <code>stat</code> + a Debug diagnostic.</td></tr><tr><td><code>title</code></td><td>string?</td><td>Tile heading (the plugin/metric name).</td></tr><tr><td><code>symbol</code></td><td>string?</td><td>SF Symbol name for the glyph.</td></tr><tr><td><code>tint</code></td><td>color?</td><td>Named (<code>green</code>) or <code>#rrggbbaa</code>.</td></tr><tr><td><code>value</code></td><td>string?</td><td>The headline value, already formatted by the plugin.</td></tr><tr><td><code>caption</code></td><td>string?</td><td>Small secondary line (e.g. "today").</td></tr><tr><td><code>detail</code></td><td>string?</td><td>One more line of context.</td></tr><tr><td><code>status</code></td><td>enum?</td><td><code>ok</code> \</td><td><code>warning</code> \</td><td><code>error</code> — drives styling and the health roll-up.</td></tr><tr><td><code>progress</code></td><td>double?</td><td><code>0…1</code>, clamped; the <code>gauge</code> template's fill.</td></tr><tr><td><code>trend</code></td><td>[double]?</td><td>The <code>trend</code> template's series.</td></tr><tr><td><code>items</code></td><td>[Item]?</td><td>Rows for <code>list</code>/<code>board</code>: <code>{label, value?, symbol?, tint?}</code>.</td></tr><tr><td><code>actions</code></td><td>[Action]?</td><td>Up to two rendered as buttons — see below.</td></tr><tr><td><code>refresh_after</code></td><td>int?</td><td>Seconds; a hint for the next widget reload.</td></tr><tr><td><code>stale_after</code></td><td>int?</td><td>Seconds; when the tile should show a stale treatment (else the interval-derived default).</td></tr></tbody></table></div>
-<p>Unknown top-level keys are ignored (forward-compatible); an invalid value
-(bad <code>progress</code>, a non-finite <code>trend</code> entry, an unsafe <code>href</code> URL) degrades to
-<code>nil</code>/dropped with a diagnostic, visible in the plugin's Debug console —
-never a crash.</p>
-<h3 id="templates">Templates</h3>
-<p>Five native SwiftUI templates, each adapting across the small/medium/large
-widget families — describe your data, Vee draws it:</p>
-<ul>
-<li><strong>stat</strong> — glyph, big <code>value</code> in <code>tint</code>, <code>title</code>/<code>caption</code>. The default.</li>
-<li><strong>gauge</strong> — stat + a native gauge from <code>progress</code>.</li>
-<li><strong>trend</strong> — stat + a sparkline from <code>trend</code>.</li>
-<li><strong>list</strong> — <code>title</code> header + <code>items</code> as rows, truncated per family (small
-shows the headline <code>value</code>; medium ≤3 rows; large ≤8).</li>
-<li><strong>board</strong> — a compact grid of <code>items</code> as stat cells (a KPI board); small
-collapses to the headline.</li>
-</ul>
-<h3 id="actions">Actions</h3>
-<p>Up to two <code>actions</code> render as buttons:</p>
-<ul>
-<li><code>refresh</code> — re-runs this plugin.</li>
-<li><code>href</code> — opens a URL (scheme-filtered like menu <code>href=</code>: <code>http</code>/<code>https</code>/
-custom app deep links; never <code>file</code>/<code>javascript</code>/…).</li>
-<li><code>shortcut</code> — runs a named macOS Shortcut (<code>name</code>), like menu <code>shortcut=</code>.</li>
-</ul>
-<p>There is deliberately <strong>no <code>shell</code> action</strong> — a widget button must not run an
-arbitrary command without the menu's context.</p>
-<h3 id="building-the-card-with-the-sdk">Building the card with the SDK</h3>
-<p>The <a href="sdk.html">TypeScript, Python, and Go SDKs</a> all have <code>Stat</code>/<code>Gauge</code>/<code>Trend</code>/
-<code>List</code>/<code>Board</code> builders that emit this JSON for you:</p>
-<div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">ts</span></div><pre><code>import { Stat } from "./src/vee.ts";
-
-if (process.env.VEE_TARGET === "widget") {
-  Stat({
-    title: "Revenue",
-    symbol: "chart.line.uptrend.xyaxis",
-    tint: "green",
-    value: "$18.2k",
-    status: "ok",
-    actions: [{ kind: "refresh", label: "Refresh" }],
-  }).print();
-} else {
-  // ordinary menu-bar output
-}</code></pre></div>
-<p>See <a href="sdk.html#widget-cards">Plugin SDKs</a> for the Python/Go equivalents.</p>
+<p>Plugins can also render as native desktop and Notification Center widgets —
+automatically from their menu-bar line, or as a rich <strong>widget card</strong> they print
+themselves. That surface has its own page: <a href="widgets.html">Widgets</a>.</p>
 <h2 id="metadata-headers">Metadata headers</h2>
 <p>Put <code>&lt;xbar.*&gt;</code> / <code>&lt;swiftbar.*&gt;</code> tags anywhere in the file (usually in a comment block near the top). They are scanned regardless of the comment syntax, so they work in any language.</p>
 <div class="table-scroll"><table><thead><tr><th>Tag</th><th>Purpose</th></tr></thead><tbody><tr><td><code>&lt;xbar.title&gt;</code></td><td>Human-readable plugin name.</td></tr><tr><td><code>&lt;xbar.version&gt;</code></td><td>Plugin version.</td></tr><tr><td><code>&lt;xbar.author&gt;</code></td><td>Author name.</td></tr><tr><td><code>&lt;xbar.author.github&gt;</code></td><td>Author's GitHub handle.</td></tr><tr><td><code>&lt;xbar.desc&gt;</code></td><td>One-line description.</td></tr><tr><td><code>&lt;xbar.image&gt;</code></td><td>Preview image URL.</td></tr><tr><td><code>&lt;xbar.dependencies&gt;</code></td><td>Comma-separated tools the plugin needs (e.g. <code>python3,jq</code>).</td></tr><tr><td><code>&lt;xbar.abouturl&gt;</code></td><td>A link to the plugin's homepage.</td></tr><tr><td><code>&lt;xbar.var&gt;</code></td><td>A typed, user-editable preference — see <a href="preferences.html">Preferences</a>.</td></tr><tr><td><code>&lt;swiftbar.schedule&gt;</code></td><td>A cron schedule (one or more, `</td><td>`-separated).</td></tr><tr><td><code>&lt;swiftbar.type&gt;streamable&lt;/swiftbar.type&gt;</code></td><td>Marks the plugin as a long-running streaming plugin.</td></tr><tr><td><code>&lt;swiftbar.runInBash&gt;</code></td><td>Whether to run the script through bash.</td></tr><tr><td><code>&lt;swiftbar.refreshOnOpen&gt;</code></td><td>Re-run the plugin each time its menu opens.</td></tr><tr><td><code>&lt;swiftbar.environment&gt;</code></td><td>Inline environment variables, e.g. <code>[VAR1=a, VAR2=b]</code>.</td></tr><tr><td><code>&lt;swiftbar.hideAbout&gt;</code></td><td>Hide the default "About" item.</td></tr><tr><td><code>&lt;swiftbar.hideRunInTerminal&gt;</code></td><td>Hide the "Run in Terminal…" item.</td></tr><tr><td><code>&lt;swiftbar.hideLastUpdated&gt;</code></td><td>Hide the "Updated…" timestamp item.</td></tr><tr><td><code>&lt;swiftbar.hideDisablePlugin&gt;</code></td><td>Hide the "Disable Plugin" item.</td></tr><tr><td><code>&lt;swiftbar.hideSwiftBar&gt;</code></td><td>Hide the app (Vee) submenu.</td></tr><tr><td><code>&lt;swiftbar.persistentWebView&gt;</code></td><td>Keep a <code>webview=</code> window alive across refreshes instead of recreating it.</td></tr></tbody></table></div>
@@ -601,17 +502,72 @@ while true; do
   echo "$(date '+%A, %B %d')"
   sleep 1
 done</code></pre></div>
+<h2 id="publishing-your-plugin">Publishing your plugin</h2>
+<p>Vee reads plugins from a folder, so "distributing" one can be as simple as
+sending someone a file. There are three routes, in increasing order of reach.</p>
+<h3 id="1-share-the-file">1. Share the file</h3>
+<p>Any executable with an interval in its filename is a complete, self-contained
+plugin. Someone drops it in their plugins folder and it runs — no packaging, no
+manifest, no install step.</p>
+<p>Two courtesies make a shared plugin pleasant to receive:</p>
+<ul>
+<li><strong>Ship it without the executable bit</strong>, so the recipient reads the source
+before marking it <code>+x</code>. The bundled <a href="https://github.com/navbytes/vee/tree/main/examples" rel="noopener">examples</a>
+do exactly this.</li>
+<li><strong>Fill in the metadata.</strong> <code>&lt;xbar.title&gt;</code>, <code>&lt;xbar.desc&gt;</code>, <code>&lt;xbar.author&gt;</code>, and
+<code>&lt;xbar.dependencies&gt;</code> are what Vee shows about your plugin, and
+<code>&lt;xbar.dependencies&gt;</code> is what tells someone why it does not work on their
+machine.</li>
+</ul>
+<h3 id="2-submit-it-to-the-catalog">2. Submit it to the catalog</h3>
+<p>Vee's <strong>Discover</strong> window browses the shared
+<a href="https://github.com/matryer/xbar-plugins" rel="noopener"><code>matryer/xbar-plugins</code></a> catalog, so a
+plugin accepted there reaches xbar, SwiftBar, and Vee users alike.</p>
+<p>To propose one for Vee's own catalog and gallery, open an issue using the
+<strong>Plugin submission</strong> template in the
+<a href="https://github.com/navbytes/vee/issues/new/choose" rel="noopener">Vee repository</a>. Include what
+the plugin does, its language and dependencies, its declared <code>&lt;vee.*&gt;</code>
+capabilities, and a link to the source.</p>
+<p>Submissions are reviewed against the trust model, and this is the part worth
+taking seriously: <strong>declarations must match behavior.</strong> A plugin whose
+<code>&lt;vee.network&gt;</code> list omits a domain it actually contacts will be declined, because
+the whole point of the declaration is that a user can rely on it when deciding
+whether to run un-sandboxed code. Declaring more than you use is fine; declaring
+less is not. See the <a href="trust-model.html">trust model</a>.</p>
+<h3 id="3-run-your-own-store">3. Run your own store</h3>
+<p>For internal or team plugins that should not be public, Vee can read a <strong>custom
+store</strong> — a GitHub repo, a static HTTP host, or an air-gapped <code>file://</code> mirror —
+and show it in Discover alongside (or instead of) the public catalog, installing
+through the same trust gate.</p>
+<p>That is the enterprise path, including private repositories, integrity checks,
+and MDM-managed configuration: see
+<a href="enterprise-store.html">Custom plugin stores</a>.</p>
+<h3 id="before-you-publish-whichever-route">Before you publish, whichever route</h3>
+<ul>
+<li><code>vee lint</code> exits non-zero on authoring mistakes — wire it into CI if the plugin
+lives in a repository. See <a href="debugging.html">Debugging and testing plugins</a>.</li>
+<li>Check the plugin degrades gracefully with no token, no network, and a missing
+dependency. A plugin that prints a useful "not configured" row beats one that
+prints a stack trace into someone's menu bar.</li>
+<li>Declare your <code>&lt;vee.*&gt;</code> capabilities honestly, even outside the catalog — they
+are what the <a href="trust-model.html">trust summary</a> shows at install.</li>
+</ul>
 <h2 id="see-also">See also</h2>
 <ul>
 <li><a href="trust-model.html">Trust model</a> — declare what your plugin accesses.</li>
 <li><a href="preferences.html">Preferences</a> — declare typed settings and secrets.</li>
+<li><a href="enterprise-store.html">Custom plugin stores</a> — host your own catalog of internal plugins.</li>
+<li><a href="widgets.html">Widgets</a> — render a plugin on the desktop and in Notification Center.</li>
+<li><a href="debugging.html">Debugging and testing plugins</a> — preview, watch, and lint a plugin while you write it.</li>
 <li><a href="cli-and-urls.html">CLI and URL actions</a> — trigger refresh/notify from a plugin.</li>
 <li><a href="troubleshooting.html">Troubleshooting</a> — when a plugin does not appear or errors.</li>
 </ul>
     </article>
-    <nav class="doc-nextprev" aria-label="Guide pagination"><a class="prev" href="./migrating-from-swiftbar.html"><span class="dir">&larr; Previous</span><span class="lbl">Migrating from SwiftBar / xbar</span></a><a class="next" href="./trust-model.html"><span class="dir">Next &rarr;</span><span class="lbl">Trust model</span></a></nav>
+    <nav class="doc-nextprev" aria-label="Guide pagination"><a class="prev" href="./migrating-from-swiftbar.html"><span class="dir">&larr; Previous</span><span class="lbl">Migrating from SwiftBar / xbar</span></a><a class="next" href="./widgets.html"><span class="dir">Next &rarr;</span><span class="lbl">Widgets</span></a></nav>
   </main>
 </div>
+<link rel="stylesheet" href="../pagefind/pagefind-ui.css">
+<script src="../pagefind/pagefind-ui.js"></script>
 <script src="../assets/app.js" defer></script>
 </body>
 </html>

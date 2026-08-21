@@ -110,6 +110,27 @@ python3 docs/scripts/build_guide.py --check  # what CI runs; fails if stale
 
 Adding a new guide means adding its page to `PAGES` in that script (it drives
 the sidebar order, the prev/next pager, and each page's title/description).
+The same run also emits `docs/sitemap.xml` and `docs/robots.txt`, and `--check`
+covers them, so they cannot go stale either.
+
+Search is a static [Pagefind](https://pagefind.app) index over the built HTML —
+a build-time binary, not a runtime dependency, and no package manifest in the
+repo. After changing a guide, rebuild it too and commit the result:
+
+```sh
+npx -y pagefind@1.5.2 --site docs/guide --output-subdir ../pagefind
+```
+
+Note that unlike the guide HTML, **nothing fails CI when the index is stale** —
+the pages will be correct but search will return the previous text. Regenerate
+it in the same commit as any content change.
+
+Two more checks run on docs in CI, both pure standard library:
+
+```sh
+python3 docs/scripts/check_params.py    # parser, linter, and docs agree on line params
+python3 docs/scripts/check_schemas.py   # docs/schemas matches the SDK golden fixtures
+```
 
 ### A rule of thumb for where a change goes
 
