@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Custom plugin stores (enterprise) — Vee docs</title>
+  <meta name="description" content="Point Vee at your own curated plugin catalog: a GitHub repo, a static HTTP host, or an air-gapped file mirror, with integrity checks and MDM-managed configuration.">
+  <link rel="canonical" href="https://vee.navbytes.io/guide/enterprise-store.html">
+  <link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
+  <link rel="stylesheet" href="../assets/style.css">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Vee">
+  <meta property="og:title" content="Custom plugin stores (enterprise) — Vee docs">
+  <meta property="og:description" content="Point Vee at your own curated plugin catalog: a GitHub repo, a static HTTP host, or an air-gapped file mirror, with integrity checks and MDM-managed configuration.">
+  <meta property="og:url" content="https://vee.navbytes.io/guide/enterprise-store.html">
+  <meta property="og:image" content="https://vee.navbytes.io/assets/og-image.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Custom plugin stores (enterprise) — Vee docs">
+  <meta name="twitter:description" content="Point Vee at your own curated plugin catalog: a GitHub repo, a static HTTP host, or an air-gapped file mirror, with integrity checks and MDM-managed configuration.">
+  <meta name="twitter:image" content="https://vee.navbytes.io/assets/og-image.png">
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="../index.html" aria-label="Vee home">
+      <img class="mark" src="../assets/favicon.svg" alt="" width="28" height="28">
+      <span><b>Vee</b></span>
+    </a>
+    <button class="nav-toggle" aria-label="Toggle navigation" aria-expanded="false" aria-controls="nav-links">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+    </button>
+    <ul class="nav-links" id="nav-links">
+      <li><a href="../index.html#features">Features</a></li>
+      <li><a href="../index.html#trust">Trust</a></li>
+      <li><a href="../compare/index.html">Compare</a></li>
+      <li><a href="./index.html" aria-current="page">Docs</a></li>
+      <li><a class="nav-cta" href="https://github.com/navbytes/vee" rel="noopener">GitHub</a></li>
+    </ul>
+  </div>
+</header>
+<div class="docs-layout">
+  <aside class="docs-side" aria-label="Documentation navigation">
+    <div id="docs-search" class="docs-search" data-pagefind-ignore></div>
+    <p class="docs-nav-title">Documentation</p>
+<ul class="docs-nav">
+<li><a href="./index.html">Overview</a></li>
+<li><a href="./getting-started.html">Getting started</a></li>
+<li><a href="./migrating-from-swiftbar.html">Migrating from SwiftBar / xbar</a></li>
+<li><a href="./plugin-authoring.html">Plugin authoring</a></li>
+<li><a href="./widgets.html">Widgets</a></li>
+<li><a href="./trust-model.html">Trust model</a></li>
+<li><a href="./preferences.html">Preferences</a></li>
+<li><a href="./sdk.html">Plugin SDKs</a></li>
+<li><a href="./json-output.html">JSON output</a></li>
+<li><a href="./cli-and-urls.html">CLI &amp; URL actions</a></li>
+<li><a href="./debugging.html">Debugging &amp; testing</a></li>
+<li><a href="./enterprise-store.html" aria-current="page">Custom plugin stores</a></li>
+<li><a href="./faq.html">FAQ</a></li>
+<li><a href="./troubleshooting.html">Troubleshooting</a></li>
+</ul>
+<nav class="docs-toc" aria-labelledby="toc-title"><p class="docs-nav-title" id="toc-title">On this page</p><ul><li><a href="#quick-start-a-store-in-one-repo">Quick start: a store in one repo</a></li><li><a href="#two-store-shapes">Two store shapes</a></li><li><a href="#private-repositories">Private repositories</a></li><li><a href="#github-enterprise-static-http-and-air-gapped-mirrors">GitHub Enterprise, static HTTP, and air-gapped mirrors</a></li><li><a href="#integrity-and-signing">Integrity and signing</a></li><li><a href="#managed-configuration-mdm">Managed configuration (MDM)</a></li><li><a href="#adding-a-store-by-hand">Adding a store by hand</a></li><li><a href="#security-notes">Security notes</a></li></ul></nav>
+  </aside>
+  <main class="docs-main" id="main">
+    <article class="docs-content" data-pagefind-body>
+      <p class="doc-hero-note">Vee documentation</p>
+<h1>Custom plugin stores (enterprise)</h1>
+<p>Vee ships with the public <a href="https://github.com/matryer/xbar-plugins" rel="noopener"><code>matryer/xbar-plugins</code></a>
+catalog in <strong>Discover</strong>. You can also point Vee at <strong>your own store</strong> — a curated,
+trust-gated catalog of internal plugins — and it shows up in Discover next to (or
+instead of) the public one, installing through the same trust gate.</p>
+<p>A store is just a place Vee can read an index and download sources from. <strong>It can
+be a plain GitHub repo</strong> (public, private, or GitHub Enterprise Server), a static
+HTTP host, or a local <code>file://</code> mirror for air-gapped machines.</p>
+<ul>
+<li><a href="#quick-start-a-store-in-one-repo">Quick start: a store in one repo</a></li>
+<li><a href="#two-store-shapes">Two store shapes</a></li>
+<li><a href="#private-repositories">Private repositories</a></li>
+<li><a href="#github-enterprise-static-http-and-air-gapped-mirrors">GitHub Enterprise, static HTTP, and air-gapped mirrors</a></li>
+<li><a href="#integrity-and-signing">Integrity and signing</a></li>
+<li><a href="#managed-configuration-mdm">Managed configuration (MDM)</a></li>
+<li><a href="#adding-a-store-by-hand">Adding a store by hand</a></li>
+<li><a href="#security-notes">Security notes</a></li>
+</ul>
+<h2 id="quick-start-a-store-in-one-repo">Quick start: a store in one repo</h2>
+<ol>
+<li>Create a repository, e.g. <code>acme/vee-plugins</code>.</li>
+<li>Put each plugin in a <strong>category folder</strong>, exactly like the public catalog:
+<div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">text</span></div><pre><code>acme-vee-plugins/
+├─ Deployment/
+│  └─ deploy-status.30s.sh
+├─ Oncall/
+│  └─ pager.1m.py
+└─ Metrics/
+   └─ burn-rate.5m.ts</code></pre></div>
+<p>The top-level folder is the plugin's <strong>category</strong>; the filename encodes its
+refresh interval (<code>name.INTERVAL.ext</code>), just like any Vee/xbar plugin.</p></li>
+<li>In Vee, open <strong>Preferences → Stores → Add store…</strong>, choose <strong>GitHub</strong>, and
+enter the owner and repo. Your plugins appear in Discover under your store.</li>
+</ol>
+<p>That's the whole thing. No manifest, no build step — the repo layout <em>is</em> the
+catalog.</p>
+<h2 id="two-store-shapes">Two store shapes</h2>
+<h3 id="1-convention-zero-config">1. Convention (zero-config)</h3>
+<p>The quick-start layout above. Vee infers the catalog from the repo's folders,
+exactly as it does for the public catalog. A plugin's title, description, and
+declared capabilities are read from its source headers (<code>&lt;xbar.title&gt;</code>,
+<code>&lt;vee.*&gt;</code>, …) when its card is shown — nothing extra to write.</p>
+<h3 id="2-manifest-vee-catalogjson">2. Manifest (<code>vee-catalog.json</code>)</h3>
+<p>Add a <code>vee-catalog.json</code> at the repo root when you want <strong>curation</strong>: explicit
+titles and descriptions without downloading every file, an integrity hash per
+plugin, a minimum-macOS gate, deprecation flags, and optional signing. When the
+file is present it is authoritative; otherwise Vee falls back to the convention.</p>
+<div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">jsonc</span></div><pre><code>{
+  "vee_catalog": 1,
+  "name": "Acme Internal Tools",
+  "homepage": "https://wiki.acme.corp/vee",
+  "updated": "2026-07-01T00:00:00Z",
+  "signing_key": "MCowBQYDK2VwAyEA…",     // optional, base64 Ed25519 public key
+  "plugins": [
+    {
+      "path": "Oncall/pager.1m.py",        // repo-relative
+      "title": "PagerDuty On-call",
+      "category": "Oncall",
+      "summary": "Shows the current on-call engineer.",
+      "author": "sre@acme.corp",
+      "min_macos": "26.0",
+      "sha256": "9f2b…",                    // integrity pin (see below)
+      "signature": "base64…",              // optional (see below)
+      "deprecated": false,
+      "tags": ["oncall", "sre"]
+    }
+  ]
+}</code></pre></div>
+<p>A static HTTP host <strong>must</strong> publish a manifest (there's no repo to infer from); a
+Git repo or a local mirror may use either.</p>
+<h2 id="private-repositories">Private repositories</h2>
+<p>For a private GitHub/GHE repo, add the store as usual and paste a <strong>personal
+access token</strong> (or a fine-grained token / GitHub App token with read access to
+the repo). Vee stores it in the <strong>macOS Keychain</strong> and sends it only to that
+store's host. The token is an app credential — it is <strong>never</strong> placed in a
+plugin's environment.</p>
+<p>Use the <strong>Test connection</strong> button in the Add-store sheet to confirm the token
+and repo before saving. A <code>401</code> in Discover means the token is missing or
+invalid — update it in <strong>Preferences → Stores</strong>.</p>
+<h2 id="github-enterprise-static-http-and-air-gapped-mirrors">GitHub Enterprise, static HTTP, and air-gapped mirrors</h2>
+<p>Vee supports four store kinds; all install through the same trust gate.</p>
+<div class="table-scroll"><table><thead><tr><th>Kind</th><th>Where it reads from</th><th>Manifest</th></tr></thead><tbody><tr><td><strong>GitHub</strong></td><td><code>api.github.com</code> + <code>raw.githubusercontent.com</code></td><td>optional</td></tr><tr><td><strong>GitHub Enterprise</strong></td><td>your <code>ghe.acme.corp/api/v3</code> + raw host</td><td>optional</td></tr><tr><td><strong>Static HTTP</strong></td><td>a host serving <code>vee-catalog.json</code> + raw sources (S3, Artifactory, nginx)</td><td>required</td></tr><tr><td><strong>Local (<code>file://</code>)</strong></td><td>a directory on disk or a mounted share</td><td>optional</td></tr></tbody></table></div>
+<p>A <strong>local mirror</strong> is the simplest air-gapped option: clone your store repo (or
+export it) to <code>/opt/vee/store</code> on the managed machines and configure a <code>local</code>
+store pointing at it. No network required.</p>
+<h2 id="integrity-and-signing">Integrity and signing</h2>
+<p>Vee offers three levels of assurance, each optional and layered on the existing
+<a href="trust-model.html">provenance</a> (source URL + hash recorded at install):</p>
+<ol>
+<li><strong>Pinned hash.</strong> Set <code>sha256</code> on a manifest entry and Vee verifies the fetched
+source against it <strong>before</strong> writing to disk. A mismatch blocks the install —
+this defends against a tampered raw host when the manifest is trusted.</li>
+<li><strong>Signature.</strong> Publish a <code>signing_key</code> (base64 Ed25519 public key) in the
+manifest, and sign each entry's source. The signature is computed over the
+source's SHA-256 digest:
+<div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">sh</span></div><pre><code># digest of the source, then sign it with your Ed25519 private key
+openssl dgst -sha256 -binary plugin.py &gt; plugin.sha256
+# (sign plugin.sha256 with your key; base64 the result into "signature")</code></pre></div></li>
+<li><strong>Require signatures.</strong> Turn on <strong>Require signature</strong> for the store (or push it
+via MDM). Any unsigned or invalid-signature plugin is refused. This setting is
+client-side and <strong>cannot be lowered by the store</strong> — a compromised catalog
+can't downgrade a machine that requires signing.</li>
+</ol>
+<p>Prefer a <strong>policy-pinned key</strong> (<code>pinnedSigningKey</code>, delivered by MDM) over the
+manifest's own key when you can: it can't be replaced by whoever controls the
+repo.</p>
+<h2 id="managed-configuration-mdm">Managed configuration (MDM)</h2>
+<p>Push stores to managed Macs with a configuration profile for the <code>com.vee.app</code>
+preference domain. Managed stores are <strong>read-only and force-enabled</strong> — a user
+can't disable or remove them.</p>
+<p>Reserved keys:</p>
+<div class="table-scroll"><table><thead><tr><th>Key</th><th>Type</th><th>Effect</th></tr></thead><tbody><tr><td><code>vee.managedStores</code></td><td>array of dicts</td><td>Stores to install (see fields below).</td></tr><tr><td><code>vee.disablePublicStore</code></td><td>bool</td><td>Hide the built-in public xbar catalog.</td></tr></tbody></table></div>
+<p>Each entry in <code>vee.managedStores</code> mirrors a store's fields:</p>
+<div class="table-scroll"><table><thead><tr><th>Field</th><th>Notes</th></tr></thead><tbody><tr><td><code>id</code>, <code>displayName</code>, <code>kind</code></td><td>Required. <code>kind</code> ∈ <code>github</code>, <code>githubEnterprise</code>, <code>http</code>, <code>local</code>.</td></tr><tr><td><code>apiHost</code>, <code>rawHost</code></td><td>For <code>github</code>/<code>githubEnterprise</code>.</td></tr><tr><td><code>owner</code>, <code>repo</code>, <code>ref</code></td><td>For <code>github</code>/<code>githubEnterprise</code> (<code>ref</code> defaults to <code>main</code>).</td></tr><tr><td><code>baseURL</code></td><td>For <code>http</code>/<code>local</code>.</td></tr><tr><td><code>manifestPath</code></td><td>Defaults to <code>vee-catalog.json</code>.</td></tr><tr><td><code>trustPolicy</code></td><td><code>internalReviewed</code> (default for managed) or <code>publicUntrusted</code>.</td></tr><tr><td><code>authMode</code></td><td><code>none</code> or <code>token</code>.</td></tr><tr><td><code>requireSignature</code></td><td><code>true</code> to refuse unsigned plugins.</td></tr><tr><td><code>pinnedSigningKey</code></td><td>Base64 Ed25519 public key that overrides the manifest's.</td></tr></tbody></table></div>
+<p>Example profile payload (abbreviated):</p>
+<div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">xml</span></div><pre><code>&lt;key&gt;vee.managedStores&lt;/key&gt;
+&lt;array&gt;
+  &lt;dict&gt;
+    &lt;key&gt;id&lt;/key&gt;&lt;string&gt;acme-internal&lt;/string&gt;
+    &lt;key&gt;displayName&lt;/key&gt;&lt;string&gt;Acme Internal Tools&lt;/string&gt;
+    &lt;key&gt;kind&lt;/key&gt;&lt;string&gt;githubEnterprise&lt;/string&gt;
+    &lt;key&gt;apiHost&lt;/key&gt;&lt;string&gt;https://ghe.acme.corp/api/v3&lt;/string&gt;
+    &lt;key&gt;rawHost&lt;/key&gt;&lt;string&gt;https://ghe.acme.corp/raw&lt;/string&gt;
+    &lt;key&gt;owner&lt;/key&gt;&lt;string&gt;platform&lt;/string&gt;
+    &lt;key&gt;repo&lt;/key&gt;&lt;string&gt;vee-plugins&lt;/string&gt;
+    &lt;key&gt;requireSignature&lt;/key&gt;&lt;true/&gt;
+    &lt;key&gt;pinnedSigningKey&lt;/key&gt;&lt;string&gt;MCowBQYDK2VwAyEA…&lt;/string&gt;
+  &lt;/dict&gt;
+&lt;/array&gt;
+&lt;key&gt;vee.disablePublicStore&lt;/key&gt;&lt;true/&gt;</code></pre></div>
+<p><strong>Tokens are not delivered via the profile</strong> (a profile is world-readable on the
+device). For a managed private store, the user enters the token once, or the
+store uses a host that authenticates through your SSO.</p>
+<h2 id="adding-a-store-by-hand">Adding a store by hand</h2>
+<p>Anyone (not just enterprise) can add a store in <strong>Preferences → Stores →
+Add store…</strong>: pick the kind, fill in the location, optionally paste a token, and
+optionally mark it <em>internal-reviewed</em> or <em>require signature</em>. User-added stores
+are fully under your control — enable, disable, edit, or remove them at any time.
+The built-in public catalog can be toggled off but not removed.</p>
+<h2 id="security-notes">Security notes</h2>
+<ul>
+<li><strong>Trust stays advisory.</strong> A store's trust policy changes how loudly the install
+gate speaks and what the default action is — it never enforces an OS sandbox
+and never hides a capability Vee detected. See the <a href="trust-model.html">trust model</a>.</li>
+<li><strong>Review is your gate.</strong> For an internal Git store, pull-request review of the
+repo is the real control; Vee's provenance and (optional) signing verify that
+what you install is what was reviewed.</li>
+<li><strong>Filenames are sanitized.</strong> A plugin path from any store is reduced to a single
+safe filename before it's written, so a hostile <code>path</code> can't escape the plugins
+folder.</li>
+<li><strong>Responses are bounded.</strong> Index and source downloads are size-capped, and a
+manifest's plugin count is capped, so a hostile or compromised store can't
+exhaust memory.</li>
+</ul>
+    </article>
+    <nav class="doc-nextprev" aria-label="Guide pagination"><a class="prev" href="./debugging.html"><span class="dir">&larr; Previous</span><span class="lbl">Debugging &amp; testing</span></a><a class="next" href="./faq.html"><span class="dir">Next &rarr;</span><span class="lbl">FAQ</span></a></nav>
+  </main>
+</div>
+<link rel="stylesheet" href="../pagefind/pagefind-ui.css">
+<script src="../pagefind/pagefind-ui.js"></script>
+<script src="../assets/app.js" defer></script>
+</body>
+</html>

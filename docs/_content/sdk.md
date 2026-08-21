@@ -249,7 +249,7 @@ line-parameter grammar in the
 
 ## Widget cards
 
-All three SDKs also build the rich [widget card](plugin-authoring.md#widgets)
+All three SDKs also build the rich [widget card](widgets.md)
 payload a plugin prints when invoked with `VEE_TARGET=widget` — a generic
 `widgetCard(...)`/`WidgetCard(...)` constructor, plus `Stat`/`Gauge`/`Trend`/
 `List`/`Board` convenience builders that preset the `template` field. Each
@@ -307,7 +307,7 @@ c.Print()
 All three emit byte-identical JSON for the same card (there's a `widget-card`
 example and a shared golden fixture proving it, also round-tripped through
 the Swift parser). See the full field/template/action reference in
-[Widgets](plugin-authoring.md#widgets).
+[Widgets](widgets.md).
 
 ## The no-build-step note (TypeScript)
 

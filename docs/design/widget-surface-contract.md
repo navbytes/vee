@@ -6,6 +6,13 @@ Status: **implemented** (single-card; timeline arrays deferred — see
 specifies making widgets a *first-class output surface* of a plugin rather than a
 scrape of its menu-bar line.
 
+> **Reference vs. record.** The authoring reference for everything below —
+> the card schema, the templates, the layout tree, and the actions — is the
+> published guide page [`docs/_content/widgets.md`](../_content/widgets.md).
+> This document is the design record: why the contract has the shape it has.
+> When the two disagree, the guide is what plugin authors read, so fix the
+> guide first.
+
 ## Problem
 
 Today the widget is derived from the menu bar. `PluginCoordinator.widgetFields`
@@ -299,6 +306,9 @@ Phases A–C are independent and pure; D depends on A–C; E/F depend on A/C; G 
 on A; H last. Each pushes on its own so CI compiles it incrementally.
 
 ## Layout tree (composable escape hatch)
+
+*(Full field-by-field reference: [the layout tree](../_content/widgets.md).
+What follows is the rationale and the bounding decisions.)*
 
 Status: **implemented** (v1; images deferred — see below). The five templates
 in §5 are ergonomic presets, but a fixed record can't express a two-column

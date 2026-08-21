@@ -63,6 +63,7 @@ An entry in `items` (or in a `submenu`). Every field is optional; the shape of t
 |-----|------|---------|
 | `text` | string | The item's label. Omitted for a separator. |
 | `separator` | boolean | When `true`, this entry is a divider; all other fields are ignored. |
+| `header` | boolean | When `true`, render as a real, non-interactive section header rather than a normal row (the JSON spelling of `header=true`). |
 | `color` | string | Text color (named or hex). |
 | `href` | string | A URL to open when the item is clicked. |
 | `shell` | string | A command to run on click (a launch path or command name). |
@@ -177,6 +178,24 @@ form collapses the three chart shapes into one `chart` object with a `kind`,
 since they describe the same data —
 so colors, SF Symbols, links, shell actions, submenus, alternates, checkmarks,
 tooltips, and the rich controls are all available in both formats.
+
+## Editor validation (JSON Schema)
+
+The JSON output format has a published schema too:
+
+<https://vee.navbytes.io/schemas/json-output.schema.json>
+
+```json
+{
+  "$schema": "https://vee.navbytes.io/schemas/json-output.schema.json",
+  "vee": 1,
+  "title": [{ "text": "System" }],
+  "items": [{ "text": "Hello" }]
+}
+```
+
+As with the widget card, `$schema` is ignored by Vee, and CI validates the
+schema against the shipped fixtures.
 
 ## See also
 

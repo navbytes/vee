@@ -42,24 +42,28 @@
 
 <div class="docs-layout">
   <aside class="docs-side" aria-label="Documentation navigation">
+    <div id="docs-search" class="docs-search" data-pagefind-ignore></div>
     <p class="docs-nav-title">Documentation</p>
     <ul class="docs-nav">
       <li><a href="./index.html" aria-current="page">Overview</a></li>
       <li><a href="./getting-started.html">Getting started</a></li>
       <li><a href="./migrating-from-swiftbar.html">Migrating from SwiftBar / xbar</a></li>
       <li><a href="./plugin-authoring.html">Plugin authoring</a></li>
+      <li><a href="./widgets.html">Widgets</a></li>
       <li><a href="./trust-model.html">Trust model</a></li>
       <li><a href="./preferences.html">Preferences</a></li>
       <li><a href="./sdk.html">Plugin SDKs</a></li>
       <li><a href="./json-output.html">JSON output</a></li>
       <li><a href="./cli-and-urls.html">CLI &amp; URL actions</a></li>
+      <li><a href="./debugging.html">Debugging &amp; testing</a></li>
+      <li><a href="./enterprise-store.html">Custom plugin stores</a></li>
       <li><a href="./faq.html">FAQ</a></li>
       <li><a href="./troubleshooting.html">Troubleshooting</a></li>
     </ul>
   </aside>
 
   <main class="docs-main" id="main">
-    <article class="docs-content">
+    <article class="docs-content" data-pagefind-body>
       <p class="doc-hero-note">Vee documentation</p>
       <h1>Documentation</h1>
       <p class="lede" style="max-width:var(--measure);">Everything you need to install Vee, bring over your existing plugins, write new ones, and understand the trust model. New here? Start with <a href="./getting-started.html">Getting started</a>.</p>
@@ -85,42 +89,57 @@
           <h3>Plugin authoring reference</h3>
           <p>The full output format: filenames, menus, line params, headers, SF Symbols, ANSI, Markdown, streaming, cron.</p>
         </a>
+        <a class="card card--hover guide-index-card" href="./widgets.html">
+          <span class="num">04</span>
+          <h3>Widgets</h3>
+          <p>Render a plugin on the desktop and in Notification Center — the surface contract, the card schema, five templates, and a composable layout tree.</p>
+        </a>
         <a class="card card--hover guide-index-card" href="./preferences.html">
-          <span class="num">05</span>
+          <span class="num">06</span>
           <h3>Preferences</h3>
           <p>Declare typed settings with <code>&lt;xbar.var&gt;</code>; Vee builds a form and keeps secrets in the Keychain.</p>
         </a>
         <a class="card card--hover guide-index-card" href="./sdk.html">
-          <span class="num">06</span>
+          <span class="num">07</span>
           <h3>Plugin SDKs</h3>
           <p>Typed <code>Menu</code>/<code>Section</code> builders for TypeScript, Python, and Go — byte-identical output, with a golden-fixture drift guard.</p>
         </a>
         <a class="card card--hover guide-index-card" href="./json-output.html">
-          <span class="num">07</span>
+          <span class="num">08</span>
           <h3>JSON output</h3>
           <p>An optional structured-JSON format — opt in with a <code>{"vee":1}</code> object and skip the text protocol's quoting and nesting rules.</p>
         </a>
         <a class="card card--hover guide-index-card" href="./cli-and-urls.html">
-          <span class="num">08</span>
+          <span class="num">09</span>
           <h3>CLI &amp; URL actions</h3>
           <p>Run from source and drive Vee with <code>vee://</code> / <code>swiftbar://</code> actions — refresh, toggle, notify.</p>
+        </a>
+        <a class="card card--hover guide-index-card" href="./debugging.html">
+          <span class="num">10</span>
+          <h3>Debugging &amp; testing</h3>
+          <p>Preview, watch, and lint a plugin without installing it — <code>vee render</code>, <code>show</code>, <code>dev</code>, <code>lint</code>, plus timeouts and the Debug console.</p>
         </a>
       </div>
 
       <h2 id="understand-vee">Understand &amp; troubleshoot</h2>
       <div class="guide-index-grid">
         <a class="card card--hover guide-index-card" href="./trust-model.html">
-          <span class="num">04</span>
+          <span class="num">05</span>
           <h3>Trust model</h3>
           <p>How plugins declare what they touch, and how Vee turns that into a plain-language summary. Advisory, not a sandbox.</p>
         </a>
+        <a class="card card--hover guide-index-card" href="./enterprise-store.html">
+          <span class="num">11</span>
+          <h3>Custom plugin stores</h3>
+          <p>Point Vee at your own curated catalog — a GitHub repo, static HTTP, or an air-gapped mirror — with integrity checks and MDM configuration.</p>
+        </a>
         <a class="card card--hover guide-index-card" href="./faq.html">
-          <span class="num">09</span>
+          <span class="num">12</span>
           <h3>FAQ</h3>
           <p>Safety, compatibility, requirements, secrets, updates — the questions people ask first.</p>
         </a>
         <a class="card card--hover guide-index-card" href="./troubleshooting.html">
-          <span class="num">10</span>
+          <span class="num">13</span>
           <h3>Troubleshooting</h3>
           <p>Plugin not appearing, Gatekeeper blocks, timeouts, missing interpreters, PATH differences.</p>
         </a>
@@ -133,6 +152,8 @@
     </article>
   </main>
 </div>
+<link rel="stylesheet" href="../pagefind/pagefind-ui.css">
+<script src="../pagefind/pagefind-ui.js"></script>
 <script src="../assets/app.js" defer></script>
 </body>
 </html>

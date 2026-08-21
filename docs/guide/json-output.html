@@ -5,19 +5,19 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>JSON output format — Vee docs</title>
   <meta name="description" content="Vee's optional structured-JSON output format: opt in with a top-level {"vee":1} object, skip the text protocol's quoting and escaping, and get typed items and clean nesting.">
-  <link rel="canonical" href="https://navbytes.github.io/vee/guide/json-output.html">
+  <link rel="canonical" href="https://vee.navbytes.io/guide/json-output.html">
   <link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
   <link rel="stylesheet" href="../assets/style.css">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Vee">
   <meta property="og:title" content="JSON output format — Vee docs">
   <meta property="og:description" content="Vee's optional structured-JSON output format: opt in with a top-level {"vee":1} object, skip the text protocol's quoting and escaping, and get typed items and clean nesting.">
-  <meta property="og:url" content="https://navbytes.github.io/vee/guide/json-output.html">
-  <meta property="og:image" content="https://navbytes.github.io/vee/assets/og-image.png">
+  <meta property="og:url" content="https://vee.navbytes.io/guide/json-output.html">
+  <meta property="og:image" content="https://vee.navbytes.io/assets/og-image.png">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="JSON output format — Vee docs">
   <meta name="twitter:description" content="Vee's optional structured-JSON output format: opt in with a top-level {"vee":1} object, skip the text protocol's quoting and escaping, and get typed items and clean nesting.">
-  <meta name="twitter:image" content="https://navbytes.github.io/vee/assets/og-image.png">
+  <meta name="twitter:image" content="https://vee.navbytes.io/assets/og-image.png">
 </head>
 <body>
 <a class="skip-link" href="#main">Skip to content</a>
@@ -41,23 +41,28 @@
 </header>
 <div class="docs-layout">
   <aside class="docs-side" aria-label="Documentation navigation">
+    <div id="docs-search" class="docs-search" data-pagefind-ignore></div>
     <p class="docs-nav-title">Documentation</p>
 <ul class="docs-nav">
 <li><a href="./index.html">Overview</a></li>
 <li><a href="./getting-started.html">Getting started</a></li>
 <li><a href="./migrating-from-swiftbar.html">Migrating from SwiftBar / xbar</a></li>
 <li><a href="./plugin-authoring.html">Plugin authoring</a></li>
+<li><a href="./widgets.html">Widgets</a></li>
 <li><a href="./trust-model.html">Trust model</a></li>
 <li><a href="./preferences.html">Preferences</a></li>
 <li><a href="./sdk.html">Plugin SDKs</a></li>
 <li><a href="./json-output.html" aria-current="page">JSON output</a></li>
 <li><a href="./cli-and-urls.html">CLI &amp; URL actions</a></li>
+<li><a href="./debugging.html">Debugging &amp; testing</a></li>
+<li><a href="./enterprise-store.html">Custom plugin stores</a></li>
 <li><a href="./faq.html">FAQ</a></li>
 <li><a href="./troubleshooting.html">Troubleshooting</a></li>
 </ul>
+<nav class="docs-toc" aria-labelledby="toc-title"><p class="docs-nav-title" id="toc-title">On this page</p><ul><li><a href="#when-to-use-json-vs-the-text-protocol">When to use JSON vs the text protocol</a></li><li><a href="#opting-in">Opting in</a></li><li><a href="#schema">Schema</a></li><li><a href="#examples">Examples</a></li><li><a href="#a-runnable-example">A runnable example</a></li><li><a href="#rich-params">Rich params</a></li><li><a href="#editor-validation-json-schema">Editor validation (JSON Schema)</a></li><li><a href="#see-also">See also</a></li></ul></nav>
   </aside>
   <main class="docs-main" id="main">
-    <article class="docs-content">
+    <article class="docs-content" data-pagefind-body>
       <p class="doc-hero-note">Vee documentation</p>
 <h1>JSON output format</h1>
 <p>Alongside the xbar/SwiftBar text protocol, Vee understands an <strong>optional structured-JSON output format</strong>. A plugin prints a single JSON object describing its title and menu, and Vee decodes it directly — no line parsing, no <code>|</code>-separated parameters, no quoting rules.</p>
@@ -91,7 +96,7 @@
 <div class="table-scroll"><table><thead><tr><th>Key</th><th>Type</th><th>Required</th><th>Meaning</th></tr></thead><tbody><tr><td><code>text</code></td><td>string</td><td><strong>yes</strong></td><td>The title text shown in the menu bar.</td></tr><tr><td><code>color</code></td><td>string</td><td>no</td><td>Text color (a named color or hex, e.g. <code>"green"</code>, <code>"#34c759"</code>).</td></tr><tr><td><code>sfimage</code></td><td>string</td><td>no</td><td>An SF Symbol name to render alongside the text.</td></tr><tr><td><code>size</code></td><td>number</td><td>no</td><td>Font size in points.</td></tr></tbody></table></div>
 <h3 id="jsonitem">JSONItem</h3>
 <p>An entry in <code>items</code> (or in a <code>submenu</code>). Every field is optional; the shape of the item depends on which fields you set.</p>
-<div class="table-scroll"><table><thead><tr><th>Key</th><th>Type</th><th>Meaning</th></tr></thead><tbody><tr><td><code>text</code></td><td>string</td><td>The item's label. Omitted for a separator.</td></tr><tr><td><code>separator</code></td><td>boolean</td><td>When <code>true</code>, this entry is a divider; all other fields are ignored.</td></tr><tr><td><code>color</code></td><td>string</td><td>Text color (named or hex).</td></tr><tr><td><code>href</code></td><td>string</td><td>A URL to open when the item is clicked.</td></tr><tr><td><code>shell</code></td><td>string</td><td>A command to run on click (a launch path or command name).</td></tr><tr><td><code>params</code></td><td>array of string</td><td>Arguments passed to <code>shell</code>, in order.</td></tr><tr><td><code>terminal</code></td><td>boolean</td><td>When <code>true</code>, run the <code>shell</code> command in Terminal; otherwise run it in the background.</td></tr><tr><td><code>refresh</code></td><td>boolean</td><td>When <code>true</code>, clicking re-runs the plugin.</td></tr><tr><td><code>sfimage</code></td><td>string</td><td>An SF Symbol name to render alongside the text.</td></tr><tr><td><code>size</code></td><td>number</td><td>Font size in points.</td></tr><tr><td><code>disabled</code></td><td>boolean</td><td>When <code>true</code>, the item is shown greyed-out and not clickable.</td></tr><tr><td><code>checked</code></td><td>boolean</td><td>When <code>true</code>, the item shows a checkmark.</td></tr><tr><td><code>tooltip</code></td><td>string</td><td>Hover tooltip text.</td></tr><tr><td><code>submenu</code></td><td>array of JSONItem</td><td>Child items, forming a nested submenu.</td></tr><tr><td><code>alternate</code></td><td>JSONItem</td><td>An alternate item shown when Option is held (mirrors the text protocol's <code>alternate=true</code>).</td></tr></tbody></table></div>
+<div class="table-scroll"><table><thead><tr><th>Key</th><th>Type</th><th>Meaning</th></tr></thead><tbody><tr><td><code>text</code></td><td>string</td><td>The item's label. Omitted for a separator.</td></tr><tr><td><code>separator</code></td><td>boolean</td><td>When <code>true</code>, this entry is a divider; all other fields are ignored.</td></tr><tr><td><code>header</code></td><td>boolean</td><td>When <code>true</code>, render as a real, non-interactive section header rather than a normal row (the JSON spelling of <code>header=true</code>).</td></tr><tr><td><code>color</code></td><td>string</td><td>Text color (named or hex).</td></tr><tr><td><code>href</code></td><td>string</td><td>A URL to open when the item is clicked.</td></tr><tr><td><code>shell</code></td><td>string</td><td>A command to run on click (a launch path or command name).</td></tr><tr><td><code>params</code></td><td>array of string</td><td>Arguments passed to <code>shell</code>, in order.</td></tr><tr><td><code>terminal</code></td><td>boolean</td><td>When <code>true</code>, run the <code>shell</code> command in Terminal; otherwise run it in the background.</td></tr><tr><td><code>refresh</code></td><td>boolean</td><td>When <code>true</code>, clicking re-runs the plugin.</td></tr><tr><td><code>sfimage</code></td><td>string</td><td>An SF Symbol name to render alongside the text.</td></tr><tr><td><code>size</code></td><td>number</td><td>Font size in points.</td></tr><tr><td><code>disabled</code></td><td>boolean</td><td>When <code>true</code>, the item is shown greyed-out and not clickable.</td></tr><tr><td><code>checked</code></td><td>boolean</td><td>When <code>true</code>, the item shows a checkmark.</td></tr><tr><td><code>tooltip</code></td><td>string</td><td>Hover tooltip text.</td></tr><tr><td><code>submenu</code></td><td>array of JSONItem</td><td>Child items, forming a nested submenu.</td></tr><tr><td><code>alternate</code></td><td>JSONItem</td><td>An alternate item shown when Option is held (mirrors the text protocol's <code>alternate=true</code>).</td></tr></tbody></table></div>
 <h2 id="examples">Examples</h2>
 <h3 id="title-only-menu">Title-only menu</h3>
 <p>The smallest useful JSON plugin — just a menu-bar title, no dropdown.</p>
@@ -140,7 +145,7 @@
 <p>The repository ships a runnable JSON plugin at <a href="https://github.com/navbytes/vee/tree/main/plugins/examples/json-demo.ts" rel="noopener"><code>plugins/examples/json-demo.ts</code></a>. It builds a <code>{"vee":1,…}</code> object with a colored title, a link, a separator, and a submenu, then prints it — a good starting point to copy.</p>
 <h2 id="rich-params">Rich params</h2>
 <p>The Vee-native inline controls are available in JSON too, as typed item fields:</p>
-<div class="table-scroll"><table><thead><tr><th>Field</th><th>Type</th><th>Notes</th></tr></thead><tbody><tr><td><code>sparkline</code></td><td><code>number[]</code></td><td>Inline chart popover data. Non-finite values are dropped.</td></tr><tr><td><code>toggle</code></td><td><code>boolean</code></td><td>On/off switch.</td></tr><tr><td><code>slider</code></td><td><code>{ "min": number, "max": number, "value": number }</code></td><td>Requires <code>min &lt; max</code>; <code>value</code> is clamped into range.</td></tr><tr><td><code>progress</code></td><td><code>number</code></td><td>A completion fraction, clamped to <code>0…1</code>. The fill uses the item's <code>color</code>.</td></tr><tr><td><code>trackColor</code></td><td><code>string</code></td><td>Progress track color (named or hex).</td></tr><tr><td><code>progressWidth</code></td><td><code>number</code></td><td>Progress bar width in points.</td></tr><tr><td><code>progressHeight</code></td><td><code>number</code></td><td>Progress bar height in points.</td></tr><tr><td><code>chart</code></td><td>`{ "kind": "pie" \</td><td>"donut" \</td><td>"stackedbar", "values": number[], "labels"?: string[], "colors"?: string[], "w"?: number, "h"?: number }`</td><td>A categorical share chart. <code>values</code> must be finite and <code>&gt;= 0</code> with a positive total; at most 8 segments (a longer series folds its tail into "Other"). <code>labels</code>/<code>colors</code> are positional — a color that is <code>null</code>, blank, malformed, or unrecognised keeps that segment's palette slot. <code>w</code>/<code>h</code> are the inline size in points (<code>chartw=</code>/<code>charth=</code>), clamped to 8–200; <code>"w": "full"</code> stretches the chart to the row's width.</td></tr></tbody></table></div>
+<div class="table-scroll"><table><thead><tr><th>Field</th><th>Type</th><th>Notes</th></tr></thead><tbody><tr><td><code>sparkline</code></td><td><code>number[]</code></td><td>Inline chart popover data. Non-finite values are dropped.</td></tr><tr><td><code>toggle</code></td><td><code>boolean</code></td><td>On/off switch.</td></tr><tr><td><code>slider</code></td><td><code>{ "min": number, "max": number, "value": number }</code></td><td>Requires <code>min &lt; max</code>; <code>value</code> is clamped into range.</td></tr><tr><td><code>progress</code></td><td><code>number</code></td><td>A completion fraction, clamped to <code>0…1</code>. The fill uses the item's <code>color</code>.</td></tr><tr><td><code>trackColor</code></td><td><code>string</code></td><td>Progress track color (named or hex).</td></tr><tr><td><code>progressWidth</code></td><td><code>number</code></td><td>Progress bar width in points.</td></tr><tr><td><code>progressHeight</code></td><td><code>number</code></td><td>Progress bar height in points.</td></tr><tr><td><code>chart</code></td><td><code>{ "kind": "pie" | "donut" | "stackedbar", "values": number[], "labels"?: string[], "colors"?: string[], "w"?: number, "h"?: number }</code></td><td>A categorical share chart. <code>values</code> must be finite and <code>&gt;= 0</code> with a positive total; at most 8 segments (a longer series folds its tail into "Other"). <code>labels</code>/<code>colors</code> are positional — a color that is <code>null</code>, blank, malformed, or unrecognised keeps that segment's palette slot. <code>w</code>/<code>h</code> are the inline size in points (<code>chartw=</code>/<code>charth=</code>), clamped to 8–200; <code>"w": "full"</code> stretches the chart to the row's width.</td></tr></tbody></table></div>
 <div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">json</span></div><pre><code>{
   "vee": 1,
   "title": [{ "text": "System" }],
@@ -159,6 +164,17 @@ form collapses the three chart shapes into one <code>chart</code> object with a 
 since they describe the same data —
 so colors, SF Symbols, links, shell actions, submenus, alternates, checkmarks,
 tooltips, and the rich controls are all available in both formats.</p>
+<h2 id="editor-validation-json-schema">Editor validation (JSON Schema)</h2>
+<p>The JSON output format has a published schema too:</p>
+<https://vee.navbytes.io/schemas/json-output.schema.json>
+<div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">json</span></div><pre><code>{
+  "$schema": "https://vee.navbytes.io/schemas/json-output.schema.json",
+  "vee": 1,
+  "title": [{ "text": "System" }],
+  "items": [{ "text": "Hello" }]
+}</code></pre></div>
+<p>As with the widget card, <code>$schema</code> is ignored by Vee, and CI validates the
+schema against the shipped fixtures.</p>
 <h2 id="see-also">See also</h2>
 <ul>
 <li><a href="plugin-authoring.html">Plugin authoring reference</a> — the text protocol and the full set of line parameters, including the rich params.</li>
@@ -169,6 +185,8 @@ tooltips, and the rich controls are all available in both formats.</p>
     <nav class="doc-nextprev" aria-label="Guide pagination"><a class="prev" href="./sdk.html"><span class="dir">&larr; Previous</span><span class="lbl">Plugin SDKs</span></a><a class="next" href="./cli-and-urls.html"><span class="dir">Next &rarr;</span><span class="lbl">CLI &amp; URL actions</span></a></nav>
   </main>
 </div>
+<link rel="stylesheet" href="../pagefind/pagefind-ui.css">
+<script src="../pagefind/pagefind-ui.js"></script>
 <script src="../assets/app.js" defer></script>
 </body>
 </html>

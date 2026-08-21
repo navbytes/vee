@@ -5,19 +5,19 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Troubleshooting — Vee docs</title>
   <meta name="description" content="Fix common Vee issues: a plugin not appearing, Gatekeeper blocks, timeouts, missing interpreters and PATH differences, and refreshes not happening.">
-  <link rel="canonical" href="https://navbytes.github.io/vee/guide/troubleshooting.html">
+  <link rel="canonical" href="https://vee.navbytes.io/guide/troubleshooting.html">
   <link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
   <link rel="stylesheet" href="../assets/style.css">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Vee">
   <meta property="og:title" content="Troubleshooting — Vee docs">
   <meta property="og:description" content="Fix common Vee issues: a plugin not appearing, Gatekeeper blocks, timeouts, missing interpreters and PATH differences, and refreshes not happening.">
-  <meta property="og:url" content="https://navbytes.github.io/vee/guide/troubleshooting.html">
-  <meta property="og:image" content="https://navbytes.github.io/vee/assets/og-image.png">
+  <meta property="og:url" content="https://vee.navbytes.io/guide/troubleshooting.html">
+  <meta property="og:image" content="https://vee.navbytes.io/assets/og-image.png">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="Troubleshooting — Vee docs">
   <meta name="twitter:description" content="Fix common Vee issues: a plugin not appearing, Gatekeeper blocks, timeouts, missing interpreters and PATH differences, and refreshes not happening.">
-  <meta name="twitter:image" content="https://navbytes.github.io/vee/assets/og-image.png">
+  <meta name="twitter:image" content="https://vee.navbytes.io/assets/og-image.png">
 </head>
 <body>
 <a class="skip-link" href="#main">Skip to content</a>
@@ -41,23 +41,28 @@
 </header>
 <div class="docs-layout">
   <aside class="docs-side" aria-label="Documentation navigation">
+    <div id="docs-search" class="docs-search" data-pagefind-ignore></div>
     <p class="docs-nav-title">Documentation</p>
 <ul class="docs-nav">
 <li><a href="./index.html">Overview</a></li>
 <li><a href="./getting-started.html">Getting started</a></li>
 <li><a href="./migrating-from-swiftbar.html">Migrating from SwiftBar / xbar</a></li>
 <li><a href="./plugin-authoring.html">Plugin authoring</a></li>
+<li><a href="./widgets.html">Widgets</a></li>
 <li><a href="./trust-model.html">Trust model</a></li>
 <li><a href="./preferences.html">Preferences</a></li>
 <li><a href="./sdk.html">Plugin SDKs</a></li>
 <li><a href="./json-output.html">JSON output</a></li>
 <li><a href="./cli-and-urls.html">CLI &amp; URL actions</a></li>
+<li><a href="./debugging.html">Debugging &amp; testing</a></li>
+<li><a href="./enterprise-store.html">Custom plugin stores</a></li>
 <li><a href="./faq.html">FAQ</a></li>
 <li><a href="./troubleshooting.html" aria-current="page">Troubleshooting</a></li>
 </ul>
+<nav class="docs-toc" aria-labelledby="toc-title"><p class="docs-nav-title" id="toc-title">On this page</p><ul><li><a href="#a-plugin-doesnt-appear-in-the-menu-bar">A plugin doesn't appear in the menu bar</a></li><li><a href="#unidentified-developer--gatekeeper-blocks-the-app">"unidentified developer" / Gatekeeper blocks the app</a></li><li><a href="#a-plugin-errors-or-shows-nothing-useful">A plugin errors or shows nothing useful</a></li><li><a href="#a-plugin-times-out">A plugin times out</a></li><li><a href="#command-not-found--a-dependency-or-interpreter-is-missing">"command not found" / a dependency or interpreter is missing</a></li><li><a href="#refreshes-arent-happening">Refreshes aren't happening</a></li><li><a href="#permissions-network-files-notifications">Permissions (network, files, notifications)</a></li><li><a href="#diagnostics-reference">Diagnostics reference</a></li><li><a href="#still-stuck">Still stuck?</a></li></ul></nav>
   </aside>
   <main class="docs-main" id="main">
-    <article class="docs-content">
+    <article class="docs-content" data-pagefind-body>
       <p class="doc-hero-note">Vee documentation</p>
 <h1>Troubleshooting</h1>
 <p>Common issues and how to fix them. If none of these help, open an issue at <a href="https://github.com/navbytes/vee" rel="noopener">github.com/navbytes/vee</a>.</p>
@@ -115,6 +120,29 @@
 <li><strong>Notifications.</strong> For <code>vee://notify</code> to show alerts, allow notifications for Vee in <strong>System Settings → Notifications</strong>.</li>
 <li>The <code>&lt;vee.*&gt;</code> trust declarations are <strong>advisory</strong> — they describe what a plugin says it does, and Vee never blocks based on them. See the <a href="trust-model.html">trust model</a>.</li>
 </ul>
+<h2 id="diagnostics-reference">Diagnostics reference</h2>
+<p>Vee's parser is deliberately permissive: bad input degrades to a diagnostic and
+a best-effort render, never a crash and never a blank menu. Those diagnostics
+are collected per run and shown in the plugin's <strong>Debug console</strong> (Plugin
+Manager → the plugin), and printed by
+<a href="debugging.html"><code>vee render</code> and <code>vee lint</code></a>.</p>
+<p>Every one of them means <em>something you wrote was ignored or altered</em>, so an
+empty diagnostics list is the goal.</p>
+<h3 id="line-and-parameter-problems">Line and parameter problems</h3>
+<div class="table-scroll"><table><thead><tr><th>Diagnostic</th><th>What happened</th><th>Fix</th></tr></thead><tbody><tr><td><code>unknown parameter '…'</code></td><td>A <code>key=</code> Vee does not recognise. The value is preserved but nothing renders from it.</td><td>Check the spelling against the <a href="plugin-authoring.html#line-parameters">parameter table</a>.</td></tr><tr><td><code>duplicate parameter '…'</code></td><td>The same key appeared twice on one line.</td><td>Remove one; the winner is not something to rely on.</td></tr><tr><td><code>parameter '…' has no value</code></td><td>A bare key with no <code>=value</code>.</td><td>Give it a value, or drop it.</td></tr><tr><td><code>value for '…' contains a space but isn't quoted</code></td><td>The value was cut short at the space.</td><td>Quote it: <code>tooltip="two words"</code>.</td></tr><tr><td><code>stray '|' in title text</code></td><td>A later <code>|</code> was read as the params delimiter and truncated the item.</td><td>Escape it as <code>\|</code>, or let an <a href="sdk.html">SDK</a> do the escaping.</td></tr><tr><td><code>alternate item has no preceding item</code></td><td><code>alternate=true</code> on a line with nothing above it to be the alternate <em>of</em>.</td><td>Move it below the item it alternates with.</td></tr><tr><td><code>paramN given without shell=/bash=</code></td><td>Positional arguments with no command to pass them to.</td><td>Add <code>shell=</code>/<code>bash=</code>, or remove the params.</td></tr><tr><td><code>submenu depth exceeded; truncated</code></td><td>More than 64 levels of <code>--</code> nesting.</td><td>Flatten the menu — this is far past usable.</td></tr><tr><td><code>submenu depth jumped; clamped to …</code></td><td>A line nested more than one level deeper than its parent (e.g. <code>--</code> then <code>------</code>).</td><td>Add the intermediate level, or reduce the dashes.</td></tr></tbody></table></div>
+<h3 id="images">Images</h3>
+<div class="table-scroll"><table><thead><tr><th>Diagnostic</th><th>What happened</th><th>Fix</th></tr></thead><tbody><tr><td><code>image=/templateImage= is not valid base64; dropped</code></td><td>The payload did not decode.</td><td>Re-encode; check for stray newlines in the base64.</td></tr><tr><td><code>image=/templateImage= decodes to over 2097152 bytes; dropped</code></td><td>Over the 2 MB image cap.</td><td>Shrink the image — menu icons need very few pixels.</td></tr></tbody></table></div>
+<h3 id="charts-and-gauges">Charts and gauges</h3>
+<div class="table-scroll"><table><thead><tr><th>Diagnostic</th><th>What happened</th><th>Fix</th></tr></thead><tbody><tr><td><code>progress= expects a fraction (0..1) or 'value,max'</code></td><td>The value did not parse.</td><td>Use <code>progress=0.72</code> or <code>progress=23,100</code>.</td></tr><tr><td><code>pie=/donut=/stackedbar= expects a comma-separated list of non-negative numbers</code></td><td>The list did not parse.</td><td>Use <code>pie=45,30,25</code>.</td></tr><tr><td><code>… values must all be finite and non-negative</code></td><td>A <code>NaN</code>, an infinity, or a negative share.</td><td>Clamp the values before printing them.</td></tr><tr><td><code>… values sum to zero; nothing to chart</code></td><td>Every share was <code>0</code>.</td><td>Skip the chart when there is no data, rather than emitting zeros.</td></tr><tr><td><code>… has N segments; the last M were folded into 'Other'</code></td><td>More than 8 segments.</td><td>Aggregate the tail yourself if you want to control the label.</td></tr><tr><td><code>chartlabels=/chartcolors= given without pie=/donut=/stackedbar=</code></td><td>Labels or colors with no chart to attach to.</td><td>Add the chart param, or remove them.</td></tr><tr><td><code>chartcolors= has a malformed color; those segments use the default palette</code></td><td>A color name or hex Vee could not read.</td><td>Check against the named colors, or use <code>#rrggbb</code>.</td></tr><tr><td><code>accessory= expects 'leading' or 'trailing'</code></td><td>Any other value.</td><td>Use one of the two.</td></tr><tr><td><code>slider= expects 'min,max,value' with min &lt; max</code></td><td>Malformed or inverted bounds.</td><td>e.g. <code>slider=0,100,40</code>.</td></tr></tbody></table></div>
+<h3 id="urls">URLs</h3>
+<div class="table-scroll"><table><thead><tr><th>Diagnostic</th><th>What happened</th><th>Fix</th></tr></thead><tbody><tr><td><code>href= has a missing or unsafe url; dropped</code></td><td>The URL did not parse, or used a blocked scheme. Only <code>http</code>, <code>https</code>, and app deep links open — never <code>file:</code>, <code>javascript:</code>, and the like.</td><td>Use a web URL, or run a command with <code>shell=</code> instead.</td></tr><tr><td><code>abouturl has a missing or unsafe url; dropped</code></td><td>Same gate, on <code>&lt;xbar.abouturl&gt;</code>.</td><td>As above.</td></tr></tbody></table></div>
+<h3 id="widget-cards">Widget cards</h3>
+<p>Only from a <a href="widgets.html">widget-mode</a> run.</p>
+<div class="table-scroll"><table><thead><tr><th>Diagnostic</th><th>What happened</th><th>Fix</th></tr></thead><tbody><tr><td><code>widget output is not a JSON object</code></td><td><code>VEE_TARGET=widget</code> produced something that is not one JSON object. Vee falls back to scraping the menu text.</td><td>Print exactly one JSON object and nothing else.</td></tr><tr><td><code>unknown widget template "…"; using stat</code></td><td>A <code>template</code> outside the five.</td><td>Use <code>stat</code>, <code>gauge</code>, <code>trend</code>, <code>list</code>, or <code>board</code>.</td></tr><tr><td><code>unknown widget status "…"; ignored</code></td><td>A <code>status</code> outside the three.</td><td>Use <code>ok</code>, <code>warning</code>, or <code>error</code>.</td></tr><tr><td><code>progress is not a finite number; dropped</code> / <code>progress N outside 0...1; clamped</code></td><td>A bad or out-of-range gauge fill.</td><td>Clamp to <code>0…1</code> before printing.</td></tr><tr><td><code>trend contained non-finite values; dropped</code></td><td>A <code>NaN</code>/infinity in the series.</td><td>Filter the series first.</td></tr><tr><td><code>href action "…" has a missing or unsafe url; dropped</code></td><td>A card action's URL failed the scheme gate.</td><td>Use a web URL or an app deep link.</td></tr></tbody></table></div>
+<h3 id="widget-layout-trees">Widget layout trees</h3>
+<div class="table-scroll"><table><thead><tr><th>Diagnostic</th><th>What happened</th><th>Fix</th></tr></thead><tbody><tr><td><code>unknown layout node type "…"</code></td><td>A <code>type</code> outside the ten. The node renders as nothing.</td><td>Check it against the <a href="widgets.html#node-types">node types</a>.</td></tr><tr><td><code>layout nested deeper than 8 levels; inner nodes dropped</code></td><td>Past the depth cap.</td><td>Flatten the tree.</td></tr><tr><td><code>layout has more than 64 nodes; extra nodes dropped</code></td><td>Past the node cap.</td><td>Send less — a widget tile is small.</td></tr><tr><td><code>layout text longer than 512 characters; truncated</code></td><td>A very long <code>text</code> node.</td><td>Shorten it; it would not have fit anyway.</td></tr><tr><td><code>layout sparkline longer than 256 points; truncated</code></td><td>Too many series points.</td><td>Downsample before printing.</td></tr><tr><td><code>layout sparkline contained non-finite values; dropped</code> / <code>layout gauge value is not finite; dropped</code></td><td>A <code>NaN</code>/infinity.</td><td>Filter or clamp first.</td></tr></tbody></table></div>
+<h3 id="run-level">Run-level</h3>
+<div class="table-scroll"><table><thead><tr><th>Diagnostic</th><th>What happened</th><th>Fix</th></tr></thead><tbody><tr><td><code>Output truncated at 8 MB</code></td><td>The plugin printed more than the capture cap.</td><td>Almost always accidental — a log or an unbounded loop reaching stdout.</td></tr></tbody></table></div>
 <h2 id="still-stuck">Still stuck?</h2>
 <ul>
 <li>Reveal the plugin in Finder from the Plugin Manager and read its source.</li>
@@ -125,6 +153,8 @@
     <nav class="doc-nextprev" aria-label="Guide pagination"><a class="prev" href="./faq.html"><span class="dir">&larr; Previous</span><span class="lbl">FAQ</span></a></nav>
   </main>
 </div>
+<link rel="stylesheet" href="../pagefind/pagefind-ui.css">
+<script src="../pagefind/pagefind-ui.js"></script>
 <script src="../assets/app.js" defer></script>
 </body>
 </html>

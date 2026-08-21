@@ -111,13 +111,15 @@ up to two action buttons (refresh / open a link / run a Shortcut), via
 `<vee.surface>both</vee.surface>` and a JSON "card" printed when Vee invokes
 it with `VEE_TARGET=widget`. A plugin can also be **widget-only** —
 `<vee.surface>widget</vee.surface>` gives it no menu-bar presence at all, just
-a widget feed. See [Widgets](plugin-authoring.md#widgets) in the authoring
-reference for the full contract.
+a widget feed. See [Widgets](widgets.md) for the full
+contract.
 
 ## Next steps
 
 - [Plugin authoring reference](plugin-authoring.md) — the full output format, params, metadata, SF Symbols, ANSI, Markdown, streaming, and cron.
 - [Preferences](preferences.md) — let a plugin declare typed settings that Vee turns into a form.
 - [Trust model](trust-model.md) — how plugins declare what they access.
+- [Widgets](widgets.md) — the full widget surface contract, card schema, and layout tree.
+- [Debugging and testing plugins](debugging.md) — preview a plugin, watch it re-render on save, and lint it.
 - [Plugin SDKs](sdk.md) — build plugins with typed builders (TypeScript, Python, or Go) instead of hand-formatting text.
 - [JSON output format](json-output.md) — the optional structured-JSON alternative to the text protocol.

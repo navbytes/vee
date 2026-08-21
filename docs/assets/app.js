@@ -116,4 +116,55 @@
     }, { threshold: 0.12, rootMargin: "0px 0px -8% 0px" });
     nodes.forEach(function (el) { io.observe(el); });
   })();
+
+  /* ---- Docs search (Pagefind) -------------------------------------------- */
+  // Progressive enhancement: the index is static and the sidebar nav works
+  // without this. If PagefindUI failed to load, leave the container empty
+  // rather than showing a dead input.
+  (function () {
+    var host = document.getElementById("docs-search");
+    if (!host || typeof PagefindUI === "undefined") return;
+    new PagefindUI({
+      element: "#docs-search",
+      baseUrl: "/",
+      showImages: false,
+      showSubResults: true,
+      resetStyles: false,
+      translations: { placeholder: "Search docs" },
+    });
+    // `/` focuses search, the shortcut every docs site has. Ignore it while
+    // the user is already typing somewhere.
+    document.addEventListener("keydown", function (e) {
+      if (e.key !== "/" || e.metaKey || e.ctrlKey || e.altKey) return;
+      var t = e.target;
+      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
+      var input = host.querySelector("input");
+      if (input) { e.preventDefault(); input.focus(); }
+    });
+  })();
+
+  /* ---- Copy buttons on code blocks --------------------------------------- */
+  // Every sample on these pages is meant to be run, so make taking it cheap.
+  (function () {
+    var blocks = document.querySelectorAll(".docs-content pre");
+    if (!blocks.length || !navigator.clipboard) return;
+    blocks.forEach(function (pre) {
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "copy-btn";
+      btn.textContent = "Copy";
+      btn.setAttribute("aria-label", "Copy code to clipboard");
+      btn.addEventListener("click", function () {
+        navigator.clipboard.writeText(pre.innerText).then(function () {
+          btn.textContent = "Copied";
+          btn.classList.add("copied");
+          setTimeout(function () {
+            btn.textContent = "Copy";
+            btn.classList.remove("copied");
+          }, 1600);
+        });
+      });
+      pre.appendChild(btn);
+    });
+  })();
 })();

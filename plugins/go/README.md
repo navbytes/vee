@@ -67,6 +67,52 @@ Build it to a binary and drop it in your plugins folder as `cpu.5s`
   charts). See the
   [SDK guide](../../docs/_content/sdk.md) for the rich-param details.
 
+## Widget cards
+
+Beyond menus, the SDK builds the [widget card](../../docs/_content/widgets.md)
+payload a plugin prints when Vee invokes it with `VEE_TARGET=widget`:
+
+```go
+if os.Getenv("VEE_TARGET") == "widget" {
+	c := &vee.WidgetCard{
+		Template: vee.TemplateStat,
+		Title:    vee.Str("Revenue"),
+		Symbol:   vee.Str("chart.line.uptrend.xyaxis"),
+		Tint:     vee.Str("green"),
+		Value:    vee.Str("$18.2k"),
+		Status:   vee.StatusOK,
+		Items:    []vee.WidgetCardItem{{Label: "Orders", Value: vee.Str("214")}},
+		Actions:  []vee.WidgetCardAction{{Kind: vee.ActionRefresh, Label: "Refresh"}},
+	}
+	c.Print()
+	return
+}
+```
+
+`Template` selects one of the five presets (`TemplateStat`, `TemplateGauge`,
+`TemplateTrend`, `TemplateList`, `TemplateBoard`). `WidgetCard` has the same
+`String()` / `Print()` shape as `Menu`.
+
+For layouts the five templates cannot express, build a **layout tree** with the
+`vee.Node` builders and set `Layout`:
+
+```go
+layout := vee.Node.VStack([]vee.WidgetNode{
+	vee.Node.Text("CPU", vee.Style(vee.WidgetNodeStyle{Tint: vee.Str("secondary")})),
+	vee.Node.Text("38%", vee.Style(vee.WidgetNodeStyle{MonospacedDigit: vee.Bool(true)})),
+	vee.Node.Gauge(0.38, vee.GaugeStyle("circular")),
+}, vee.Align("leading"), vee.Spacing(6))
+
+c := &vee.WidgetCard{Layout: &layout}
+c.Print()
+```
+
+`vee.Node.VStack`, `HStack`, `ZStack`, `Grid`, `Text`, `Image`, `Gauge`,
+`Sparkline`, `Spacer`, and `Divider` are the full vocabulary; node options are
+set with `vee.Align`, `vee.Spacing`, `vee.Columns`, `vee.MinLen`,
+`vee.GaugeStyle`, `vee.Families`, and `vee.Style`. See
+[Widgets](../../docs/_content/widgets.md) for every field and its limits.
+
 ## Tests
 
 ```sh
