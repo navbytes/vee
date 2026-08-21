@@ -4,6 +4,40 @@ A Vee plugin is any executable that prints text to standard output in the xbar/S
 
 If you would rather build menus with typed code than format text by hand, see the [Plugin SDKs](sdk.md) (TypeScript, Python, and Go). For a structured alternative to the text protocol, see the [JSON output format](json-output.md).
 
+## The authoring loop
+
+Before the reference, the workflow it is meant to be read alongside. Vee gives
+you a save-driven loop that needs no app running and no plugin installed:
+
+```sh
+vee dev ./cpu.10s.sh
+```
+
+Keep that in a split terminal beside your editor. Every save re-runs the file and
+repaints the menu tree Vee would build, together with any lint findings. A save
+that breaks the script shows the exit code and stderr and keeps watching, so you
+never have to restart the loop over a typo.
+
+Two flags make it a design tool rather than only a debugger:
+
+- **`vee dev --text menu.txt`** treats the file as plugin *output* and never
+  executes it. Sketch the shape of a menu — sections, submenus, colors, charts —
+  as plain text, watch it render, and only then write the script that produces
+  it. Nothing runs, so the file needs no shebang and no execute bit.
+- **`vee dev --push ./cpu.10s.sh`** additionally shows each save as a real status
+  item in the menu bar, with no file written to your plugins folder. The terminal
+  shows you the structure; the menu bar shows you Vee's actual render.
+
+For inline diagnostics in your editor, `vee lint --format compact` emits
+`path:line:col: severity: message`, which VS Code, vim, and emacs already parse —
+no extension required. See [CLI and URL actions](cli-and-urls.md) for the loop's
+full flag list, a copy-pasteable VS Code `problemMatcher`, and a note on which
+file a finding is attributed to.
+
+Editing a plugin that is already installed works too: Vee watches each plugin
+file and re-reads it shortly after you save, so the menu bar keeps up without a
+relaunch.
+
 ## Filenames and refresh intervals
 
 The refresh interval is encoded in the filename as `name.INTERVAL.ext`:

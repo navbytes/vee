@@ -8,21 +8,24 @@ public enum RefreshStrategy: Sendable, Equatable {
     /// A high-resolution `DispatchSourceTimer` (short intervals), with leeway so
     /// the system can coalesce wake-ups for energy efficiency.
     case highResolutionTimer(leeway: TimeInterval)
-    /// `NSBackgroundActivityScheduler` — the OS batches long-interval refreshes
-    /// for minimal energy impact.
-    case backgroundActivity
 }
 
 /// Chooses the refresh mechanism for an interval and computes timer leeway.
 public enum RefreshScheduler {
-    /// Intervals at or above this use the energy-friendly background scheduler.
-    public static let backgroundThreshold: TimeInterval = 600 // 10 minutes
-
+    /// Every interval, however long, is driven by an in-process
+    /// `DispatchSourceTimer`.
+    ///
+    /// Intervals of 10 minutes or more used to go to
+    /// `NSBackgroundActivityScheduler` so the OS could batch wake-ups. That
+    /// registers a *launch-on-demand* XPC activity against Vee's own launchd
+    /// job, which made the app impossible to quit: launchd relaunched it within
+    /// moments to service the activity. Energy batching is not worth an app the
+    /// user cannot close — and it bought little here, since Vee is a resident
+    /// menu-bar app that is already running. Timer leeway (below) still lets the
+    /// system coalesce these wake-ups. See `LegacyBackgroundActivity` for
+    /// clearing registrations left by earlier versions.
     public static func strategy(for interval: RefreshInterval) -> RefreshStrategy {
         guard let seconds = interval.timeInterval else { return .none }
-        if seconds >= backgroundThreshold {
-            return .backgroundActivity
-        }
         return .highResolutionTimer(leeway: leeway(forSeconds: seconds))
     }
 

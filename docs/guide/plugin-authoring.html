@@ -62,6 +62,32 @@
 <h1>Plugin authoring reference</h1>
 <p>A Vee plugin is any executable that prints text to standard output in the xbar/SwiftBar format. This page is the full reference: filenames, menu structure, the parameter table, metadata headers, and the richer features (SF Symbols, ANSI, Markdown, streaming, cron).</p>
 <p>If you would rather build menus with typed code than format text by hand, see the <a href="sdk.html">Plugin SDKs</a> (TypeScript, Python, and Go). For a structured alternative to the text protocol, see the <a href="json-output.html">JSON output format</a>.</p>
+<h2 id="the-authoring-loop">The authoring loop</h2>
+<p>Before the reference, the workflow it is meant to be read alongside. Vee gives
+you a save-driven loop that needs no app running and no plugin installed:</p>
+<div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">sh</span></div><pre><code>vee dev ./cpu.10s.sh</code></pre></div>
+<p>Keep that in a split terminal beside your editor. Every save re-runs the file and
+repaints the menu tree Vee would build, together with any lint findings. A save
+that breaks the script shows the exit code and stderr and keeps watching, so you
+never have to restart the loop over a typo.</p>
+<p>Two flags make it a design tool rather than only a debugger:</p>
+<ul>
+<li><strong><code>vee dev --text menu.txt</code></strong> treats the file as plugin <em>output</em> and never
+executes it. Sketch the shape of a menu — sections, submenus, colors, charts —
+as plain text, watch it render, and only then write the script that produces
+it. Nothing runs, so the file needs no shebang and no execute bit.</li>
+<li><strong><code>vee dev --push ./cpu.10s.sh</code></strong> additionally shows each save as a real status
+item in the menu bar, with no file written to your plugins folder. The terminal
+shows you the structure; the menu bar shows you Vee's actual render.</li>
+</ul>
+<p>For inline diagnostics in your editor, <code>vee lint --format compact</code> emits
+<code>path:line:col: severity: message</code>, which VS Code, vim, and emacs already parse —
+no extension required. See <a href="cli-and-urls.html">CLI and URL actions</a> for the loop's
+full flag list, a copy-pasteable VS Code <code>problemMatcher</code>, and a note on which
+file a finding is attributed to.</p>
+<p>Editing a plugin that is already installed works too: Vee watches each plugin
+file and re-reads it shortly after you save, so the menu bar keeps up without a
+relaunch.</p>
 <h2 id="filenames-and-refresh-intervals">Filenames and refresh intervals</h2>
 <p>The refresh interval is encoded in the filename as <code>name.INTERVAL.ext</code>:</p>
 <div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">text</span></div><pre><code>cpu.5s.sh      → run every 5 seconds

@@ -17,29 +17,112 @@ final class PluginDirectoryWatcherTests: XCTestCase {
         return dir
     }
 
-    /// Regression: the vnode source only fires on directory-entry add/remove/
+    /// The vnode source on the *directory* only fires on entry add/remove/
     /// rename, so an in-place edit (`nano`/append/`chmod` on an existing file)
-    /// produces no event there. Only the periodic tick can notice it.
-    func testInPlaceEditIsDetectedByPeriodicTick() throws {
+    /// produces no event there. It used to be caught only by the periodic tick,
+    /// which meant an author waited out a poll to see their edit. The per-file
+    /// watchers must now catch it promptly — a `tickInterval` far longer than
+    /// the timeout below means any fire here can only have come from them.
+    func testInPlaceEditIsDetectedPromptlyWithoutTheTick() throws {
         let dir = try tempDir()
         defer { try? FileManager.default.removeItem(atPath: dir) }
         let filePath = dir + "/plugin.5s.sh"
         FileManager.default.createFile(atPath: filePath, contents: Data("original".utf8))
 
-        let fired = expectation(description: "onChange fires after an in-place edit, via the periodic tick")
+        let fired = expectation(description: "onChange fires promptly after an in-place edit")
         fired.assertForOverFulfill = false
-        let watcher = PluginDirectoryWatcher(directory: dir, debounce: 0.05, tickInterval: 0.3) {
+        let watcher = PluginDirectoryWatcher(directory: dir, debounce: 0.05, tickInterval: 30) {
             fired.fulfill()
         }
         watcher.start()
         defer { watcher.stop() }
 
-        // Let the watcher's initial open/tick-scheduling settle, then edit the
-        // file in place — no entry add/remove/rename for the vnode source to see.
-        Thread.sleep(forTimeInterval: 0.1)
+        // Let the watcher's initial open settle, then edit the file in place —
+        // no entry add/remove/rename for the directory source to see.
+        Thread.sleep(forTimeInterval: 0.2)
         try Data("changed".utf8).write(to: URL(fileURLWithPath: filePath))
 
-        wait(for: [fired], timeout: 5)
+        wait(for: [fired], timeout: 3)
+    }
+
+    /// A plugin added *after* the watcher started must also get a per-file
+    /// watcher, otherwise the fast path would only ever cover plugins present at
+    /// launch.
+    func testPluginAddedAfterStartIsWatchedInPlace() throws {
+        let dir = try tempDir()
+        defer { try? FileManager.default.removeItem(atPath: dir) }
+
+        let counter = ChangeCounter()
+        let watcher = PluginDirectoryWatcher(directory: dir, debounce: 0.05, tickInterval: 30) {
+            counter.increment()
+        }
+        watcher.start()
+        defer { watcher.stop() }
+        Thread.sleep(forTimeInterval: 0.2)
+
+        // Creating the file is a directory event, which the directory source
+        // already caught before this change. Baseline past it, then edit the new
+        // file in place — that second fire is the one only a per-file watcher
+        // can produce.
+        let filePath = dir + "/late.5s.sh"
+        FileManager.default.createFile(atPath: filePath, contents: Data("original".utf8))
+        let baselineDeadline = Date().addingTimeInterval(2)
+        while counter.current == 0, Date() < baselineDeadline {
+            Thread.sleep(forTimeInterval: 0.02)
+        }
+        let baseline = counter.current
+        Thread.sleep(forTimeInterval: 0.2)  // let refreshFileWatchers pick it up
+
+        try Data("changed".utf8).write(to: URL(fileURLWithPath: filePath))
+
+        let deadline = Date().addingTimeInterval(3)
+        while counter.current <= baseline, Date() < deadline {
+            Thread.sleep(forTimeInterval: 0.02)
+        }
+        XCTAssertGreaterThan(counter.current, baseline, "an in-place edit to a newly added plugin should fire promptly")
+    }
+
+    /// Per-file watchers are capped so a huge plugins folder cannot exhaust the
+    /// process's file descriptors — which would break plugin *execution*, not
+    /// just watching. Past the cap the periodic tick still covers the remainder,
+    /// so the degradation is to the old behavior rather than to silence.
+    func testFileCountBeyondTheCapStillWorks() throws {
+        let dir = try tempDir()
+        defer { try? FileManager.default.removeItem(atPath: dir) }
+
+        // Above the 256 watcher cap. Names sort so `plugin000` is inside the cap
+        // and `plugin299` is outside it.
+        for i in 0..<300 {
+            let name = String(format: "plugin%03d.5s.sh", i)
+            FileManager.default.createFile(atPath: dir + "/" + name, contents: Data("original".utf8))
+        }
+
+        let counter = ChangeCounter()
+        // A short tick, because the past-the-cap half of this test depends on it.
+        let watcher = PluginDirectoryWatcher(directory: dir, debounce: 0.05, tickInterval: 0.3) {
+            counter.increment()
+        }
+        watcher.start()
+        defer { watcher.stop() }
+        Thread.sleep(forTimeInterval: 0.5)
+
+        // Inside the cap: caught by its own watcher.
+        var baseline = counter.current
+        try Data("edited".utf8).write(to: URL(fileURLWithPath: dir + "/plugin000.5s.sh"))
+        var deadline = Date().addingTimeInterval(3)
+        while counter.current <= baseline, Date() < deadline {
+            Thread.sleep(forTimeInterval: 0.02)
+        }
+        XCTAssertGreaterThan(counter.current, baseline, "a file inside the cap should fire")
+
+        // Outside the cap: no per-file watcher, so the tick is what catches it.
+        baseline = counter.current
+        try Data("edited".utf8).write(to: URL(fileURLWithPath: dir + "/plugin299.5s.sh"))
+        deadline = Date().addingTimeInterval(3)
+        while counter.current <= baseline, Date() < deadline {
+            Thread.sleep(forTimeInterval: 0.02)
+        }
+        XCTAssertGreaterThan(counter.current, baseline, "a file past the cap should still be caught by the tick")
     }
 
     /// Regression: an atomic-rename save (write a temp file alongside the

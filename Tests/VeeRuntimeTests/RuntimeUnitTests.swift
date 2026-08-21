@@ -221,11 +221,35 @@ final class RefreshSchedulerTests: XCTestCase {
     func testStrategySelection() {
         XCTAssertEqual(RefreshScheduler.strategy(for: .manual), .none)
         XCTAssertEqual(RefreshScheduler.strategy(for: .cron("* * * * *")), .none)
-        XCTAssertEqual(RefreshScheduler.strategy(for: .minutes(10)), .backgroundActivity)
-        XCTAssertEqual(RefreshScheduler.strategy(for: .hours(1)), .backgroundActivity)
         if case .highResolutionTimer = RefreshScheduler.strategy(for: .seconds(5)) {} else {
             XCTFail("short interval should use a high-resolution timer")
         }
+    }
+
+    /// Regression: long intervals used to go to `NSBackgroundActivityScheduler`,
+    /// which registers a launch-on-demand XPC activity against Vee's own launchd
+    /// job — so launchd relaunched Vee moments after the user quit it, and the
+    /// app could not be closed at all. **No interval, however long, may select a
+    /// mechanism that can relaunch the app.**
+    func testEveryIntervalUsesAnInProcessTimer() {
+        for interval in [RefreshInterval.minutes(10), .minutes(30), .hours(1), .hours(12), .days(1)] {
+            guard case .highResolutionTimer = RefreshScheduler.strategy(for: interval) else {
+                return XCTFail("\(interval) must use an in-process timer, not a launch-on-demand activity")
+            }
+        }
+    }
+
+    /// The identifiers earlier versions registered, which a fresh launch must be
+    /// able to name in order to invalidate them.
+    func testLegacyActivityIdentifiersCoverMenuAndWidgetCadences() {
+        let ids = LegacyBackgroundActivity.identifiers(forPluginID: "prs-and-jira.10m.js")
+        XCTAssertEqual(ids, ["com.vee.refresh.prs-and-jira.10m.js", "com.vee.refresh.widget.prs-and-jira.10m.js"])
+    }
+
+    /// Clearing must be safe to call unconditionally on every launch, including
+    /// for plugins that never registered anything.
+    func testClearingAnUnregisteredActivityIsHarmless() {
+        LegacyBackgroundActivity.clear(forPluginID: "never-registered-\(UUID().uuidString)")
     }
 
     func testLeewayClamped() {

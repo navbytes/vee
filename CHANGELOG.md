@@ -6,7 +6,30 @@ All notable changes to Vee are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed
+- **Vee can be quit again.** Any plugin with an interval of 10 minutes or more
+  (e.g. `prs-and-jira.10m.js`) made the app impossible to close: quitting it —
+  from the menu, `⌘Q`, or a `kill` — relaunched it within milliseconds. Long
+  intervals were driven by `NSBackgroundActivityScheduler`, which registers a
+  **repeating, launch-on-demand XPC activity against Vee's own launchd job**, so
+  launchd started Vee back up to service the activity (`immediate reason =
+  launch job demand`). Every interval is now driven by the same in-process
+  `DispatchSourceTimer` the shorter ones always used, with leeway that still
+  lets the system coalesce wake-ups; nothing Vee schedules can relaunch the app.
+
+  The stale registration lives in launchd, not in Vee, so it survives the update
+  that stops creating it — on start, each plugin now invalidates the identifiers
+  earlier versions used, which unsticks an install that already has one. If you
+  hit this before updating, quitting will stick once the new version has run
+  with that plugin present.
+
 ### Changed
+- **Edits to an installed plugin are picked up promptly.** Vee now watches each
+  plugin file individually, not just the plugins directory. A vnode source on a
+  directory does not fire when an existing file is written, so an in-place edit
+  used to be caught only by a 15-second poll; saving a plugin you are editing now
+  updates the menu bar in about a debounce. Adding, removing, and renaming
+  plugins behave as before, and the periodic tick remains as a backstop.
 - **Plugin text now honors `\|`/`\n`/`\\` escapes.** A literal `|`, backslash, or
   newline in menu text or a quoted param value must be escaped as `\|`, `\\`, or
   `\n` — an unescaped `|` now truncates the item and a raw newline splits it into
@@ -16,28 +39,30 @@ All notable changes to Vee are documented here. The format is based on
   as `C:\\node`.
 
 ### Added
-- **Chart sizing — `chartw=` / `charth=`, and `chartw=full`.** The `pie=`,
-  `donut=`, and `stackedbar=` charts now take an explicit inline size in points
-  (clamped to 8–200), instead of always drawing at one fixed size. A pie or donut
-  is a circle, so either dimension sizes both sides; a stacked bar takes width and
-  height independently. Defaults are unchanged in spirit — a 24pt circle and a
-  110×12 bar — chosen because at text line height a pie reads as a dot rather
-  than a chart.
+- **`vee dev` — a save-driven authoring loop.** `vee dev <path>` watches one file
+  and re-runs it on **every save**, repainting the parsed menu tree, the run
+  status, and any lint findings. Where `vee show` re-runs on the plugin's own
+  cadence — so an edit to a 5-minute plugin appears five minutes later — this
+  re-runs when you hit save. A broken save repaints with the exit code and stderr
+  and keeps watching rather than exiting.
 
-  **`chartw=full`** stretches a chart to the width the row actually has. A menu is
-  only as wide as its widest row, so a fixed `chartw=` cannot fill a menu whose
-  width some *other* row decides; this can. The chart takes the row's content
-  width, less the row's own text when it has any.
-
-  The size is resolved in the format layer (`ChartParams.inlineSize`) rather than
-  in either renderer, for the same reason `progress=`'s bar dimensions live there:
-  the AppKit menu row and the SwiftUI window row cannot see each other's modules,
-  and a chart that measured differently on the two surfaces is exactly the drift
-  that placement avoids by construction.
-
-  Available through the structured JSON output as `"w"`/`"h"` (with `"w": "full"`),
-  and in all three SDKs — TypeScript (`w?: number | "full"`), Python, and Go
-  (`FullWidth`).
+  `--text` treats the file as plugin *output* and never executes it, so a menu's
+  shape can be designed as plain text with no shebang, no execute bit, and no
+  code running on save. `--push` additionally renders each save as a real
+  menu-bar status item with no file written to the plugins folder, so the
+  terminal shows structure while the menu bar shows Vee's true render; it is
+  opt-in, and the preview is removed on exit. Executable (`shell=`/`bash=`) rows
+  appear in a pushed preview but do not fire — ephemeral content is defanged
+  because any web page can open a `vee://` URL — and the loop says so rather than
+  letting a row silently do nothing.
+- **`vee lint --format compact`** emits `path:line:col: severity: message`, the
+  shape VS Code, vim, and emacs already parse, so findings become inline
+  diagnostics with no Vee-specific editor extension. Because lint runs over a
+  plugin's *output*, an executed script's findings are attributed to `<stdout>`
+  rather than to the script — a loop emitting many rows from one `echo` has no
+  recoverable line mapping, and marking an innocent source line would be worse
+  than marking none. Lint the protocol text with `--text` for diagnostics that
+  land exactly. `vee lint <path>` with no flags is unchanged.
 - **Detached plugin windows — leave a plugin open on the desktop.** *Open in
   Window*, in a plugin's own dropdown beside Refresh and Debug, opens that
   plugin's whole menu surface as a resizable window you can move to another
@@ -99,9 +124,13 @@ All notable changes to Vee are documented here. The format is based on
   each with a diagnostic), and folds a series longer than eight segments into a
   neutral "Other" tail rather than truncating it, so the shares still add up to
   the plugin's own total. Available in the structured-JSON format as a `chart`
-  object, in all three SDKs as one typed `chart`/`Chart` builder, in `vee render`/
-  `vee show` as a segmented block bar, and in `vee show --tree` by name.
-  VoiceOver reads every segment and its share, on both the row and the popover.
+  object, in all three SDKs as one typed `chart`/`Chart` builder, and in
+  `vee show` as a segmented block bar (`vee render` names the shape).
+  `chartw=`/`charth=` size the inline chart in points (defaults: a 24pt circle,
+  a 110x12 bar; clamped to 8-200), and `chartw=full` stretches it to the width
+  the row actually has — a row with empty text before the `|` then gives the
+  chart the whole row. VoiceOver reads every segment and its share, on both
+  the row and the popover.
 - **Search panel shows menu structure.** When idle (before typing), the search panel
   now mirrors the dropdown's structure — section headers (`header=true`), separators
   (`---`), and non-actionable rows (plain sub-text and `disabled=true` items) appear

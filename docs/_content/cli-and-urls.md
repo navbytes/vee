@@ -30,6 +30,7 @@ zero-install authoring loop that reuses Vee's real parser — no app, no GUI:
 |---------|--------------|
 | `vee render <plugin>` | Runs the plugin and prints the parsed menu tree plus any parse diagnostics. |
 | `vee show <plugin>` | Renders the plugin's dropdown in the terminal — color, block progress bars, and sparklines — and live-refreshes it on the plugin's own cadence. |
+| `vee dev <path>` | Watches one file and re-renders it on **every save**. The authoring loop: edit in your editor, save, see the menu. |
 | `vee lint <plugin>` | Runs the plugin and reports problems: unknown params, a bare `\|` in a title, unquoted values containing spaces, and the parser's own diagnostics. Exits non-zero if anything is flagged. |
 | `vee search <plugin> [query…]` | Runs the plugin, flattens its (nested) menu, and prints the items fuzzy-filtered and ranked by your query — each with its breadcrumb and the action it would fire. |
 | `vee new [flags]` | Scaffolds a new plugin file with the right filename, header tags, and a working body. |
@@ -84,6 +85,61 @@ trailing glyph: `↗` link, `$` shell, `⟳` refresh, `⌘` Shortcut) but does n
 it. Activating items, the interactive control popovers, and the embedded WebView
 remain the menu bar's job.
 
+### `vee dev`
+
+Where `vee show` re-runs on the plugin's *own* cadence — so an edit to a 5-minute
+plugin appears five minutes later — `vee dev` re-runs on **save**. Put it in a
+split terminal beside your editor and the loop is: edit, save, see it.
+
+```sh
+$ vee dev ./cpu.10s.sh
+```
+
+Each save re-runs the file and repaints the status line, the parsed menu tree,
+and any lint findings. A save that breaks the script repaints with the exit code
+and stderr and **keeps watching** — the loop does not exit over a typo. `r`
+re-runs now, `q` quits.
+
+#### `--text`: preview a menu without running anything
+
+`vee dev --text <path>` treats the file as plugin *output* rather than a program.
+Nothing is executed, so the file needs no execute bit and no shebang, and a save
+carries no risk of running code:
+
+```sh
+$ cat menu.txt
+CPU 42% | color=red
+---
+Open dashboard | href=https://example.com
+
+$ vee dev --text menu.txt
+```
+
+This is how to design a menu's *shape* before writing the script that produces
+it — and, as the next section explains, it is the only mode in which an editor
+can put a diagnostic on the right line.
+
+#### `--push`: see the real thing in the menu bar
+
+A terminal shows structure; only Vee can show Vee's render. `vee dev --push` also
+sends each save to the running app as a real status item, with **no file written
+to your plugins folder**:
+
+```sh
+$ vee dev --push ./cpu.10s.sh
+```
+
+The item updates in place on each save and disappears when you quit. It is
+opt-in — plain `vee dev` never touches your menu bar. If Vee is not running it is
+started in the background (without stealing focus), and the loop says so.
+
+One limitation, stated plainly: a pushed preview travels over the
+`setephemeralplugin` URL action, and because any web page can open a `vee://`
+URL, Vee strips `shell=`/`bash=` actions from ephemeral content. Those rows still
+*appear* in the preview so you can confirm you wrote them correctly, but clicking
+one does nothing. The loop prints a note when your menu contains one. To test an
+executable action, install the plugin normally.
+
 ### `vee lint`
 
 Catches the common authoring mistakes before you ship — especially the
@@ -98,6 +154,61 @@ Lint findings:
 
 `vee lint` exits `1` when it finds anything, so you can wire it into a
 pre-commit hook or CI.
+
+#### Diagnostics in your editor (`--format compact`)
+
+`--format compact` emits `path:line:col: severity: message` — the shape VS Code,
+vim, and emacs already parse — so findings become inline diagnostics with no
+Vee-specific editor extension:
+
+```sh
+$ vee lint --text --format compact menu.txt
+menu.txt:1:1: warning: unknown parameter 'colour'
+menu.txt:4:1: warning: value for 'color' contains a space but isn't quoted; wrap it in quotes (e.g. color="a b")
+```
+
+VS Code — add to `.vscode/tasks.json`:
+
+```json
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "vee lint",
+      "type": "shell",
+      "command": "vee lint --text --format compact ${file}",
+      "problemMatcher": {
+        "owner": "vee",
+        "fileLocation": ["autoDetect", "${workspaceFolder}"],
+        "pattern": {
+          "regexp": "^(.*):(\\d+):(\\d+):\\s+(warning|error):\\s+(.*)$",
+          "file": 1, "line": 2, "column": 3, "severity": 4, "message": 5
+        }
+      }
+    }
+  ]
+}
+```
+
+vim — `:set errorformat=%f:%l:%c:\ %t%*[^:]:\ %m` then `:cexpr system('vee lint --text --format compact ' . expand('%'))`.
+
+#### Which file a finding names, and why
+
+**Lint runs over a plugin's output, not its source.** That distinction decides
+what a line number can honestly refer to:
+
+| Mode | What is linted | Path in compact output | In your editor |
+|------|----------------|------------------------|----------------|
+| `--text` | the file itself | the real path | diagnostics land on the correct line |
+| default (executed) | the script's stdout | `<stdout>` | listed, but never placed on a line |
+
+A script emitting fifty rows from one `echo` inside a loop makes the
+output-line → source-line mapping many-to-one and unrecoverable. Naming the
+script would put squiggles on lines that have nothing wrong with them, so
+executed-script findings are attributed to `<stdout>`, which resolves to no file.
+You still see every finding; your editor just does not mark an innocent line.
+
+If you want squiggles that land exactly, lint the protocol text with `--text`.
 
 ### `vee new`
 

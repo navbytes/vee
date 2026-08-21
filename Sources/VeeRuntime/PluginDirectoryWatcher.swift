@@ -8,13 +8,22 @@ import VeeCore
 ///
 /// The vnode source only fires on directory-entry add/remove/rename — an
 /// in-place edit (`nano`, append, `chmod` on an existing plugin file) produces
-/// no event there, so a periodic tick also calls the same debounced `onChange`.
-/// `AppController.reload()` already no-ops cheaply when its mtime-keyed
-/// signature is unchanged, so the poll just reuses that existing dedupe rather
-/// than needing its own. The tick additionally recovers from the watched
-/// directory itself being deleted and recreated (switching plugins folders, or
-/// an editor's atomic-replace of a directory), which otherwise leaves the fd
-/// pointed at a dead inode and the watcher silently inert until relaunch.
+/// no event there. A per-file `FileWatcher` on each enumerated plugin closes
+/// that gap, so an author editing an installed plugin sees the menu bar update
+/// in about a debounce rather than waiting out a poll.
+///
+/// A periodic tick remains as a backstop and calls the same debounced
+/// `onChange`. `AppController.reload()` already no-ops cheaply when its
+/// mtime-keyed signature is unchanged, so both the tick and any redundant
+/// per-file notification reuse that existing dedupe rather than needing their
+/// own. The tick additionally recovers from the watched directory itself being
+/// deleted and recreated (switching plugins folders, or an editor's
+/// atomic-replace of a directory), which otherwise leaves the fd pointed at a
+/// dead inode and the watcher silently inert until relaunch.
+///
+/// The per-file layer is purely additive: the directory source and the tick are
+/// untouched, so a failure in it degrades to the previous behavior rather than
+/// breaking discovery.
 ///
 /// `@unchecked Sendable`: state is confined to `queue`.
 public final class PluginDirectoryWatcher: @unchecked Sendable {
@@ -28,6 +37,14 @@ public final class PluginDirectoryWatcher: @unchecked Sendable {
     private var source: DispatchSourceFileSystemObject?
     private var pendingWork: DispatchWorkItem?
     private var tickTimer: DispatchSourceTimer?
+    /// One watcher per enumerated plugin file, keyed by path. Rebuilt whenever
+    /// the directory's entries change.
+    private var fileWatchers: [String: FileWatcher] = [:]
+    /// Ceiling on per-file watchers. Each holds an `O_EVTONLY` descriptor, in a
+    /// process that also opens pipes for every plugin run — exhausting
+    /// descriptors would break plugin *execution*, not just watching. Beyond the
+    /// cap the periodic tick still covers the remainder.
+    private let maxWatchedFiles = 256
     /// Set when the watched fd itself is deleted/renamed (the directory, not
     /// just an entry inside it) — the vnode source is now watching a dead
     /// inode. Checked (and cleared on a successful reopen) on the next tick.
@@ -43,6 +60,7 @@ public final class PluginDirectoryWatcher: @unchecked Sendable {
     public func start() {
         queue.async { [weak self] in
             self?.openSource()
+            self?.refreshFileWatchers()
             self?.scheduleTick()
         }
     }
@@ -51,6 +69,7 @@ public final class PluginDirectoryWatcher: @unchecked Sendable {
         queue.async { [weak self] in
             self?.closeSource()
             self?.cancelTick()
+            self?.stopFileWatchers()
         }
     }
 
@@ -85,6 +104,7 @@ public final class PluginDirectoryWatcher: @unchecked Sendable {
         if let mask = source?.data, mask.contains(.delete) || mask.contains(.rename) {
             sourceInvalidated = true
         }
+        refreshFileWatchers()
         scheduleNotify()
     }
 
@@ -121,6 +141,7 @@ public final class PluginDirectoryWatcher: @unchecked Sendable {
             // hasn't been recreated yet).
             openSource()
         }
+        refreshFileWatchers()
         scheduleNotify()
     }
 
@@ -138,6 +159,56 @@ public final class PluginDirectoryWatcher: @unchecked Sendable {
         return openStat.st_dev == pathStat.st_dev && openStat.st_ino == pathStat.st_ino
     }
 
+    // MARK: - Per-file watchers
+
+    /// Brings `fileWatchers` in line with the directory's current entries,
+    /// creating and tearing down only the difference. Called on start, on every
+    /// directory event, and on each tick — so a coalesced or missed directory
+    /// event cannot leave the set permanently stale.
+    private func refreshFileWatchers() {
+        let desired = currentPluginFilePaths()
+
+        for (path, watcher) in fileWatchers where !desired.contains(path) {
+            watcher.stop()
+            fileWatchers[path] = nil
+        }
+
+        for path in desired where fileWatchers[path] == nil {
+            let watcher = FileWatcher(path: path, debounce: debounce) { [weak self] in
+                // Fires on the FileWatcher's own queue; `scheduleNotify` mutates
+                // `queue`-confined state, so hop before touching it.
+                self?.queue.async { [weak self] in self?.scheduleNotify() }
+            }
+            watcher.start()
+            fileWatchers[path] = watcher
+        }
+    }
+
+    /// Regular, non-hidden entries directly inside the directory, capped and
+    /// ordered deterministically so which files fall past the cap is stable
+    /// rather than dependent on enumeration order. Hidden entries are skipped:
+    /// they are the app's own dotfiles and editors' in-flight temp files, and a
+    /// temp file's rename over the real plugin already fires the directory
+    /// source.
+    private func currentPluginFilePaths() -> Set<String> {
+        guard let names = try? FileManager.default.contentsOfDirectory(atPath: directory) else { return [] }
+        let paths = names
+            .filter { !$0.hasPrefix(".") }
+            .sorted()
+            .map { directory + "/" + $0 }
+            .filter { path in
+                var st = stat()
+                guard stat(path, &st) == 0 else { return false }
+                return (st.st_mode & S_IFMT) == S_IFREG
+            }
+        return Set(paths.prefix(maxWatchedFiles))
+    }
+
+    private func stopFileWatchers() {
+        fileWatchers.values.forEach { $0.stop() }
+        fileWatchers.removeAll()
+    }
+
     /// Tears down the vnode source, its fd, and any pending debounced notify.
     /// Safe to call repeatedly — `openSource()` calls this at its top before
     /// reopening. Deliberately leaves the tick timer alone; see `cancelTick()`.
@@ -152,5 +223,6 @@ public final class PluginDirectoryWatcher: @unchecked Sendable {
     deinit {
         closeSource()
         cancelTick()
+        stopFileWatchers()
     }
 }

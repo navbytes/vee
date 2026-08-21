@@ -28,7 +28,6 @@ final class PluginCoordinator {
     /// plugin is excluded naturally since it stays `nil`.
     private(set) var controller: StatusItemController?
     private var timer: RefreshTimer?
-    private var background: BackgroundRefreshScheduler?
     private var cron: CronScheduler?
     private var streaming: StreamingSession?
     private var hotKeyID: UInt32?
@@ -43,10 +42,11 @@ final class PluginCoordinator {
     /// racing the replacement coordinator's run of the same plugin.
     private var refreshTask: Task<Void, Never>?
     /// The second, independent scheduler for `.both`/`.widget` plugins — see
-    /// `start()`. Always `BackgroundRefreshScheduler` since the widget cadence
-    /// is floored at 5 minutes regardless of source, squarely in that
-    /// scheduler's energy-batched range.
-    private var widgetBackground: BackgroundRefreshScheduler?
+    /// `start()`. The widget cadence is floored at 5 minutes regardless of
+    /// source; it is driven by the same in-process timer as every other
+    /// interval, so it cannot register a launch-on-demand activity that would
+    /// keep Vee alive against the user's wishes.
+    private var widgetBackground: RefreshTimer?
     private var isRefreshingWidget = false
     /// The in-flight `refreshWidget()` Task — same reasoning as `refreshTask`.
     private var refreshWidgetTask: Task<Void, Never>?
@@ -211,6 +211,10 @@ final class PluginCoordinator {
     }
 
     func start() {
+        // Earlier versions registered a launch-on-demand XPC activity for this
+        // plugin, which survives in launchd and relaunches Vee after the user
+        // quits it. Clearing is a no-op when nothing was registered.
+        LegacyBackgroundActivity.clear(forPluginID: plugin.id.rawValue)
         registerHotKey()
         // `.widget` has no menu presence — skip the menu-mode run/schedule
         // entirely; only the widget-mode cadence below applies to it.
@@ -312,8 +316,6 @@ final class PluginCoordinator {
         hotKeyID = nil
         timer?.stop()
         timer = nil
-        background?.stop()
-        background = nil
         cron?.stop()
         cron = nil
         streaming?.stop()
@@ -465,13 +467,6 @@ final class PluginCoordinator {
                 Task { @MainActor in self?.refresh() }
             }
             self.timer = timer
-        case .backgroundActivity:
-            // Long intervals: let the OS batch wake-ups for energy efficiency.
-            let scheduler = BackgroundRefreshScheduler(identifier: "com.vee.refresh.\(plugin.id.rawValue)", interval: interval) { [weak self] in
-                Task { @MainActor in self?.refresh() }
-            }
-            scheduler.start()
-            self.background = scheduler
         case .none:
             return
         }
@@ -585,14 +580,12 @@ final class PluginCoordinator {
     }
 
     private func scheduleWidgetTimer() {
-        let scheduler = BackgroundRefreshScheduler(
-            identifier: "com.vee.refresh.widget.\(plugin.id.rawValue)",
-            interval: widgetRefreshInterval
-        ) { [weak self] in
+        let interval = widgetRefreshInterval
+        let timer = RefreshTimer()
+        timer.start(interval: interval, leeway: RefreshScheduler.leeway(forSeconds: interval)) { [weak self] in
             Task { @MainActor in self?.refreshWidget() }
         }
-        scheduler.start()
-        self.widgetBackground = scheduler
+        self.widgetBackground = timer
     }
 
     /// Runs the plugin with `VEE_TARGET=widget`, parses stdout as a card, and
