@@ -118,18 +118,21 @@ a build-time binary, not a runtime dependency, and no package manifest in the
 repo. After changing a guide, rebuild it too and commit the result:
 
 ```sh
-npx -y pagefind@1.5.2 --site docs/guide --output-subdir ../pagefind
+python3 docs/scripts/check_search_index.py --update
 ```
 
-Note that unlike the guide HTML, **nothing fails CI when the index is stale** —
-the pages will be correct but search will return the previous text. Regenerate
-it in the same commit as any content change.
+That runs Pagefind and records a fingerprint of the pages it indexed. CI checks
+that fingerprint, so a stale index fails the build the same way stale HTML does
+— which matters because a stale index is silent: every page renders correctly
+while search returns the previous text.
 
-Two more checks run on docs in CI, both pure standard library:
+Three more checks run on docs in CI, all pure standard library (the Pagefind
+binary is only needed for `--update`, never to verify):
 
 ```sh
-python3 docs/scripts/check_params.py    # parser, linter, and docs agree on line params
-python3 docs/scripts/check_schemas.py   # docs/schemas matches the SDK golden fixtures
+python3 docs/scripts/check_params.py        # parser, linter, and docs agree on line params
+python3 docs/scripts/check_schemas.py       # docs/schemas matches the SDK golden fixtures
+python3 docs/scripts/check_search_index.py  # the search index is current with docs/guide
 ```
 
 ### A rule of thumb for where a change goes
