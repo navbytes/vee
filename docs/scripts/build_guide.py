@@ -87,6 +87,11 @@ PAGES = [
         desc="Preview, watch, and lint a Vee plugin without installing it: vee render, vee show, vee dev, and vee lint, plus execution timeouts, exit codes, and the Debug console.",
     ),
     dict(
+        slug="writing-plugins-with-an-llm", nav="Writing plugins with an LLM",
+        title="Writing Vee plugins with an LLM — Vee docs",
+        desc="Hand a model the whole plugin format in one file, give it the JSON Schemas instead of prose, and close the loop with vee lint — plus the mistakes to watch for.",
+    ),
+    dict(
         slug="enterprise-store", nav="Custom plugin stores",
         title="Custom plugin stores (enterprise) — Vee docs",
         desc="Point Vee at your own curated plugin catalog: a GitHub repo, a static HTTP host, or an air-gapped file mirror, with integrity checks and MDM-managed configuration.",
@@ -343,6 +348,7 @@ TEMPLATE = """<!doctype html>
   <link rel="canonical" href="{site}/guide/{slug}.html">
   <link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
   <link rel="stylesheet" href="../assets/style.css">
+  <link rel="alternate" type="text/markdown" href="./{slug}.md" title="Markdown source">
   <meta property="og:type" content="article">
   <meta property="og:site_name" content="Vee">
   <meta property="og:title" content="{title}">
@@ -422,6 +428,66 @@ def build(page, index):
     )
 
 
+def plain(nav):
+    """A PAGES nav label as plain text.
+
+    `nav` is inserted raw into HTML, so it carries entities (`CLI &amp; URL
+    actions`). Text outputs need the character back.
+    """
+    return nav.replace("&amp;", "&").replace("&lt;", "<").replace("&gt;", ">")
+
+
+def sourced_pages():
+    """PAGES entries that have a Markdown source (everything but the index)."""
+    return [p for p in PAGES if p.get("source", True) is not None]
+
+
+def llms_txt():
+    """The llmstxt.org entry point: what Vee is, then every page as a link.
+
+    Links point at the Markdown mirrors, not the HTML: a client reaching for
+    this file wants source, not a rendered page. Descriptions are the ones
+    PAGES already carries, so this cannot claim something the pages do not.
+    """
+    out = ["# Vee", "",
+           "> A native, leak-free macOS menu-bar script runner, compatible with the",
+           "> xbar and SwiftBar plugin protocol. Plugins are ordinary executables that",
+           "> print text (or JSON) to standard output; Vee runs them on a schedule and",
+           "> renders the result as menu-bar titles, dropdown menus, and native widgets.",
+           "",
+           "The complete documentation is also available as a single document:",
+           "[%s/llms-full.txt](%s/llms-full.txt)." % (SITE, SITE),
+           "", "## Documentation", ""]
+    for page in sourced_pages():
+        out.append("- [%s](%s/guide/%s.md): %s" % (plain(page["nav"]), SITE, page["slug"], page["desc"]))
+    out += ["", "## Machine-readable contracts", "",
+            "- [Widget card schema](%s/schemas/widget-card.schema.json): JSON Schema for the "
+            "payload a plugin prints in widget mode, including the layout tree. Validated in "
+            "CI against the SDKs' golden fixtures." % SITE,
+            "- [JSON output schema](%s/schemas/json-output.schema.json): JSON Schema for the "
+            "structured-JSON alternative to the text protocol." % SITE,
+            "", "## Optional", "",
+            "- [Plugin SDKs](https://github.com/navbytes/vee/tree/main/plugins): zero-dependency "
+            "TypeScript, Python, and Go builders that emit byte-identical output.",
+            "- [Example plugins](https://github.com/navbytes/vee/tree/main/examples): runnable, "
+            "heavily commented showcase plugins.",
+            ""]
+    return "\n".join(out)
+
+
+def llms_full_txt():
+    """Every guide concatenated, so the whole format is one retrieval."""
+    out = ["# Vee — complete documentation", "",
+           "Every page of the Vee plugin documentation, concatenated. Source: %s" % SITE,
+           "Machine-readable payload schemas: %s/schemas/" % SITE,
+           "", "---", ""]
+    for page in sourced_pages():
+        with open(os.path.join(CONTENT, "%s.md" % page["slug"]), encoding="utf-8") as handle:
+            body = handle.read().strip()
+        out += ["<!-- %s/guide/%s.html -->" % (SITE, page["slug"]), "", body, "", "---", ""]
+    return "\n".join(out)
+
+
 # Static pages outside PAGES that still belong in the sitemap.
 EXTRA_URLS = ["/", "/compare/", "/compare/vee-vs-swiftbar.html", "/compare/vee-vs-xbar.html"]
 
@@ -455,7 +521,25 @@ def main(argv):
         with open(target, "w", encoding="utf-8") as handle:
             handle.write(rendered)
         print("wrote guide/%s.html" % page["slug"])
-    for name, rendered in (("sitemap.xml", sitemap()), ("robots.txt", robots())):
+    # Markdown mirrors: the same source the HTML was rendered from, published
+    # beside it so /guide/x.md is derivable from /guide/x.html. Cross-links keep
+    # their .md form here — correct for a Markdown reader, unlike the HTML.
+    for page in sourced_pages():
+        with open(os.path.join(CONTENT, "%s.md" % page["slug"]), encoding="utf-8") as handle:
+            rendered = handle.read()
+        target = os.path.join(GUIDE, "%s.md" % page["slug"])
+        current = open(target, encoding="utf-8").read() if os.path.exists(target) else None
+        if current == rendered:
+            continue
+        if check:
+            stale.append("guide/%s.md" % page["slug"])
+            continue
+        with open(target, "w", encoding="utf-8") as handle:
+            handle.write(rendered)
+        print("wrote guide/%s.md" % page["slug"])
+
+    for name, rendered in (("sitemap.xml", sitemap()), ("robots.txt", robots()),
+                           ("llms.txt", llms_txt()), ("llms-full.txt", llms_full_txt())):
         target = os.path.join(DOCS, name)
         current = open(target, encoding="utf-8").read() if os.path.exists(target) else None
         if current == rendered:
@@ -465,7 +549,8 @@ def main(argv):
             continue
         with open(target, "w", encoding="utf-8") as handle:
             handle.write(rendered)
-        print("wrote %s" % name)
+        size = " (%d KB)" % (len(rendered.encode("utf-8")) // 1024) if name == "llms-full.txt" else ""
+        print("wrote %s%s" % (name, size))
 
     if stale:
         print("stale (run docs/scripts/build_guide.py): %s" % ", ".join(stale), file=sys.stderr)
