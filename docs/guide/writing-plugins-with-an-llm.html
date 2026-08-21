@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Writing Vee plugins with an LLM — Vee docs</title>
+  <meta name="description" content="Hand a model the whole plugin format in one file, give it the JSON Schemas instead of prose, and close the loop with vee lint — plus the mistakes to watch for.">
+  <link rel="canonical" href="https://vee.navbytes.io/guide/writing-plugins-with-an-llm.html">
+  <link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
+  <link rel="stylesheet" href="../assets/style.css">
+  <link rel="alternate" type="text/markdown" href="./writing-plugins-with-an-llm.md" title="Markdown source">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Vee">
+  <meta property="og:title" content="Writing Vee plugins with an LLM — Vee docs">
+  <meta property="og:description" content="Hand a model the whole plugin format in one file, give it the JSON Schemas instead of prose, and close the loop with vee lint — plus the mistakes to watch for.">
+  <meta property="og:url" content="https://vee.navbytes.io/guide/writing-plugins-with-an-llm.html">
+  <meta property="og:image" content="https://vee.navbytes.io/assets/og-image.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Writing Vee plugins with an LLM — Vee docs">
+  <meta name="twitter:description" content="Hand a model the whole plugin format in one file, give it the JSON Schemas instead of prose, and close the loop with vee lint — plus the mistakes to watch for.">
+  <meta name="twitter:image" content="https://vee.navbytes.io/assets/og-image.png">
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="../index.html" aria-label="Vee home">
+      <img class="mark" src="../assets/favicon.svg" alt="" width="28" height="28">
+      <span><b>Vee</b></span>
+    </a>
+    <button class="nav-toggle" aria-label="Toggle navigation" aria-expanded="false" aria-controls="nav-links">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+    </button>
+    <ul class="nav-links" id="nav-links">
+      <li><a href="../index.html#features">Features</a></li>
+      <li><a href="../index.html#trust">Trust</a></li>
+      <li><a href="../compare/index.html">Compare</a></li>
+      <li><a href="./index.html" aria-current="page">Docs</a></li>
+      <li><a class="nav-cta" href="https://github.com/navbytes/vee" rel="noopener">GitHub</a></li>
+    </ul>
+  </div>
+</header>
+<div class="docs-layout">
+  <aside class="docs-side" aria-label="Documentation navigation">
+    <div id="docs-search" class="docs-search" data-pagefind-ignore></div>
+    <p class="docs-nav-title">Documentation</p>
+<ul class="docs-nav">
+<li><a href="./index.html">Overview</a></li>
+<li><a href="./getting-started.html">Getting started</a></li>
+<li><a href="./migrating-from-swiftbar.html">Migrating from SwiftBar / xbar</a></li>
+<li><a href="./plugin-authoring.html">Plugin authoring</a></li>
+<li><a href="./widgets.html">Widgets</a></li>
+<li><a href="./trust-model.html">Trust model</a></li>
+<li><a href="./preferences.html">Preferences</a></li>
+<li><a href="./sdk.html">Plugin SDKs</a></li>
+<li><a href="./json-output.html">JSON output</a></li>
+<li><a href="./cli-and-urls.html">CLI &amp; URL actions</a></li>
+<li><a href="./debugging.html">Debugging &amp; testing</a></li>
+<li><a href="./writing-plugins-with-an-llm.html" aria-current="page">Writing plugins with an LLM</a></li>
+<li><a href="./enterprise-store.html">Custom plugin stores</a></li>
+<li><a href="./faq.html">FAQ</a></li>
+<li><a href="./troubleshooting.html">Troubleshooting</a></li>
+</ul>
+<nav class="docs-toc" aria-labelledby="toc-title"><p class="docs-nav-title" id="toc-title">On this page</p><ul><li><a href="#give-it-the-format-not-a-search-result">Give it the format, not a search result</a></li><li><a href="#give-it-the-schemas-not-a-description-of-them">Give it the schemas, not a description of them</a></li><li><a href="#close-the-loop-with-vee-lint">Close the loop with <code>vee lint</code></a></li><li><a href="#the-mistakes-to-watch-for">The mistakes to watch for</a></li><li><a href="#be-specific-about-the-surface">Be specific about the surface</a></li><li><a href="#see-also">See also</a></li></ul></nav>
+  </aside>
+  <main class="docs-main" id="main">
+    <article class="docs-content" data-pagefind-body>
+      <p class="doc-hero-note">Vee documentation</p>
+<h1>Writing plugins with an LLM</h1>
+<p>A Vee plugin is a small, self-contained script with a strict output format and a
+fast way to check it. That shape suits an LLM well — but only if you give it the
+format and a way to verify what it wrote. This page is how.</p>
+<h2 id="give-it-the-format-not-a-search-result">Give it the format, not a search result</h2>
+<p>The whole plugin documentation is published as one file:</p>
+<div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">text</span></div><pre><code>https://vee.navbytes.io/llms-full.txt</code></pre></div>
+<p>Paste it, or point a tool that can fetch URLs at it. It is about 140 KB of
+Markdown — one comfortable request, and it contains every page of this guide.</p>
+<p>If you want less, <a href="https://vee.navbytes.io/llms.txt" rel="noopener"><code>llms.txt</code></a> is an index of
+every page with a one-line description, and each guide page is available as
+Markdown by swapping the extension:</p>
+<div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">text</span></div><pre><code>https://vee.navbytes.io/guide/plugin-authoring.html   ← the page you read
+https://vee.navbytes.io/guide/plugin-authoring.md     ← the source a model reads</code></pre></div>
+<p>For most plugin work, <a href="plugin-authoring.html">plugin-authoring.md</a> alone is enough
+context. Add <a href="widgets.html">widgets.md</a> if the plugin renders a widget, and
+<a href="json-output.html">json-output.md</a> if it emits JSON.</p>
+<h2 id="give-it-the-schemas-not-a-description-of-them">Give it the schemas, not a description of them</h2>
+<p>If the plugin prints structured output, hand over the schema rather than prose.
+It encodes every field, enum, and clamp, and CI proves it matches what Vee
+actually accepts:</p>
+<div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">text</span></div><pre><code>https://vee.navbytes.io/schemas/widget-card.schema.json
+https://vee.navbytes.io/schemas/json-output.schema.json</code></pre></div>
+<p>A model that has the schema will not invent a <code>template</code> that does not exist or a
+<code>progress</code> value outside <code>0…1</code>. One that is working from a paragraph might.</p>
+<h2 id="close-the-loop-with-vee-lint">Close the loop with <code>vee lint</code></h2>
+<p>This is the part that matters. A generated plugin is <em>plausible</em>; <code>vee lint</code>
+makes it <em>correct</em>:</p>
+<div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">sh</span></div><pre><code>vee lint ./cpu.30s.sh</code></pre></div>
+<p>It exits non-zero on anything it flags, so it works as the check in an agent
+loop: generate, lint, feed the findings back, repeat until clean. For a plugin
+that is not executable yet, or when you want to iterate on the output shape
+before writing the script, lint the protocol text directly:</p>
+<div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">sh</span></div><pre><code>vee lint --text ./menu.txt</code></pre></div>
+<p>Then see what Vee would actually build from it:</p>
+<div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">sh</span></div><pre><code>vee dev --text ./menu.txt</code></pre></div>
+<p>See <a href="debugging.html">Debugging and testing plugins</a> for both commands in full, and
+<a href="troubleshooting.html#diagnostics-reference">Troubleshooting</a> for what each
+diagnostic means.</p>
+<h2 id="the-mistakes-to-watch-for">The mistakes to watch for</h2>
+<p><code>vee lint</code> exists because these are the mistakes people make when hand-writing
+the format. They are the same ones a model makes, and most of them produce a
+plugin that <em>runs</em> while rendering something subtly wrong — which is why reading
+the output is not enough on its own.</p>
+<ul>
+<li><strong>An unescaped <code>|</code> in display text.</strong> The first <code>|</code> on a line separates text
+from parameters, so a literal pipe truncates the item. It must be <code>\|</code>. The
+<a href="sdk.html">SDKs</a> escape this for you; hand-written output does not.</li>
+<li><strong>Unquoted parameter values containing spaces.</strong> <code>tooltip=two words</code> silently
+keeps only <code>two</code>. It needs <code>tooltip="two words"</code>.</li>
+<li><strong>Confusing the first <code>---</code> with the rest.</strong> The first one splits the menu-bar
+title from the dropdown; every later one is a divider.</li>
+<li><strong>Assuming indentation nests.</strong> Submenus nest with leading <code>--</code>, not
+whitespace, and each extra <code>--</code> is one more level.</li>
+<li><strong>Inventing parameters.</strong> Vee preserves unknown parameters rather than
+erroring, so a plausible-but-nonexistent one renders nothing and says nothing.
+<code>vee lint</code> is what tells you. The
+<a href="migrating-from-swiftbar.html#compatibility-matrix">compatibility matrix</a> is the
+list of what is real, and which tool it came from.</li>
+<li><strong>Forgetting the filename carries the interval.</strong> <code>cpu.sh</code> runs once on demand;
+<code>cpu.30s.sh</code> runs every thirty seconds. The plugin also needs <code>chmod +x</code>.</li>
+<li><strong>Expecting state between runs.</strong> Every refresh is a fresh process. Anything
+that must persist goes in <code>SWIFTBAR_PLUGIN_CACHE_PATH</code>, not a variable.</li>
+</ul>
+<h2 id="be-specific-about-the-surface">Be specific about the surface</h2>
+<p>"Write a Vee plugin" underspecifies three things worth stating outright: which
+<strong>language</strong> (any executable works — shell, Python, and TypeScript are the
+common ones), which <strong>surface</strong> (menu bar, <a href="widgets.html">widget</a>, or both), and
+what the plugin should do when its dependency, token, or network is missing.
+That last one matters more than it sounds: a plugin that degrades to a useful
+"not configured" row beats one that prints a stack trace into your menu bar.</p>
+<p>If the plugin touches the network, a secret, the filesystem, or another binary,
+ask for the <a href="trust-model.html"><code>&lt;vee.*&gt;</code> trust declarations</a> too — and check them
+against what the code actually does. They are advisory, and a declaration that
+does not match its behavior is worse than none.</p>
+<h2 id="see-also">See also</h2>
+<ul>
+<li><a href="plugin-authoring.html">Plugin authoring reference</a> — the format itself.</li>
+<li><a href="debugging.html">Debugging and testing plugins</a> — <code>vee lint</code>, <code>vee dev</code>, and the rest of the loop.</li>
+<li><a href="sdk.html">Plugin SDKs</a> — typed builders that make whole classes of the mistakes above impossible.</li>
+<li><a href="trust-model.html">Trust model</a> — declaring what a plugin touches.</li>
+</ul>
+    </article>
+    <nav class="doc-nextprev" aria-label="Guide pagination"><a class="prev" href="./debugging.html"><span class="dir">&larr; Previous</span><span class="lbl">Debugging &amp; testing</span></a><a class="next" href="./enterprise-store.html"><span class="dir">Next &rarr;</span><span class="lbl">Custom plugin stores</span></a></nav>
+  </main>
+</div>
+<link rel="stylesheet" href="../pagefind/pagefind-ui.css">
+<script src="../pagefind/pagefind-ui.js"></script>
+<script src="../assets/app.js" defer></script>
+</body>
+</html>

@@ -24,6 +24,7 @@ regeneration costs seconds, and a missed one ships stale search.
 import glob
 import hashlib
 import os
+import shutil
 import subprocess
 import sys
 
@@ -49,6 +50,14 @@ def fingerprint():
 
 
 def update():
+    # Pagefind writes content-hashed filenames and does not clean its output
+    # directory, so rebuilding leaves every previous run's fragments and index
+    # chunks behind — they accumulate in the repo and ship to the site. Only one
+    # .pf_meta can be current, so anything left over is dead weight. Clear the
+    # directory first; everything in it is generated.
+    if os.path.isdir(INDEX):
+        shutil.rmtree(INDEX)
+
     print("$ " + " ".join(BUILD_CMD))
     result = subprocess.run(BUILD_CMD, cwd=os.path.dirname(DOCS))
     if result.returncode != 0:

@@ -110,8 +110,9 @@ python3 docs/scripts/build_guide.py --check  # what CI runs; fails if stale
 
 Adding a new guide means adding its page to `PAGES` in that script (it drives
 the sidebar order, the prev/next pager, and each page's title/description).
-The same run also emits `docs/sitemap.xml` and `docs/robots.txt`, and `--check`
-covers them, so they cannot go stale either.
+The same run also emits `docs/sitemap.xml`, `docs/robots.txt`, a Markdown mirror
+of each page at `docs/guide/<slug>.md`, and `docs/llms.txt` / `docs/llms-full.txt`
+for LLM and agent consumers. `--check` covers all of them, so none can go stale.
 
 Search is a static [Pagefind](https://pagefind.app) index over the built HTML —
 a build-time binary, not a runtime dependency, and no package manifest in the
