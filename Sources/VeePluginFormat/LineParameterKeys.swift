@@ -33,7 +33,7 @@ public enum LineParameterKeys {
         "sparkline", "toggle", "slider", "progress", "trackcolor",
         "progressw", "progressh", "header", "accessory",
         "pie", "donut", "stackedbar", "chartlabels", "chartcolors",
-        "chartw", "charth",
+        "chartw", "charth"
     ]
 
     /// Whether `key` is a parameter Vee understands. Handles the positional
