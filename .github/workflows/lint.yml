@@ -44,3 +44,8 @@ jobs:
       # golden fixtures all three SDKs produce byte-identically.
       - name: Published JSON Schemas match the shipped fixtures
         run: python3 docs/scripts/check_schemas.py
+      # A stale search index is the quietest docs failure there is: every page
+      # renders correctly while search returns the previous release's text.
+      # Verifying the fingerprint needs no network and no Pagefind binary.
+      - name: Search index is current with docs/guide
+        run: python3 docs/scripts/check_search_index.py
