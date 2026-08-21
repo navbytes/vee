@@ -221,7 +221,7 @@ enum DevLoop {
     private static func waitForChangeOrKey(wakeRead: Int32) -> Wake {
         var pfds = [
             pollfd(fd: STDIN_FILENO, events: Int16(POLLIN), revents: 0),
-            pollfd(fd: wakeRead, events: Int16(POLLIN), revents: 0),
+            pollfd(fd: wakeRead, events: Int16(POLLIN), revents: 0)
         ]
 
         let ready = poll(&pfds, 2, -1)

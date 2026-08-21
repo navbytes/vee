@@ -75,7 +75,7 @@ final class DiagnosticFormatterTests: XCTestCase {
             d(.error, "zeta", line: 5),
             d(.error, "alpha", line: 5),
             d(.error, "later", line: 9),
-            d(.error, "no line"),
+            d(.error, "no line")
         ])
         XCTAssertEqual(sorted.map(\.message), ["no line", "alpha", "zeta", "later"])
     }
