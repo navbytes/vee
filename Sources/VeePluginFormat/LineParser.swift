@@ -126,6 +126,9 @@ enum LineParser {
         var chartRaw = ""
         var chartLabels: [String] = []
         var chartColors: [VeeColor?] = []
+        var chartW: Double?
+        var chartH: Double?
+        var chartFullWidth = false
         var seenKeys: Set<String> = []
 
         func bool(_ v: String) -> Bool { v == "true" || v == "1" || v == "yes" }
@@ -259,6 +262,11 @@ enum LineParser {
                         message: "chartcolors= has a malformed color; those segments use the default palette"
                     ))
                 }
+            case "chartw":
+                // `full` is the one non-numeric value: stretch to the row's own
+                // width rather than a fixed number of points.
+                if value.lowercased() == "full" { chartFullWidth = true } else { chartW = finite(value) }
+            case "charth": chartH = finite(value)
             case "trackcolor": progressTrack = VeeColor.parse(value)
             case "progressw": progressW = finite(value)
             case "progressh": progressH = finite(value)
@@ -310,6 +318,7 @@ enum LineParser {
             if nums.count == tokens.count {
                 p.swiftbar.chart = ChartParams.make(
                     kind: kind, values: nums, labels: chartLabels, colors: chartColors,
+                    width: chartW, height: chartH, isFullWidth: chartFullWidth,
                     diagnostics: &diagnostics
                 )
             } else {

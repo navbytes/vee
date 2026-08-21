@@ -37,7 +37,7 @@ enum PluginsDirectory {
         // the implicit unwrap so a nil `NSApp` degrades to light mode instead of
         // crashing (and so this stays callable without a live NSApplication).
         let dark = (NSApp?.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) ?? .aqua) == .darkAqua
-        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.1.0"
+        let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.1.2"
         ensureExists(cacheDirectory())
         ensureExists(dataDirectory())
         return RuntimeEnvironmentContext(

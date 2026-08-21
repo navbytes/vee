@@ -111,11 +111,52 @@ final class CategoryChartRenderSmokeTests: XCTestCase {
     }
 
     func testCircularAndBarChartsTakeDifferentAccessorySlots() {
-        XCTAssertEqual(
-            CategoryChartMenuItemView.accessorySize(for: .pie),
-            CategoryChartMenuItemView.accessorySize(for: .donut)
-        )
-        let bar = CategoryChartMenuItemView.accessorySize(for: .stackedBar)
+        func size(_ line: String) -> CGSize {
+            CategoryChartMenuItemView.accessorySize(for: item(line).params.swiftbar.chart!)
+        }
+        XCTAssertEqual(size("x | pie=1,2"), size("x | donut=1,2"))
+        let bar = size("x | stackedbar=1,2")
         XCTAssertGreaterThan(bar.width, bar.height, "a stacked bar is wide, not square")
+    }
+
+    func testChartSizeIsDeclarableAndClamped() {
+        func size(_ line: String) -> CGSize {
+            CategoryChartMenuItemView.accessorySize(for: item(line).params.swiftbar.chart!)
+        }
+        // A circle takes one dimension from either knob.
+        XCTAssertEqual(size("x | pie=1,2 charth=48"), CGSize(width: 48, height: 48))
+        XCTAssertEqual(size("x | donut=1,2 chartw=48"), CGSize(width: 48, height: 48))
+        // A bar takes both independently.
+        XCTAssertEqual(size("x | stackedbar=1,2 chartw=200 charth=20"), CGSize(width: 200, height: 20))
+        // Out-of-range values clamp rather than pushing a row off the screen.
+        XCTAssertEqual(size("x | pie=1,2 charth=9000"), CGSize(width: 200, height: 200))
+        XCTAssertEqual(size("x | pie=1,2 charth=0"), CGSize(width: 8, height: 8))
+        // Undeclared stays at the per-kind default.
+        XCTAssertEqual(size("x | pie=1,2"), CGSize(width: 24, height: 24))
+    }
+
+    func testFullWidthChartStretchesToTheRowLessItsLabel() {
+        let chart = item("Budget | stackedbar=1,2 chartw=full").params.swiftbar.chart!
+        XCTAssertTrue(chart.isFullWidth)
+        let layout = ProgressBarLayout(barWidth: 110, barHeight: 12)
+        let bounds = CGRect(x: 0, y: 0, width: 400, height: 22)
+
+        let labelled = CategoryChartMenuItemView.stretchedWidth(
+            layout: layout, title: NSAttributedString(string: "Budget"), in: bounds
+        )
+        let bare = CategoryChartMenuItemView.stretchedWidth(
+            layout: layout, title: NSAttributedString(string: ""), in: bounds
+        )
+        // A bare row gives the chart everything between the insets; a labelled
+        // one gives it the rest after its own text.
+        XCTAssertEqual(bare, 400 - layout.leadingInset - layout.trailingInset)
+        XCTAssertLessThan(labelled, bare)
+
+        // A menu too narrow to stretch into never collapses the chart.
+        let narrow = CategoryChartMenuItemView.stretchedWidth(
+            layout: layout, title: NSAttributedString(string: ""),
+            in: CGRect(x: 0, y: 0, width: 40, height: 22)
+        )
+        XCTAssertEqual(narrow, layout.barWidth)
     }
 }

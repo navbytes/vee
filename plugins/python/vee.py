@@ -135,6 +135,14 @@ def _encode(options: dict[str, Any] | None) -> str:
     chart = options.get("chart")
     if chart is not None:
         push(chart["kind"], ",".join(_fmt(v) for v in chart["values"]))
+        # Inline size in points. A pie/donut is a circle, so either knob sizes
+        # both sides; a stacked bar takes them independently. ``"full"`` is the
+        # one non-numeric width: stretch to the row's own width.
+        w = chart.get("w")
+        if w is not None:
+            push("chartw", w if isinstance(w, str) else _fmt(w))
+        if chart.get("h") is not None:
+            push("charth", _fmt(chart["h"]))
         labels = chart.get("labels")
         if labels is not None:
             push("chartlabels", ",".join(str(v) for v in labels))

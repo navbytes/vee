@@ -200,7 +200,9 @@ d.Item("Disk usage", &amp;vee.Options{Color: vee.Str("green"), Progress: vee.Flo
 <p>The <a href="plugin-authoring.html#share-charts-pie-donut-stackedbar">share charts</a>
 (<code>pie=</code>/<code>donut=</code>/<code>stackedbar=</code>) get one typed builder rather than three: the
 shapes take the same data, so <code>kind</code> is the only thing that changes between them.
-<code>labels</code> and <code>colors</code> are optional and positional.</p>
+<code>labels</code> and <code>colors</code> are optional and positional; <code>w</code>/<code>h</code> (<code>W</code>/<code>H</code> in Go) set
+the inline size in points, the typed spelling of <code>chartw=</code>/<code>charth=</code>. Pass
+<code>w: "full"</code> (Go: <code>FullWidth: true</code>) to stretch the chart to the row's own width.</p>
 <p><strong>TypeScript</strong></p>
 <div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">ts</span></div><pre><code>d.item("By category", { chart: { kind: "pie", values: [45, 30, 25], labels: ["Documents", "Photos", "Apps"] } });
 d.item("By volume", { chart: { kind: "donut", values: [512, 256, 128], colors: ["blue", "teal", "orange"] } });</code></pre></div>

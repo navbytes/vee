@@ -58,6 +58,14 @@ export interface ItemOptions {
     values: number[];
     labels?: string[];
     colors?: Color[];
+    /**
+     * Inline size in points → `chartw=`/`charth=`. A pie/donut is a circle, so
+     * either knob sizes both sides; a stacked bar takes them independently.
+     * Omitted, a chart takes its per-kind default (24pt circle, 110×12 bar).
+     * `w: "full"` stretches the chart to the row's own width instead.
+     */
+    w?: number | "full";
+    h?: number;
   };
 }
 
@@ -123,6 +131,8 @@ function encode(options?: ItemOptions): string {
   if (options.chart !== undefined) {
     const c = options.chart;
     push(c.kind, c.values.map(String).join(","));
+    push("chartw", c.w);
+    push("charth", c.h);
     if (c.labels !== undefined) push("chartlabels", c.labels.join(","));
     if (c.colors !== undefined) push("chartcolors", c.colors.join(","));
   }

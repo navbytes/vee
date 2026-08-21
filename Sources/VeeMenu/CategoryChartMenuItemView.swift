@@ -34,15 +34,19 @@ final class CategoryChartMenuItemView: NSView {
         // mixes them.
         // Named explicitly rather than via `Self`, which is not available
         // before `super.init` in a class initializer.
-        let size = CategoryChartMenuItemView.accessorySize(for: chart.kind)
+        let size = CategoryChartMenuItemView.accessorySize(for: chart)
         let layout = ProgressBarLayout(barWidth: size.width, barHeight: size.height, leading: leading)
         self.layout = layout
 
-        let rowHeight = Swift.max(22, size.height + 6)
+        let rowHeight = Swift.max(22, size.height + 10)
         // Size to fit label + chart so the menu grows wide enough, matching
-        // ProgressMenuItemView/SparklineMenuItemView's sizing.
+        // ProgressMenuItemView/SparklineMenuItemView's sizing. A `chartw=full`
+        // chart claims no width of its own here on purpose: it stretches to
+        // whatever width the menu ends up with, so it must not be the row that
+        // decides that width.
         let titleWidth = title.size().width.rounded(.up)
-        let desiredWidth = layout.leadingInset + titleWidth + layout.gap + size.width + layout.trailingInset
+        let claimedWidth = chart.isFullWidth ? 0 : size.width
+        let desiredWidth = layout.leadingInset + titleWidth + layout.gap + claimedWidth + layout.trailingInset
         super.init(frame: NSRect(x: 0, y: 0, width: Swift.max(240, desiredWidth), height: rowHeight))
         autoresizingMask = [.width]
 
@@ -57,13 +61,30 @@ final class CategoryChartMenuItemView: NSView {
 
     required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
-    /// The accessory slot a chart of `kind` occupies, in points. Exposed for the
-    /// layout tests, which assert the geometry without rendering.
-    static func accessorySize(for kind: ChartKind) -> CGSize {
-        switch kind {
-        case .pie, .donut: return CGSize(width: 16, height: 16)
-        case .stackedBar: return CGSize(width: 90, height: 8)
-        }
+    /// The accessory slot `chart` occupies, in points: its `chartw=`/`charth=`
+    /// if it declared any, otherwise the per-kind default. Both come from
+    /// `ChartParams` so the SwiftUI row (`MenuRowAccessory`) measures the same
+    /// chart identically. Exposed for the layout tests, which assert the
+    /// geometry without rendering.
+    static func accessorySize(for chart: ChartParams) -> CGSize {
+        let size = chart.inlineSize
+        return CGSize(width: size.width, height: size.height)
+    }
+
+    /// Width a `chartw=full` chart takes: the row's content width, less its own
+    /// text when it has any. Computed at draw time rather than at init, because
+    /// the row is only as wide as the menu — which the *widest* row decides,
+    /// and that may be some other row entirely.
+    ///
+    /// Static and geometry-only so the stretch is unit-testable without a live
+    /// menu, like `sectorPath`.
+    static func stretchedWidth(layout: ProgressBarLayout, title: NSAttributedString, in bounds: CGRect) -> CGFloat {
+        let titleWidth = title.size().width.rounded(.up)
+        let reserved = titleWidth > 0 ? titleWidth + layout.gap : 0
+        let available = bounds.width - layout.leadingInset - layout.trailingInset - reserved
+        // Never collapse to nothing in a too-narrow menu: fall back to the
+        // declared/default slot, which is what a non-full chart would have taken.
+        return Swift.max(available, layout.barWidth)
     }
 
     override func draw(_ dirtyRect: NSRect) {
@@ -74,6 +95,8 @@ final class CategoryChartMenuItemView: NSView {
 
         // `fraction` drives progress='s fill rect only; a chart uses the track
         // rect as its whole drawing area and ignores it.
+        var layout = self.layout
+        if chart.isFullWidth { layout.barWidth = Self.stretchedWidth(layout: layout, title: title, in: bounds) }
         let rects = layout.rects(in: bounds, fraction: 0)
         title.drawTruncatedCentered(in: rects.label)
 
