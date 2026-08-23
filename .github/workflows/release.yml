@@ -49,6 +49,26 @@ jobs:
           git tag -a "$TAG" -m "Release $TAG"
           git push origin "$TAG"
 
+      # The Go SDK is a module in a subdirectory, so Go resolves its versions
+      # from tags prefixed with that path — a bare `v0.2.0` is invisible to it,
+      # and `go get` falls back to a pseudo-version naming a commit hash. This
+      # gives Go users the same version everything else ships under.
+      #
+      # Runs for both triggers (dispatch and a pushed tag), and tolerates the
+      # tag already existing so a re-run after a later failure is not blocked.
+      - name: Tag the Go module
+        env:
+          TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+        run: |
+          go_tag="plugins/go/${TAG}"
+          if git ls-remote --exit-code --tags origin "refs/tags/${go_tag}" >/dev/null 2>&1; then
+            echo "${go_tag} already exists — leaving it alone."
+          else
+            git tag -a "${go_tag}" -m "Go SDK ${TAG}"
+            git push origin "${go_tag}"
+            echo "Pushed ${go_tag}"
+          fi
+
       - uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1
         with:
           xcode-version: latest-stable

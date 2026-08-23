@@ -16,8 +16,13 @@ A Go plugin compiles to a binary, so the SDK is a normal module dependency —
 there is nothing to vendor beside the plugin:
 
 ```sh
-go get github.com/navbytes/vee/plugins/go
+go get github.com/navbytes/vee/plugins/go@v0.2.0   # or @latest
 ```
+
+The SDK is a module in a subdirectory, so its versions come from tags prefixed
+with that path (`plugins/go/v0.2.0`). Each release pushes one, and it carries
+the same version as the app — the SDK and the parser that reads its output ship
+together, so a matching pair is a guaranteed-compatible pair.
 
 ```go
 import vee "github.com/navbytes/vee/plugins/go"
