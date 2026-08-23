@@ -178,28 +178,30 @@ jobs:
           files: Vee.zip
           fail_on_unmatched_files: true
 
-      # Publish the TypeScript SDK. Deliberately NOT conditional on the token:
-      # the Homebrew step below skips silently when its secret is absent, and
-      # that is how the tap sat two releases stale. A missing NPM_TOKEN should
-      # fail the release, not quietly ship three artifacts out of four.
+      # Publish the TypeScript SDK using npm trusted publishing: the registry
+      # verifies this workflow's OIDC identity instead of a token, so there is
+      # no NPM_TOKEN to leak, to rotate every 90 days, or to forget. It also
+      # sidesteps the two things that broke 0.3.0 — a token without 2FA bypass
+      # is rejected outright (EOTP), and one *with* it has its publishes staged
+      # for manual confirmation, which npm is restricting anyway.
+      #
+      # Configured at npmjs.com on the package: publisher GitHub Actions,
+      # navbytes/vee, workflow release.yml. Requires npm >= 11.5.1 (Node 24
+      # ships 11.17) and the id-token: write permission granted above.
+      # Provenance is attested automatically; no --provenance flag needed.
       - uses: actions/setup-node@v7
         with:
           node-version: 24
           registry-url: "https://registry.npmjs.org"
       - name: Publish @navbytes/vee to npm
         working-directory: plugins/typescript
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
-          if [ -z "${NODE_AUTH_TOKEN}" ]; then
-            echo "::error::NPM_TOKEN is not set — cannot publish @navbytes/vee."
-            exit 1
-          fi
           version="$(node -p "require('./package.json').version")"
           # npm refuses to republish a version, which would strand a re-run here
-          # the way the tag step used to. Skipping an already-published version
-          # is not the same as skipping on a missing credential: the work is
-          # done, not silently abandoned — a missing token still fails above.
+          # the way the tag step used to. Skipping work that is already done is
+          # not the same as skipping because a credential is missing: there is
+          # no credential to miss any more, and a genuine publish failure still
+          # fails the release.
           if npm view "@navbytes/vee@${version}" version >/dev/null 2>&1; then
             echo "::notice::@navbytes/vee@${version} is already published — nothing to do."
             exit 0
@@ -207,7 +209,7 @@ jobs:
           # prepublishOnly builds and re-checks the compiled output against the
           # golden fixtures, so a package that would differ from the source
           # never leaves the runner.
-          npm publish --provenance --access public
+          npm publish --access public
 
       # Keep navbytes/homebrew-tap tracking this release. Self-seeding: creates
       # Casks/vee.rb on the first run and bumps version + sha256 afterwards.
