@@ -44,11 +44,24 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      # Idempotent on purpose. Everything after this step can fail — notarization,
+      # the npm publish, the Homebrew sync — and the tag is already pushed by
+      # then, so re-running the job is the natural recovery. Creating the tag
+      # unconditionally made that impossible: the re-run died here on "tag
+      # already exists" before reaching the step that actually failed, leaving a
+      # new version number or a manual fix as the only ways out.
+      #
+      # Re-running against an existing tag is safe: the tag names a commit, and
+      # the job rebuilds that same commit.
       - name: Create + push tag (manual dispatch only)
         if: github.event_name == 'workflow_dispatch'
         env:
           TAG: ${{ inputs.tag }}
         run: |
+          if git ls-remote --exit-code --tags origin "refs/tags/${TAG}" >/dev/null 2>&1; then
+            echo "::notice::${TAG} already exists — re-running the release against it."
+            exit 0
+          fi
           git tag -a "$TAG" -m "Release $TAG"
           git push origin "$TAG"
 
@@ -181,6 +194,15 @@ jobs:
           if [ -z "${NODE_AUTH_TOKEN}" ]; then
             echo "::error::NPM_TOKEN is not set — cannot publish @navbytes/vee."
             exit 1
+          fi
+          version="$(node -p "require('./package.json').version")"
+          # npm refuses to republish a version, which would strand a re-run here
+          # the way the tag step used to. Skipping an already-published version
+          # is not the same as skipping on a missing credential: the work is
+          # done, not silently abandoned — a missing token still fails above.
+          if npm view "@navbytes/vee@${version}" version >/dev/null 2>&1; then
+            echo "::notice::@navbytes/vee@${version} is already published — nothing to do."
+            exit 0
           fi
           # prepublishOnly builds and re-checks the compiled output against the
           # golden fixtures, so a package that would differ from the source

@@ -7,6 +7,20 @@ All notable changes to Vee are documented here. The format is based on
 ## [Unreleased]
 
 ### Fixed
+- **A failed release could not be re-run.** The tag is pushed before the build,
+  so any later failure — notarization, the npm publish, the Homebrew sync — left
+  re-running as the natural recovery. It was not: the re-run died at "Create +
+  push tag" on *tag already exists*, before reaching the step that actually
+  failed, leaving a new version number or a manual fix as the only ways out.
+  That happened on 0.2.0, when the Homebrew sync failed on a token permission
+  and the cask had to be pushed by hand.
+
+  The tag step now skips a tag that already exists, and the npm publish skips a
+  version already on the registry, so every step after the tag is re-runnable.
+  Skipping finished work is deliberately not the same as skipping on a missing
+  credential — a missing NPM_TOKEN still fails the release.
+
+### Fixed
 - **The installer's documented overrides did not work.** The README showed
   `VEE_APP_DIR=… curl … | bash`, which sets the variable for `curl` — not for
   the `bash` reading the script on stdin — so the setting was silently ignored
