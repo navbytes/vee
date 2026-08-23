@@ -21,6 +21,7 @@ __pycache__/
 # to be, and "published output stale relative to its source" was a whole class
 # of bug that a build step cannot have.
 docs-site/node_modules/
+plugins/typescript/dist/
 docs-site/dist/
 # Staged from scripts/install.sh at build time so the served copy and the real
 # script cannot drift; see .github/workflows/docs.yml.

@@ -147,6 +147,11 @@ jobs:
       # TypeScript directly. `npm test` runs the fixture drift guard.
       - name: Test (fixture drift guard)
         run: npm test
+      # The published package ships compiled JavaScript, because Node will not
+      # strip types under node_modules. That makes `tsc` output a fourth copy of
+      # this SDK, so it is held to the same golden fixtures as the source.
+      - name: Compiled SDK matches the fixtures
+        run: npm run build && npm run check:dist
 
   plugins-python:
     name: Plugin SDK (Python)

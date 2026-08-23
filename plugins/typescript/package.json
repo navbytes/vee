@@ -1,14 +1,34 @@
 {
-  "name": "vee-plugins",
-  "version": "0.1.0",
-  "private": true,
+  "name": "@navbytes/vee",
+  "version": "0.2.0",
   "type": "module",
-  "description": "TypeScript SDK and example plugins for Vee.",
+  "description": "Typed builders for authoring Vee plugins — the xbar/SwiftBar text protocol, the structured-JSON menu format, and widget cards.",
+  "keywords": ["vee", "xbar", "swiftbar", "menubar", "macos", "plugin"],
+  "license": "MIT",
+  "author": "Naveen Kumar",
+  "homepage": "https://vee.navbytes.io",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/navbytes/vee.git",
+    "directory": "plugins/typescript"
+  },
+  "bugs": "https://github.com/navbytes/vee/issues",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/vee.d.ts",
+      "default": "./dist/vee.js"
+    }
+  },
+  "files": ["dist", "README.md"],
   "engines": {
-    "node": ">=24"
+    "node": ">=18"
   },
   "scripts": {
+    "build": "npx -y -p typescript@5 tsc -p tsconfig.build.json",
     "test": "node --test \"test/**/*.test.ts\"",
-    "build:fixtures": "for f in examples/*.ts; do node \"$f\" > \"../fixtures/$(basename \"${f%.ts}\").txt\"; done"
+    "check:dist": "node scripts/check-dist.mjs",
+    "build:fixtures": "for f in examples/*.ts; do node \"$f\" > \"../fixtures/$(basename \"${f%.ts}\").txt\"; done",
+    "prepublishOnly": "npm run build && npm run check:dist"
   }
 }

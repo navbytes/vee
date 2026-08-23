@@ -47,6 +47,21 @@ from vee import Menu  # vee.py sits beside this plugin
 `vee new --lang ts --out DIR` does both in one step: it scaffolds a plugin and
 writes the SDK beside it, so the result runs immediately.
 
+The TypeScript SDK is also on npm, for a plugin that is part of a project with a
+`node_modules` — bundled, or built before it is dropped in:
+
+```sh
+npm install @navbytes/vee
+```
+
+```ts
+import { Menu } from "@navbytes/vee";
+```
+
+It ships compiled JavaScript with declarations (Node will not strip types under
+`node_modules`) and has no dependencies. Vendoring stays the default for
+drop-in plugins, because it keeps a plugin a single file with a sibling.
+
 Go is the exception. A Go plugin compiles to a binary, so it takes the SDK as a
 normal module dependency:
 

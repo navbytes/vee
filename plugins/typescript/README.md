@@ -27,6 +27,23 @@ import { Menu } from "./vee.ts";
 `vee new --lang ts --out DIR` does both at once — it scaffolds a plugin and
 writes `vee.ts` beside it, so the result runs immediately.
 
+**Or from npm**, if your plugin is part of a project that already has a
+`node_modules` — a bundled plugin, or one you build before dropping in:
+
+```sh
+npm install @navbytes/vee
+```
+
+```ts
+import { Menu } from "@navbytes/vee";
+```
+
+The package ships compiled JavaScript with type declarations, because Node
+refuses to strip types under `node_modules`. It has no dependencies, and it
+carries the same version as the app it was released with — the SDK and the
+parser that reads its output ship from one commit, so a matching pair is a
+guaranteed-compatible pair.
+
 The examples in this repository import `../vee.ts` because they sit next to the
 SDK here. Copying one out means running `vee sdk ts` beside it and changing that
 import to `./vee.ts`.
