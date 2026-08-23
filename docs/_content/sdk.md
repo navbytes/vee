@@ -1,5 +1,19 @@
-# Plugin SDKs
-
+---
+title: "Plugin SDKs"
+description: "Zero-dependency Vee plugin SDKs for TypeScript, Python, and Go — the same typed Menu/Section builders in every language, producing byte-identical output."
+sidebar:
+  label: "Plugin SDKs"
+  order: 8
+head:
+  - tag: link
+    attrs:
+      rel: "alternate"
+      type: "text/markdown"
+      href: "/guide/sdk.md"
+      title: "Markdown source"
+  - tag: title
+    content: "Plugin SDKs — Vee docs"
+---
 Vee ships tiny, zero-dependency SDKs for writing plugins with typed builders instead of hand-formatting the xbar/SwiftBar text protocol. There are three, one per language — **TypeScript**, **Python**, and **Go** — and they mirror each other exactly: the same builder shape, option names, encoding order, and quoting, so a plugin reads the same in any language and all three produce **byte-identical** output for the same menu.
 
 The SDKs live in the [`plugins/`](https://github.com/navbytes/vee/tree/main/plugins) directory of the repository:

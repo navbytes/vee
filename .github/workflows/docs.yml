@@ -1,0 +1,53 @@
+name: Docs
+
+# The site is built here rather than committed. Before this, docs/guide,
+# docs/pagefind, llms.txt and llms-full.txt were generated output tracked in
+# git — roughly 1.4 MB of build artifacts for 180 KB of prose, and a class of
+# bug (published output stale relative to its source) that a build step cannot
+# have.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Pages needs id-token to deploy; nothing here writes to the repository.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deploy at a time, and never cancel one midway: a half-published site is
+# worse than a late one.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: docs-site/package-lock.json
+      # The generated reference tables are inputs to the build, not outputs of
+      # it: the pages include them, so they must exist before Astro renders.
+      - name: Generate reference tables
+        run: python3 docs/scripts/build_reference.py
+      - name: Install
+        run: npm ci
+        working-directory: docs-site
+      - name: Build
+        run: npm run build
+        working-directory: docs-site
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: docs-site/dist
+      - id: deploy
+        uses: actions/deploy-pages@v4

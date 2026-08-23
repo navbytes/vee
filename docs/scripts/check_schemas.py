@@ -18,7 +18,7 @@ with no list to update here.
 
 Implements only the JSON Schema subset these schemas use (type, const, enum,
 required, properties, items, minimum, maximum, oneOf, $ref/$defs) — the same
-"support what we actually use" rule as docs/scripts/build_guide.py, rather than
+"support what we actually use" rule as the other guard scripts, rather than
 taking on a third-party dependency for a validator.
 """
 import glob

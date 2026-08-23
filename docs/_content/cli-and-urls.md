@@ -1,5 +1,19 @@
-# CLI and URL actions
-
+---
+title: "CLI and URL actions"
+description: "Run Vee from source with swift run vee, and drive it at runtime with vee:// and swiftbar:// URL actions — refresh, enable/disable, toggle, and notify."
+sidebar:
+  label: "CLI & URL actions"
+  order: 10
+head:
+  - tag: link
+    attrs:
+      rel: "alternate"
+      type: "text/markdown"
+      href: "/guide/cli-and-urls.md"
+      title: "Markdown source"
+  - tag: title
+    content: "CLI and URL actions — Vee docs"
+---
 Vee can be driven from the command line during development and controlled at runtime through URL actions. Plugins use those same URL schemes to trigger refreshes and post notifications.
 
 ## Running from source (`swift run vee`)

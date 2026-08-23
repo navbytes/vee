@@ -1,5 +1,19 @@
-# Plugin authoring reference
-
+---
+title: "Plugin authoring reference"
+description: "The full Vee plugin reference: filenames and intervals, menu structure, line parameters, metadata headers, SF Symbols, ANSI, Markdown, streaming, and cron."
+sidebar:
+  label: "Plugin authoring"
+  order: 3
+head:
+  - tag: link
+    attrs:
+      rel: "alternate"
+      type: "text/markdown"
+      href: "/guide/plugin-authoring.md"
+      title: "Markdown source"
+  - tag: title
+    content: "Plugin authoring reference — Vee docs"
+---
 A Vee plugin is any executable that prints text to standard output in the xbar/SwiftBar format. This page is the full reference: filenames, menu structure, the parameter table, metadata headers, and the richer features (SF Symbols, ANSI, Markdown, streaming, cron).
 
 If you would rather build menus with typed code than format text by hand, see the [Plugin SDKs](sdk.md) (TypeScript, Python, and Go). For a structured alternative to the text protocol, see the [JSON output format](json-output.md).

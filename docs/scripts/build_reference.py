@@ -5,7 +5,7 @@ The plugin format's parameter surface is authored once, as data, in
 ``docs/api/params.json``. Every published table describing it is produced from
 that file by this script and written to ``docs/_content/_generated/``; the pages
 pull them in with an ``<!-- include: _generated/<name>.md -->`` directive that
-``build_guide.py`` expands.
+the Astro build expands (see ``docs-site/src/remark-include.mjs``).
 
     python3 docs/scripts/build_reference.py            # write the partials
     python3 docs/scripts/build_reference.py --check    # exit 1 if any is stale
@@ -17,7 +17,8 @@ cross-product that wide goes stale the moment it is typed by hand — which is w
 it is generated here, and why ``check_params.py`` verifies the numbers in it
 against the Swift that defines them.
 
-Pure standard library, matching docs/scripts/build_guide.py.
+Pure standard library: the guard scripts stay dependency-free even though
+the site build no longer is.
 """
 import json
 import os

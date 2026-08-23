@@ -38,7 +38,8 @@ a parameter added to one SDK and forgotten in the other two fails here.
 
     python3 docs/scripts/check_params.py
 
-Pure standard library, matching the project policy and docs/scripts/build_guide.py.
+Pure standard library: the guard scripts stay dependency-free even though
+the site build no longer is.
 """
 import json
 import os

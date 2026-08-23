@@ -1,5 +1,19 @@
-# Troubleshooting
-
+---
+title: "Troubleshooting"
+description: "Fix common Vee issues: a plugin not appearing, Gatekeeper blocks, timeouts, missing interpreters and PATH differences, and refreshes not happening."
+sidebar:
+  label: "Troubleshooting"
+  order: 15
+head:
+  - tag: link
+    attrs:
+      rel: "alternate"
+      type: "text/markdown"
+      href: "/guide/troubleshooting.md"
+      title: "Markdown source"
+  - tag: title
+    content: "Troubleshooting — Vee docs"
+---
 Common issues and how to fix them. If none of these help, open an issue at [github.com/navbytes/vee](https://github.com/navbytes/vee).
 
 ## A plugin doesn't appear in the menu bar

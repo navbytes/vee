@@ -15,3 +15,14 @@ Vee.xcodeproj/
 # Vee local state (never commit user data)
 *.veestate
 __pycache__/
+
+# The documentation site is built by docs-site/ (Astro + Starlight) and
+# deployed by .github/workflows/docs.yml. Its output is not committed: it used
+# to be, and "published output stale relative to its source" was a whole class
+# of bug that a build step cannot have.
+docs-site/node_modules/
+docs-site/dist/
+docs-site/.astro/
+# Generated into the content tree by docs/scripts/build_reference.py, and into
+# the build output by the Astro integration.
+docs/_content/_generated/

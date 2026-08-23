@@ -1,5 +1,19 @@
-# Widgets
-
+---
+title: "Widgets"
+description: "Render Vee plugins as native desktop and Notification Center widgets: the surface contract, the widget card schema, the five templates, and the composable layout tree."
+sidebar:
+  label: "Widgets"
+  order: 5
+head:
+  - tag: link
+    attrs:
+      rel: "alternate"
+      type: "text/markdown"
+      href: "/guide/widgets.md"
+      title: "Markdown source"
+  - tag: title
+    content: "Widgets — Vee docs"
+---
 Vee plugins can render on your desktop and in Notification Center as native
 WidgetKit tiles, not just in the menu bar. Every plugin already has a widget
 representation for free; a plugin that opts in can print a **widget card** — a

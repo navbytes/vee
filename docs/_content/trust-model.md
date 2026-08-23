@@ -1,5 +1,19 @@
-# Trust model
-
+---
+title: "Trust model"
+description: "How Vee makes plugins transparent: authors declare what they touch with <vee.*> tags, and Vee shows a plain-language trust summary before install. Advisory, not a sandbox."
+sidebar:
+  label: "Trust model"
+  order: 6
+head:
+  - tag: link
+    attrs:
+      rel: "alternate"
+      type: "text/markdown"
+      href: "/guide/trust-model.md"
+      title: "Markdown source"
+  - tag: title
+    content: "Trust model — Vee docs"
+---
 Vee runs plugins as ordinary executables with your full user privileges. There is no sandbox — a plugin can do anything you can do. Rather than pretend to isolate plugins, Vee makes their intentions **transparent**: plugins declare what they touch, and Vee surfaces that to you in plain language before you install and while you manage them.
 
 **This is advisory, never enforced.** The declarations do not restrict what a plugin can actually do. They are a way for authors to be honest and for you to make an informed choice.

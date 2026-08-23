@@ -33,7 +33,9 @@ See CONTRIBUTING.md for the full flow (dev setup, module layout, TDD, CI).
 
 - [ ] Tests added/updated for the change (TDD — a bug fix has a regression test).
 - [ ] All tests pass locally.
-- [ ] No new third-party dependencies introduced (zero-dependency policy).
+- [ ] No new third-party dependencies in the app or the SDKs (zero-dependency
+      policy; `docs-site/` is the one exception, and adding to it still needs a
+      reason).
 - [ ] Code matches the surrounding Swift style; public API has doc comments.
 - [ ] If plugin output/format changed, golden fixtures were regenerated and
       committed (`npm run build:fixtures`).

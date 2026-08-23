@@ -72,12 +72,12 @@ restate a third of that contract here, the full cross-language reference —
 every method, every option, and the Go spelling of each — lives in one
 place:
 
-**[Plugin SDKs reference](https://vee.navbytes.io/guide/sdk.html)**
+**[Plugin SDKs reference](https://vee.navbytes.io/guide/sdk/)**
 
 For the parameters themselves — what each one accepts, its default, and which
 chart it belongs to — see the [plugin authoring
-reference](https://vee.navbytes.io/guide/plugin-authoring.html) and
-[Charts](https://vee.navbytes.io/guide/charts.html), both generated from
+reference](https://vee.navbytes.io/guide/plugin-authoring/) and
+[Charts](https://vee.navbytes.io/guide/charts/), both generated from
 `docs/api/params.json`, the same record this SDK is verified against.
 
 ## Tests

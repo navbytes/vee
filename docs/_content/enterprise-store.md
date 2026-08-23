@@ -1,5 +1,19 @@
-# Custom plugin stores (enterprise)
-
+---
+title: "Custom plugin stores (enterprise)"
+description: "Point Vee at your own curated plugin catalog: a GitHub repo, a static HTTP host, or an air-gapped file mirror, with integrity checks and MDM-managed configuration."
+sidebar:
+  label: "Custom plugin stores"
+  order: 13
+head:
+  - tag: link
+    attrs:
+      rel: "alternate"
+      type: "text/markdown"
+      href: "/guide/enterprise-store.md"
+      title: "Markdown source"
+  - tag: title
+    content: "Custom plugin stores (enterprise) — Vee docs"
+---
 Vee ships with the public [`matryer/xbar-plugins`](https://github.com/matryer/xbar-plugins)
 catalog in **Discover**. You can also point Vee at **your own store** — a curated,
 trust-gated catalog of internal plugins — and it shows up in Discover next to (or
