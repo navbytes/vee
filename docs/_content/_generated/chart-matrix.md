@@ -11,7 +11,7 @@
 | **Stacked bar** — One horizontal bar whose segments lie end to end. | `stackedbar=60,25,15` | `"chart": {"kind": "stackedbar", "values": […]}` | — |
 | **Widget gauge** — A native WidgetKit gauge. | — | — | `node type "gauge" with "value", or the "gauge" template` |
 
-**What each chart takes.** Options are named for the chart they belong to, not shared across all of them — a sparkline takes `sparklinew=`, a share chart takes `chartw=`, and a progress bar takes `progressw=`.
+**What each chart takes.** One pair sizes any of them: `accessoryw=` and `accessoryh=`, whichever accessory the row carries. The per-chart names (`sparklinew=`, `chartw=`, `progressw=` and their heights) still parse but are deprecated, and do nothing when aimed at a chart the row does not draw.
 
 | Chart | Options | Default size | Full width | Limits | Click |
 | ----- | ------- | ------------ | ---------- | ------ | ----- |

@@ -6,15 +6,15 @@ All notable changes to Vee are documented here. The format is based on
 
 ## [Unreleased]
 
-### Fixed
-- **Vee could not be quit on some installs — it relaunched itself within
-  seconds.** An older version registered a launch-on-demand background activity
-  per plugin, and those live in launchd rather than in the app, so they survive
-  every update. Vee already cleared them, but only for plugins still installed —
-  and the activity's name can only be derived from the plugin that created it,
-  so one registered by a plugin you had since deleted was unreachable forever.
-  Vee now remembers every plugin it has ever loaded and clears all of them at
-  launch. Launch the updated build once and the app stays quit.
+### Added
+- **One way to size any inline accessory: `accessoryw=` / `accessoryh=`.** A row
+  draws at most one accessory, so sizing it no longer means knowing which kind
+  it turned out to be. `accessoryw=full` still stretches to the row's leftover
+  width, and is still refused on `pie=`/`donut=`, which can only fill a width by
+  growing the row. The JSON spellings are `accessoryWidth` / `accessoryHeight`.
+- **`slider=` can be sized.** Its track width was a hard-coded 64pt with no way
+  for a plugin to change it; `accessoryw=` now sets it. Height is ignored for
+  controls, whose height is their control size.
 
 ### Changed
 - **A plugin's window and filter panel now show its structure.** They used to
@@ -42,6 +42,21 @@ All notable changes to Vee are documented here. The format is based on
   Both surfaces are now rendered from one resolved description of the menu, so
   they cannot disagree about what a row is or what activating it does.
 
+### Deprecated
+- **`progressw=`, `progressh=`, `sparklinew=`, `sparklineh=`, `chartw=`,
+  `charth=`** — and their JSON counterparts `progressWidth`/`progressHeight`,
+  `sparklineWidth`/`sparklineHeight`, `chart.w`/`chart.h`. All still work and
+  still render exactly what they rendered, so no published plugin changes; each
+  now reports the parameter that replaces it. Where a line declares both, the
+  new one wins, so a plugin can migrate a row at a time.
+
+  `vee lint` also now catches a mistake the old names made easy and silent:
+  sizing an accessory the row does not carry. `progressw=full` on a `stackedbar=`
+  row did nothing at all, with nothing anywhere saying why — it now says so.
+
+  The SDKs keep their per-accessory options (`progressW`, `chart.w`, …), which
+  a typed builder cannot misapply; only what they emit changed.
+
 ### Removed
 - **Cross-plugin "Search All Plugins" is gone**, along with the item in Vee's
   menu and its opt-in global hotkey. If you had enabled that hotkey it will
@@ -51,6 +66,14 @@ All notable changes to Vee are documented here. The format is based on
   would have meant inventing a plugin-name level purely to hold them.
 
 ### Fixed
+- **Vee could not be quit on some installs — it relaunched itself within
+  seconds.** An older version registered a launch-on-demand background activity
+  per plugin, and those live in launchd rather than in the app, so they survive
+  every update. Vee already cleared them, but only for plugins still installed —
+  and the activity's name can only be derived from the plugin that created it,
+  so one registered by a plugin you had since deleted was unreachable forever.
+  Vee now remembers every plugin it has ever loaded and clears all of them at
+  launch. Launch the updated build once and the app stays quit.
 - **A failed release could not be re-run.** The tag is pushed before the build,
   so any later failure — notarization, the npm publish, the Homebrew sync — left
   re-running as the natural recovery. It was not: the re-run died at "Create +

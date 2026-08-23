@@ -166,13 +166,13 @@ The chart takes the same size and colour vocabulary as the other two inline
 accessories — `<control>w`, `<control>h`, `<control>color`:
 
 ```
-Load average | sparkline=0.4,0.6,0.9,1.2 sparklinew=120 sparklineh=18 sparklinecolor=teal
-Requests     | sparkline=12,40,31,55,48 sparklinew=full
+Load average | sparkline=0.4,0.6,0.9,1.2 accessoryw=120 accessoryh=18 sparklinecolor=teal
+Requests     | sparkline=12,40,31,55,48 accessoryw=full
 ```
 
-`sparklinew=`/`sparklineh=` set the chart size in points (defaults 90×20).
-`sparklinew=full` stretches it across whatever width the row actually has,
-exactly as `progressw=full` and `chartw=full` do — a menu is as wide as its
+`accessoryw=`/`accessoryh=` set the chart size in points (defaults 90×20).
+`accessoryw=full` stretches it across whatever width the row actually has —
+a menu is as wide as its
 widest row, so a fixed width cannot fill a menu some *other* row sizes.
 `sparklinecolor=` sets the line colour; without it the chart uses the row's
 `color=`, and without that, the control accent.
@@ -217,7 +217,7 @@ the menu row** — no click, no popover. It's the native answer to hand-drawn
 block-glyph bars:
 
 ```
-$23.65 of $100 | progress=23.65,100 color=#36C26E progresstrackcolor=#3C4046 progressw=210
+$23.65 of $100 | progress=23.65,100 color=#36C26E progresstrackcolor=#3C4046 accessoryw=210
 Disk | progress=0.88 color=#F5A623
 ```
 
@@ -225,16 +225,16 @@ Disk | progress=0.88 color=#F5A623
   grammar). The result is always clamped to `0…1`.
 - The **fill** color is the row's `color=`; `progresstrackcolor=` sets the groove.
   (`trackcolor=` is the deprecated spelling and still works.)
-- `progressw=` / `progressh=` set the bar's width/height in points (defaults 120×6).
-  `progressw=full` stretches the bar across whatever width the row actually has,
-  less the row's own text — the same knob a `stackedbar=` takes as `chartw=full`.
-  A menu is as wide as its widest row, so a fixed `progressw=` can't fill a menu
+- `accessoryw=` / `accessoryh=` set the bar's width/height in points (defaults 120×6).
+  `accessoryw=full` stretches the bar across whatever width the row actually has,
+  less the row's own text — the same knob every other accessory takes.
+  A menu is as wide as its widest row, so a fixed `accessoryw=` can't fill a menu
   whose width some *other* row decides; `full` can. It never widens the menu
   itself, and in a menu too narrow to stretch into it falls back to 120pt.
 
 ```
-Disk | progress=0.88 progressw=full
- | progress=0.62 progressw=full progressh=10
+Disk | progress=0.88 accessoryw=full
+ | progress=0.62 accessoryw=full accessoryh=10
 ```
 
 - The row's text renders to the left of the bar; the row auto-sizes so the label
@@ -269,38 +269,38 @@ legend naming every segment with its percentage — the popover is where
 also shows the series total in its hole.
 
 **Size.** An inline chart is small by default — it shares a menu row with its
-label. `chartw=`/`charth=` make it as large as the row can carry (clamped to
+label. `accessoryw=`/`accessoryh=` make it as large as the row can carry (clamped to
 8–200 points); the row grows to fit. A pie or donut is a circle, so either knob
 sizes both sides:
 
 ```
- | pie=45,30,25 charth=56 chartlabels=Documents,Photos,Apps
-Budget | stackedbar=60,25,15 chartw=200 charth=16
+ | pie=45,30,25 accessoryh=56 chartlabels=Documents,Photos,Apps
+Budget | stackedbar=60,25,15 accessoryw=200 accessoryh=16
 ```
 
 Leaving the text before `|` empty, as in the first line, gives the chart the
 whole row — useful when a legend of ordinary rows underneath already names the
 segments.
 
-`chartw=full` stretches a **stacked bar** to the width the row actually has,
+`accessoryw=full` stretches a **stacked bar** to the width the row actually has,
 rather than a number of points:
 
 ```
- | stackedbar=60,25,15 chartw=full charth=14
-By model | stackedbar=60,25,15 chartw=full
+ | stackedbar=60,25,15 accessoryw=full accessoryh=14
+By model | stackedbar=60,25,15 accessoryw=full
 ```
 
-A menu is as wide as its widest row, so a fixed `chartw=` can't fill a menu whose
+A menu is as wide as its widest row, so a fixed `accessoryw=` can't fill a menu whose
 width some *other* row decides — `full` can. A row with text keeps it, and the
 chart takes the width that remains; a row with none gives the chart everything
 between the menu's insets. A full-width chart never widens the menu itself, and
 in a menu too narrow to stretch into it falls back to its normal size.
-`progress=` takes the same knob, spelled `progressw=full`.
+Every other accessory takes the same knob — it is one parameter.
 
 `full` is a *width* control, and a pie or donut has no free width — its width is
 its diameter, so stretching one would make the row as tall as the menu is wide.
-`chartw=full` on a `pie=`/`donut=` is therefore ignored with a warning; size a
-circle with `chartw=`/`charth=` points instead.
+`accessoryw=full` on a `pie=`/`donut=` is therefore ignored with a warning; size a
+circle with `accessoryw=`/`accessoryh=` points instead.
 
 **Colors.** Segments take Vee's built-in categorical palette by position, so
 segment 1 is always the same hue no matter how many segments a plugin emits.

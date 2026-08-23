@@ -335,7 +335,7 @@ The [share charts](plugin-authoring.md#share-charts-pie-donut-stackedbar)
 (`pie=`/`donut=`/`stackedbar=`) get one typed builder rather than three: the
 shapes take the same data, so `kind` is the only thing that changes between them.
 `labels` and `colors` are optional and positional; `w`/`h` (`W`/`H` in Go) set
-the inline size in points, the typed spelling of `chartw=`/`charth=`. Pass
+the inline size in points, emitted as `accessoryw=`/`accessoryh=`. Pass
 `w: "full"` (Go: `FullWidth: true`) to stretch a `stackedbar` to the row's own
 width — a bar only, since a circle has no free width; on `pie`/`donut` Vee warns
 and falls back to points. `progress=` takes the same knob as

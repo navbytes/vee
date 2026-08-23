@@ -74,9 +74,9 @@ two columns.
 | `shortcut` (runs a macOS Shortcut) | | ✓ | |
 | `header` — a real AppKit section header | | | ✓ |
 | `sparkline` | | | ✓ |
-| `progress`, `trackcolor`, `progressw`, `progressh` | | | ✓ |
+| `progress`, `trackcolor`, `accessoryw`, `accessoryh` | | | ✓ |
 | `pie`, `donut`, `stackedbar` | | | ✓ |
-| `chartlabels`, `chartcolors`, `chartw`, `charth` | | | ✓ |
+| `chartlabels`, `chartcolors` | | | ✓ |
 | `toggle`, `slider` — interactive popover controls | | | ✓ |
 | `accessory` — which edge an accessory anchors to | | | ✓ |
 

@@ -105,6 +105,13 @@ the output is not enough on its own.
   `vee lint` is what tells you. The
   [compatibility matrix](migrating-from-swiftbar.md#compatibility-matrix) is the
   list of what is real, and which tool it came from.
+- **Reaching for a parameter that has been superseded.** A model trained on
+  older Vee or SwiftBar material will size an accessory with `progressw=`,
+  `sparklinew=` or `chartw=`. Those still work, but the one name now is
+  `accessoryw=`/`accessoryh=`, whichever accessory the row carries — and the
+  old names are worse than merely dated: `progressw=` on a `stackedbar=` row
+  sizes nothing at all, because it names an accessory that row does not have.
+  `vee lint` reports both the deprecation and the mismatch.
 - **Forgetting the filename carries the interval.** `cpu.sh` runs once on demand;
   `cpu.30s.sh` runs every thirty seconds. The plugin also needs `chmod +x`.
 - **Expecting state between runs.** Every refresh is a fresh process. Anything

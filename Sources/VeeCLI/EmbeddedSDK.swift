@@ -117,7 +117,7 @@ export interface ItemOptions {
 
   /** Height in points for this row's accessory → `accessoryh=`. Ignored for a toggle or slider. */
   accessoryH?: number;
-  /** Sparkline height in points → `sparklineh=`. */
+  /** Sparkline height in points, emitted as `accessoryh=`. */
   sparklineH?: number;
   /** Sparkline line colour → `sparklinecolor=`. Falls back to the row's `color`. */
   sparklineColor?: Color;
@@ -145,7 +145,7 @@ export interface ItemOptions {
    * the row's own width instead, the same knob `chart.w` takes.
    */
   progressW?: number | "full";
-  /** Progress bar height in points → `progressh=`. */
+  /** Progress bar height in points, emitted as `accessoryh=`. */
   progressH?: number;
   /**
    * Categorical share chart → `pie=` / `donut=` / `stackedbar=`. All three
