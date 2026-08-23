@@ -42,14 +42,38 @@ Vee runs plugins — any executable, in any language — on a schedule and rende
 
 Vee is distributed Developer-ID-signed and **notarized**, outside the Mac App Store (the App Store sandbox is incompatible with arbitrary plugin execution).
 
+Vee ships as one binary that is both the menu-bar app and the `vee` CLI, so
+installing gets you both.
+
 **Homebrew (recommended):**
 
 ```sh
-brew tap navbytes/tap
-brew install --cask vee
+brew install --cask navbytes/tap/vee
 ```
 
-`brew upgrade --cask vee` picks up new releases automatically.
+Puts `Vee.app` in `/Applications` and `vee` on your PATH. `brew upgrade --cask vee`
+picks up new releases.
+
+**Or one line, without Homebrew:**
+
+```sh
+curl -fsSL https://vee.navbytes.io/install.sh | bash
+```
+
+Same result — app in `/Applications`, `vee` linked into `~/.local/bin` (or
+`/usr/local/bin`). Re-run it to upgrade. Pin a version or change either location
+with `VEE_VERSION`, `VEE_APP_DIR`, `VEE_BIN_DIR`. Read it first if you would
+rather not pipe a script to a shell: [`scripts/install.sh`](scripts/install.sh).
+
+**Just the CLI, via [mise](https://mise.jdx.dev):**
+
+```sh
+mise use github:navbytes/vee
+```
+
+This is the CLI only — `vee render`, `vee lint`, `vee dev`, `vee new`. mise puts
+binaries on your PATH; it does not install the menu-bar app. Use it when you want
+the CLI pinned per-project, or on a machine that only needs the tooling.
 
 **Or download directly:**
 
