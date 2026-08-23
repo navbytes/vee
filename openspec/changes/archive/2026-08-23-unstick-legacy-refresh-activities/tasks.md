@@ -42,12 +42,18 @@
 ## 5. Verification
 
 - [x] 5.1 `swift test` green; `swiftlint --strict` clean.
-- [ ] 5.2 **On the affected machine**: confirm the app relaunches on quit before
+- [x] 5.2 **On the affected machine**: confirm the app relaunches on quit before
       the fix, then that it stays quit after launching the fixed build once.
       This is the only check that proves the fix — a unit test cannot observe
       launchd. Requires the user.
-- [ ] 5.3 Confirm `launchctl print gui/<uid>/application.com.vee.app…` no longer
+- [x] 5.3 Confirm `launchctl print gui/<uid>/application.com.vee.app…` no longer
       reports an active `com.apple.xpc.activity` channel afterwards.
+      **Satisfied by outcome rather than by inspection.** The channel can only
+      be read off a *running* job, and the whole point of the fix is that Vee is
+      no longer running once quit — so the check as written contradicts the
+      state it is meant to confirm. 5.2 is the observable form of the same
+      claim, and it passed on the affected machine: the app stays quit, and
+      `launchctl list` reports no Vee job at all.
 
 ## 6. Notes for whoever picks this up
 
