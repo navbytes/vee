@@ -148,6 +148,19 @@ def _fmt_float(x: float) -> str:
     return "-" + out if negative else out
 
 
+def _first_set(*values: Any) -> Any:
+    """The first argument that is not ``None``, or ``None``.
+
+    Used to funnel the per-accessory size options into the single
+    ``accessoryw=``/``accessoryh=`` the format takes. Not ``or``-chaining:
+    ``0`` is a legitimate size and must not fall through to the next option.
+    """
+    for value in values:
+        if value is not None:
+            return value
+    return None
+
+
 def _fmt(value: Any) -> str:
     # Match JS String(): booleans lowercase, numbers formatted by the shared
     # ECMA-262 rule so `size=12` is not `size=12.0` and a 1e6 sparkline point
@@ -180,6 +193,7 @@ _OPTION_NAMES = frozenset(
     + [
         "shell", "params", "sf_color",
         "sparkline", "sparkline_w", "sparkline_h", "sparkline_color",
+        "accessory_w", "accessory_h",
         "toggle", "slider",
         "progress", "progress_track_color", "progress_w", "progress_h",
         "chart",
@@ -270,15 +284,13 @@ def _encode(options: dict[str, Any] | None) -> str:
         push(key, options.get(name))
 
     # Vee-native rich params, emitted last in a fixed order shared across SDKs:
-    # sparkline, toggle, slider, progress, trackcolor, progressw, progressh,
-    # then the chart shape with its labels/colors.
+    # sparkline, toggle, slider, progress, trackcolor, then the chart shape with
+    # its labels/colors, and finally the accessory size. The three SDKs are
+    # compared byte-for-byte against ``plugins/fixtures/``, so this order is a
+    # contract, not a preference.
     sparkline = options.get("sparkline")
     if sparkline is not None:
         push("sparkline", ",".join(_fmt(v) for v in sparkline))
-    # ``sparkline_w`` takes points or ``"full"`` -- the same width vocabulary as
-    # ``progress_w`` and ``chart["w"]``.
-    push("sparklinew", options.get("sparkline_w"))
-    push("sparklineh", options.get("sparkline_h"))
     push("sparklinecolor", options.get("sparkline_color"))
 
     toggle = options.get("toggle")
@@ -310,10 +322,6 @@ def _encode(options: dict[str, Any] | None) -> str:
             push("progress", _fmt(progress))
 
     push("progresstrackcolor", options.get("progress_track_color"))
-    # ``progress_w`` takes points or ``"full"`` -- the same width vocabulary as
-    # ``chart["w"]`` below.
-    push("progressw", options.get("progress_w"))
-    push("progressh", options.get("progress_h"))
 
     # Categorical share chart: `pie=`/`donut=`/`stackedbar=` plus its positional
     # `chartlabels=`/`chartcolors=`. All three shapes take the same data, so the
@@ -322,21 +330,28 @@ def _encode(options: dict[str, Any] | None) -> str:
     chart = options.get("chart")
     if chart is not None:
         push(chart["kind"], ",".join(_fmt(v) for v in chart["values"]))
-        # Inline size in points. A pie/donut is a circle, so either knob sizes
-        # both sides; a stacked bar takes them independently. ``"full"`` is the
-        # one non-numeric width: stretch to the row's own width — stacked bars
-        # only, since a circle has no free width.
-        w = chart.get("w")
-        if w is not None:
-            push("chartw", w if isinstance(w, str) else _fmt(w))
-        if chart.get("h") is not None:
-            push("charth", _fmt(chart["h"]))
         labels = chart.get("labels")
         if labels is not None:
             push("chartlabels", ",".join(str(v) for v in labels))
         colors = chart.get("colors")
         if colors is not None:
             push("chartcolors", ",".join(str(v) for v in colors))
+
+    # One wire parameter sizes whichever accessory the row carries, so every
+    # per-accessory option funnels here. They stay separate in the API because a
+    # builder already knows which accessory you are describing -- the ambiguity
+    # ``accessoryw=`` solves for hand-written lines cannot arise. ``"full"`` is
+    # the one non-numeric width: stretch to the row's own width (stacked bars
+    # and gauges only -- a circle has no free width).
+    _chart = options.get("chart") or {}
+    _w = _first_set(options.get("accessory_w"), options.get("sparkline_w"),
+                    options.get("progress_w"), _chart.get("w"))
+    _h = _first_set(options.get("accessory_h"), options.get("sparkline_h"),
+                    options.get("progress_h"), _chart.get("h"))
+    if _w is not None:
+        push("accessoryw", _w if isinstance(_w, str) else _fmt(_w))
+    if _h is not None:
+        push("accessoryh", _h if isinstance(_h, str) else _fmt(_h))
 
     return " | " + " ".join(parts) if parts else ""
 
@@ -684,6 +699,7 @@ _JSON_ITEM_KEYS = [
     "text", "separator", "color", "size", "href", "shell", "params", "terminal",
     "refresh", "sfimage", "disabled", "checked", "tooltip", "header", "accessory",
     "sparkline", "sparkline_width", "sparkline_height", "sparkline_color",
+    "accessory_width", "accessory_height",
     "toggle", "slider", "progress", "progress_track_color", "progress_width",
     "progress_height", "chart", "submenu", "alternate",
 ]
@@ -691,6 +707,8 @@ _JSON_ITEM_KEYS = [
 # snake_case option -> the JSON key it emits. The wire format is camelCase; the
 # SDK keeps Python's spelling, matching how the text-protocol options work.
 _JSON_KEY_NAMES = {
+    "accessory_width": "accessoryWidth",
+    "accessory_height": "accessoryHeight",
     "sparkline_width": "sparklineWidth",
     "sparkline_height": "sparklineHeight",
     "sparkline_color": "sparklineColor",

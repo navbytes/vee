@@ -111,6 +111,19 @@ EXCEPTIONS = {
                    "plugin-authoring.md"),
 }
 
+# The six per-accessory sizing spellings superseded by accessoryw=/accessoryh=.
+# Same shape as trackcolor above: still parsed and still linted so published
+# plugins keep working, but the SDKs emit only the current name. Their typed
+# options (progressW, chart.w, ...) are kept and funnel into the new parameter,
+# so an SDK author's source is unchanged -- only the wire format moved.
+for _old in ("progressw", "progressh", "sparklinew", "sparklineh", "chartw", "charth"):
+    EXCEPTIONS[_old] = (
+        {"ts", "python", "go"},
+        "superseded by accessoryw=/accessoryh=. Still parsed and still linted "
+        "so published plugins keep working, but the SDKs emit only the current "
+        "name -- see the deprecation note in plugin-authoring.md",
+    )
+
 
 def parser_keys():
     """Keys from the top-level `switch key {` in LineParser.mapParams."""

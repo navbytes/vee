@@ -71,10 +71,23 @@ export interface ItemOptions {
   /** Inline data series → `sparkline=1,2,3`. */
   sparkline?: number[];
   /**
-   * Sparkline width in points → `sparklinew=`. `"full"` stretches the chart to
-   * the row's own width instead — the same knob `progressW` and `chart.w` take.
+   * Sparkline width in points. `"full"` stretches the chart to the row's own
+   * width instead. Emitted as `accessoryw=`, which sizes whichever accessory a
+   * row carries; `progressW`, `chart.w` and `accessoryW` are the same knob
+   * reached from different option sets.
    */
   sparklineW?: number | "full";
+
+  /**
+   * Width in points for whichever accessory this row carries — gauge,
+   * sparkline, chart, or slider → `accessoryw=`. `"full"` stretches it to the
+   * row's own width. Use this to size a `slider`, which has no option of its
+   * own; for the others the per-accessory options are equivalent.
+   */
+  accessoryW?: number | "full";
+
+  /** Height in points for this row's accessory → `accessoryh=`. Ignored for a toggle or slider. */
+  accessoryH?: number;
   /** Sparkline height in points → `sparklineh=`. */
   sparklineH?: number;
   /** Sparkline line colour → `sparklinecolor=`. Falls back to the row's `color`. */
@@ -99,7 +112,7 @@ export interface ItemOptions {
    */
   trackColor?: Color;
   /**
-   * Progress bar width in points → `progressw=`. `"full"` stretches the bar to
+   * Progress bar width in points, emitted as `accessoryw=`. `"full"` stretches the bar to
    * the row's own width instead, the same knob `chart.w` takes.
    */
   progressW?: number | "full";
@@ -120,7 +133,7 @@ export interface ItemOptions {
     labels?: string[];
     colors?: Color[];
     /**
-     * Inline size in points → `chartw=`/`charth=`. A pie/donut is a circle, so
+     * Inline size in points, emitted as `accessoryw=`/`accessoryh=`. A pie/donut is a circle, so
      * either knob sizes both sides; a stacked bar takes them independently.
      * Omitted, a chart takes its per-kind default (24pt circle, 110×12 bar).
      * `w: "full"` stretches the chart to the row's own width instead — a
@@ -209,8 +222,6 @@ function encode(options?: ItemOptions): string {
   push("header", options.header);
   push("accessory", options.accessory);
   if (options.sparkline !== undefined) push("sparkline", options.sparkline.map(String).join(","));
-  push("sparklinew", options.sparklineW);
-  push("sparklineh", options.sparklineH);
   push("sparklinecolor", options.sparklineColor);
   if (options.toggle !== undefined) push("toggle", options.toggle ? "on" : "off");
   if (options.slider !== undefined) {
@@ -222,16 +233,18 @@ function encode(options?: ItemOptions): string {
     push("progress", typeof p === "number" ? String(p) : `${p.value},${p.max}`);
   }
   push("progresstrackcolor", options.progressTrackColor ?? options.trackColor);
-  push("progressw", options.progressW);
-  push("progressh", options.progressH);
   if (options.chart !== undefined) {
     const c = options.chart;
     push(c.kind, c.values.map(String).join(","));
-    push("chartw", c.w);
-    push("charth", c.h);
     if (c.labels !== undefined) push("chartlabels", c.labels.join(","));
     if (c.colors !== undefined) push("chartcolors", c.colors.join(","));
   }
+  // One wire parameter sizes whichever accessory the row carries, so the
+  // per-accessory options above all funnel here. They stay separate in the API
+  // because a typed builder already knows which accessory you are describing —
+  // the ambiguity `accessoryw=` solves for hand-written lines cannot arise.
+  push("accessoryw", options.accessoryW ?? options.sparklineW ?? options.progressW ?? options.chart?.w);
+  push("accessoryh", options.accessoryH ?? options.sparklineH ?? options.progressH ?? options.chart?.h);
   return parts.length ? " | " + parts.join(" ") : "";
 }
 
@@ -593,7 +606,12 @@ export interface JSONItemOptions {
   accessory?: "leading" | "trailing";
   sparkline?: number[];
   /** Sparkline width in points; `"full"` stretches it to the row's width. */
+  /** @deprecated Use `accessoryWidth`. */
   sparklineWidth?: number | "full";
+  /** Width for whichever accessory this item carries, or `"full"`. */
+  accessoryWidth?: number | "full";
+  /** Height for whichever accessory this item carries. */
+  accessoryHeight?: number;
   sparklineHeight?: number;
   sparklineColor?: Color;
   toggle?: boolean;
@@ -628,6 +646,7 @@ const JSON_ITEM_KEYS: Array<keyof JSONItem> = [
   "text", "separator", "color", "size", "href", "shell", "params", "terminal",
   "refresh", "sfimage", "disabled", "checked", "tooltip", "header", "accessory",
   "sparkline", "sparklineWidth", "sparklineHeight", "sparklineColor",
+  "accessoryWidth", "accessoryHeight",
   "toggle", "slider", "progress", "progressTrackColor", "progressWidth",
   "progressHeight", "chart", "submenu", "alternate",
 ];

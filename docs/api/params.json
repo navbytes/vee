@@ -293,6 +293,24 @@
       "section": "rich-inline-charts-liquid-glass-popovers"
     },
     {
+      "key": "accessoryw",
+      "group": "charts",
+      "type": "number-or-full",
+      "grammar": "points | full",
+      "default": "the accessory's own default",
+      "appliesTo": "progress, sparkline, pie, donut, stackedbar, slider",
+      "summary": "Width in points for whichever accessory the row carries, or `full` to stretch it to the row's own width. A row draws at most one accessory, so one parameter sizes any of them. Defaults differ per accessory — see the chart matrix. `full` is refused on `pie=`/`donut=`, which can only fill a width by growing the row. Replaces `progressw=`, `sparklinew=` and `chartw=`."
+    },
+    {
+      "key": "accessoryh",
+      "group": "charts",
+      "type": "number",
+      "grammar": "points",
+      "default": "the accessory's own default",
+      "appliesTo": "progress, sparkline, pie, donut, stackedbar",
+      "summary": "Height in points for whichever accessory the row carries. Ignored for `toggle=`/`slider=`, whose height is its control size. Replaces `progressh=`, `sparklineh=` and `charth=`."
+    },
+    {
       "key": "sparklinew",
       "group": "charts",
       "chart": "sparkline",
@@ -301,7 +319,10 @@
       "default": "90",
       "appliesTo": "sparkline",
       "summary": "Sparkline width in points, or `full` to stretch it to the row's own width.",
-      "constant": "sparkline.defaultWidth"
+      "constant": "sparkline.defaultWidth",
+      "deprecated": true,
+      "replacedBy": "accessoryw",
+      "removedIn": "the next major version"
     },
     {
       "key": "sparklineh",
@@ -312,7 +333,10 @@
       "default": "20",
       "appliesTo": "sparkline",
       "summary": "Sparkline height in points.",
-      "constant": "sparkline.defaultHeight"
+      "constant": "sparkline.defaultHeight",
+      "deprecated": true,
+      "replacedBy": "accessoryh",
+      "removedIn": "the next major version"
     },
     {
       "key": "sparklinecolor",
@@ -340,7 +364,10 @@
       "default": "120",
       "appliesTo": "progress",
       "summary": "Bar width in points, or `full` to stretch it to the row's own width.",
-      "constant": "progress.defaultWidth"
+      "constant": "progress.defaultWidth",
+      "deprecated": true,
+      "replacedBy": "accessoryw",
+      "removedIn": "the next major version"
     },
     {
       "key": "progressh",
@@ -351,7 +378,10 @@
       "default": "6",
       "appliesTo": "progress",
       "summary": "Bar height in points.",
-      "constant": "progress.defaultHeight"
+      "constant": "progress.defaultHeight",
+      "deprecated": true,
+      "replacedBy": "accessoryh",
+      "removedIn": "the next major version"
     },
     {
       "key": "progresstrackcolor",
@@ -407,7 +437,10 @@
       "grammar": "points | full",
       "appliesTo": "pie, donut, stackedbar",
       "summary": "The chart's inline width in points, clamped to 8–200. A pie or donut is a circle, so either dimension sizes both. `chartw=full` stretches a `stackedbar=` to the row's own width, and is refused on `pie=`/`donut=` with a diagnostic.",
-      "constant": "chart.sizeLimit"
+      "constant": "chart.sizeLimit",
+      "deprecated": true,
+      "replacedBy": "accessoryw",
+      "removedIn": "the next major version"
     },
     {
       "key": "charth",
@@ -417,7 +450,10 @@
       "grammar": "points",
       "appliesTo": "pie, donut, stackedbar",
       "summary": "The chart's inline height in points, clamped to 8–200. Defaults to a 24pt circle for `pie=`/`donut=` and 110×12 for `stackedbar=`.",
-      "constant": "chart.sizeLimit"
+      "constant": "chart.sizeLimit",
+      "deprecated": true,
+      "replacedBy": "accessoryh",
+      "removedIn": "the next major version"
     },
     {
       "key": "chartlabels",
@@ -468,7 +504,7 @@
       "member": "lowerBound",
       "file": "Sources/VeePluginFormat/ChartParams.swift",
       "value": 8,
-      "statedAs": "the floor `chartw=`/`charth=` are clamped to, in points"
+      "statedAs": "the floor `accessoryw=`/`accessoryh=` are clamped to, in points"
     },
     {
       "id": "chart.sizeLimit.max",
@@ -476,7 +512,7 @@
       "member": "upperBound",
       "file": "Sources/VeePluginFormat/ChartParams.swift",
       "value": 200,
-      "statedAs": "the ceiling `chartw=`/`charth=` are clamped to, in points"
+      "statedAs": "the ceiling `accessoryw=`/`accessoryh=` are clamped to, in points"
     },
     {
       "id": "chart.defaultCircleSide",
@@ -552,7 +588,7 @@
         "accessory",
         "color"
       ],
-      "fullWidth": "`sparklinew=full`",
+      "fullWidth": "`accessoryw=full`",
       "defaults": "90×20 points",
       "limits": "Widget sparkline nodes are truncated at 256 points; non-finite entries are dropped.",
       "popover": "Yes — a full Swift Charts line/area chart.",
@@ -574,7 +610,7 @@
         "accessory",
         "color"
       ],
-      "fullWidth": "`progressw=full`",
+      "fullWidth": "`accessoryw=full`",
       "defaults": "120×6 points",
       "limits": "Clamped to 0…1; a non-finite value is dropped.",
       "popover": "No — the bar is the whole surface.",
@@ -600,7 +636,7 @@
       "defaults": "24pt diameter",
       "limits": "8 segments (the tail folds into 'Other'); size clamped to 8–200 points.",
       "popover": "Yes — full size with a labelled legend.",
-      "notes": "A circle, so chartw= or charth= alone sizes both dimensions."
+      "notes": "A circle, so accessoryw= or accessoryh= alone sizes both dimensions."
     },
     {
       "id": "donut",
@@ -640,7 +676,7 @@
         "chartcolors",
         "accessory"
       ],
-      "fullWidth": "`chartw=full` — the only chart kind that accepts it.",
+      "fullWidth": "`accessoryw=full` — the only chart kind that accepts it.",
       "defaults": "110×12 points",
       "limits": "8 segments (the tail folds into 'Other'); size clamped to 8–200 points.",
       "popover": "Yes — full size with a labelled legend.",

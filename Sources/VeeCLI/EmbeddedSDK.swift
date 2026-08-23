@@ -100,10 +100,23 @@ export interface ItemOptions {
   /** Inline data series → `sparkline=1,2,3`. */
   sparkline?: number[];
   /**
-   * Sparkline width in points → `sparklinew=`. `"full"` stretches the chart to
-   * the row's own width instead — the same knob `progressW` and `chart.w` take.
+   * Sparkline width in points. `"full"` stretches the chart to the row's own
+   * width instead. Emitted as `accessoryw=`, which sizes whichever accessory a
+   * row carries; `progressW`, `chart.w` and `accessoryW` are the same knob
+   * reached from different option sets.
    */
   sparklineW?: number | "full";
+
+  /**
+   * Width in points for whichever accessory this row carries — gauge,
+   * sparkline, chart, or slider → `accessoryw=`. `"full"` stretches it to the
+   * row's own width. Use this to size a `slider`, which has no option of its
+   * own; for the others the per-accessory options are equivalent.
+   */
+  accessoryW?: number | "full";
+
+  /** Height in points for this row's accessory → `accessoryh=`. Ignored for a toggle or slider. */
+  accessoryH?: number;
   /** Sparkline height in points → `sparklineh=`. */
   sparklineH?: number;
   /** Sparkline line colour → `sparklinecolor=`. Falls back to the row's `color`. */
@@ -128,7 +141,7 @@ export interface ItemOptions {
    */
   trackColor?: Color;
   /**
-   * Progress bar width in points → `progressw=`. `"full"` stretches the bar to
+   * Progress bar width in points, emitted as `accessoryw=`. `"full"` stretches the bar to
    * the row's own width instead, the same knob `chart.w` takes.
    */
   progressW?: number | "full";
@@ -149,7 +162,7 @@ export interface ItemOptions {
     labels?: string[];
     colors?: Color[];
     /**
-     * Inline size in points → `chartw=`/`charth=`. A pie/donut is a circle, so
+     * Inline size in points, emitted as `accessoryw=`/`accessoryh=`. A pie/donut is a circle, so
      * either knob sizes both sides; a stacked bar takes them independently.
      * Omitted, a chart takes its per-kind default (24pt circle, 110×12 bar).
      * `w: "full"` stretches the chart to the row's own width instead — a
@@ -238,8 +251,6 @@ function encode(options?: ItemOptions): string {
   push("header", options.header);
   push("accessory", options.accessory);
   if (options.sparkline !== undefined) push("sparkline", options.sparkline.map(String).join(","));
-  push("sparklinew", options.sparklineW);
-  push("sparklineh", options.sparklineH);
   push("sparklinecolor", options.sparklineColor);
   if (options.toggle !== undefined) push("toggle", options.toggle ? "on" : "off");
   if (options.slider !== undefined) {
@@ -251,16 +262,18 @@ function encode(options?: ItemOptions): string {
     push("progress", typeof p === "number" ? String(p) : `${p.value},${p.max}`);
   }
   push("progresstrackcolor", options.progressTrackColor ?? options.trackColor);
-  push("progressw", options.progressW);
-  push("progressh", options.progressH);
   if (options.chart !== undefined) {
     const c = options.chart;
     push(c.kind, c.values.map(String).join(","));
-    push("chartw", c.w);
-    push("charth", c.h);
     if (c.labels !== undefined) push("chartlabels", c.labels.join(","));
     if (c.colors !== undefined) push("chartcolors", c.colors.join(","));
   }
+  // One wire parameter sizes whichever accessory the row carries, so the
+  // per-accessory options above all funnel here. They stay separate in the API
+  // because a typed builder already knows which accessory you are describing —
+  // the ambiguity `accessoryw=` solves for hand-written lines cannot arise.
+  push("accessoryw", options.accessoryW ?? options.sparklineW ?? options.progressW ?? options.chart?.w);
+  push("accessoryh", options.accessoryH ?? options.sparklineH ?? options.progressH ?? options.chart?.h);
   return parts.length ? " | " + parts.join(" ") : "";
 }
 
@@ -622,7 +635,12 @@ export interface JSONItemOptions {
   accessory?: "leading" | "trailing";
   sparkline?: number[];
   /** Sparkline width in points; `"full"` stretches it to the row's width. */
+  /** @deprecated Use `accessoryWidth`. */
   sparklineWidth?: number | "full";
+  /** Width for whichever accessory this item carries, or `"full"`. */
+  accessoryWidth?: number | "full";
+  /** Height for whichever accessory this item carries. */
+  accessoryHeight?: number;
   sparklineHeight?: number;
   sparklineColor?: Color;
   toggle?: boolean;
@@ -657,6 +675,7 @@ const JSON_ITEM_KEYS: Array<keyof JSONItem> = [
   "text", "separator", "color", "size", "href", "shell", "params", "terminal",
   "refresh", "sfimage", "disabled", "checked", "tooltip", "header", "accessory",
   "sparkline", "sparklineWidth", "sparklineHeight", "sparklineColor",
+  "accessoryWidth", "accessoryHeight",
   "toggle", "slider", "progress", "progressTrackColor", "progressWidth",
   "progressHeight", "chart", "submenu", "alternate",
 ];
@@ -878,6 +897,19 @@ def _fmt_float(x: float) -> str:
     return "-" + out if negative else out
 
 
+def _first_set(*values: Any) -> Any:
+    """The first argument that is not ``None``, or ``None``.
+
+    Used to funnel the per-accessory size options into the single
+    ``accessoryw=``/``accessoryh=`` the format takes. Not ``or``-chaining:
+    ``0`` is a legitimate size and must not fall through to the next option.
+    """
+    for value in values:
+        if value is not None:
+            return value
+    return None
+
+
 def _fmt(value: Any) -> str:
     # Match JS String(): booleans lowercase, numbers formatted by the shared
     # ECMA-262 rule so `size=12` is not `size=12.0` and a 1e6 sparkline point
@@ -910,6 +942,7 @@ _OPTION_NAMES = frozenset(
     + [
         "shell", "params", "sf_color",
         "sparkline", "sparkline_w", "sparkline_h", "sparkline_color",
+        "accessory_w", "accessory_h",
         "toggle", "slider",
         "progress", "progress_track_color", "progress_w", "progress_h",
         "chart",
@@ -1000,15 +1033,13 @@ def _encode(options: dict[str, Any] | None) -> str:
         push(key, options.get(name))
 
     # Vee-native rich params, emitted last in a fixed order shared across SDKs:
-    # sparkline, toggle, slider, progress, trackcolor, progressw, progressh,
-    # then the chart shape with its labels/colors.
+    # sparkline, toggle, slider, progress, trackcolor, then the chart shape with
+    # its labels/colors, and finally the accessory size. The three SDKs are
+    # compared byte-for-byte against ``plugins/fixtures/``, so this order is a
+    # contract, not a preference.
     sparkline = options.get("sparkline")
     if sparkline is not None:
         push("sparkline", ",".join(_fmt(v) for v in sparkline))
-    # ``sparkline_w`` takes points or ``"full"`` -- the same width vocabulary as
-    # ``progress_w`` and ``chart["w"]``.
-    push("sparklinew", options.get("sparkline_w"))
-    push("sparklineh", options.get("sparkline_h"))
     push("sparklinecolor", options.get("sparkline_color"))
 
     toggle = options.get("toggle")
@@ -1040,10 +1071,6 @@ def _encode(options: dict[str, Any] | None) -> str:
             push("progress", _fmt(progress))
 
     push("progresstrackcolor", options.get("progress_track_color"))
-    # ``progress_w`` takes points or ``"full"`` -- the same width vocabulary as
-    # ``chart["w"]`` below.
-    push("progressw", options.get("progress_w"))
-    push("progressh", options.get("progress_h"))
 
     # Categorical share chart: `pie=`/`donut=`/`stackedbar=` plus its positional
     # `chartlabels=`/`chartcolors=`. All three shapes take the same data, so the
@@ -1052,21 +1079,28 @@ def _encode(options: dict[str, Any] | None) -> str:
     chart = options.get("chart")
     if chart is not None:
         push(chart["kind"], ",".join(_fmt(v) for v in chart["values"]))
-        # Inline size in points. A pie/donut is a circle, so either knob sizes
-        # both sides; a stacked bar takes them independently. ``"full"`` is the
-        # one non-numeric width: stretch to the row's own width — stacked bars
-        # only, since a circle has no free width.
-        w = chart.get("w")
-        if w is not None:
-            push("chartw", w if isinstance(w, str) else _fmt(w))
-        if chart.get("h") is not None:
-            push("charth", _fmt(chart["h"]))
         labels = chart.get("labels")
         if labels is not None:
             push("chartlabels", ",".join(str(v) for v in labels))
         colors = chart.get("colors")
         if colors is not None:
             push("chartcolors", ",".join(str(v) for v in colors))
+
+    # One wire parameter sizes whichever accessory the row carries, so every
+    # per-accessory option funnels here. They stay separate in the API because a
+    # builder already knows which accessory you are describing -- the ambiguity
+    # ``accessoryw=`` solves for hand-written lines cannot arise. ``"full"`` is
+    # the one non-numeric width: stretch to the row's own width (stacked bars
+    # and gauges only -- a circle has no free width).
+    _chart = options.get("chart") or {}
+    _w = _first_set(options.get("accessory_w"), options.get("sparkline_w"),
+                    options.get("progress_w"), _chart.get("w"))
+    _h = _first_set(options.get("accessory_h"), options.get("sparkline_h"),
+                    options.get("progress_h"), _chart.get("h"))
+    if _w is not None:
+        push("accessoryw", _w if isinstance(_w, str) else _fmt(_w))
+    if _h is not None:
+        push("accessoryh", _h if isinstance(_h, str) else _fmt(_h))
 
     return " | " + " ".join(parts) if parts else ""
 
@@ -1414,6 +1448,7 @@ _JSON_ITEM_KEYS = [
     "text", "separator", "color", "size", "href", "shell", "params", "terminal",
     "refresh", "sfimage", "disabled", "checked", "tooltip", "header", "accessory",
     "sparkline", "sparkline_width", "sparkline_height", "sparkline_color",
+    "accessory_width", "accessory_height",
     "toggle", "slider", "progress", "progress_track_color", "progress_width",
     "progress_height", "chart", "submenu", "alternate",
 ]
@@ -1421,6 +1456,8 @@ _JSON_ITEM_KEYS = [
 # snake_case option -> the JSON key it emits. The wire format is camelCase; the
 # SDK keeps Python's spelling, matching how the text-protocol options work.
 _JSON_KEY_NAMES = {
+    "accessory_width": "accessoryWidth",
+    "accessory_height": "accessoryHeight",
     "sparkline_width": "sparklineWidth",
     "sparkline_height": "sparklineHeight",
     "sparkline_color": "sparklineColor",

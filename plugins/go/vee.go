@@ -82,7 +82,19 @@ type Options struct {
 	Sparkline []float64
 	// SparklineW and SparklineH set the chart's inline size in points.
 	SparklineW *float64
-	// SparklineFullWidth emits `sparklinew=full`: stretch the chart to the
+	// AccessoryW sets the width in points for whichever accessory this row
+	// carries -- gauge, sparkline, chart, or slider (`accessoryw=`). Use it to
+	// size a Slider, which has no field of its own; for the others the
+	// per-accessory fields below are equivalent.
+	AccessoryW *float64
+	// AccessoryH sets the accessory's height in points (`accessoryh=`).
+	// Ignored for a Toggle or Slider, whose height is its control size.
+	AccessoryH *float64
+	// AccessoryFullWidth emits `accessoryw=full`: stretch the accessory to the
+	// row's own width. Refused on a pie or donut, which can only fill a width
+	// by growing the row.
+	AccessoryFullWidth bool
+	// SparklineFullWidth emits `accessoryw=full`: stretch the chart to the
 	// row's own width rather than a fixed number of points. Takes precedence
 	// over SparklineW.
 	SparklineFullWidth bool
@@ -108,7 +120,7 @@ type Options struct {
 	// (as `progresstrackcolor=`); removed in the next major version.
 	TrackColor *string
 	ProgressW  *float64
-	// ProgressFullWidth emits `progressw=full`: stretch the bar to the row's
+	// ProgressFullWidth emits `accessoryw=full`: stretch the bar to the row's
 	// own width rather than a fixed number of points. Takes precedence over
 	// ProgressW, mirroring Chart.FullWidth.
 	ProgressFullWidth bool
@@ -130,13 +142,13 @@ type Chart struct {
 	Values []float64
 	Labels []string
 	Colors []string
-	// W and H set the inline size in points (`chartw=`/`charth=`). A pie or
+	// W and H set the inline size in points (`accessoryw=`/`accessoryh=`). A pie or
 	// donut is a circle, so either one sizes both sides; a stacked bar takes
 	// them independently. Nil takes the per-kind default (24pt circle,
 	// 110x12 bar).
 	W *float64
 	H *float64
-	// FullWidth emits `chartw=full`: stretch to the row's own width rather
+	// FullWidth emits `accessoryw=full`: stretch to the row's own width rather
 	// than a fixed number of points. Takes precedence over W. Stacked bars
 	// only — a circle has no free width, and Vee warns and falls back to
 	// points on a pie/donut.
@@ -366,14 +378,6 @@ func encode(o *Options) string {
 		}
 		push("sparkline", strings.Join(nums, ","))
 	}
-	if o.SparklineFullWidth {
-		push("sparklinew", "full")
-	} else if o.SparklineW != nil {
-		push("sparklinew", fmtFloat(*o.SparklineW))
-	}
-	if o.SparklineH != nil {
-		push("sparklineh", fmtFloat(*o.SparklineH))
-	}
 	if o.SparklineColor != nil {
 		push("sparklinecolor", *o.SparklineColor)
 	}
@@ -397,34 +401,48 @@ func encode(o *Options) string {
 	} else if o.TrackColor != nil {
 		push("progresstrackcolor", *o.TrackColor)
 	}
-	if o.ProgressFullWidth {
-		push("progressw", "full")
-	} else if o.ProgressW != nil {
-		push("progressw", fmtFloat(*o.ProgressW))
-	}
-	if o.ProgressH != nil {
-		push("progressh", fmtFloat(*o.ProgressH))
-	}
 	if o.Chart != nil {
 		nums := make([]string, len(o.Chart.Values))
 		for i, v := range o.Chart.Values {
 			nums[i] = fmtFloat(v)
 		}
 		push(o.Chart.Kind, strings.Join(nums, ","))
-		if o.Chart.FullWidth {
-			push("chartw", "full")
-		} else if o.Chart.W != nil {
-			push("chartw", fmtFloat(*o.Chart.W))
-		}
-		if o.Chart.H != nil {
-			push("charth", fmtFloat(*o.Chart.H))
-		}
 		if o.Chart.Labels != nil {
 			push("chartlabels", strings.Join(o.Chart.Labels, ","))
 		}
 		if o.Chart.Colors != nil {
 			push("chartcolors", strings.Join(o.Chart.Colors, ","))
 		}
+	}
+
+	// One wire parameter sizes whichever accessory the row carries, so every
+	// per-accessory field funnels here. They stay separate in the API because a
+	// typed builder already knows which accessory you are describing -- the
+	// ambiguity accessoryw= solves for hand-written lines cannot arise. The
+	// three SDKs are compared byte-for-byte against plugins/fixtures/, so this
+	// order is a contract, not a preference.
+	switch {
+	case o.AccessoryFullWidth || o.SparklineFullWidth || o.ProgressFullWidth ||
+		(o.Chart != nil && o.Chart.FullWidth):
+		push("accessoryw", "full")
+	case o.AccessoryW != nil:
+		push("accessoryw", fmtFloat(*o.AccessoryW))
+	case o.SparklineW != nil:
+		push("accessoryw", fmtFloat(*o.SparklineW))
+	case o.ProgressW != nil:
+		push("accessoryw", fmtFloat(*o.ProgressW))
+	case o.Chart != nil && o.Chart.W != nil:
+		push("accessoryw", fmtFloat(*o.Chart.W))
+	}
+	switch {
+	case o.AccessoryH != nil:
+		push("accessoryh", fmtFloat(*o.AccessoryH))
+	case o.SparklineH != nil:
+		push("accessoryh", fmtFloat(*o.SparklineH))
+	case o.ProgressH != nil:
+		push("accessoryh", fmtFloat(*o.ProgressH))
+	case o.Chart != nil && o.Chart.H != nil:
+		push("accessoryh", fmtFloat(*o.Chart.H))
 	}
 
 	if len(parts) == 0 {
@@ -895,6 +913,8 @@ type JSONOptions struct {
 	Accessory *string   `json:"accessory,omitempty"`
 	Sparkline []float64 `json:"sparkline,omitempty"`
 	// SparklineWidth is a number of points, or the string "full".
+	AccessoryWidth  any      `json:"accessoryWidth,omitempty"`
+	AccessoryHeight any      `json:"accessoryHeight,omitempty"`
 	SparklineWidth  any      `json:"sparklineWidth,omitempty"`
 	SparklineHeight *float64 `json:"sparklineHeight,omitempty"`
 	SparklineColor  *string  `json:"sparklineColor,omitempty"`
