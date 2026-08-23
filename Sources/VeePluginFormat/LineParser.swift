@@ -134,6 +134,16 @@ enum LineParser {
         var chartH: Double?
         var chartFullWidth = false
         var progressFullWidth = false
+        // `accessoryw=`/`accessoryh=`: one pair sizing whichever accessory the
+        // row turns out to carry. Held separately from the per-family values
+        // above and fanned out below, so the per-kind clamping and defaults
+        // stay with the types that own them.
+        var accessoryW: Double?
+        var accessoryH: Double?
+        var accessoryFullWidth = false
+        // Which superseded sizing parameters this line used, for the migration
+        // diagnostic emitted once the row's accessory is known.
+        var deprecatedSizeKeys: [String] = []
         var seenKeys: Set<String> = []
 
         func bool(_ v: String) -> Bool { v == "true" || v == "1" || v == "yes" }
@@ -267,26 +277,39 @@ enum LineParser {
                         message: "chartcolors= has a malformed color; those segments use the default palette"
                     ))
                 }
+            case "accessoryw":
+                // Sizes whatever accessory the row carries — gauge, sparkline,
+                // chart, or control. `full` is the one non-numeric value:
+                // stretch to the row's own width rather than a fixed number of
+                // points.
+                if value.lowercased() == "full" { accessoryFullWidth = true } else { accessoryW = finite(value) }
+            case "accessoryh": accessoryH = finite(value)
             case "chartw":
-                // `full` is the one non-numeric value: stretch to the row's own
-                // width rather than a fixed number of points.
+                // Superseded by `accessoryw=`; still honoured so published
+                // plugins keep drawing what they drew, like `trackcolor=`.
+                deprecatedSizeKeys.append("chartw")
                 if value.lowercased() == "full" { chartFullWidth = true } else { chartW = finite(value) }
-            case "charth": chartH = finite(value)
+            case "charth":
+                deprecatedSizeKeys.append("charth")
+                chartH = finite(value)
             case "progresstrackcolor", "trackcolor":
                 // `trackcolor=` is the pre-v2 spelling, kept working for
                 // plugins already published with it.
                 progressTrack = VeeColor.parse(value)
             case "progressw":
-                // `full` is the one non-numeric value, exactly as in `chartw=`:
-                // stretch to the row's own width rather than a fixed number of
-                // points.
+                // Superseded by `accessoryw=`; still honoured.
+                deprecatedSizeKeys.append("progressw")
                 if value.lowercased() == "full" { progressFullWidth = true } else { progressW = finite(value) }
-            case "progressh": progressH = finite(value)
+            case "progressh":
+                deprecatedSizeKeys.append("progressh")
+                progressH = finite(value)
             case "sparklinew":
-                // `full` is the one non-numeric value, exactly as in `progressw=`
-                // and `chartw=`: stretch to the row's own width.
+                // Superseded by `accessoryw=`; still honoured.
+                deprecatedSizeKeys.append("sparklinew")
                 if value.lowercased() == "full" { sparklineFullWidth = true } else { sparklineW = finite(value) }
-            case "sparklineh": sparklineH = finite(value)
+            case "sparklineh":
+                deprecatedSizeKeys.append("sparklineh")
+                sparklineH = finite(value)
             case "sparklinecolor": sparklineColor = VeeColor.parse(value)
             case "header":
                 // Vee-native: a first-class, non-interactive section-header
@@ -321,6 +344,35 @@ enum LineParser {
             p.shell = ShellCommand(launchPath: path, arguments: args, openInTerminal: terminal ?? false)
         } else if !positional.isEmpty {
             diagnostics.append(.init(severity: .warning, message: "paramN given without shell=/bash="))
+        }
+
+        // Fan `accessoryw=`/`accessoryh=` out to whichever accessory the row
+        // actually declared. A row carries at most one (`MenuTree.accessory`
+        // resolves progress -> sparkline -> chart), so this can never size two
+        // things. The new pair wins where a line declares both, so a plugin can
+        // migrate one row at a time.
+        //
+        // Gated on the accessory existing, not merely on the size being
+        // present: an ungated fan-out makes `accessoryw=` on a row with no
+        // accessory *conjure* one — a bare `accessoryw=full` produced a
+        // `SparklineStyle` for a row that had no series at all.
+        let hasAccessorySize = accessoryW != nil || accessoryH != nil || accessoryFullWidth
+        if hasAccessorySize {
+            if p.sparkline?.isEmpty == false {
+                if let accessoryW { sparklineW = accessoryW }
+                if let accessoryH { sparklineH = accessoryH }
+                if accessoryFullWidth { sparklineFullWidth = true }
+            }
+            if progressFraction != nil {
+                if let accessoryW { progressW = accessoryW }
+                if let accessoryH { progressH = accessoryH }
+                if accessoryFullWidth { progressFullWidth = true }
+            }
+            if chartKind != nil {
+                if let accessoryW { chartW = accessoryW }
+                if let accessoryH { chartH = accessoryH }
+                if accessoryFullWidth { chartFullWidth = true }
+            }
         }
 
         if sparklineW != nil || sparklineH != nil || sparklineColor != nil || sparklineFullWidth {
@@ -364,7 +416,81 @@ enum LineParser {
             ))
         }
 
+        reportDeprecatedSizing(
+            keys: deprecatedSizeKeys,
+            supersededByAccessorySize: hasAccessorySize,
+            params: p,
+            diagnostics: &diagnostics
+        )
+
         return (p, diagnostics)
+    }
+
+    /// The accessory family a superseded sizing parameter was named for.
+    private static func sizingFamily(of key: String) -> String {
+        if key.hasPrefix("progress") { return "progress=" }
+        if key.hasPrefix("sparkline") { return "sparkline=" }
+        return "pie=/donut=/stackedbar="
+    }
+
+    /// The accessory this row actually draws, named as the plugin would write
+    /// it. Mirrors the resolution order every surface renders by (progress,
+    /// then sparkline, then chart); `nil` when the row draws none.
+    private static func accessoryFamily(of params: LineParams) -> String? {
+        if params.progress != nil { return "progress=" }
+        if let series = params.sparkline, !series.isEmpty { return "sparkline=" }
+        if let chart = params.swiftbar.chart { return "\(chart.kind.rawValue)=" }
+        return nil
+    }
+
+    /// Reports the superseded sizing parameters a line used.
+    ///
+    /// Two distinct problems share this one diagnostic. The first is the rename:
+    /// `accessoryw=`/`accessoryh=` replace six names, and an author wants to be
+    /// told which one to switch to.
+    ///
+    /// The second is worse and is why the mismatch branch exists. A sizing
+    /// parameter aimed at an accessory the row does not carry — `progressw=full`
+    /// on a `stackedbar=` row — has always been silently ignored, so the plugin
+    /// looks broken with nothing anywhere saying why. That is a real report from
+    /// a real user, and it is the failure the single pair exists to make
+    /// impossible.
+    ///
+    /// A row with no accessory at all stays silent: that is a plugin mid-edit,
+    /// not a mistake, and the same tolerance `progressw=` alone has always had.
+    private static func reportDeprecatedSizing(
+        keys: [String],
+        supersededByAccessorySize: Bool,
+        params: LineParams,
+        diagnostics: inout [ParseDiagnostic]
+    ) {
+        guard !keys.isEmpty else { return }
+        let drawn = accessoryFamily(of: params)
+
+        for key in Set(keys).sorted() {
+            let replacement = key.hasSuffix("h") ? "accessoryh=" : "accessoryw="
+
+            if supersededByAccessorySize {
+                diagnostics.append(.init(
+                    severity: .warning,
+                    message: "\(key)= is deprecated and was ignored here — \(replacement) on the same line wins"
+                ))
+                continue
+            }
+
+            let named = sizingFamily(of: key)
+            if let drawn, !named.contains(drawn) {
+                diagnostics.append(.init(
+                    severity: .warning,
+                    message: "\(key)= sizes \(named), but this row draws \(drawn) — it had no effect. Use \(replacement), which sizes whichever accessory a row carries"
+                ))
+            } else {
+                diagnostics.append(.init(
+                    severity: .warning,
+                    message: "\(key)= is deprecated; use \(replacement), which sizes whichever accessory a row carries"
+                ))
+            }
+        }
     }
 
     /// Decoded-byte cap for `image=`/`templateImage=` payloads. A menu-bar/status

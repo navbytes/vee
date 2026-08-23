@@ -155,7 +155,14 @@ final class CategoryChartRenderSmokeTests: XCTestCase {
         }
         let (bar, diagnostics) = parse("x | stackedbar=1,2 chartw=full")
         XCTAssertTrue(bar.isFullWidth)
-        XCTAssertTrue(diagnostics.isEmpty)
+        // `chartw=` still works, and now says it has been superseded by
+        // `accessoryw=`. The refusal above is the only *other* thing this line
+        // could report, and it must not fire for a bar.
+        XCTAssertFalse(
+            diagnostics.contains { $0.message.contains("applies to stackedbar=") },
+            "a stacked bar is exactly what full width is for"
+        )
+        XCTAssertTrue(diagnostics.allSatisfy { $0.message.contains("accessoryw=") })
     }
 
     func testFullWidthChartStretchesToTheRowLessItsLabel() {
