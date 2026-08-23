@@ -30,7 +30,12 @@ public enum LineParameterKeys {
         "md", "markdown", "checked", "badge", "webview", "webvieww",
         "webviewh", "shortcut",
         // Vee-native
-        "sparkline", "toggle", "slider", "progress", "trackcolor",
+        "sparkline", "sparklinew", "sparklineh", "sparklinecolor",
+        "toggle", "slider", "progress",
+        // `trackcolor` is the pre-v2 spelling of `progresstrackcolor`: still
+        // parsed and still recognised so existing plugins keep working, but
+        // deprecated and no longer emitted by the SDKs.
+        "progresstrackcolor", "trackcolor",
         "progressw", "progressh", "header", "accessory",
         "pie", "donut", "stackedbar", "chartlabels", "chartcolors",
         "chartw", "charth"

@@ -75,11 +75,20 @@ public enum MenuBuilder {
             view.toolTip = item.params.swiftbar.tooltip
             menuItem.view = view
         } else if let series = item.params.sparkline {
+            // `sparklinecolor=` wins, then the row's own `color=`, then the
+            // accent — the same fallback ladder `progress=` uses for its fill.
+            let style = item.params.swiftbar.sparklineStyle ?? SparklineStyle()
+            let lineColor = style.color.flatMap(ColorResolver.nsColor(for:))
+                ?? item.params.color.flatMap(ColorResolver.nsColor(for:))
+                ?? .controlAccentColor
             let view = SparklineMenuItemView(
                 title: menuItem.attributedTitle ?? NSAttributedString(string: item.text),
                 values: series,
-                lineColor: item.params.color.flatMap(ColorResolver.nsColor(for:)) ?? .controlAccentColor,
-                leading: accessoryLeading
+                lineColor: lineColor,
+                chartWidth: CGFloat(style.effectiveWidth),
+                chartHeight: CGFloat(style.effectiveHeight),
+                leading: accessoryLeading,
+                fullWidth: style.isFullWidth
             )
             view.toolTip = item.params.swiftbar.tooltip
             menuItem.view = view

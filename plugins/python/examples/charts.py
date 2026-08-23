@@ -3,6 +3,10 @@
 # stacked bar. Doubles as a golden fixture: its build() output is committed to
 # plugins/fixtures/charts.txt and checked for drift. Produces
 # byte-identical output to the TypeScript and Go examples.
+#
+# Using this outside the repository: run `vee sdk py` to write vee.py beside
+# your copy. No edit needed -- Python already searches the script's own
+# directory.
 import os
 import sys
 

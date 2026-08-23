@@ -10,6 +10,19 @@ byte-identical output.
 
 - Go 1.21+ (uses only the standard library).
 
+## Installing
+
+A Go plugin compiles to a binary, so the SDK is a normal module dependency —
+there is nothing to vendor beside the plugin:
+
+```sh
+go get github.com/navbytes/vee/plugins/go
+```
+
+```go
+import vee "github.com/navbytes/vee/plugins/go"
+```
+
 ## Layout
 
 ```
@@ -59,12 +72,29 @@ Build it to a binary and drop it in your plugins folder as `cpu.5s`
 - `Section.Item(text, *Options)`, `Section.Separator()`,
   `Section.Submenu(text, *Options) Section`.
 - `Options` — pointer fields are optional (nil is omitted). Helpers `vee.Str`,
-  `vee.Int`, `vee.Bool` set them concisely. Fields match the TS SDK's
-  `ItemOptions`: Color, Size, Font, Length, Href, Shell (+ Params), Terminal,
-  Refresh, Alternate, Disabled, Checked, Key, Tooltip, SFImage, MD, Badge,
-  Symbolize, the rich controls Sparkline, Toggle, Slider, Progress (+
-  TrackColor, ProgressW, ProgressH), and Chart (the pie/donut/stackedbar share
-  charts). See the
+  `vee.Int`, `vee.Bool`, `vee.Float` set them concisely. Fields match the
+  TypeScript SDK's `ItemOptions`:
+  - **Rendering** — Color, Size, Font, Length, Trim, Ansi, Emojize
+  - **Behaviour** — Href, Shell (+ Params), Terminal, Refresh, Dropdown,
+    Alternate, Disabled, Checked, Key, Tooltip
+  - **Images** — Image, TemplateImage
+  - **SF Symbols** — SFImage, SFColor, SFSize, SFConfig, Symbolize
+  - **SwiftBar extras** — MD, Badge, Webview, WebviewW, WebviewH, Shortcut
+  - **Vee-native rows** — Header, Accessory
+  - **Controls** — Toggle, Slider, Progress (a fraction; or ProgressValue +
+    ProgressMax for the format's two-argument form)
+  - **Inline visuals** — each takes the same size/colour vocabulary:
+
+    | Control | Size | Full width | Colour |
+    | ------- | ---- | ---------- | ------ |
+    | Sparkline | SparklineW, SparklineH | SparklineFullWidth | SparklineColor |
+    | Progress | ProgressW, ProgressH | ProgressFullWidth | ProgressTrackColor |
+    | Chart | Chart.W, Chart.H | Chart.FullWidth | Chart.Colors |
+
+  Naming rule: inside a control's own struct the knobs are unprefixed
+  (`Chart.W`), because the struct already names the control; on the flat
+  `Options` they carry the control's name (`SparklineW`). `TrackColor` is the
+  deprecated spelling of `ProgressTrackColor`. See the
   [SDK guide](../../docs/_content/sdk.md) for the rich-param details.
 
 ## Widget cards
@@ -90,7 +120,15 @@ if os.Getenv("VEE_TARGET") == "widget" {
 ```
 
 `Template` selects one of the five presets (`TemplateStat`, `TemplateGauge`,
-`TemplateTrend`, `TemplateList`, `TemplateBoard`). `WidgetCard` has the same
+`TemplateTrend`, `TemplateList`, `TemplateBoard`), or use the constructor of
+the same name — matching the TypeScript and Python SDKs:
+
+```go
+vee.Stat(vee.WidgetCard{Title: vee.Str("Revenue"), Value: vee.Str("$18.2k")}).Print()
+```
+
+`vee.Stat`, `vee.Gauge`, `vee.Trend`, `vee.List`, and `vee.Board` each preset
+`Template` on a card you have already filled in. `WidgetCard` has the same
 `String()` / `Print()` shape as `Menu`.
 
 For layouts the five templates cannot express, build a **layout tree** with the
@@ -110,8 +148,18 @@ c.Print()
 `vee.Node.VStack`, `HStack`, `ZStack`, `Grid`, `Text`, `Image`, `Gauge`,
 `Sparkline`, `Spacer`, and `Divider` are the full vocabulary; node options are
 set with `vee.Align`, `vee.Spacing`, `vee.Columns`, `vee.MinLen`,
-`vee.GaugeStyle`, `vee.Families`, and `vee.Style`. See
-[Widgets](../../docs/_content/widgets.md) for every field and its limits.
+`vee.GaugeStyle`, `vee.Families`, and `vee.Style`.
+
+Each builder accepts only the options that mean something for its node type, so
+a mistake is a compile error rather than a key the renderer quietly ignores:
+
+```go
+vee.Node.Text("hi", vee.Columns(4))
+// cannot use vee.Columns(4) (value of func type vee.gridOnlyOpt) as
+// vee.LeafOpt value in argument to vee.Node.Text
+```
+
+See [Widgets](../../docs/_content/widgets.md) for every field and its limits.
 
 ## Tests
 

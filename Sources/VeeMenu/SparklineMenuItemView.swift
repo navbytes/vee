@@ -14,22 +14,27 @@ final class SparklineMenuItemView: NSView {
     private let title: NSAttributedString
     private let values: [Double]
     private let lineColor: NSColor
-    private let layout: ProgressBarLayout
+    private let isFullWidth: Bool
+    private var layout: ProgressBarLayout
 
-    init(title: NSAttributedString, values: [Double], lineColor: NSColor, chartWidth: CGFloat = 90, chartHeight: CGFloat = 20, leading: Bool = false) {
+    init(title: NSAttributedString, values: [Double], lineColor: NSColor, chartWidth: CGFloat = CGFloat(SparklineStyle.defaultWidth), chartHeight: CGFloat = CGFloat(SparklineStyle.defaultHeight), leading: Bool = false, fullWidth: Bool = false) {
         self.title = title
         // D9: NaN/Inf would otherwise flow into min()/max() and the point
         // interpolation below, producing garbage geometry. Filter on ingest so
         // `values` is always plottable (or empty) from here on.
         self.values = values.filter { $0.isFinite }
         self.lineColor = lineColor
+        self.isFullWidth = fullWidth
         let layout = ProgressBarLayout(barWidth: chartWidth, barHeight: chartHeight, leading: leading)
         self.layout = layout
         let rowHeight = Swift.max(22, chartHeight + 10)
         // Size to fit label + chart so the menu grows wide enough, matching
         // ProgressMenuItemView's sizing.
         let titleWidth = title.size().width.rounded(.up)
-        let desiredWidth = layout.leadingInset + titleWidth + layout.gap + chartWidth + layout.trailingInset
+        // A `sparklinew=full` chart claims no width of its own, exactly as a
+        // `progressw=full` bar does: it takes whatever the row ends up with.
+        let claimedWidth = fullWidth ? 0 : chartWidth
+        let desiredWidth = layout.leadingInset + titleWidth + layout.gap + claimedWidth + layout.trailingInset
         super.init(frame: NSRect(x: 0, y: 0, width: Swift.max(240, desiredWidth), height: rowHeight))
         autoresizingMask = [.width]
 
@@ -51,6 +56,8 @@ final class SparklineMenuItemView: NSView {
 
         // `fraction` only matters for progress='s fill rect; the chart uses the
         // track rect as its plotting area and ignores it.
+        var layout = self.layout
+        if isFullWidth { layout.barWidth = ProgressBarLayout.stretchedWidth(layout: layout, title: title, in: bounds) }
         let rects = layout.rects(in: bounds, fraction: 0)
         title.drawTruncatedCentered(in: rects.label)
         drawChart(in: rects.track)

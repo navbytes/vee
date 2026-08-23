@@ -9,6 +9,7 @@ package vee
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"os"
 	"strconv"
 	"strings"
@@ -16,32 +17,95 @@ import (
 
 // Options are the per-item parameters. Pointer fields are optional: a nil
 // pointer is omitted, matching the TS SDK's `undefined`. Use the helpers
-// (Str, Int, Bool) to set them concisely.
+// (Str, Int, Bool, Float) to set them concisely.
+//
+// Naming rule for a control's knobs: inside a control's own struct they are
+// unprefixed (Chart.W, Chart.FullWidth), because the struct already names the
+// control; on this flat struct they carry the control's name (ProgressW,
+// ProgressFullWidth, SparklineW). The two spellings are the same rule applied
+// to two shapes, not two conventions.
 type Options struct {
-	Color     *string
-	Size      *int
-	Font      *string
-	Length    *int
-	Href      *string
-	Shell     *string
-	Params    []string
-	Terminal  *bool
-	Refresh   *bool
+	Color  *string
+	Size   *int
+	Font   *string
+	Length *int
+	// Trim removes surrounding whitespace from the text.
+	Trim *bool
+	// Ansi interprets ANSI colour escapes in the text.
+	Ansi *bool
+	// Emojize expands `:emoji:` shortcodes in the text.
+	Emojize  *bool
+	Href     *string
+	Shell    *string
+	Params   []string
+	Terminal *bool
+	Refresh  *bool
+	// Dropdown shows this line in the dropdown only, never in the menu bar.
+	Dropdown  *bool
 	Alternate *bool
 	Disabled  *bool
 	Checked   *bool
 	Key       *string
 	Tooltip   *string
-	SFImage   *string
+	// Image is a base64 payload or file path for the row's image.
+	Image *string
+	// TemplateImage is like Image, but adapts to the theme.
+	TemplateImage *string
+	SFImage       *string
+	// SFColor sets the SF Symbol's colour(s): one entry per layer of a
+	// multicolour symbol. Vee reads it as a comma-separated list, so keep
+	// commas out of colour names.
+	SFColor []string
+	// SFSize is the SF Symbol's point size.
+	SFSize *float64
+	// SFConfig is the SF Symbol configuration string.
+	SFConfig  *string
 	MD        *bool
 	Badge     *string
 	Symbolize *bool
+	// Webview opens this web URL in a web view on click.
+	Webview *string
+	// WebviewW and WebviewH size that web view, in points.
+	WebviewW *float64
+	WebviewH *float64
+	// Shortcut is the name of a macOS Shortcut to run on click.
+	Shortcut *string
+	// Header renders the row as a native, non-interactive section header --
+	// a real NSMenuItem.sectionHeader, not a disabled row dressed up as one.
+	Header *bool
+	// Accessory is which edge this row's visual accessory anchors to,
+	// "leading" or "trailing". It applies uniformly to Sparkline, Progress
+	// and Chart, which share the same in-row geometry. Nil sits trailing.
+	Accessory *string
 
 	// Vee-native rich params, emitted last in a fixed order shared across SDKs.
-	Sparkline  []float64
-	Toggle     *bool
-	Slider     *Slider
-	Progress   *float64
+	Sparkline []float64
+	// SparklineW and SparklineH set the chart's inline size in points.
+	SparklineW *float64
+	// SparklineFullWidth emits `sparklinew=full`: stretch the chart to the
+	// row's own width rather than a fixed number of points. Takes precedence
+	// over SparklineW.
+	SparklineFullWidth bool
+	SparklineH         *float64
+	// SparklineColor is the line colour; falls back to the row's Color.
+	SparklineColor *string
+	Toggle         *bool
+	Slider         *Slider
+	// Progress is the completion fraction, 0..1, emitted as
+	// `progress=<fraction>`.
+	Progress *float64
+	// ProgressValue and ProgressMax are the alternative to Progress: set both
+	// to emit the format's two-argument form (`progress=72,100`) and let Vee
+	// do the division on parse, keeping your own numbers on the wire. They
+	// take precedence over Progress.
+	ProgressValue *float64
+	ProgressMax   *float64
+	// ProgressTrackColor is the bar's background track colour.
+	ProgressTrackColor *string
+	// TrackColor is the pre-v2 spelling of ProgressTrackColor.
+	//
+	// Deprecated: use ProgressTrackColor. Still accepted and still emitted
+	// (as `progresstrackcolor=`); removed in the next major version.
 	TrackColor *string
 	ProgressW  *float64
 	// ProgressFullWidth emits `progressw=full`: stretch the bar to the row's
@@ -99,10 +163,78 @@ func Bool(b bool) *bool { return &b }
 // Float returns a pointer to f, for setting optional float64 options.
 func Float(f float64) *float64 { return &f }
 
-// fmtFloat formats a float like JS String(): whole values without a trailing
-// ".0", shortest round-trippable representation otherwise.
+// fmtFloat formats f exactly as JavaScript's String(Number) does (ECMA-262
+// Number::toString), which is the number format all three SDKs commit to.
+//
+// Go's own 'g' verb is not that format and diverges much earlier than it
+// looks: it renders 1000000 as "1e+06" where JavaScript and Python both render
+// "1000000". Since the fixtures are shared byte-for-byte, the rule has to be
+// written down once rather than inherited from each language's default.
 func fmtFloat(f float64) string {
-	return strconv.FormatFloat(f, 'g', -1, 64)
+	switch {
+	case math.IsNaN(f):
+		return "NaN"
+	case math.IsInf(f, 1):
+		return "Infinity"
+	case math.IsInf(f, -1):
+		return "-Infinity"
+	case f == 0:
+		return "0" // also normalizes -0, matching String(-0)
+	}
+
+	negative := math.Signbit(f)
+	// Shortest round-trippable digits, as "d.ddde±dd".
+	mantissa, exponent, _ := strings.Cut(strconv.FormatFloat(math.Abs(f), 'e', -1, 64), "e")
+	exp10, _ := strconv.Atoi(exponent)
+	digits := strings.Replace(mantissa, ".", "", 1)
+	k := len(digits)
+	n := exp10 + 1 // position of the decimal point (ECMA-262 `n`)
+
+	var out string
+	switch {
+	case k <= n && n <= 21:
+		out = digits + strings.Repeat("0", n-k)
+	case 0 < n && n <= 21:
+		out = digits[:n] + "." + digits[n:]
+	case -6 < n && n <= 0:
+		out = "0." + strings.Repeat("0", -n) + digits
+	default:
+		e := n - 1
+		sign := "+"
+		if e < 0 {
+			sign = "-"
+			e = -e
+		}
+		if k == 1 {
+			out = digits + "e" + sign + strconv.Itoa(e)
+		} else {
+			out = digits[:1] + "." + digits[1:] + "e" + sign + strconv.Itoa(e)
+		}
+	}
+	if negative {
+		return "-" + out
+	}
+	return out
+}
+
+// needsQuote reports whether value must go through the quoted path: it holds
+// one of the two characters the format reserves (`|`, `\`) or one of
+// JavaScript's `\s` characters, which is the set the TypeScript and Python
+// SDKs use. Go's unicode.IsSpace is close but not the same set -- it omits
+// U+FEFF and includes U+0085 -- so the characters are listed rather than
+// inherited.
+func needsQuote(value string) bool {
+	for _, r := range value {
+		switch r {
+		case '|', '\\', '\t', '\n', '\v', '\f', '\r', ' ',
+			'\u00a0', '\u1680', '\u2028', '\u2029', '\u202f', '\u205f', '\u3000', '\ufeff':
+			return true
+		}
+		if r >= '\u2000' && r <= '\u200a' {
+			return true
+		}
+	}
+	return false
 }
 
 // escapeText escapes the three characters Vee's parser
@@ -123,7 +255,13 @@ func quote(value string) string {
 	// Backslash also forces quoting: an unquoted (bare) value is never
 	// unescaped by the parser, so anything containing an escape must go
 	// through the quoted path, which is.
-	if strings.ContainsAny(value, " \t\n|\\") {
+	//
+	// A leading quote character forces it too: the parser decides a value is
+	// quoted by looking at its first character, so emitting `"a"` bare would
+	// round-trip back as `a` with the quotes eaten. Values that merely
+	// *contain* a quote are safe bare -- only the first position is read as a
+	// delimiter.
+	if needsQuote(value) || strings.HasPrefix(value, `"`) || strings.HasPrefix(value, "'") {
 		return `"` + strings.ReplaceAll(escaped, `"`, `\"`) + `"`
 	}
 	return escaped
@@ -135,6 +273,15 @@ func encode(o *Options) string {
 	}
 	var parts []string
 	push := func(key, value string) { parts = append(parts, key+"="+quote(value)) }
+	pushBool := func(key string, v *bool) {
+		if v != nil {
+			if *v {
+				push(key, "true")
+			} else {
+				push(key, "false")
+			}
+		}
+	}
 
 	if o.Color != nil {
 		push("color", *o.Color)
@@ -148,6 +295,9 @@ func encode(o *Options) string {
 	if o.Length != nil {
 		push("length", fmt.Sprintf("%d", *o.Length))
 	}
+	pushBool("trim", o.Trim)
+	pushBool("ansi", o.Ansi)
+	pushBool("emojize", o.Emojize)
 	if o.Href != nil {
 		push("href", *o.Href)
 	}
@@ -157,17 +307,9 @@ func encode(o *Options) string {
 			push(fmt.Sprintf("param%d", i+1), p)
 		}
 	}
-	pushBool := func(key string, v *bool) {
-		if v != nil {
-			if *v {
-				push(key, "true")
-			} else {
-				push(key, "false")
-			}
-		}
-	}
 	pushBool("terminal", o.Terminal)
 	pushBool("refresh", o.Refresh)
+	pushBool("dropdown", o.Dropdown)
 	pushBool("alternate", o.Alternate)
 	pushBool("disabled", o.Disabled)
 	pushBool("checked", o.Checked)
@@ -177,14 +319,45 @@ func encode(o *Options) string {
 	if o.Tooltip != nil {
 		push("tooltip", *o.Tooltip)
 	}
+	if o.Image != nil {
+		push("image", *o.Image)
+	}
+	if o.TemplateImage != nil {
+		push("templateimage", *o.TemplateImage)
+	}
 	if o.SFImage != nil {
 		push("sfimage", *o.SFImage)
+	}
+	if o.SFColor != nil {
+		push("sfcolor", strings.Join(o.SFColor, ","))
+	}
+	if o.SFSize != nil {
+		push("sfsize", fmtFloat(*o.SFSize))
+	}
+	if o.SFConfig != nil {
+		push("sfconfig", *o.SFConfig)
 	}
 	pushBool("md", o.MD)
 	if o.Badge != nil {
 		push("badge", *o.Badge)
 	}
 	pushBool("symbolize", o.Symbolize)
+	if o.Webview != nil {
+		push("webview", *o.Webview)
+	}
+	if o.WebviewW != nil {
+		push("webvieww", fmtFloat(*o.WebviewW))
+	}
+	if o.WebviewH != nil {
+		push("webviewh", fmtFloat(*o.WebviewH))
+	}
+	if o.Shortcut != nil {
+		push("shortcut", *o.Shortcut)
+	}
+	pushBool("header", o.Header)
+	if o.Accessory != nil {
+		push("accessory", *o.Accessory)
+	}
 
 	if o.Sparkline != nil {
 		nums := make([]string, len(o.Sparkline))
@@ -192,6 +365,17 @@ func encode(o *Options) string {
 			nums[i] = fmtFloat(v)
 		}
 		push("sparkline", strings.Join(nums, ","))
+	}
+	if o.SparklineFullWidth {
+		push("sparklinew", "full")
+	} else if o.SparklineW != nil {
+		push("sparklinew", fmtFloat(*o.SparklineW))
+	}
+	if o.SparklineH != nil {
+		push("sparklineh", fmtFloat(*o.SparklineH))
+	}
+	if o.SparklineColor != nil {
+		push("sparklinecolor", *o.SparklineColor)
 	}
 	if o.Toggle != nil {
 		if *o.Toggle {
@@ -203,11 +387,15 @@ func encode(o *Options) string {
 	if o.Slider != nil {
 		push("slider", fmtFloat(o.Slider.Min)+","+fmtFloat(o.Slider.Max)+","+fmtFloat(o.Slider.Value))
 	}
-	if o.Progress != nil {
+	if o.ProgressValue != nil && o.ProgressMax != nil {
+		push("progress", fmtFloat(*o.ProgressValue)+","+fmtFloat(*o.ProgressMax))
+	} else if o.Progress != nil {
 		push("progress", fmtFloat(*o.Progress))
 	}
-	if o.TrackColor != nil {
-		push("trackcolor", *o.TrackColor)
+	if o.ProgressTrackColor != nil {
+		push("progresstrackcolor", *o.ProgressTrackColor)
+	} else if o.TrackColor != nil {
+		push("progresstrackcolor", *o.TrackColor)
 	}
 	if o.ProgressFullWidth {
 		push("progressw", "full")
@@ -443,29 +631,77 @@ type WidgetNode struct {
 	Children   []WidgetNode     `json:"children,omitempty"`
 }
 
-// NodeOpt sets an optional field on a node (functional-options pattern).
-type NodeOpt func(*WidgetNode)
+// Node option kinds. A builder accepts only the options that mean something
+// for its node type, so `Columns` on a text node or `MinLen` on a gauge is a
+// compile error rather than a key that ships in the payload and is ignored.
+// This mirrors the TypeScript SDK, whose option types draw the same lines; the
+// Python SDK checks the same rules at call time.
+type (
+	// ContainerOpt is accepted by VStack, HStack and ZStack.
+	ContainerOpt interface{ applyContainer(*WidgetNode) }
+	// GridOpt is accepted by Grid: every ContainerOpt, plus Columns.
+	GridOpt interface{ applyGrid(*WidgetNode) }
+	// LeafOpt is accepted by Text, Image and Sparkline.
+	LeafOpt interface{ applyLeaf(*WidgetNode) }
+	// GaugeOpt is accepted by Gauge: every LeafOpt, plus GaugeStyle.
+	GaugeOpt interface{ applyGauge(*WidgetNode) }
+	// SpacerOpt is accepted by Spacer: Families, plus MinLen.
+	SpacerOpt interface{ applySpacer(*WidgetNode) }
+	// DividerOpt is accepted by Divider: Families only.
+	DividerOpt interface{ applyDivider(*WidgetNode) }
+)
 
-// Align sets a container's cross-axis (or text) alignment.
-func Align(s string) NodeOpt { return func(n *WidgetNode) { n.Align = &s } }
+// The concrete option types, each declaring where it is legal.
+type (
+	anyOpt       func(*WidgetNode) // every node type
+	styleOpt     func(*WidgetNode) // everything except Spacer and Divider
+	stackOpt     func(*WidgetNode) // containers and Grid
+	gridOnlyOpt  func(*WidgetNode) // Grid
+	gaugeOnlyOpt func(*WidgetNode) // Gauge
+	spacerOnly   func(*WidgetNode) // Spacer
+)
+
+func (f anyOpt) applyContainer(n *WidgetNode) { f(n) }
+func (f anyOpt) applyGrid(n *WidgetNode)      { f(n) }
+func (f anyOpt) applyLeaf(n *WidgetNode)      { f(n) }
+func (f anyOpt) applyGauge(n *WidgetNode)     { f(n) }
+func (f anyOpt) applySpacer(n *WidgetNode)    { f(n) }
+func (f anyOpt) applyDivider(n *WidgetNode)   { f(n) }
+
+func (f styleOpt) applyContainer(n *WidgetNode) { f(n) }
+func (f styleOpt) applyGrid(n *WidgetNode)      { f(n) }
+func (f styleOpt) applyLeaf(n *WidgetNode)      { f(n) }
+func (f styleOpt) applyGauge(n *WidgetNode)     { f(n) }
+
+func (f stackOpt) applyContainer(n *WidgetNode) { f(n) }
+func (f stackOpt) applyGrid(n *WidgetNode)      { f(n) }
+
+func (f gridOnlyOpt) applyGrid(n *WidgetNode) { f(n) }
+
+func (f gaugeOnlyOpt) applyGauge(n *WidgetNode) { f(n) }
+
+func (f spacerOnly) applySpacer(n *WidgetNode) { f(n) }
+
+// Align sets a container's cross-axis alignment.
+func Align(s string) stackOpt { return func(n *WidgetNode) { n.Align = &s } }
 
 // Spacing sets a container's inter-child spacing.
-func Spacing(f float64) NodeOpt { return func(n *WidgetNode) { n.Spacing = &f } }
+func Spacing(f float64) stackOpt { return func(n *WidgetNode) { n.Spacing = &f } }
 
 // Columns sets a grid's column count (default 2; clamped 1…4 by Vee).
-func Columns(i int) NodeOpt { return func(n *WidgetNode) { n.Columns = &i } }
+func Columns(i int) gridOnlyOpt { return func(n *WidgetNode) { n.Columns = &i } }
 
 // MinLen sets a spacer's minimum length.
-func MinLen(f float64) NodeOpt { return func(n *WidgetNode) { n.MinLength = &f } }
+func MinLen(f float64) spacerOnly { return func(n *WidgetNode) { n.MinLength = &f } }
 
 // GaugeStyle selects a gauge's style: "linear" (default) or "circular".
-func GaugeStyle(s string) NodeOpt { return func(n *WidgetNode) { n.GaugeStyle = &s } }
+func GaugeStyle(s string) gaugeOnlyOpt { return func(n *WidgetNode) { n.GaugeStyle = &s } }
 
 // Families restricts a node to the given widget families (small/medium/large).
-func Families(f ...string) NodeOpt { return func(n *WidgetNode) { n.Families = f } }
+func Families(f ...string) anyOpt { return func(n *WidgetNode) { n.Families = f } }
 
 // Style attaches per-element styling to a node.
-func Style(s WidgetNodeStyle) NodeOpt { return func(n *WidgetNode) { n.Style = &s } }
+func Style(s WidgetNodeStyle) styleOpt { return func(n *WidgetNode) { n.Style = &s } }
 
 // nodeBuilders namespaces the layout-node constructors so they read as
 // Node.VStack(…) — node-level, distinct from the card-level struct literal.
@@ -474,61 +710,120 @@ type nodeBuilders struct{}
 // Node is the entry point for the layout-node builders (Node.VStack(…)).
 var Node nodeBuilders
 
-func apply(n WidgetNode, opts []NodeOpt) WidgetNode {
+// VStack builds a vertical stack.
+func (nodeBuilders) VStack(children []WidgetNode, opts ...ContainerOpt) WidgetNode {
+	n := WidgetNode{Type: "vstack", Children: children}
 	for _, o := range opts {
-		o(&n)
+		o.applyContainer(&n)
 	}
 	return n
 }
 
-// VStack builds a vertical stack.
-func (nodeBuilders) VStack(children []WidgetNode, opts ...NodeOpt) WidgetNode {
-	return apply(WidgetNode{Type: "vstack", Children: children}, opts)
-}
-
 // HStack builds a horizontal stack — side-by-side regions.
-func (nodeBuilders) HStack(children []WidgetNode, opts ...NodeOpt) WidgetNode {
-	return apply(WidgetNode{Type: "hstack", Children: children}, opts)
+func (nodeBuilders) HStack(children []WidgetNode, opts ...ContainerOpt) WidgetNode {
+	n := WidgetNode{Type: "hstack", Children: children}
+	for _, o := range opts {
+		o.applyContainer(&n)
+	}
+	return n
 }
 
 // ZStack builds a depth stack — overlays and rings.
-func (nodeBuilders) ZStack(children []WidgetNode, opts ...NodeOpt) WidgetNode {
-	return apply(WidgetNode{Type: "zstack", Children: children}, opts)
+func (nodeBuilders) ZStack(children []WidgetNode, opts ...ContainerOpt) WidgetNode {
+	n := WidgetNode{Type: "zstack", Children: children}
+	for _, o := range opts {
+		o.applyContainer(&n)
+	}
+	return n
 }
 
 // Grid builds a grid of Columns (default 2, clamped 1…4).
-func (nodeBuilders) Grid(children []WidgetNode, opts ...NodeOpt) WidgetNode {
-	return apply(WidgetNode{Type: "grid", Children: children}, opts)
+func (nodeBuilders) Grid(children []WidgetNode, opts ...GridOpt) WidgetNode {
+	n := WidgetNode{Type: "grid", Children: children}
+	for _, o := range opts {
+		o.applyGrid(&n)
+	}
+	return n
 }
 
 // Text builds a text run.
-func (nodeBuilders) Text(text string, opts ...NodeOpt) WidgetNode {
-	return apply(WidgetNode{Type: "text", Text: &text}, opts)
+func (nodeBuilders) Text(text string, opts ...LeafOpt) WidgetNode {
+	n := WidgetNode{Type: "text", Text: &text}
+	for _, o := range opts {
+		o.applyLeaf(&n)
+	}
+	return n
 }
 
 // Image builds an SF Symbol glyph (v1 renders SF Symbols only).
-func (nodeBuilders) Image(symbol string, opts ...NodeOpt) WidgetNode {
-	return apply(WidgetNode{Type: "image", Symbol: &symbol}, opts)
+func (nodeBuilders) Image(symbol string, opts ...LeafOpt) WidgetNode {
+	n := WidgetNode{Type: "image", Symbol: &symbol}
+	for _, o := range opts {
+		o.applyLeaf(&n)
+	}
+	return n
 }
 
 // Gauge builds a gauge — "linear" (default) or "circular"; value is 0…1.
-func (nodeBuilders) Gauge(value float64, opts ...NodeOpt) WidgetNode {
-	return apply(WidgetNode{Type: "gauge", Value: &value}, opts)
+func (nodeBuilders) Gauge(value float64, opts ...GaugeOpt) WidgetNode {
+	n := WidgetNode{Type: "gauge", Value: &value}
+	for _, o := range opts {
+		o.applyGauge(&n)
+	}
+	return n
 }
 
 // Sparkline builds a dependency-free line chart from values.
-func (nodeBuilders) Sparkline(values []float64, opts ...NodeOpt) WidgetNode {
-	return apply(WidgetNode{Type: "sparkline", Values: values}, opts)
+func (nodeBuilders) Sparkline(values []float64, opts ...LeafOpt) WidgetNode {
+	n := WidgetNode{Type: "sparkline", Values: values}
+	for _, o := range opts {
+		o.applyLeaf(&n)
+	}
+	return n
 }
 
 // Spacer builds flexible empty space.
-func (nodeBuilders) Spacer(opts ...NodeOpt) WidgetNode {
-	return apply(WidgetNode{Type: "spacer"}, opts)
+func (nodeBuilders) Spacer(opts ...SpacerOpt) WidgetNode {
+	n := WidgetNode{Type: "spacer"}
+	for _, o := range opts {
+		o.applySpacer(&n)
+	}
+	return n
 }
 
 // Divider builds a hairline divider.
-func (nodeBuilders) Divider(opts ...NodeOpt) WidgetNode {
-	return apply(WidgetNode{Type: "divider"}, opts)
+func (nodeBuilders) Divider(opts ...DividerOpt) WidgetNode {
+	n := WidgetNode{Type: "divider"}
+	for _, o := range opts {
+		o.applyDivider(&n)
+	}
+	return n
+}
+
+// The five template constructors, mirroring the TypeScript and Python SDKs.
+// Each presets Template on a card you have already filled in, so the template
+// is chosen the same way in all three languages:
+//
+//	vee.Stat(vee.WidgetCard{Title: vee.Str("Revenue"), Value: vee.Str("$18.2k")}).Print()
+
+// Stat presets the stat template: glyph, big Value in Tint, Title/Caption.
+func Stat(c WidgetCard) *WidgetCard { return withTemplate(c, TemplateStat) }
+
+// Gauge presets the gauge template: stat plus a native gauge from Progress.
+func Gauge(c WidgetCard) *WidgetCard { return withTemplate(c, TemplateGauge) }
+
+// Trend presets the trend template: stat plus a sparkline from Trend.
+func Trend(c WidgetCard) *WidgetCard { return withTemplate(c, TemplateTrend) }
+
+// List presets the list template: Title header plus Items as rows.
+func List(c WidgetCard) *WidgetCard { return withTemplate(c, TemplateList) }
+
+// Board presets the board template: a compact grid of Items as stat cells.
+func Board(c WidgetCard) *WidgetCard { return withTemplate(c, TemplateBoard) }
+
+func withTemplate(c WidgetCard, t WidgetTemplate) *WidgetCard {
+	c.Template = t
+	return &c
 }
 
 // widgetCardEnvelope prefixes the schema-version field the parser reads for
@@ -541,14 +836,173 @@ type widgetCardEnvelope struct {
 
 // String renders the card as its JSON payload.
 func (c *WidgetCard) String() string {
-	data, err := json.Marshal(widgetCardEnvelope{VeeWidget: 1, WidgetCard: *c})
-	if err != nil {
+	return marshalJSON(widgetCardEnvelope{VeeWidget: 1, WidgetCard: *c})
+}
+
+// marshalJSON encodes v the way JSON.stringify does, which is the reference
+// the three SDKs share.
+//
+// encoding/json escapes <, > and & as \u003c/\u003e/\u0026 by default -- a
+// defence against embedding JSON in HTML that this payload never does -- so a
+// card titled "R&D" would go out differently from the TypeScript and Python
+// SDKs. Encoder.SetEscapeHTML(false) turns it off; the trailing newline
+// Encode appends is trimmed.
+func marshalJSON(v any) string {
+	var buf strings.Builder
+	enc := json.NewEncoder(&buf)
+	enc.SetEscapeHTML(false)
+	if err := enc.Encode(v); err != nil {
 		return "{}"
 	}
-	return string(data)
+	return strings.TrimSuffix(buf.String(), "\n")
 }
 
 // Print writes String() plus a trailing newline to stdout.
 func (c *WidgetCard) Print() {
 	fmt.Fprintln(os.Stdout, c.String())
+}
+
+// ---------------------------------------------------------------------------
+// Structured-JSON output — the optional alternative to the text protocol above.
+// A plugin opts in by printing a single `{"vee":1,…}` object; Vee decodes it
+// directly, with no line parsing, no `|`-separated parameters and no quoting
+// rules. See docs/_content/json-output.md.
+//
+// JSONMenu deliberately mirrors Menu method for method — Title, Dropdown,
+// Item, Separator, Submenu, String, Print — so choosing a wire format does not
+// mean learning a second builder.
+
+// JSONOptions are the per-item parameters of a JSON menu item.
+//
+// The JSON protocol carries a subset of the text protocol's parameters, so
+// this is a distinct type rather than Options: a parameter JSON cannot express
+// is simply not a field here, rather than one that is silently dropped on the
+// way out. Field order is the canonical key order the three SDKs share.
+type JSONOptions struct {
+	Color    *string  `json:"color,omitempty"`
+	Size     *float64 `json:"size,omitempty"`
+	Href     *string  `json:"href,omitempty"`
+	Shell    *string  `json:"shell,omitempty"`
+	Params   []string `json:"params,omitempty"`
+	Terminal *bool    `json:"terminal,omitempty"`
+	Refresh  *bool    `json:"refresh,omitempty"`
+	SFImage  *string  `json:"sfimage,omitempty"`
+	Disabled *bool    `json:"disabled,omitempty"`
+	Checked  *bool    `json:"checked,omitempty"`
+	Tooltip  *string  `json:"tooltip,omitempty"`
+	Header   *bool    `json:"header,omitempty"`
+	// Accessory is "leading" or "trailing".
+	Accessory *string   `json:"accessory,omitempty"`
+	Sparkline []float64 `json:"sparkline,omitempty"`
+	// SparklineWidth is a number of points, or the string "full".
+	SparklineWidth  any      `json:"sparklineWidth,omitempty"`
+	SparklineHeight *float64 `json:"sparklineHeight,omitempty"`
+	SparklineColor  *string  `json:"sparklineColor,omitempty"`
+	Toggle          *bool    `json:"toggle,omitempty"`
+	Slider          *Slider  `json:"slider,omitempty"`
+	// Progress is a completion fraction, clamped to 0…1 by Vee.
+	Progress           *float64 `json:"progress,omitempty"`
+	ProgressTrackColor *string  `json:"progressTrackColor,omitempty"`
+	// ProgressWidth is a number of points, or the string "full".
+	ProgressWidth  any        `json:"progressWidth,omitempty"`
+	ProgressHeight *float64   `json:"progressHeight,omitempty"`
+	Chart          *JSONChart `json:"chart,omitempty"`
+	// Alternate is a row shown while ⌥ is held.
+	Alternate *JSONItem `json:"alternate,omitempty"`
+}
+
+// JSONChart is the structured-JSON spelling of `pie=`/`donut=`/`stackedbar=`:
+// one object rather than three sibling keys, because the shape is a property
+// of the same data.
+type JSONChart struct {
+	// Kind is "pie", "donut", or "stackedbar".
+	Kind   string    `json:"kind"`
+	Values []float64 `json:"values,omitempty"`
+	Labels []string  `json:"labels,omitempty"`
+	Colors []string  `json:"colors,omitempty"`
+	// W is a number of points, or the string "full".
+	W any      `json:"w,omitempty"`
+	H *float64 `json:"h,omitempty"`
+}
+
+// JSONItem is one item in a JSON menu: JSONOptions plus the structural keys.
+type JSONItem struct {
+	Text      *string `json:"text,omitempty"`
+	Separator *bool   `json:"separator,omitempty"`
+	JSONOptions
+	Submenu []JSONItem `json:"submenu,omitempty"`
+}
+
+// JSONSection is a JSON menu section at a given submenu depth. Mirrors Section.
+type JSONSection struct {
+	items *[]JSONItem
+}
+
+// Item adds a menu item. Pass nil for opts when there are no options.
+func (s JSONSection) Item(text string, opts *JSONOptions) JSONSection {
+	*s.items = append(*s.items, newJSONItem(text, opts))
+	return s
+}
+
+// Separator adds a separator row at this depth.
+func (s JSONSection) Separator() JSONSection {
+	yes := true
+	*s.items = append(*s.items, JSONItem{Separator: &yes})
+	return s
+}
+
+// Submenu adds an item and returns a JSONSection for its submenu.
+func (s JSONSection) Submenu(text string, opts *JSONOptions) JSONSection {
+	item := newJSONItem(text, opts)
+	item.Submenu = []JSONItem{}
+	*s.items = append(*s.items, item)
+	return JSONSection{items: &(*s.items)[len(*s.items)-1].Submenu}
+}
+
+func newJSONItem(text string, opts *JSONOptions) JSONItem {
+	item := JSONItem{Text: &text}
+	if opts != nil {
+		item.JSONOptions = *opts
+	}
+	return item
+}
+
+// JSONMenu is the top-level JSON menu: title line(s) plus a dropdown.
+// Mirrors Menu.
+type JSONMenu struct {
+	titles []JSONItem
+	body   []JSONItem
+}
+
+// Title adds a menu-bar title line. Call more than once for multiple lines.
+func (m *JSONMenu) Title(text string, opts *JSONOptions) *JSONMenu {
+	m.titles = append(m.titles, newJSONItem(text, opts))
+	return m
+}
+
+// Dropdown returns a JSONSection for the dropdown body.
+func (m *JSONMenu) Dropdown() JSONSection {
+	return JSONSection{items: &m.body}
+}
+
+// jsonMenuEnvelope is the wire object: the format version, then the menu.
+type jsonMenuEnvelope struct {
+	Vee   int        `json:"vee"`
+	Title []JSONItem `json:"title"`
+	Items []JSONItem `json:"items,omitempty"`
+}
+
+// String renders the whole menu as its JSON payload.
+func (m *JSONMenu) String() string {
+	titles := m.titles
+	if titles == nil {
+		titles = []JSONItem{}
+	}
+	return marshalJSON(jsonMenuEnvelope{Vee: 1, Title: titles, Items: m.body})
+}
+
+// Print writes String() plus a trailing newline to stdout. This is what a real
+// plugin calls.
+func (m *JSONMenu) Print() {
+	fmt.Fprintln(os.Stdout, m.String())
 }

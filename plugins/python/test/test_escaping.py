@@ -9,6 +9,7 @@ SDKs mirror this file exactly (same original text, same expected escaped line).
 import os
 import sys
 import unittest
+import warnings
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
@@ -66,3 +67,96 @@ class EscapingTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class QuotingAndNumbersTests(unittest.TestCase):
+    """Mirrors plugins/typescript/test/escaping.test.ts — same inputs, same
+    expected lines, so a divergence in either SDK fails here."""
+
+    def test_leading_quote_forces_quoting(self) -> None:
+        menu = Menu()
+        menu.title("T")
+        menu.dropdown.item("a", tooltip='"quoted"')
+        menu.dropdown.item("b", tooltip="'tis")
+        menu.dropdown.item("c", tooltip='has"inside')
+        self.assertEqual(
+            menu.to_string().split("\n")[2:],
+            [
+                'a | tooltip="\\"quoted\\""',
+                "b | tooltip=\"'tis\"",
+                'c | tooltip=has"inside',
+            ],
+        )
+
+    def test_cross_language_whitespace_forces_quoting(self) -> None:
+        menu = Menu()
+        menu.title("T")
+        menu.dropdown.item("a", tooltip="x\ry")
+        menu.dropdown.item("b", tooltip="x\u00a0y")
+        self.assertEqual(
+            menu.to_string().split("\n")[2:],
+            ['a | tooltip="x\ry"', 'b | tooltip="x\u00a0y"'],
+        )
+
+    def test_numbers_use_the_shared_ecma_rule(self) -> None:
+        menu = Menu()
+        menu.title("T")
+        menu.dropdown.item("n", sparkline=[1000000.0, 1234567.0, 1e-7, 1e20, 1e21, -0.0])
+        self.assertEqual(
+            menu.to_string().split("\n")[-1],
+            "n | sparkline=1000000,1234567,1e-7,100000000000000000000,1e+21,0",
+        )
+
+
+class OptionNameTests(unittest.TestCase):
+    """The Python SDK used to drop unknown options in silence, so a typo — or
+    the idiomatic snake_case spelling, back when options were camelCase — 
+    emitted nothing at all. TypeScript rejects those at compile time and Go
+    rejects them as unknown struct fields; these assert Python now does too."""
+
+    def test_unknown_option_raises(self) -> None:
+        menu = Menu()
+        for bad in ("colour", "sfimg", "progressWidth"):
+            with self.assertRaises(TypeError):
+                menu.dropdown.item("x", **{bad: "value"})
+
+    def test_unknown_option_suggests_the_real_name(self) -> None:
+        menu = Menu()
+        with self.assertRaises(TypeError) as caught:
+            menu.dropdown.item("x", progressw=10)
+        self.assertIn("progress_w", str(caught.exception))
+
+    def test_deprecated_camelcase_still_works_and_warns(self) -> None:
+        old, new = Menu(), Menu()
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            old.dropdown.item(
+                "row", progress=0.5, trackColor="gray", progressW=200, progressH=6
+            )
+            self.assertEqual(len(caught), 3)
+            self.assertTrue(all(w.category is DeprecationWarning for w in caught))
+        new.dropdown.item(
+            "row",
+            progress=0.5,
+            progress_track_color="gray",
+            progress_w=200,
+            progress_h=6,
+        )
+        self.assertEqual(old.to_string(), new.to_string())
+
+    def test_python_only_tuple_forms_warn_but_match_the_mapping_form(self) -> None:
+        """The tuple shorthands are the per-language sugar that stops a Python
+        plugin porting: TypeScript takes only the object form, Go only the
+        struct. They still work, and must agree with the portable spelling."""
+        tuples, mappings = Menu(), Menu()
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            tuples.dropdown.item("row", progress=(72, 100), slider=(0, 100, 40))
+            self.assertEqual(len(caught), 2)
+            self.assertTrue(all(w.category is DeprecationWarning for w in caught))
+        mappings.dropdown.item(
+            "row",
+            progress={"value": 72, "max": 100},
+            slider={"min": 0, "max": 100, "value": 40},
+        )
+        self.assertEqual(tuples.to_string(), mappings.to_string())

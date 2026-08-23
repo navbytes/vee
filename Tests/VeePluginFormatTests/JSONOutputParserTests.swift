@@ -191,4 +191,41 @@ final class JSONOutputParserTests: XCTestCase {
         XCTAssertEqual(out.titleLines.first?.text, "Title")
         XCTAssertEqual(out.body.count, 1)
     }
+
+    // MARK: - parity with the text protocol's inline-control knobs
+
+    /// The JSON format documents its rich params as mapping onto "exactly the
+    /// same controls" as the text protocol, so the sparkline's size/colour
+    /// knobs have to exist on both surfaces, not just the text one.
+    func testSparklineStyleParsesFromJSON() throws {
+        let json = #"""
+        {"vee":1,"title":[{"text":"T"}],"items":[
+          {"text":"a","sparkline":[1,2,3],"sparklineWidth":140,"sparklineHeight":18,"sparklineColor":"teal"}]}
+        """#
+        let out = OutputParser.parseAuto(json)
+        guard case .item(let item)? = out.body.first else { return XCTFail("expected an item") }
+        let style = item.params.swiftbar.sparklineStyle
+        XCTAssertEqual(style?.width, 140)
+        XCTAssertEqual(style?.height, 18)
+        XCTAssertEqual(style?.color, .named("teal"))
+        XCTAssertEqual(style?.isFullWidth, false)
+    }
+
+    func testSparklineFullWidthParsesFromJSON() throws {
+        let json = #"{"vee":1,"title":[{"text":"T"}],"items":[{"text":"a","sparkline":[1,2,3],"sparklineWidth":"full"}]}"#
+        guard case .item(let item)? = OutputParser.parseAuto(json).body.first else { return XCTFail("expected an item") }
+        XCTAssertEqual(item.params.swiftbar.sparklineStyle?.isFullWidth, true)
+        XCTAssertEqual(item.params.swiftbar.sparklineStyle?.effectiveWidth, SparklineStyle.defaultWidth)
+    }
+
+    func testProgressTrackColorAcceptsBothSpellingsInJSON() throws {
+        func track(_ body: String) -> VeeColor? {
+            let json = #"{"vee":1,"title":[{"text":"T"}],"items":[{"text":"a","progress":0.5,\#(body)}]}"#
+            guard case .item(let item)? = OutputParser.parseAuto(json).body.first else { return nil }
+            return item.params.progress?.trackColor
+        }
+        XCTAssertEqual(track(#""progressTrackColor":"gray""#), .named("gray"))
+        XCTAssertEqual(track(#""trackColor":"gray""#), .named("gray"),
+                       "trackColor is the pre-v2 spelling and must keep working for published plugins")
+    }
 }

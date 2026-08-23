@@ -86,3 +86,47 @@ func TestValuesNeedingNoEscapingStayUnquoted(t *testing.T) {
 		t.Errorf("last line = %q, want %q", got, want)
 	}
 }
+
+// Mirrors plugins/typescript/test/escaping.test.ts — same inputs, same
+// expected lines, so a divergence in either SDK fails here.
+func TestLeadingQuoteForcesQuoting(t *testing.T) {
+	m := &Menu{}
+	m.Title("T", nil)
+	d := m.Dropdown()
+	d.Item("a", &Options{Tooltip: Str(`"quoted"`)})
+	d.Item("b", &Options{Tooltip: Str("'tis")})
+	d.Item("c", &Options{Tooltip: Str(`has"inside`)})
+	want := []string{`a | tooltip="\"quoted\""`, `b | tooltip="'tis"`, `c | tooltip=has"inside`}
+	got := strings.Split(m.String(), "\n")[2:]
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("line %d:\n got %s\nwant %s", i, got[i], want[i])
+		}
+	}
+}
+
+func TestCrossLanguageWhitespaceForcesQuoting(t *testing.T) {
+	m := &Menu{}
+	m.Title("T", nil)
+	d := m.Dropdown()
+	d.Item("a", &Options{Tooltip: Str("x\ry")})
+	d.Item("b", &Options{Tooltip: Str("x\u00a0y")})
+	want := []string{"a | tooltip=\"x\ry\"", "b | tooltip=\"x\u00a0y\""}
+	got := strings.Split(m.String(), "\n")[2:]
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("line %d:\n got %q\nwant %q", i, got[i], want[i])
+		}
+	}
+}
+
+func TestNumbersUseTheSharedECMARule(t *testing.T) {
+	m := &Menu{}
+	m.Title("T", nil)
+	m.Dropdown().Item("n", &Options{Sparkline: []float64{1000000, 1234567, 1e-7, 1e20, 1e21, -0.0}})
+	want := "n | sparkline=1000000,1234567,1e-7,100000000000000000000,1e+21,0"
+	got := strings.Split(m.String(), "\n")[2]
+	if got != want {
+		t.Errorf("\n got %s\nwant %s", got, want)
+	}
+}

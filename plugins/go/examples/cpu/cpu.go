@@ -2,12 +2,14 @@
 // Build() output is committed to plugins/fixtures/cpu.txt and checked for
 // drift by cpu_test.go. Produces byte-identical output to the TypeScript and
 // Python examples — proving cross-language parity.
+//
+// Using this outside the repository: go get github.com/navbytes/vee/plugins/go
 package main
 
 import (
 	"fmt"
 
-	"vee"
+	vee "github.com/navbytes/vee/plugins/go"
 )
 
 // Build assembles the menu and returns the rendered text protocol.

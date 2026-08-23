@@ -44,6 +44,12 @@ public struct SwiftBarParams: Equatable, Sendable {
     /// (`accessory=`). `nil` (absent) means today's default: trailing.
     public var accessory: AccessoryPlacement?
 
+    /// Inline size and colour for the row's `sparkline=` series
+    /// (`sparklinew=`/`sparklineh=`/`sparklinecolor=`). Stored here — see the
+    /// comment on `LineParams.swiftbar` for why; the series itself stays on
+    /// `LineParams.sparkline`.
+    public var sparklineStyle: SparklineStyle?
+
     /// A categorical share chart (`pie=`/`donut=`/`stackedbar=`). When non-nil,
     /// the row draws the chart inline and opens a richer Swift Charts popover on
     /// click. Stored here — see the comment on `LineParams.swiftbar` for why.
@@ -81,7 +87,8 @@ public enum AccessoryPlacement: String, Equatable, Sendable {
 public struct ProgressParams: Equatable, Sendable {
     /// Completion, always clamped to `0...1` at parse time.
     public var fraction: Double
-    /// Background track color (`trackcolor=`). Defaults applied at render time.
+    /// Background track color (`progresstrackcolor=`, or the deprecated
+    /// `trackcolor=`). Defaults applied at render time.
     public var trackColor: VeeColor?
     /// Bar width in points (`progressw=`). Default applied at render time.
     public var width: Double?
@@ -112,6 +119,46 @@ public struct ProgressParams: Equatable, Sendable {
     public static let defaultHeight: Double = 6
 
     /// The declared bar width/height, or the default.
+    public var effectiveWidth: Double { width ?? Self.defaultWidth }
+    public var effectiveHeight: Double { height ?? Self.defaultHeight }
+}
+
+/// Inline size and colour for a row's `sparkline=` chart (`sparklinew=`,
+/// `sparklineh=`, `sparklinecolor=`).
+///
+/// The sparkline was for a long time the only inline accessory with no size or
+/// colour knob: `progress=` had `progressw`/`progressh`/`trackcolor` and a
+/// chart had `chartw`/`charth`/`chartcolors`, while a sparkline took whatever
+/// the renderer chose. These close that gap, using the same vocabulary as the
+/// other two — including `sparklinew=full`, which stretches the chart to the
+/// row's own width exactly as `progressw=full` and `chartw=full` do.
+public struct SparklineStyle: Equatable, Sendable {
+    /// Chart width in points (`sparklinew=`). Default applied at render time.
+    public var width: Double?
+    /// Chart height in points (`sparklineh=`). Default applied at render time.
+    public var height: Double?
+    /// Line colour (`sparklinecolor=`). Falls back to the row's `color=`, and
+    /// then to the control accent, at render time.
+    public var color: VeeColor?
+    /// `sparklinew=full`: stretch to whatever width the row actually has,
+    /// instead of a fixed number of points. Same geometry as `progressw=full`
+    /// (`ProgressBarLayout.stretchedWidth`).
+    public var isFullWidth: Bool
+
+    public init(width: Double? = nil, height: Double? = nil, color: VeeColor? = nil, isFullWidth: Bool = false) {
+        self.width = width
+        self.height = height
+        self.color = color
+        self.isFullWidth = isFullWidth
+    }
+
+    /// Chart dimensions when the plugin declares none. They live here, in the
+    /// format layer, for the same reason `ProgressParams`'s do: more than one
+    /// renderer applies them and they must not drift apart.
+    public static let defaultWidth: Double = 90
+    public static let defaultHeight: Double = 20
+
+    /// The declared chart width/height, or the default.
     public var effectiveWidth: Double { width ?? Self.defaultWidth }
     public var effectiveHeight: Double { height ?? Self.defaultHeight }
 }

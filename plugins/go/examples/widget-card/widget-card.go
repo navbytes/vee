@@ -3,12 +3,14 @@
 // docs/design/widget-surface-contract.md §4. Doubles as a golden fixture,
 // byte-identical to the TypeScript/Python widget-card examples — proving
 // cross-language parity for the card schema too.
+//
+// Using this outside the repository: go get github.com/navbytes/vee/plugins/go
 package main
 
 import (
 	"fmt"
 
-	"vee"
+	vee "github.com/navbytes/vee/plugins/go"
 )
 
 // Build assembles the widget card and returns its JSON payload.

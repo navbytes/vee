@@ -9,13 +9,27 @@ language and both produce byte-identical output for the same menu.
 from __future__ import annotations
 
 import json
-import re
 import sys
+import warnings
 from typing import Any
 
-__all__ = ["Menu", "Section", "WidgetCard", "widget_card", "Stat", "Gauge", "Trend", "List", "Board"]
+__all__ = ["Menu", "Section", "JSONMenu", "JSONSection", "WidgetCard", "widget_card",
+           "Stat", "Gauge", "Trend", "List", "Board"]
 
-_NEEDS_QUOTE = re.compile(r"[\s|\\]")
+# The characters that force a value through the quoted path: JavaScript's `\s`
+# set (the reference the three SDKs share), plus the two the format itself
+# reserves. Spelled out by code point rather than borrowed from Python's own
+# `\s`, which additionally matches U+001C-U+001F and U+0085 and does not match
+# U+FEFF -- close enough to look right, different enough to break
+# byte-identical output.
+_QUOTE_FORCING = frozenset(
+    "\t\n\v\f\r \u00a0\u1680\u2028\u2029\u202f\u205f\u3000\ufeff|\\"
+) | frozenset(chr(c) for c in range(0x2000, 0x200B))
+
+
+def _needs_quote(value: str) -> bool:
+    return any(ch in _QUOTE_FORCING for ch in value)
+
 
 # Option name -> emitted key, in the exact order the TypeScript SDK emits them.
 # ``shell`` is handled specially (it pulls in param1..N), so it is not listed.
@@ -24,21 +38,37 @@ _SCALAR_KEYS: list[tuple[str, str]] = [
     ("size", "size"),
     ("font", "font"),
     ("length", "length"),
+    ("trim", "trim"),
+    ("ansi", "ansi"),
+    ("emojize", "emojize"),
     ("href", "href"),
 ]
 
 _TRAILING_KEYS: list[tuple[str, str]] = [
     ("terminal", "terminal"),
     ("refresh", "refresh"),
+    ("dropdown", "dropdown"),
     ("alternate", "alternate"),
     ("disabled", "disabled"),
     ("checked", "checked"),
     ("key", "key"),
     ("tooltip", "tooltip"),
+    ("image", "image"),
+    ("template_image", "templateimage"),
     ("sfimage", "sfimage"),
+    # sfcolor is emitted here too -- see the branch in _encode; it accepts a
+    # list as well as a scalar, so it cannot ride this plain key table.
+    ("sf_size", "sfsize"),
+    ("sf_config", "sfconfig"),
     ("md", "md"),
     ("badge", "badge"),
     ("symbolize", "symbolize"),
+    ("webview", "webview"),
+    ("webview_w", "webvieww"),
+    ("webview_h", "webviewh"),
+    ("shortcut", "shortcut"),
+    ("header", "header"),
+    ("accessory", "accessory"),
 ]
 
 
@@ -58,19 +88,157 @@ def _quote(value: str) -> str:
     # Backslash also forces quoting: an unquoted (bare) value is never
     # unescaped by the parser, so anything containing an escape must go
     # through the quoted path, which is.
-    if _NEEDS_QUOTE.search(value):
+    #
+    # A leading quote character forces it too: the parser decides a value is
+    # quoted by looking at its first character, so emitting ``"a"`` bare would
+    # round-trip back as ``a`` with the quotes eaten. Values that merely
+    # *contain* a quote are safe bare -- only the first position is read as a
+    # delimiter.
+    if _needs_quote(value) or value[:1] in ('"', "'"):
         return '"' + escaped.replace('"', '\\"') + '"'
     return escaped
 
 
+def _fmt_float(x: float) -> str:
+    """Formats ``x`` exactly as JavaScript's ``String(Number)`` does
+    (ECMA-262 Number::toString).
+
+    Python's own ``str`` agrees with JavaScript across the ordinary range but
+    parts company at the edges -- ``1e21`` prints in full, ``1e-07`` carries a
+    padded exponent -- and Go's ``'g'`` verb parts company much earlier still,
+    at 1e6. Since the three SDKs commit to byte-identical output, the format
+    has to be one written-down rule rather than three native defaults.
+    """
+    if x != x:
+        return "NaN"
+    if x == float("inf"):
+        return "Infinity"
+    if x == float("-inf"):
+        return "-Infinity"
+    if x == 0:
+        return "0"  # also normalizes -0.0, matching String(-0)
+
+    negative = x < 0
+    s = repr(abs(x))  # shortest round-trippable digits
+    if "e" in s:
+        mantissa, _, exponent = s.partition("e")
+        exp10 = int(exponent)
+    else:
+        mantissa, exp10 = s, 0
+    int_part, _, frac_part = mantissa.partition(".")
+
+    all_digits = int_part + frac_part
+    stripped = all_digits.lstrip("0")
+    leading_zeros = len(all_digits) - len(stripped)
+    digits = stripped.rstrip("0") or "0"
+    k = len(digits)
+    n = len(int_part) + exp10 - leading_zeros  # position of the decimal point
+
+    if k <= n <= 21:
+        out = digits + "0" * (n - k)
+    elif 0 < n <= 21:
+        out = digits[:n] + "." + digits[n:]
+    elif -6 < n <= 0:
+        out = "0." + "0" * (-n) + digits
+    else:
+        e = n - 1
+        sign = "+" if e >= 0 else "-"
+        head = digits if k == 1 else digits[0] + "." + digits[1:]
+        out = head + "e" + sign + str(abs(e))
+    return "-" + out if negative else out
+
+
 def _fmt(value: Any) -> str:
-    # Match JS String(): booleans lowercase, numbers without a trailing ".0"
-    # when they are whole, so `size=12` not `size=12.0`.
+    # Match JS String(): booleans lowercase, numbers formatted by the shared
+    # ECMA-262 rule so `size=12` is not `size=12.0` and a 1e6 sparkline point
+    # is not `1e+06`.
     if isinstance(value, bool):
         return "true" if value else "false"
-    if isinstance(value, float) and value.is_integer():
-        return str(int(value))
+    if isinstance(value, float):
+        return _fmt_float(value)
+    if isinstance(value, int):
+        # Python ints are unbounded; JS would render one past 2**53 as a
+        # double. Route the ones that reach exponent form through the float
+        # rule so the two agree.
+        return str(value) if abs(value) < 10**21 else _fmt_float(float(value))
     return str(value)
+
+
+# Every option `item()`/`title()` accepts, and the camelCase spellings kept
+# working from before the SDK moved to snake_case.
+#
+# Two problems this solves at once. Unknown keyword arguments used to be
+# dropped in silence -- `colour="red"` or a mistyped `sfimg=` emitted nothing,
+# with no error -- where the TypeScript SDK rejects them at compile time and
+# the Go SDK rejects them as unknown struct fields. And the SDK's own spelling
+# was inconsistent: menu options were camelCase while layout-node options were
+# snake_case, so the spelling a Python author would naturally reach for was
+# exactly the one that failed silently.
+_OPTION_NAMES = frozenset(
+    [name for name, _ in _SCALAR_KEYS]
+    + [name for name, _ in _TRAILING_KEYS]
+    + [
+        "shell", "params", "sf_color",
+        "sparkline", "sparkline_w", "sparkline_h", "sparkline_color",
+        "toggle", "slider",
+        "progress", "progress_track_color", "progress_w", "progress_h",
+        "chart",
+    ]
+)
+
+# Deprecated camelCase spelling -> current snake_case name. Accepted with a
+# DeprecationWarning so existing plugins keep running; scheduled for removal in
+# the next major version.
+_DEPRECATED_ALIASES = {
+    "templateImage": "template_image",
+    "sfColor": "sf_color",
+    "sfSize": "sf_size",
+    "sfConfig": "sf_config",
+    "webviewW": "webview_w",
+    "webviewH": "webview_h",
+    "trackColor": "progress_track_color",
+    "progressW": "progress_w",
+    "progressH": "progress_h",
+}
+
+
+def _normalize_options(options: dict[str, Any]) -> dict[str, Any]:
+    """Maps deprecated spellings onto current ones and rejects unknown keys."""
+    out: dict[str, Any] = {}
+    for name, value in options.items():
+        current = _DEPRECATED_ALIASES.get(name)
+        if current is not None:
+            warnings.warn(
+                f"{name!r} is the pre-snake_case spelling; use {current!r}. "
+                "The old name still works and will be removed in the next "
+                "major version.",
+                DeprecationWarning,
+                stacklevel=3,
+            )
+            name = current
+        elif name not in _OPTION_NAMES:
+            close = sorted(n for n in _OPTION_NAMES if n.replace("_", "") == name.lower().replace("_", ""))
+            hint = f" Did you mean {close[0]!r}?" if close else ""
+            raise TypeError(f"unknown option {name!r}.{hint}")
+        out[name] = value
+    return out
+
+
+def _warn_tuple_form(option: str, mapping: str) -> None:
+    """Warns about a tuple/list shorthand that only this SDK accepts.
+
+    The three SDKs promise the same builder shape in any language, and these
+    shorthands break that: TypeScript takes only the object form and Go only
+    the struct, so a plugin written with a tuple does not port. The mapping
+    form works identically in all three.
+    """
+    warnings.warn(
+        f"the tuple form of {option}= is a Python-only shorthand the other SDKs "
+        f"cannot express; pass {mapping} instead. It still works and will be "
+        "removed in the next major version.",
+        DeprecationWarning,
+        stacklevel=4,
+    )
 
 
 def _encode(options: dict[str, Any] | None) -> str:
@@ -91,6 +259,14 @@ def _encode(options: dict[str, Any] | None) -> str:
             push(f"param{i + 1}", param)
 
     for name, key in _TRAILING_KEYS:
+        if key == "sfsize":
+            # `sfcolor` sits between `sfimage` and `sfsize` in the order the
+            # three SDKs share. It accepts one colour or a list of them (one
+            # per layer of a multicolour symbol), so it needs its own branch.
+            sf_color = options.get("sf_color")
+            if sf_color is not None:
+                push("sfcolor", ",".join(str(c) for c in sf_color)
+                     if isinstance(sf_color, (list, tuple)) else sf_color)
         push(key, options.get(name))
 
     # Vee-native rich params, emitted last in a fixed order shared across SDKs:
@@ -99,6 +275,11 @@ def _encode(options: dict[str, Any] | None) -> str:
     sparkline = options.get("sparkline")
     if sparkline is not None:
         push("sparkline", ",".join(_fmt(v) for v in sparkline))
+    # ``sparkline_w`` takes points or ``"full"`` -- the same width vocabulary as
+    # ``progress_w`` and ``chart["w"]``.
+    push("sparklinew", options.get("sparkline_w"))
+    push("sparklineh", options.get("sparkline_h"))
+    push("sparklinecolor", options.get("sparkline_color"))
 
     toggle = options.get("toggle")
     if toggle is not None:
@@ -109,26 +290,30 @@ def _encode(options: dict[str, Any] | None) -> str:
         if isinstance(slider, dict):
             smin, smax, sval = slider["min"], slider["max"], slider["value"]
         else:  # tuple/list of (min, max, value)
+            _warn_tuple_form("slider", '{"min": 0, "max": 100, "value": 40}')
             smin, smax, sval = slider
         push("slider", f"{_fmt(smin)},{_fmt(smax)},{_fmt(sval)}")
 
     progress = options.get("progress")
     if progress is not None:
+        # A fraction goes out as-is; a value/max pair goes out as the format's
+        # own two-argument form (`progress=72,100`), which Vee divides on
+        # parse. That keeps the author's numbers on the wire rather than a
+        # pre-divided float.
         if isinstance(progress, (tuple, list)):  # (value, max)
+            _warn_tuple_form("progress", '{"value": 72, "max": 100}')
             value, maximum = progress
-            fraction = 0.0 if maximum == 0 else value / maximum
+            push("progress", f"{_fmt(value)},{_fmt(maximum)}")
         elif isinstance(progress, dict):
-            value, maximum = progress["value"], progress["max"]
-            fraction = 0.0 if maximum == 0 else value / maximum
-        else:  # already a fraction
-            fraction = progress
-        push("progress", _fmt(fraction))
+            push("progress", f"{_fmt(progress['value'])},{_fmt(progress['max'])}")
+        else:
+            push("progress", _fmt(progress))
 
-    push("trackcolor", options.get("trackColor"))
-    # ``progressW`` takes points or ``"full"`` — the same width vocabulary as
+    push("progresstrackcolor", options.get("progress_track_color"))
+    # ``progress_w`` takes points or ``"full"`` -- the same width vocabulary as
     # ``chart["w"]`` below.
-    push("progressw", options.get("progressW"))
-    push("progressh", options.get("progressH"))
+    push("progressw", options.get("progress_w"))
+    push("progressh", options.get("progress_h"))
 
     # Categorical share chart: `pie=`/`donut=`/`stackedbar=` plus its positional
     # `chartlabels=`/`chartcolors=`. All three shapes take the same data, so the
@@ -167,7 +352,7 @@ class Section:
         return "-" * (self._depth * 2)
 
     def item(self, text: str, **options: Any) -> "Section":
-        self._lines.append(self._prefix() + _escape_text(text) + _encode(options))
+        self._lines.append(self._prefix() + _escape_text(text) + _encode(_normalize_options(options)))
         return self
 
     def separator(self) -> "Section":
@@ -188,7 +373,7 @@ class Menu:
         self._body: list[str] = []
 
     def title(self, text: str, **options: Any) -> "Menu":
-        self._titles.append(_escape_text(text) + _encode(options))
+        self._titles.append(_escape_text(text) + _encode(_normalize_options(options)))
         return self
 
     @property
@@ -247,11 +432,17 @@ def _json_value(value: Any) -> str:
     if isinstance(value, (bool, int, float)):
         return _fmt(value)
     if isinstance(value, str):
-        return json.dumps(value)
+        # ensure_ascii=False matches JSON.stringify, which emits non-ASCII
+        # literally. Python's default would send "✓" as "\u2713" and break the
+        # byte-identical fixture convention.
+        return json.dumps(value, ensure_ascii=False)
     if isinstance(value, (list, tuple)):
         return "[" + ",".join(_json_value(v) for v in value) + "]"
     if isinstance(value, dict):
-        return "{" + ",".join(f"{json.dumps(str(k))}:{_json_value(v)}" for k, v in value.items()) + "}"
+        return "{" + ",".join(
+            f"{json.dumps(str(k), ensure_ascii=False)}:{_json_value(v)}"
+            for k, v in value.items()
+        ) + "}"
     raise TypeError(f"unsupported widget card value: {value!r}")
 
 
@@ -337,6 +528,37 @@ def _style(s: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
+# Which options each node type accepts. `Columns` on a text node or `min_length`
+# on a gauge is a mistake, not a no-op: the TypeScript SDK's option types reject
+# those at compile time and the Go SDK's typed option kinds reject them too, so
+# Python rejects them here rather than shipping a key the renderer ignores.
+_COMMON_NODE_OPTS = frozenset({"families", "style"})
+_NODE_OPTS = {
+    "vstack": _COMMON_NODE_OPTS | {"align", "spacing"},
+    "hstack": _COMMON_NODE_OPTS | {"align", "spacing"},
+    "zstack": _COMMON_NODE_OPTS | {"align", "spacing"},
+    "grid": _COMMON_NODE_OPTS | {"align", "spacing", "columns"},
+    "text": _COMMON_NODE_OPTS,
+    "image": _COMMON_NODE_OPTS,
+    "sparkline": _COMMON_NODE_OPTS,
+    "gauge": _COMMON_NODE_OPTS | {"gauge_style"},
+    "spacer": {"families", "min_length"},
+    "divider": {"families"},
+}
+
+
+def _check_node_opts(node_type: str, opts: dict[str, Any]) -> None:
+    allowed = _NODE_OPTS[node_type]
+    for name, value in opts.items():
+        if value is None:
+            continue
+        if name not in allowed:
+            raise TypeError(
+                f"{name!r} is not a valid option for a {node_type!r} node; "
+                f"it accepts {', '.join(sorted(allowed))}"
+            )
+
+
 def _node(
     type: str,
     *,
@@ -354,6 +576,14 @@ def _node(
     children: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Builds a node dict with keys inserted in the shared canonical order."""
+    # `text`/`symbol`/`value`/`values`/`children` are positional payload set by
+    # the builders themselves, not caller-supplied options, so only the option
+    # arguments are checked.
+    _check_node_opts(type, {
+        "gauge_style": gauge_style, "align": align, "spacing": spacing,
+        "columns": columns, "min_length": min_length, "families": families,
+        "style": style,
+    })
     node: dict[str, Any] = {"type": type}
     if text is not None:
         node["text"] = text
@@ -437,3 +667,120 @@ class Node:
     def Divider(**opts: Any) -> dict[str, Any]:
         """A hairline divider."""
         return _node("divider", **opts)
+
+
+# -----------------------------------------------------------------------------
+# Structured-JSON output — the optional alternative to the text protocol above.
+# A plugin opts in by printing a single ``{"vee":1,…}`` object; Vee decodes it
+# directly, with no line parsing, no ``|``-separated parameters and no quoting
+# rules. See docs/_content/json-output.md.
+#
+# ``JSONMenu`` deliberately mirrors ``Menu`` method for method -- ``title``,
+# ``dropdown``, ``item``, ``separator``, ``submenu``, ``to_string``, ``print``
+# -- so choosing a wire format does not mean learning a second builder.
+
+# The key order every SDK emits, so the three produce byte-identical JSON.
+_JSON_ITEM_KEYS = [
+    "text", "separator", "color", "size", "href", "shell", "params", "terminal",
+    "refresh", "sfimage", "disabled", "checked", "tooltip", "header", "accessory",
+    "sparkline", "sparkline_width", "sparkline_height", "sparkline_color",
+    "toggle", "slider", "progress", "progress_track_color", "progress_width",
+    "progress_height", "chart", "submenu", "alternate",
+]
+
+# snake_case option -> the JSON key it emits. The wire format is camelCase; the
+# SDK keeps Python's spelling, matching how the text-protocol options work.
+_JSON_KEY_NAMES = {
+    "sparkline_width": "sparklineWidth",
+    "sparkline_height": "sparklineHeight",
+    "sparkline_color": "sparklineColor",
+    "progress_track_color": "progressTrackColor",
+    "progress_width": "progressWidth",
+    "progress_height": "progressHeight",
+}
+
+# The JSON protocol carries a subset of the text protocol's parameters, so an
+# option it cannot express is rejected rather than silently dropped -- matching
+# the TypeScript SDK, where it is a compile error.
+_JSON_OPTION_NAMES = frozenset(_JSON_ITEM_KEYS) - {"text", "separator", "submenu"}
+
+
+def _order_json_item(item: dict[str, Any]) -> dict[str, Any]:
+    """Rebuilds an item with keys in the shared canonical order, dropping absent
+    ones and recursing into ``submenu``/``alternate``."""
+    out: dict[str, Any] = {}
+    for key in _JSON_ITEM_KEYS:
+        value = item.get(key)
+        if value is None:
+            continue
+        wire = _JSON_KEY_NAMES.get(key, key)
+        if key == "submenu":
+            out[wire] = [_order_json_item(child) for child in value]
+        elif key == "alternate":
+            out[wire] = _order_json_item(value)
+        else:
+            out[wire] = value
+    return out
+
+
+def _check_json_options(options: dict[str, Any]) -> dict[str, Any]:
+    for name in options:
+        if name not in _JSON_OPTION_NAMES:
+            hint = ""
+            if name in _OPTION_NAMES:
+                hint = (" It is a text-protocol option; the JSON format carries "
+                        "a subset of them.")
+            raise TypeError(f"unknown JSON menu option {name!r}.{hint}")
+    return options
+
+
+class JSONSection:
+    """A JSON menu section at a given submenu depth. Mirrors ``Section``."""
+
+    def __init__(self, items: list[dict[str, Any]]) -> None:
+        self._items = items
+
+    def item(self, text: str, **options: Any) -> "JSONSection":
+        self._items.append({"text": text, **_check_json_options(options)})
+        return self
+
+    def separator(self) -> "JSONSection":
+        self._items.append({"separator": True})
+        return self
+
+    def submenu(self, text: str, **options: Any) -> "JSONSection":
+        """Add an item and return a ``JSONSection`` for its submenu."""
+        submenu: list[dict[str, Any]] = []
+        self._items.append({"text": text, **_check_json_options(options), "submenu": submenu})
+        return JSONSection(submenu)
+
+
+class JSONMenu:
+    """The top-level JSON menu: title line(s) plus a dropdown. Mirrors ``Menu``."""
+
+    def __init__(self) -> None:
+        self._titles: list[dict[str, Any]] = []
+        self._body: list[dict[str, Any]] = []
+
+    def title(self, text: str, **options: Any) -> "JSONMenu":
+        self._titles.append({"text": text, **_check_json_options(options)})
+        return self
+
+    @property
+    def dropdown(self) -> JSONSection:
+        return JSONSection(self._body)
+
+    def to_string(self) -> str:
+        payload: dict[str, Any] = {
+            "vee": 1,
+            "title": [_order_json_item(t) for t in self._titles],
+        }
+        if self._body:
+            payload["items"] = [_order_json_item(i) for i in self._body]
+        return _json_value(payload)
+
+    def __str__(self) -> str:
+        return self.to_string()
+
+    def print(self) -> None:
+        sys.stdout.write(self.to_string() + "\n")

@@ -10,6 +10,24 @@ so a plugin reads the same in either language.
 
 - Python 3.9+ (uses only the standard library).
 
+## Installing
+
+A Vee plugin is a single executable dropped in your plugins folder — no
+virtualenv, no `pip install`. The SDK travels *with* the plugin as a sibling
+file:
+
+```sh
+vee sdk py --out ~/path/to/your/plugins   # writes vee.py there
+```
+
+```python
+from vee import Menu
+```
+
+No `sys.path` juggling is needed: Python already searches the running script's
+own directory, so a sibling `vee.py` is importable as-is. `vee new --lang py
+--out DIR` scaffolds a plugin and writes `vee.py` beside it in one step.
+
 ## Layout
 
 ```
@@ -25,9 +43,7 @@ Create `cpu.5s.py` in your plugins folder:
 
 ```python
 #!/usr/bin/env python3
-import sys, os
-sys.path.insert(0, "/path/to/plugins/python")
-from vee import Menu
+from vee import Menu  # vee.py sits beside this file
 
 menu = Menu()
 menu.title("CPU 12%", color="green", sfimage="cpu")
@@ -69,13 +85,44 @@ The `.5s` sets a 5-second refresh, exactly as with any other plugin.
 
 ### Options
 
-`color`, `size`, `font`, `length`, `href`, `shell` (+ `params`), `terminal`,
-`refresh`, `alternate`, `disabled`, `checked`, `key`, `tooltip`, `sfimage`,
-`md`, `badge`, `symbolize`, and the rich controls `sparkline`, `toggle`,
-`slider`, `progress` (+ `trackColor`, `progressW`, `progressH`), and `chart`
-(the `pie`/`donut`/`stackedbar` share charts) — matching the TypeScript SDK's
-`ItemOptions`. See the [SDK guide](../../docs/_content/sdk.md)
-for the rich-param details.
+Option names are **snake_case** throughout — menu options and layout-node
+options alike:
+
+- **Rendering** — `color`, `size`, `font`, `length`, `trim`, `ansi`, `emojize`
+- **Behaviour** — `href`, `shell` (+ `params`), `terminal`, `refresh`,
+  `dropdown`, `alternate`, `disabled`, `checked`, `key`, `tooltip`
+- **Images** — `image`, `template_image`
+- **SF Symbols** — `sfimage`, `sf_color`, `sf_size`, `sf_config`, `symbolize`
+- **SwiftBar extras** — `md`, `badge`, `webview`, `webview_w`, `webview_h`,
+  `shortcut`
+- **Vee-native rows** — `header`, `accessory`
+- **Controls** — `toggle`, `slider`, `progress` (a fraction, or `(value, max)`
+  for the format's two-argument form)
+- **Inline visuals** — each takes the same `<control>_w` / `<control>_h` /
+  colour vocabulary:
+
+  | Control | Size | Colour |
+  | ------- | ---- | ------ |
+  | `sparkline` | `sparkline_w`, `sparkline_h` | `sparkline_color` |
+  | `progress` | `progress_w`, `progress_h` | `progress_track_color` |
+  | `chart` | `chart["w"]`, `chart["h"]` | `chart["colors"]` |
+
+  `sparkline_w`, `progress_w`, and `chart["w"]` all accept `"full"` to stretch
+  to the row's own width.
+
+**Unknown options raise `TypeError`.** They used to be dropped in silence, so a
+typo — or the idiomatic snake_case spelling, back when these were camelCase —
+emitted nothing at all:
+
+```python
+d.item("Disk", progress=0.5, track_colour="gray")
+# TypeError: unknown option 'track_colour'. Did you mean 'progress_track_color'?
+```
+
+The old camelCase spellings (`trackColor`, `progressW`, `templateImage`, …)
+still work and emit a `DeprecationWarning`; they will be removed in the next
+major version. See the [SDK guide](../../docs/_content/sdk.md) for the
+rich-param details.
 
 ## Widget cards
 

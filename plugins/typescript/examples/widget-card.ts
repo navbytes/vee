@@ -3,6 +3,9 @@
 // prints to stdout when invoked with VEE_TARGET=widget, instead of scraping
 // its own menu-bar text. See docs/design/widget-surface-contract.md §4. This
 // is the design doc's own worked example, built with the SDK.
+//
+// Using this outside the repository: run `vee sdk ts` to write vee.ts beside
+// your copy, then change the import below to "./vee.ts".
 import { fileURLToPath } from "node:url";
 import { Stat } from "../vee.ts";
 

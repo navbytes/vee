@@ -3,6 +3,10 @@
 # build() output is committed to plugins/fixtures/cpu.txt and checked for
 # drift by the test suite. Produces byte-identical output to the TypeScript
 # example (plugins/examples/cpu.ts) — proving cross-language parity.
+#
+# Using this outside the repository: run `vee sdk py` to write vee.py beside
+# your copy. No edit needed -- Python already searches the script's own
+# directory.
 import os
 import sys
 

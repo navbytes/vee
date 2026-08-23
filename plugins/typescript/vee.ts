@@ -8,37 +8,95 @@ export interface ItemOptions {
   size?: number;
   font?: string;
   length?: number;
+  /** Trim surrounding whitespace from the text. */
+  trim?: boolean;
+  /** Interpret ANSI colour escapes in the text. */
+  ansi?: boolean;
+  /** Expand `:emoji:` shortcodes in the text. */
+  emojize?: boolean;
   href?: string;
   /** Shell command to run on click; `params` become param1..N. */
   shell?: string;
   params?: string[];
   terminal?: boolean;
   refresh?: boolean;
+  /** Show this line in the dropdown only, never in the menu bar. */
+  dropdown?: boolean;
   alternate?: boolean;
   disabled?: boolean;
   checked?: boolean;
   key?: string;
   tooltip?: string;
+  /** An image for the row: a base64 payload or a file path. */
+  image?: string;
+  /** Like `image`, but rendered as a template image (adapts to the theme). */
+  templateImage?: string;
   /** SF Symbol name (SwiftBar/Vee extension). */
   sfimage?: string;
+  /**
+   * SF Symbol colour(s) → `sfcolor=`. A list supplies one colour per layer of
+   * a multicolour symbol; Vee reads it as a comma-separated list, so keep
+   * commas out of colour names.
+   */
+  sfColor?: Color | Color[];
+  /** SF Symbol point size → `sfsize=`. */
+  sfSize?: number;
+  /** SF Symbol configuration string → `sfconfig=`. */
+  sfConfig?: string;
   /** Render the text as inline Markdown. */
   md?: boolean;
   /** Trailing badge chip. */
   badge?: string;
   /** Render `:sf.symbol:` tokens in the text as inline SF Symbols. */
   symbolize?: boolean;
+  /** Open this web URL in a web view on click → `webview=`. */
+  webview?: string;
+  /** Web view width in points → `webvieww=`. */
+  webviewW?: number;
+  /** Web view height in points → `webviewh=`. */
+  webviewH?: number;
+  /** Name of a macOS Shortcut to run on click → `shortcut=`. */
+  shortcut?: string;
+  /**
+   * Render as a native, non-interactive section header (`header=true`) — a
+   * real `NSMenuItem.sectionHeader`, not a disabled row dressed up as one.
+   */
+  header?: boolean;
+  /**
+   * Which edge this row's visual accessory anchors to → `accessory=`. Applies
+   * uniformly to `sparkline`, `progress`, and the `chart` shapes, since they
+   * share the same in-row geometry. Omitted, the accessory sits trailing.
+   */
+  accessory?: "leading" | "trailing";
   /** Inline data series → `sparkline=1,2,3`. */
   sparkline?: number[];
+  /**
+   * Sparkline width in points → `sparklinew=`. `"full"` stretches the chart to
+   * the row's own width instead — the same knob `progressW` and `chart.w` take.
+   */
+  sparklineW?: number | "full";
+  /** Sparkline height in points → `sparklineh=`. */
+  sparklineH?: number;
+  /** Sparkline line colour → `sparklinecolor=`. Falls back to the row's `color`. */
+  sparklineColor?: Color;
   /** On/off switch → `toggle=on` / `toggle=off`. */
   toggle?: boolean;
   /** Continuous control → `slider=min,max,value`. */
   slider?: { min: number; max: number; value: number };
   /**
-   * Progress gauge → `progress=<fraction>`. Pass a fraction directly, or
-   * `{ value, max }` to have the SDK compute `value / max`.
+   * Progress gauge. Pass a fraction directly → `progress=<fraction>`, or
+   * `{ value, max }` → `progress=<value>,<max>`, which the format accepts
+   * natively and Vee divides on parse. The two-argument form keeps the
+   * author's own numbers on the wire instead of a pre-divided float.
    */
   progress?: number | { value: number; max: number };
-  /** Progress track (background) color → `trackcolor=`. */
+  /** Progress track (background) colour → `progresstrackcolor=`. */
+  progressTrackColor?: Color;
+  /**
+   * @deprecated The pre-v2 spelling of `progressTrackColor`. Still accepted and
+   * still emitted as `progresstrackcolor=`; will be removed in the next major
+   * version.
+   */
   trackColor?: Color;
   /**
    * Progress bar width in points → `progressw=`. `"full"` stretches the bar to
@@ -84,12 +142,26 @@ function escapeText(value: string): string {
   return value.replace(/\\/g, "\\\\").replace(/\|/g, "\\|").replace(/\n/g, "\\n");
 }
 
+// The characters that force a value through the quoted path. `\s` here is the
+// reference definition the Python and Go SDKs mirror explicitly — each
+// language's own "whitespace" class differs at the edges (Python's adds
+// U+001C–U+001F, Go's `unicode.IsSpace` omits U+FEFF), so the set is written
+// out there rather than inherited.
+const NEEDS_QUOTE = /[\s|\\]/;
+
 function quote(value: string): string {
   const escaped = escapeText(value);
   // Backslash also forces quoting: an unquoted (bare) value is never
   // unescaped by the parser, so anything containing an escape must go through
   // the quoted path, which is.
-  if (/[\s|\\]/.test(value)) return `"${escaped.replace(/"/g, '\\"')}"`;
+  //
+  // A leading quote character forces it too: the parser decides a value is
+  // quoted by looking at its first character, so emitting `"a"` bare would
+  // round-trip back as `a` with the quotes eaten. Values that merely *contain*
+  // a quote are safe bare — only the first position is read as a delimiter.
+  if (NEEDS_QUOTE.test(value) || value.startsWith('"') || value.startsWith("'")) {
+    return `"${escaped.replace(/"/g, '\\"')}"`;
+  }
   return escaped;
 }
 
@@ -103,6 +175,9 @@ function encode(options?: ItemOptions): string {
   push("size", options.size);
   push("font", options.font);
   push("length", options.length);
+  push("trim", options.trim);
+  push("ansi", options.ansi);
+  push("emojize", options.emojize);
   push("href", options.href);
   if (options.shell !== undefined) {
     push("shell", options.shell);
@@ -110,16 +185,33 @@ function encode(options?: ItemOptions): string {
   }
   push("terminal", options.terminal);
   push("refresh", options.refresh);
+  push("dropdown", options.dropdown);
   push("alternate", options.alternate);
   push("disabled", options.disabled);
   push("checked", options.checked);
   push("key", options.key);
   push("tooltip", options.tooltip);
+  push("image", options.image);
+  push("templateimage", options.templateImage);
   push("sfimage", options.sfimage);
+  if (options.sfColor !== undefined) {
+    push("sfcolor", Array.isArray(options.sfColor) ? options.sfColor.join(",") : options.sfColor);
+  }
+  push("sfsize", options.sfSize);
+  push("sfconfig", options.sfConfig);
   push("md", options.md);
   push("badge", options.badge);
   push("symbolize", options.symbolize);
+  push("webview", options.webview);
+  push("webvieww", options.webviewW);
+  push("webviewh", options.webviewH);
+  push("shortcut", options.shortcut);
+  push("header", options.header);
+  push("accessory", options.accessory);
   if (options.sparkline !== undefined) push("sparkline", options.sparkline.map(String).join(","));
+  push("sparklinew", options.sparklineW);
+  push("sparklineh", options.sparklineH);
+  push("sparklinecolor", options.sparklineColor);
   if (options.toggle !== undefined) push("toggle", options.toggle ? "on" : "off");
   if (options.slider !== undefined) {
     const s = options.slider;
@@ -127,10 +219,9 @@ function encode(options?: ItemOptions): string {
   }
   if (options.progress !== undefined) {
     const p = options.progress;
-    const fraction = typeof p === "number" ? p : p.max === 0 ? 0 : p.value / p.max;
-    push("progress", String(fraction));
+    push("progress", typeof p === "number" ? String(p) : `${p.value},${p.max}`);
   }
-  push("trackcolor", options.trackColor);
+  push("progresstrackcolor", options.progressTrackColor ?? options.trackColor);
   push("progressw", options.progressW);
   push("progressh", options.progressH);
   if (options.chart !== undefined) {
@@ -468,4 +559,140 @@ export function List(options: TemplatelessOptions): WidgetCard {
 /** A compact grid of `items` as stat cells (KPI board). */
 export function Board(options: TemplatelessOptions): WidgetCard {
   return new WidgetCard({ ...options, template: "board" });
+}
+
+// ---------------------------------------------------------------------------
+// Structured-JSON output — the optional alternative to the text protocol above.
+// A plugin opts in by printing a single `{"vee":1,…}` object; Vee decodes it
+// directly, with no line parsing, no `|`-separated parameters and no quoting
+// rules. See docs/_content/json-output.md.
+//
+// `JSONMenu` deliberately mirrors `Menu` method for method — `title`,
+// `dropdown`, `item`, `separator`, `submenu`, `toString`, `print` — so choosing
+// a wire format does not mean learning a second builder.
+
+/** Options for a JSON menu item.
+ *
+ * The JSON protocol carries a subset of the text protocol's parameters, so this
+ * is a distinct type rather than `ItemOptions`: an option JSON cannot express
+ * is a compile error here, not a key that is silently dropped on the way out.
+ */
+export interface JSONItemOptions {
+  color?: Color;
+  size?: number;
+  href?: string;
+  shell?: string;
+  params?: string[];
+  terminal?: boolean;
+  refresh?: boolean;
+  sfimage?: string;
+  disabled?: boolean;
+  checked?: boolean;
+  tooltip?: string;
+  header?: boolean;
+  accessory?: "leading" | "trailing";
+  sparkline?: number[];
+  /** Sparkline width in points; `"full"` stretches it to the row's width. */
+  sparklineWidth?: number | "full";
+  sparklineHeight?: number;
+  sparklineColor?: Color;
+  toggle?: boolean;
+  slider?: { min: number; max: number; value: number };
+  /** A completion fraction, clamped to `0…1` by Vee. */
+  progress?: number;
+  progressTrackColor?: Color;
+  /** Progress bar width in points; `"full"` stretches it to the row's width. */
+  progressWidth?: number | "full";
+  progressHeight?: number;
+  chart?: {
+    kind: "pie" | "donut" | "stackedbar";
+    values: number[];
+    labels?: string[];
+    colors?: Color[];
+    w?: number | "full";
+    h?: number;
+  };
+  /** An alternate row, shown while ⌥ is held. */
+  alternate?: JSONItem;
+}
+
+/** One item in a JSON menu: `JSONItemOptions` plus the structural keys. */
+export interface JSONItem extends JSONItemOptions {
+  text?: string;
+  separator?: boolean;
+  submenu?: JSONItem[];
+}
+
+// The key order every SDK emits, so the three produce byte-identical JSON.
+const JSON_ITEM_KEYS: Array<keyof JSONItem> = [
+  "text", "separator", "color", "size", "href", "shell", "params", "terminal",
+  "refresh", "sfimage", "disabled", "checked", "tooltip", "header", "accessory",
+  "sparkline", "sparklineWidth", "sparklineHeight", "sparklineColor",
+  "toggle", "slider", "progress", "progressTrackColor", "progressWidth",
+  "progressHeight", "chart", "submenu", "alternate",
+];
+
+/** Rebuilds an item with keys in the shared canonical order, dropping absent
+ *  ones and recursing into `submenu`/`alternate`. */
+function orderJSONItem(item: JSONItem): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const key of JSON_ITEM_KEYS) {
+    const value = item[key];
+    if (value === undefined) continue;
+    if (key === "submenu") out[key] = (value as JSONItem[]).map(orderJSONItem);
+    else if (key === "alternate") out[key] = orderJSONItem(value as JSONItem);
+    else out[key] = value;
+  }
+  return out;
+}
+
+/** A JSON menu section at a given submenu depth. Mirrors `Section`. */
+export class JSONSection {
+  private readonly items: JSONItem[];
+
+  constructor(items: JSONItem[]) {
+    this.items = items;
+  }
+
+  item(text: string, options?: JSONItemOptions): this {
+    this.items.push({ text, ...options });
+    return this;
+  }
+
+  separator(): this {
+    this.items.push({ separator: true });
+    return this;
+  }
+
+  /** Adds an item and returns a `JSONSection` for its submenu. */
+  submenu(text: string, options?: JSONItemOptions): JSONSection {
+    const submenu: JSONItem[] = [];
+    this.items.push({ text, ...options, submenu });
+    return new JSONSection(submenu);
+  }
+}
+
+/** The top-level JSON menu: title line(s) plus a dropdown. Mirrors `Menu`. */
+export class JSONMenu {
+  private readonly titles: JSONItem[] = [];
+  private readonly body: JSONItem[] = [];
+
+  title(text: string, options?: JSONItemOptions): this {
+    this.titles.push({ text, ...options });
+    return this;
+  }
+
+  get dropdown(): JSONSection {
+    return new JSONSection(this.body);
+  }
+
+  toString(): string {
+    const payload: Record<string, unknown> = { vee: 1, title: this.titles.map(orderJSONItem) };
+    if (this.body.length) payload.items = this.body.map(orderJSONItem);
+    return JSON.stringify(payload);
+  }
+
+  print(): void {
+    process.stdout.write(this.toString() + "\n");
+  }
 }

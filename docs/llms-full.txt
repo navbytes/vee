@@ -420,10 +420,11 @@ A literal `|`, backslash, or newline in the display text (or in a quoted value) 
 | `badge` | A short badge/chip shown after the text (e.g. `badge=12`). |
 | `shortcut` | Run a macOS Shortcut by name when the item is clicked (e.g. `shortcut="Start Meeting"`). |
 | `webview`, `webvieww`, `webviewh` | Open a URL in a standalone WebView window (never inside the menu), with optional width/height. |
-| `sparkline` | A comma-separated list of numbers (e.g. `sparkline=1,2,3,4,5`). Renders as a small chart **inline in the menu row**; clicking the item also opens a fuller native Liquid Glass Swift Charts popover. |
+| `sparkline`, `sparklinew`, `sparklineh`, `sparklinecolor` | A comma-separated list of numbers (e.g. `sparkline=1,2,3,4,5`). Renders as a small chart **inline in the menu row**; clicking the item also opens a fuller native Liquid Glass Swift Charts popover. `sparklinew=`/`sparklineh=` set the chart size in points (defaults 90×20), `sparklinew=full` stretches it to the row's own width, and `sparklinecolor=` sets the line colour (falling back to the row's `color=`). |
 | `toggle` | `toggle=on` / `toggle=off` (also `true`/`false`/`1`/`0`). Clicking opens a Liquid Glass popover with a switch; flipping it re-invokes the item's `shell=`/`bash=` with the new value. |
 | `slider` | `slider=min,max,value` (e.g. `slider=0,100,40`). Clicking opens a Liquid Glass popover with a slider; releasing it re-invokes the item's `shell=`/`bash=` with the chosen value. |
-| `progress`, `trackcolor`, `progressw`, `progressh` | `progress=<0..1>` or `progress=value,max` (e.g. `progress=0.72` or `progress=23.65,100`). Draws a real capsule bar **inline in the menu row**. Fill uses `color=`; `trackcolor=` is the groove, `progressw=`/`progressh=` set the bar size in points, and `progressw=full` stretches the bar to the row's own width. |
+| `progress`, `progresstrackcolor`, `progressw`, `progressh` | `progress=<0..1>` or `progress=value,max` (e.g. `progress=0.72` or `progress=23.65,100`). Draws a real capsule bar **inline in the menu row**. Fill uses `color=`; `progresstrackcolor=` is the groove, `progressw=`/`progressh=` set the bar size in points, and `progressw=full` stretches the bar to the row's own width. |
+| `trackcolor` | **Deprecated** — the pre-v2 spelling of `progresstrackcolor=`. Still parsed, so published plugins keep working, but the SDKs no longer emit it and it will be removed in the next major version. |
 | `pie`, `donut`, `stackedbar` | A comma-separated list of non-negative numbers read as shares of a whole (e.g. `pie=45,30,25`). Draws the chart **inline in the menu row**; clicking the item opens a fuller Swift Charts popover with a labelled legend. See [Share charts](#share-charts-pie-donut-stackedbar). |
 | `chartw`, `charth` | The chart's inline size in points (defaults: a 24pt circle, a 110×12 bar; clamped to 8–200). A pie or donut is a circle, so either one sizes both sides. `chartw=full` stretches a `stackedbar=` to the row's own width instead. |
 | `chartlabels` | Segment names for a chart, positional against its values (e.g. `chartlabels=Docs,Photos,Apps`). Shown in the popover legend and read out by VoiceOver. |
@@ -448,6 +449,21 @@ everything is drawn with SwiftUI + Swift Charts and AppKit, so there is no
 embedded browser or cross-platform runtime. Malformed values are skipped; an
 empty list is ignored (no inline chart, no popover). A single value has no series
 to chart, so it draws as a flat centered baseline instead.
+
+The chart takes the same size and colour vocabulary as the other two inline
+accessories — `<control>w`, `<control>h`, `<control>color`:
+
+```
+Load average | sparkline=0.4,0.6,0.9,1.2 sparklinew=120 sparklineh=18 sparklinecolor=teal
+Requests     | sparkline=12,40,31,55,48 sparklinew=full
+```
+
+`sparklinew=`/`sparklineh=` set the chart size in points (defaults 90×20).
+`sparklinew=full` stretches it across whatever width the row actually has,
+exactly as `progressw=full` and `chartw=full` do — a menu is as wide as its
+widest row, so a fixed width cannot fill a menu some *other* row sizes.
+`sparklinecolor=` sets the line colour; without it the chart uses the row's
+`color=`, and without that, the control accent.
 
 ### Interactive controls (`toggle=` / `slider=`)
 
@@ -489,13 +505,14 @@ the menu row** — no click, no popover. It's the native answer to hand-drawn
 block-glyph bars:
 
 ```
-$23.65 of $100 | progress=23.65,100 color=#36C26E trackcolor=#3C4046 progressw=210
+$23.65 of $100 | progress=23.65,100 color=#36C26E progresstrackcolor=#3C4046 progressw=210
 Disk | progress=0.88 color=#F5A623
 ```
 
 - `progress=<0..1>` (a fraction) **or** `progress=value,max` (mirrors `slider=`'s
   grammar). The result is always clamped to `0…1`.
-- The **fill** color is the row's `color=`; `trackcolor=` sets the groove.
+- The **fill** color is the row's `color=`; `progresstrackcolor=` sets the groove.
+  (`trackcolor=` is the deprecated spelling and still works.)
 - `progressw=` / `progressh=` set the bar's width/height in points (defaults 120×6).
   `progressw=full` stretches the bar across whatever width the row actually has,
   less the row's own text — the same knob a `stackedbar=` takes as `chartw=full`.
@@ -1313,7 +1330,7 @@ exactly the payload shown at the top of this section:
 **TypeScript**
 
 ```ts
-import { widgetCard, Node } from "./src/vee.ts";
+import { widgetCard, Node } from "./vee.ts";
 
 widgetCard({
   layout: Node.VStack(
@@ -1411,7 +1428,7 @@ The [TypeScript, Python, and Go SDKs](sdk.md) all have `Stat`/`Gauge`/`Trend`/
 `List`/`Board` builders that emit this JSON for you:
 
 ```ts
-import { Stat } from "./src/vee.ts";
+import { Stat } from "./vee.ts";
 
 if (process.env.VEE_TARGET === "widget") {
   Stat({
@@ -1659,6 +1676,44 @@ The SDKs live in the [`plugins/`](https://github.com/navbytes/vee/tree/main/plug
 
 Pick whichever language you are most comfortable in; the API is the same shape in all three.
 
+## Getting the SDK
+
+A Vee plugin is a single executable you drop in your plugins folder — no build
+step, no `node_modules`, no virtualenv. So the TypeScript and Python SDKs travel
+*with* the plugin as a sibling file rather than being resolved from a package
+manager:
+
+```sh
+vee sdk ts --out ~/Library/Application\ Support/Vee/plugins   # writes vee.ts
+vee sdk py --out ~/Library/Application\ Support/Vee/plugins   # writes vee.py
+```
+
+```ts
+import { Menu } from "./vee.ts";
+```
+
+```python
+from vee import Menu  # vee.py sits beside this plugin
+```
+
+`vee new --lang ts --out DIR` does both in one step: it scaffolds a plugin and
+writes the SDK beside it, so the result runs immediately.
+
+Go is the exception. A Go plugin compiles to a binary, so it takes the SDK as a
+normal module dependency:
+
+```sh
+go get github.com/navbytes/vee/plugins/go
+```
+
+```go
+import vee "github.com/navbytes/vee/plugins/go"
+```
+
+The examples in this repository import `../vee.ts` (and the local module)
+because they sit beside the SDK there. Copying one out means running
+`vee sdk` beside it — and, for TypeScript, changing that import to `./vee.ts`.
+
 ## Requirements
 
 - **TypeScript** — Node 24 or later (for native TypeScript execution / type stripping; there is **no build step**).
@@ -1675,7 +1730,7 @@ Create `cpu.5s.ts`. Node runs the `.ts` directly (type-stripping), so you drop t
 
 ```ts
 #!/usr/bin/env node
-import { Menu } from "./src/vee.ts";
+import { Menu } from "./vee.ts";
 
 const menu = new Menu();
 menu.title("CPU 12%", { color: "green", sfimage: "cpu" });
@@ -1704,8 +1759,7 @@ Create `cpu.5s.py`. Options are passed as keyword arguments.
 ```python
 #!/usr/bin/env python3
 import sys
-sys.path.insert(0, "/path/to/plugins/python")
-from vee import Menu
+from vee import Menu  # vee.py sits beside this plugin
 
 menu = Menu()
 menu.title("CPU 12%", color="green", sfimage="cpu")
@@ -1788,7 +1842,16 @@ A menu section at a given submenu depth (0 = top level).
 
 Options map onto the line parameters in the [authoring reference](plugin-authoring.md#line-parameters). The supported keys are the same in every SDK (in TypeScript they are `ItemOptions`; in Python keyword arguments; in Go the `Options` struct fields):
 
-`color`, `size`, `font`, `length`, `href`, `shell` (with `params` → `param1..N`), `terminal`, `refresh`, `alternate`, `disabled`, `checked`, `key`, `tooltip`, `sfimage`, `md`, `badge`, `symbolize`.
+- **Rendering** — `color`, `size`, `font`, `length`, `trim`, `ansi`, `emojize`
+- **Behaviour** — `href`, `shell` (with `params` → `param1..N`), `terminal`, `refresh`, `dropdown`, `alternate`, `disabled`, `checked`, `key`, `tooltip`
+- **Images** — `image`, `templateImage` (Python `template_image`, Go `TemplateImage`)
+- **SF Symbols** — `sfimage`, `sfColor`, `sfSize`, `sfConfig`, `symbolize`
+- **SwiftBar extras** — `md`, `badge`, `webview`, `webviewW`, `webviewH`, `shortcut`
+- **Vee-native rows** — `header`, `accessory`
+
+Naming follows each language's idiom, not one shared spelling: TypeScript is
+camelCase (`templateImage`), Python is snake_case (`template_image`), Go is
+PascalCase (`TemplateImage`). The emitted parameter is the same in all three.
 
 For example, in each language:
 
@@ -1813,45 +1876,82 @@ d.Item("**Bold** text", &vee.Options{MD: vee.Bool(true)})
 d.Item("Status :checkmark.circle:", &vee.Options{Symbolize: vee.Bool(true)})
 ```
 
-Values containing spaces or `|` are quoted (and embedded quotes escaped) automatically, in every SDK — you never format the protocol by hand.
+Values containing spaces or `|` are quoted (and embedded quotes escaped) automatically, in every SDK — you never format the protocol by hand. So is a value that *begins* with a quote character, which the parser would otherwise read as its own delimiter.
+
+Numbers are formatted by one shared rule — JavaScript's `String(Number)`, i.e.
+ECMA-262 `Number::toString` — rather than each language's default, so the three
+SDKs emit the same bytes for the same value. (Go's own `'g'` verb would render
+`1000000` as `1e+06`.)
+
+**Unknown options are an error, not a no-op.** TypeScript rejects them at
+compile time, Go as an unknown struct field, and Python raises `TypeError`:
+
+```python
+d.item("Disk", progress=0.5, track_colour="gray")
+# TypeError: unknown option 'track_colour'. Did you mean 'progress_track_color'?
+```
 
 ## Rich params
 
 All three SDKs expose **typed builders** for Vee's inline controls —
-**sparkline**, **toggle**, **slider**, and **progress** — plus the progress
-tuning params (`trackColor`, `progressW`, `progressH`). You pass structured
-values; the SDK formats the protocol (numbers, ranges, and quoting) for you, so
-the whole class of "I hand-formatted `slider=` wrong" bugs is impossible to
-write. (These render natively in Vee; in xbar/SwiftBar the unknown params are
-ignored, so plugins stay portable.)
+**sparkline**, **toggle**, **slider**, and **progress** — plus each visual
+control's tuning params. You pass structured values; the SDK formats the
+protocol (numbers, ranges, and quoting) for you, so the whole class of "I
+hand-formatted `slider=` wrong" bugs is impossible to write. (These render
+natively in Vee; in xbar/SwiftBar the unknown params are ignored, so plugins
+stay portable.)
+
+Every inline visual takes the same size and colour vocabulary —
+`<control>W` / `<control>H` / a colour — and every width accepts `"full"` to
+stretch across whatever width the row actually has:
+
+| Control | Width | Height | Colour |
+| ------- | ----- | ------ | ------ |
+| `sparkline` | `sparklineW` | `sparklineH` | `sparklineColor` |
+| `progress` | `progressW` | `progressH` | `progressTrackColor` |
+| `chart` | `chart.w` | `chart.h` | `chart.colors` |
+
+In Go, a control with its own struct leaves its knobs unprefixed (`Chart.W`)
+because the struct already names the control, while the flat `Options` carries
+the control's name (`SparklineW`, `ProgressW`); `full` is a sibling boolean
+(`SparklineFullWidth`) since Go has no union type.
+
+`trackColor` is the deprecated spelling of `progressTrackColor`; it still works
+and still emits `progresstrackcolor=`.
 
 **TypeScript**
 
 ```ts
-d.item("Load history", { sparkline: [1, 2, 3, 5, 8, 13] });
+d.item("Load history", { sparkline: [1, 2, 3, 5, 8, 13], sparklineW: 120, sparklineH: 18, sparklineColor: "teal" });
 d.item("Notifications", { toggle: true });
 d.item("Volume", { slider: { min: 0, max: 100, value: 40 } });
-d.item("Disk usage", { color: "green", progress: 0.72, trackColor: "#333333", progressW: 80, progressH: 6 });
-// progress also accepts a value/max pair:
+d.item("Disk usage", { color: "green", progress: 0.72, progressTrackColor: "#333333", progressW: 80, progressH: 6 });
+// progress also accepts a value/max pair, emitted as `progress=72,100`:
 d.item("Budget", { progress: { value: 72, max: 100 } });
+// and any width takes "full":
+d.item("Requests", { sparkline: [12, 40, 31, 55], sparklineW: "full" });
 ```
 
 **Python**
 
 ```python
-d.item("Load history", sparkline=[1, 2, 3, 5, 8, 13])
+d.item("Load history", sparkline=[1, 2, 3, 5, 8, 13], sparkline_w=120, sparkline_h=18, sparkline_color="teal")
 d.item("Notifications", toggle=True)
 d.item("Volume", slider={"min": 0, "max": 100, "value": 40})
-d.item("Disk usage", color="green", progress=0.72, trackColor="#333333", progressW=80, progressH=6)
+d.item("Disk usage", color="green", progress=0.72, progress_track_color="#333333", progress_w=80, progress_h=6)
+d.item("Budget", progress={"value": 72, "max": 100})
+d.item("Requests", sparkline=[12, 40, 31, 55], sparkline_w="full")
 ```
 
 **Go**
 
 ```go
-d.Item("Load history", &vee.Options{Sparkline: []float64{1, 2, 3, 5, 8, 13}})
+d.Item("Load history", &vee.Options{Sparkline: []float64{1, 2, 3, 5, 8, 13}, SparklineW: vee.Float(120), SparklineH: vee.Float(18), SparklineColor: vee.Str("teal")})
 d.Item("Notifications", &vee.Options{Toggle: vee.Bool(true)})
 d.Item("Volume", &vee.Options{Slider: &vee.Slider{Min: 0, Max: 100, Value: 40}})
-d.Item("Disk usage", &vee.Options{Color: vee.Str("green"), Progress: vee.Float(0.72), TrackColor: vee.Str("#333333"), ProgressW: vee.Float(80), ProgressH: vee.Float(6)})
+d.Item("Disk usage", &vee.Options{Color: vee.Str("green"), Progress: vee.Float(0.72), ProgressTrackColor: vee.Str("#333333"), ProgressW: vee.Float(80), ProgressH: vee.Float(6)})
+d.Item("Budget", &vee.Options{ProgressValue: vee.Float(72), ProgressMax: vee.Float(100)})
+d.Item("Requests", &vee.Options{Sparkline: []float64{12, 40, 31, 55}, SparklineFullWidth: true})
 ```
 
 ### Share charts
@@ -1911,7 +2011,7 @@ returns/builds an object with the same `toString()`/`to_string()`/`String()`
 **TypeScript**
 
 ```ts
-import { Stat } from "./src/vee.ts";
+import { Stat } from "./vee.ts";
 
 Stat({
   title: "Revenue",
@@ -1943,23 +2043,47 @@ Stat(
 **Go**
 
 ```go
-c := &vee.WidgetCard{
-	Template: vee.TemplateStat,
-	Title:    vee.Str("Revenue"),
-	Symbol:   vee.Str("chart.line.uptrend.xyaxis"),
-	Tint:     vee.Str("green"),
-	Value:    vee.Str("$18.2k"),
-	Status:   vee.StatusOK,
-	Items:    []vee.WidgetCardItem{{Label: "Orders", Value: vee.Str("214"), Symbol: vee.Str("bag"), Tint: vee.Str("blue")}},
-	Actions:  []vee.WidgetCardAction{{Kind: vee.ActionRefresh, Label: "Refresh"}},
-}
-c.Print()
+vee.Stat(vee.WidgetCard{
+	Title:   vee.Str("Revenue"),
+	Symbol:  vee.Str("chart.line.uptrend.xyaxis"),
+	Tint:    vee.Str("green"),
+	Value:   vee.Str("$18.2k"),
+	Status:  vee.StatusOK,
+	Items:   []vee.WidgetCardItem{{Label: "Orders", Value: vee.Str("214"), Symbol: vee.Str("bag"), Tint: vee.Str("blue")}},
+	Actions: []vee.WidgetCardAction{{Kind: vee.ActionRefresh, Label: "Refresh"}},
+}).Print()
 ```
+
+Setting `Template:` on a `vee.WidgetCard` literal works too — the constructor
+just presets it, so the three languages choose a template the same way.
 
 All three emit byte-identical JSON for the same card (there's a `widget-card`
 example and a shared golden fixture proving it, also round-tripped through
 the Swift parser). See the full field/template/action reference in
 [Widgets](widgets.md).
+
+### Layout nodes take only the options that fit them
+
+For layouts the five templates can't express, the `Node` builders compose a
+layout tree. Each builder accepts only the options meaningful for its node type
+— `columns` belongs to a grid, `min_length` to a spacer — and all three SDKs
+enforce that, as does the published
+[`widget-card.schema.json`](https://github.com/navbytes/vee/tree/main/docs/schemas/widget-card.schema.json):
+
+```ts
+Node.Text("hi", { columns: 4 });   // TypeScript: compile error
+```
+
+```python
+Node.Text("hi", columns=4)
+# TypeError: 'columns' is not a valid option for a 'text' node; it accepts families, style
+```
+
+```go
+vee.Node.Text("hi", vee.Columns(4))
+// cannot use vee.Columns(4) (value of func type vee.gridOnlyOpt) as
+// vee.LeafOpt value in argument to vee.Node.Text
+```
 
 ## The no-build-step note (TypeScript)
 
@@ -2149,9 +2273,62 @@ An item that runs a command when clicked, passing arguments via `params`.
 }
 ```
 
+## Building it with an SDK
+
+All three SDKs have a typed builder for this format, mirroring the text-protocol
+`Menu` method for method — `title`, `dropdown`, `item`, `separator`, `submenu`,
+`print` — so choosing a wire format does not mean learning a second builder:
+
+```ts
+import { JSONMenu } from "./vee.ts";
+
+const menu = new JSONMenu();
+menu.title("JSON ✓", { color: "green", sfimage: "curlybraces" });
+
+const d = menu.dropdown;
+d.item("Structured item", { href: "https://example.com" });
+d.separator();
+d.submenu("Submenu").item("Child", { color: "blue" });
+
+menu.print();
+```
+
+```python
+from vee import JSONMenu
+
+menu = JSONMenu()
+menu.title("JSON ✓", color="green", sfimage="curlybraces")
+
+d = menu.dropdown
+d.item("Structured item", href="https://example.com")
+d.separator()
+d.submenu("Submenu").item("Child", color="blue")
+
+menu.print()
+```
+
+```go
+m := &vee.JSONMenu{}
+m.Title("JSON ✓", &vee.JSONOptions{Color: vee.Str("green"), SFImage: vee.Str("curlybraces")})
+
+d := m.Dropdown()
+d.Item("Structured item", &vee.JSONOptions{Href: vee.Str("https://example.com")})
+d.Separator()
+d.Submenu("Submenu", nil).Item("Child", &vee.JSONOptions{Color: vee.Str("blue")})
+
+m.Print()
+```
+
+The builder emits the keys in one canonical order, so the three SDKs produce
+byte-identical JSON for the same menu (a shared golden fixture proves it).
+Because the JSON format carries a subset of the text protocol's parameters, its
+option type is a distinct one: an option JSON cannot express is a compile error
+in TypeScript and Go, and a `TypeError` in Python, rather than a key silently
+dropped on the way out.
+
 ## A runnable example
 
-The repository ships a runnable JSON plugin at [`plugins/examples/json-demo.ts`](https://github.com/navbytes/vee/tree/main/plugins/examples/json-demo.ts). It builds a `{"vee":1,…}` object with a colored title, a link, a separator, and a submenu, then prints it — a good starting point to copy.
+The repository ships a runnable JSON plugin at [`plugins/typescript/examples/json-demo.ts`](https://github.com/navbytes/vee/tree/main/plugins/typescript/examples/json-demo.ts). It builds a `{"vee":1,…}` object with `JSONMenu` — a colored title, a link, a separator, and a submenu — then prints it. A good starting point to copy.
 
 ## Rich params
 
@@ -2160,10 +2337,14 @@ The Vee-native inline controls are available in JSON too, as typed item fields:
 | Field | Type | Notes |
 |-------|------|-------|
 | `sparkline` | `number[]` | Inline chart popover data. Non-finite values are dropped. |
+| `sparklineWidth` | `number \| "full"` | Sparkline width in points; `"full"` stretches it to the row's width. |
+| `sparklineHeight` | `number` | Sparkline height in points. |
+| `sparklineColor` | `string` | Sparkline line color (named or hex). Falls back to the item's `color`. |
 | `toggle` | `boolean` | On/off switch. |
 | `slider` | `{ "min": number, "max": number, "value": number }` | Requires `min < max`; `value` is clamped into range. |
 | `progress` | `number` | A completion fraction, clamped to `0…1`. The fill uses the item's `color`. |
-| `trackColor` | `string` | Progress track color (named or hex). |
+| `progressTrackColor` | `string` | Progress track color (named or hex). |
+| `trackColor` | `string` | **Deprecated** — the pre-v2 spelling of `progressTrackColor`. Still accepted; removed in the next major version. |
 | `progressWidth` | `number` | Progress bar width in points. |
 | `progressHeight` | `number` | Progress bar height in points. |
 | `chart` | `{ "kind": "pie" \| "donut" \| "stackedbar", "values": number[], "labels"?: string[], "colors"?: string[], "w"?: number, "h"?: number }` | A categorical share chart. `values` must be finite and `>= 0` with a positive total; at most 8 segments (a longer series folds its tail into "Other"). `labels`/`colors` are positional — a color that is `null`, blank, malformed, or unrecognised keeps that segment's palette slot. `w`/`h` are the inline size in points (`chartw=`/`charth=`), clamped to 8–200; `"w": "full"` stretches the chart to the row's width. |
@@ -2173,10 +2354,10 @@ The Vee-native inline controls are available in JSON too, as typed item fields:
   "vee": 1,
   "title": [{ "text": "System" }],
   "items": [
-    { "text": "Load history", "sparkline": [1, 2, 3, 5, 8, 13] },
+    { "text": "Load history", "sparkline": [1, 2, 3, 5, 8, 13], "sparklineWidth": 120, "sparklineHeight": 18, "sparklineColor": "teal" },
     { "text": "Notifications", "toggle": true },
     { "text": "Volume", "slider": { "min": 0, "max": 100, "value": 40 } },
-    { "text": "Disk usage", "color": "green", "progress": 0.72, "trackColor": "#333333", "progressWidth": 80, "progressHeight": 6 },
+    { "text": "Disk usage", "color": "green", "progress": 0.72, "progressTrackColor": "#333333", "progressWidth": 80, "progressHeight": 6 },
     { "text": "By category", "chart": { "kind": "donut", "values": [45, 30, 25], "labels": ["Documents", "Photos", "Apps"] } }
   ]
 }

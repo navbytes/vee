@@ -279,7 +279,7 @@ exactly the payload shown at the top of this section:
 **TypeScript**
 
 ```ts
-import { widgetCard, Node } from "./src/vee.ts";
+import { widgetCard, Node } from "./vee.ts";
 
 widgetCard({
   layout: Node.VStack(
@@ -377,7 +377,7 @@ The [TypeScript, Python, and Go SDKs](sdk.md) all have `Stat`/`Gauge`/`Trend`/
 `List`/`Board` builders that emit this JSON for you:
 
 ```ts
-import { Stat } from "./src/vee.ts";
+import { Stat } from "./vee.ts";
 
 if (process.env.VEE_TARGET === "widget") {
   Stat({
