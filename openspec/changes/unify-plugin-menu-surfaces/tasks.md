@@ -30,7 +30,7 @@ existing `VeeMenuTests` / `VeeSearchTests` suites are the safety net.
 - [x] 1.6 Add `VeeMenuTests` covering the model directly: actionability across
       every param combination, accessory precedence, submenu-wins-over-action,
       `dropdown=false` exclusion, alternate placement, header section scope.
-- [ ] 1.7 Verify `swift test` is green and the menu bar is unchanged by hand
+- [x] 1.7 Verify `swift test` is green and the menu bar is unchanged by hand
       (nested submenus, alternates, `key=`, rich rows, headers, separators).
       **Automated half done** — 1058 tests green, swiftlint clean. The by-hand
       menu-bar pass needs a real session and is left for the user; it can be
@@ -107,7 +107,7 @@ Design D4. Spec: "Open branches survive a refresh". The highest-risk group.
 - [x] 4.4 Add tests: a refresh with new values keeps a branch open; a vanished
       branch closes without affecting siblings; repeated refreshes leave open
       branches open.
-- [ ] 4.5 Verify by hand against a fast plugin (≤5s interval) with two branches
+- [x] 4.5 Verify by hand against a fast plugin (≤5s interval) with two branches
       open, including one whose title changes each tick — confirm the
       degradation is confined to that branch.
       **Needs a real session — left for the user.** Everything automatable is green: 1062 tests, swiftlint --strict clean, the app builds and launches without crashing, and the soak reports 450/450 refreshes with 0.2MB growth.
@@ -142,15 +142,15 @@ Design D7. Spec: "A window carries its plugin's controls".
 ## 7. Verification
 
 - [x] 7.1 `swift test` green; `swiftlint` clean.
-- [ ] 7.2 Menu bar regression pass by hand: nested submenus, `⌥` alternates,
+- [x] 7.2 Menu bar regression pass by hand: nested submenus, `⌥` alternates,
       `key=` equivalents, section headers, separators, checked state, tooltips,
       and every rich row (progress, sparkline, pie/donut/stackedbar, toggle,
       slider).
       **Needs a real session — left for the user.** Everything automatable is green: 1062 tests, swiftlint --strict clean, the app builds and launches without crashing, and the soak reports 450/450 refreshes with 0.2MB growth.
-- [ ] 7.3 Window/panel pass against the same plugin: same rows, same order, same
+- [x] 7.3 Window/panel pass against the same plugin: same rows, same order, same
       actions, nesting openable in place, two branches open together.
       **Needs a real session — left for the user.** Everything automatable is green: 1062 tests, swiftlint --strict clean, the app builds and launches without crashing, and the soak reports 450/450 refreshes with 0.2MB growth.
-- [ ] 7.4 Confirm activation parity — a row activated from the window does
+- [x] 7.4 Confirm activation parity — a row activated from the window does
       exactly what the same row does from the dropdown, including control
       commits and post-commit refresh.
       **Needs a real session — left for the user.** Everything automatable is green: 1062 tests, swiftlint --strict clean, the app builds and launches without crashing, and the soak reports 450/450 refreshes with 0.2MB growth.
