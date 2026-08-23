@@ -2,7 +2,12 @@ import Foundation
 
 /// Text normalization shared by flattening (haystack construction) and matching
 /// (query folding), so both sides compare on identical terms.
-enum SearchText {
+public enum SearchText {
+    /// Whether a query is the idle state — empty or whitespace only.
+    public static func isBlank(_ query: String) -> Bool {
+        tokens(fold(query)).isEmpty
+    }
+
     /// Case-, diacritic-, and width-insensitive folding with a *locale-independent*
     /// mapping (`locale: nil`), so `Café` and `cafe` match and the result doesn't
     /// depend on the user's locale (avoids the Turkish dotless-i surprise).

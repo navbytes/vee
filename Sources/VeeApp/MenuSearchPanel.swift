@@ -13,11 +13,10 @@ final class KeyablePanel: NSPanel {
     override var canBecomeMain: Bool { false }
 }
 
-/// Presents the Spotlight-like search panel over a (flattened) menu — either
-/// one plugin's own, or every enabled plugin's merged together. Lives *outside*
-/// the `NSMenu` — the menu that launched it has already closed — so the native
-/// menu, its trust row, and its controls footer are untouched; this is an
-/// additional surface, not a replacement. Only one panel at a time.
+/// Presents the transient, Spotlight-like presentation of one plugin's menu.
+/// Lives *outside* the `NSMenu` — the menu that launched it has already closed —
+/// so the native menu, its trust row, and its controls footer are untouched;
+/// this is an additional surface, not a replacement. Only one panel at a time.
 ///
 /// Selecting a row runs `activate`, which the caller wires to dispatch through
 /// the plugin's own `MenuActionHandling` — so href / shell / shortcut / refresh
@@ -28,7 +27,7 @@ final class MenuSearchPanel: NSObject {
 
     private var panel: KeyablePanel?
     private var model: MenuSearchViewModel?
-    private var onActivateRow: ((FlatRow) -> Void)?
+    private var onActivateRow: ((MenuRowSpec) -> Void)?
     private var keyMonitor: Any?
     private var clickMonitor: Any?
     /// Restored on dismiss so row actions (e.g. a clipboard plugin's simulated
@@ -39,19 +38,19 @@ final class MenuSearchPanel: NSObject {
     /// wrapper below applies it, so the number stays declared once.
     static let contentSize = NSSize(width: 440, height: 380)
 
-    /// Opens the panel for `entries`, anchored near the mouse (i.e. under the
+    /// Opens the panel for `nodes`, anchored near the mouse (i.e. under the
     /// just-clicked status item), routing activations through `activate`.
-    /// `entries` carries the full panel-visible structure (rows, section
-    /// headers, separators); only `.action` rows are ever selectable/
-    /// activatable, so `activate` still deals only in `FlatRow`.
+    /// `nodes` is the plugin's whole resolved menu — the same `MenuTree` the
+    /// dropdown renders — so the two surfaces show the same rows in the same
+    /// order.
     /// `keepOpen` supplies the control that promotes this panel into a detached
     /// window. Every panel has one plugin behind it, so every caller has a
     /// window to promote into.
     func present(
-        entries: [SearchEntry],
+        nodes: [MenuTreeNode],
         pluginName: String,
         keepOpen: @escaping () -> Void,
-        activate: @escaping (FlatRow) -> Void
+        activate: @escaping (MenuRowSpec) -> Void
     ) {
         dismiss()
         self.onActivateRow = activate
@@ -59,7 +58,7 @@ final class MenuSearchPanel: NSObject {
         // would be frontmost and we'd have nothing to restore.
         frontmostRestorer.capture(NSWorkspace.shared.frontmostApplication)
 
-        let model = MenuSearchViewModel(entries: entries)
+        let model = MenuSearchViewModel(nodes: nodes)
         self.model = model
 
         let root = MenuSearchView(
@@ -101,7 +100,7 @@ final class MenuSearchPanel: NSObject {
     /// Runs the item's action, then closes. Order matters: dismiss first so that
     /// if the action opens its own popover (toggle/slider/sparkline) the panel
     /// isn't stealing key back from it.
-    private func activate(_ row: FlatRow) {
+    private func activate(_ row: MenuRowSpec) {
         let onActivateRow = self.onActivateRow
         dismiss()
         onActivateRow?(row)
@@ -134,8 +133,12 @@ final class MenuSearchPanel: NSObject {
             case 125: model.moveDown(); return nil          // ↓
             case 126: model.moveUp(); return nil            // ↑
             case 36, 76:                                    // Return / Enter
-                if let row = model.selectedRow() { self.activate(row) }
+                if let row = model.selectedVisibleRow() {
+                    if row.spec.isActionable { self.activate(row.spec) } else if row.canExpand { model.toggle(row.key) }
+                }
                 return nil
+            case 123: model.collapseSelection(); return nil // ←
+            case 124: model.expandSelection(); return nil   // →
             case 53: self.dismiss(); return nil             // Esc
             default: return event
             }
@@ -172,7 +175,7 @@ final class MenuSearchPanel: NSObject {
 private struct MenuSearchView: View {
     @ObservedObject var model: MenuSearchViewModel
     let pluginName: String
-    let onActivate: (FlatRow) -> Void
+    let onActivate: (MenuRowSpec) -> Void
     let onKeepOpen: () -> Void
 
     var body: some View {

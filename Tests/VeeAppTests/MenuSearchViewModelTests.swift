@@ -3,197 +3,282 @@ import XCTest
 import VeePluginFormat
 import VeeSearch
 
+/// The menu surface's state: filtering a tree without flattening it, which
+/// branches are open, and how both survive a live refresh. AppKit-free, so all
+/// of it runs without a window.
 @MainActor
 final class MenuSearchViewModelTests: XCTestCase {
-    private func row(_ text: String, path: [String] = []) -> FlatRow {
+    // MARK: - Builders
+
+    private func href(_ text: String, submenu: [MenuNode] = []) -> MenuNode {
         var p = LineParams()
         p.href = URL(string: "https://example.com")
-        return FlatRow(
-            item: MenuItem(text: text, params: p),
-            path: path,
-            title: text.lowercased(),
-            haystack: ([text] + path).joined(separator: " ").lowercased()
+        return .item(MenuItem(text: text, params: p, submenu: submenu))
+    }
+
+    private func group(_ text: String, _ children: MenuNode...) -> MenuNode {
+        .item(MenuItem(text: text, params: LineParams(), submenu: children))
+    }
+
+    private func header(_ text: String) -> MenuNode {
+        var p = LineParams()
+        p.swiftbar.header = true
+        return .item(MenuItem(text: text, params: p))
+    }
+
+    private func tree(_ nodes: [MenuNode]) -> [MenuTreeNode] { MenuTree.build(nodes) }
+
+    private func titles(_ model: MenuSearchViewModel) -> [String] {
+        model.visible.compactMap { $0.row?.spec.item.text }
+    }
+
+    // MARK: - Idle
+
+    func testIdleShowsTopLevelWithBranchesClosed() {
+        let model = MenuSearchViewModel(nodes: tree([
+            href("Alpha"), group("Disks", href("Macintosh HD")), href("Beta")
+        ]))
+        XCTAssertEqual(titles(model), ["Alpha", "Disks", "Beta"], "a closed branch hides its children")
+    }
+
+    func testIdleKeepsHeadersAndSeparators() {
+        let model = MenuSearchViewModel(nodes: tree([
+            header("Section"), href("Alpha"), .separator, href("Beta")
+        ]))
+        let kinds = model.visible.map { node -> String in
+            switch node {
+            case .row: return "row"
+            case .header: return "header"
+            case .separator: return "separator"
+            }
+        }
+        XCTAssertEqual(kinds, ["header", "row", "separator", "row"])
+    }
+
+    // MARK: - Expansion
+
+    func testOpeningABranchRevealsItsChildrenInPlace() {
+        let model = MenuSearchViewModel(nodes: tree([
+            href("Alpha"), group("Disks", href("Macintosh HD")), href("Beta")
+        ]))
+        model.toggle(["Disks"])
+        XCTAssertEqual(titles(model), ["Alpha", "Disks", "Macintosh HD", "Beta"])
+    }
+
+    func testTwoBranchesCanBeOpenAtOnce() {
+        let model = MenuSearchViewModel(nodes: tree([
+            group("Disks", href("Macintosh HD")), group("Network", href("Wi-Fi"))
+        ]))
+        model.toggle(["Disks"])
+        model.toggle(["Network"])
+        XCTAssertEqual(titles(model), ["Disks", "Macintosh HD", "Network", "Wi-Fi"])
+    }
+
+    func testClosingABranchHidesItsChildrenAgain() {
+        let model = MenuSearchViewModel(nodes: tree([group("Disks", href("Macintosh HD"))]))
+        model.toggle(["Disks"])
+        model.toggle(["Disks"])
+        XCTAssertEqual(titles(model), ["Disks"])
+    }
+
+    func testNestedBranchesUseTheWholePathAsTheirKey() {
+        let model = MenuSearchViewModel(nodes: tree([
+            group("Disks", group("Volumes", href("Macintosh HD")))
+        ]))
+        model.toggle(["Disks"])
+        model.toggle(["Disks", "Volumes"])
+        XCTAssertEqual(titles(model), ["Disks", "Volumes", "Macintosh HD"])
+    }
+
+    // MARK: - Filtering
+
+    func testFilterKeepsMatchesAndTheAncestorsNeededToReachThem() {
+        let model = MenuSearchViewModel(nodes: tree([
+            href("Alpha"), group("Disks", href("Macintosh HD"), href("Backup"))
+        ]))
+        model.query = "macintosh"
+        XCTAssertEqual(titles(model), ["Disks", "Macintosh HD"], "the ancestor comes along, the sibling does not")
+    }
+
+    func testFilterRevealsAncestorsAutomatically() {
+        let model = MenuSearchViewModel(nodes: tree([
+            group("Disks", group("Volumes", href("Macintosh HD")))
+        ]))
+        model.query = "macintosh"
+        XCTAssertEqual(titles(model), ["Disks", "Volumes", "Macintosh HD"], "no branch had been opened by hand")
+    }
+
+    func testMatchingAGroupSurfacesEverythingInsideIt() {
+        let model = MenuSearchViewModel(nodes: tree([
+            group("Disks", href("Macintosh HD"), href("Backup")), href("Alpha")
+        ]))
+        model.query = "disks"
+        XCTAssertEqual(titles(model), ["Disks", "Macintosh HD", "Backup"])
+    }
+
+    /// A tree cannot reorder, so filtering keeps the plugin's authored order —
+    /// the deliberate trade for preserving structure.
+    func testFilteringPreservesAuthoredOrder() {
+        let model = MenuSearchViewModel(nodes: tree([
+            href("zzz disk"), href("disk"), href("a disk")
+        ]))
+        model.query = "disk"
+        XCTAssertEqual(titles(model), ["zzz disk", "disk", "a disk"])
+    }
+
+    func testFilterDropsHeadersAndSeparators() {
+        let model = MenuSearchViewModel(nodes: tree([
+            header("Section"), href("Alpha"), .separator, href("Alpine")
+        ]))
+        model.query = "alp"
+        XCTAssertEqual(model.visible.count, 2)
+        XCTAssertEqual(titles(model), ["Alpha", "Alpine"])
+    }
+
+    func testEmptyQueryRestoresTheFullStructure() {
+        let model = MenuSearchViewModel(nodes: tree([
+            header("Section"), href("Alpha"), group("Disks", href("Macintosh HD"))
+        ]))
+        model.query = "macintosh"
+        model.query = ""
+        XCTAssertEqual(titles(model), ["Alpha", "Disks"])
+        XCTAssertEqual(model.visible.count, 3, "the header is back")
+    }
+
+    /// Every token must match (AND). Matching is fuzzy-subsequence, so a token
+    /// only excludes a row when its characters genuinely cannot be found in
+    /// order — `ssd` fails on `Macintosh HD` for want of a second `s`.
+    func testMultiTokenAnd() {
+        let model = MenuSearchViewModel(nodes: tree([href("Macintosh HD"), href("Macintosh SSD")]))
+        model.query = "mac ssd"
+        XCTAssertEqual(titles(model), ["Macintosh SSD"])
+        model.query = "macintosh"
+        XCTAssertEqual(titles(model), ["Macintosh HD", "Macintosh SSD"])
+        model.query = "macintosh zzz"
+        XCTAssertEqual(titles(model), [], "a token that matches nothing excludes every row")
+    }
+
+    // MARK: - Open branches survive a refresh
+
+    func testARefreshKeepsBranchesOpen() {
+        let model = MenuSearchViewModel(nodes: tree([group("Disks", href("Macintosh HD 40%"))]))
+        model.toggle(["Disks"])
+        model.update(nodes: tree([group("Disks", href("Macintosh HD 41%"))]))
+        XCTAssertEqual(titles(model), ["Disks", "Macintosh HD 41%"], "still open, showing the new value")
+    }
+
+    func testRepeatedRefreshesLeaveOpenBranchesOpen() {
+        let model = MenuSearchViewModel(nodes: tree([group("Disks", href("a"))]))
+        model.toggle(["Disks"])
+        for i in 0..<10 {
+            model.update(nodes: tree([group("Disks", href("value \(i)"))]))
+        }
+        XCTAssertEqual(titles(model), ["Disks", "value 9"])
+    }
+
+    /// The containment guarantee: a branch that cannot be matched after a
+    /// refresh closes **alone**. Title-keyed expansion is imperfect by
+    /// construction — a plugin that retitles a group changes its own key — so
+    /// what is pinned here is that the damage never spreads.
+    func testAVanishedBranchClosesWithoutDisturbingItsSiblings() {
+        let model = MenuSearchViewModel(nodes: tree([
+            group("Disks", href("Macintosh HD")), group("Network", href("Wi-Fi"))
+        ]))
+        model.toggle(["Disks"])
+        model.toggle(["Network"])
+
+        model.update(nodes: tree([group("Network", href("Wi-Fi"))]))
+        XCTAssertEqual(titles(model), ["Network", "Wi-Fi"], "Network stays open after Disks disappeared")
+    }
+
+    func testARetitledBranchClosesOnlyItself() {
+        let model = MenuSearchViewModel(nodes: tree([
+            group("Disks (3)", href("Macintosh HD")), group("Network", href("Wi-Fi"))
+        ]))
+        model.toggle(["Disks (3)"])
+        model.toggle(["Network"])
+
+        model.update(nodes: tree([
+            group("Disks (4)", href("Macintosh HD")), group("Network", href("Wi-Fi"))
+        ]))
+        XCTAssertEqual(
+            titles(model), ["Disks (4)", "Network", "Wi-Fi"],
+            "the retitled branch closed; the untouched one did not"
         )
     }
 
-    private func action(_ text: String, path: [String] = []) -> SearchEntry { .action(row(text, path: path)) }
-    private func info(_ text: String, path: [String] = []) -> SearchEntry { .info(row(text, path: path)) }
-
-    /// Renders an entry as its display text, for order/content assertions
-    /// that don't care which case it is (`SearchEntry` has no `.item` of its
-    /// own the way `FlatRow` does).
-    private func texts(_ entries: [SearchEntry]) -> [String] {
-        entries.compactMap {
-            switch $0 {
-            case .action(let r), .info(let r): return r.item.text
-            case .header(let title): return title
-            case .separator: return nil
-            }
-        }
+    func testTheQuerySurvivesARefresh() {
+        let model = MenuSearchViewModel(nodes: tree([href("cpu 12%"), href("memory")]))
+        model.query = "cpu"
+        model.update(nodes: tree([href("cpu 15%"), href("memory")]))
+        XCTAssertEqual(titles(model), ["cpu 15%"])
     }
 
-    // MARK: - Idle / filtering (existing behavior, now over SearchEntry)
+    // MARK: - Selection
 
-    func testIdleShowsAllRowsInOrder() {
-        let vm = MenuSearchViewModel(entries: [action("Alpha"), action("Beta"), action("Gamma")])
-        XCTAssertEqual(texts(vm.results), ["Alpha", "Beta", "Gamma"])
-        XCTAssertEqual(vm.selection, 0)
+    func testSelectionStartsOnTheFirstRow() {
+        let model = MenuSearchViewModel(nodes: tree([header("Section"), href("Alpha")]))
+        XCTAssertEqual(model.selectedRow()?.item.text, "Alpha", "a header is not selectable")
     }
 
-    func testQueryFiltersAndResetsSelectionToTop() {
-        let vm = MenuSearchViewModel(entries: [action("Settings"), action("Reset"), action("About")])
-        vm.selection = 2
-        vm.query = "set"
-        XCTAssertEqual(Set(texts(vm.results)), ["Settings", "Reset"])
-        XCTAssertEqual(vm.selection, 0, "selection resets to the best match on a new query")
+    func testArrowsMoveOverRowsAndSkipFurniture() {
+        let model = MenuSearchViewModel(nodes: tree([href("Alpha"), .separator, href("Beta")]))
+        model.moveDown()
+        XCTAssertEqual(model.selectedRow()?.item.text, "Beta")
+        model.moveUp()
+        XCTAssertEqual(model.selectedRow()?.item.text, "Alpha")
     }
 
-    func testMoveDownAndUpAreClamped() {
-        let vm = MenuSearchViewModel(entries: [action("One"), action("Two"), action("Three")])
-        vm.moveUp()                       // already at top → stays
-        XCTAssertEqual(vm.selection, 0)
-        vm.moveDown(); vm.moveDown(); vm.moveDown()  // clamp at last
-        XCTAssertEqual(vm.selection, 2)
-        vm.moveUp()
-        XCTAssertEqual(vm.selection, 1)
+    func testArrowsClampWithoutWrapping() {
+        let model = MenuSearchViewModel(nodes: tree([href("Alpha"), href("Beta")]))
+        model.moveUp()
+        XCTAssertEqual(model.selectedRow()?.item.text, "Alpha")
+        model.moveDown()
+        model.moveDown()
+        XCTAssertEqual(model.selectedRow()?.item.text, "Beta")
     }
 
-    func testSelectedRowTracksHighlight() {
-        let vm = MenuSearchViewModel(entries: [action("One"), action("Two")])
-        XCTAssertEqual(vm.selectedRow()?.item.text, "One")
-        vm.moveDown()
-        XCTAssertEqual(vm.selectedRow()?.item.text, "Two")
+    /// A parent is selectable so it can be opened from the keyboard — which is
+    /// what `→` does, and `←` closes it again.
+    func testRightOpensTheSelectedBranchAndLeftClosesIt() {
+        let model = MenuSearchViewModel(nodes: tree([group("Disks", href("Macintosh HD"))]))
+        XCTAssertEqual(model.selectedRow()?.item.text, "Disks")
+        model.expandSelection()
+        XCTAssertEqual(titles(model), ["Disks", "Macintosh HD"])
+        model.collapseSelection()
+        XCTAssertEqual(titles(model), ["Disks"])
     }
 
-    func testNoMatchYieldsNoSelectedRow() {
-        let vm = MenuSearchViewModel(entries: [action("Alpha")])
-        vm.query = "zzzz"
-        XCTAssertTrue(vm.results.isEmpty)
-        XCTAssertNil(vm.selectedRow())
-        vm.moveDown()                     // must not crash on empty results
-        XCTAssertEqual(vm.selection, -1, "no .action entries at all ⇒ the -1 sentinel, not a clamped 0")
+    func testLeftFromALeafMovesToItsParent() {
+        let model = MenuSearchViewModel(nodes: tree([group("Disks", href("Macintosh HD"))]))
+        model.toggle(["Disks"])
+        model.moveDown()
+        XCTAssertEqual(model.selectedRow()?.item.text, "Macintosh HD")
+        model.collapseSelection()
+        XCTAssertEqual(model.selectedRow()?.item.text, "Disks")
     }
 
-    func testClearingQueryRestoresAllRows() {
-        let vm = MenuSearchViewModel(entries: [action("Alpha"), action("Beta")])
-        vm.query = "alpha"
-        XCTAssertEqual(vm.results.count, 1)
-        vm.query = ""
-        XCTAssertEqual(texts(vm.results), ["Alpha", "Beta"])
+    func testSelectionSurvivesARefreshByPosition() {
+        let model = MenuSearchViewModel(nodes: tree([href("cpu 12%"), href("memory 4G")]))
+        model.moveDown()
+        XCTAssertEqual(model.selectedRow()?.item.text, "memory 4G")
+        model.update(nodes: tree([href("cpu 15%"), href("memory 3G")]))
+        XCTAssertEqual(model.selectedRow()?.item.text, "memory 3G", "position, not text — a watched row's text changes")
     }
 
-    // MARK: - Structured entries: selection/navigation skip non-action rows
-
-    func testInitialSelectionSkipsLeadingHeaderAndInfoRows() {
-        let vm = MenuSearchViewModel(entries: [.header("Section"), info("CPU: 42%"), action("Alpha"), action("Beta")])
-        XCTAssertEqual(vm.selection, 2)
-        XCTAssertEqual(vm.selectedRow()?.item.text, "Alpha")
+    func testSelectionClampsForwardWhenTheListShrinks() {
+        let model = MenuSearchViewModel(nodes: tree([href("a"), href("b"), href("c")]))
+        model.moveDown()
+        model.moveDown()
+        XCTAssertEqual(model.selectedRow()?.item.text, "c")
+        model.update(nodes: tree([href("a")]))
+        XCTAssertEqual(model.selectedRow()?.item.text, "a")
     }
 
-    func testMoveDownSkipsSeparatorHeaderAndInfoRows() {
-        let vm = MenuSearchViewModel(entries: [
-            action("Alpha"), .separator, .header("Section"), info("Sub-text"), action("Beta")
-        ])
-        XCTAssertEqual(vm.selection, 0)
-        vm.moveDown()
-        XCTAssertEqual(vm.selection, 4, "must skip the separator, header, and info row to land on the next action")
-        XCTAssertEqual(vm.selectedRow()?.item.text, "Beta")
-        vm.moveDown()                     // already the last action → clamp, no wrap
-        XCTAssertEqual(vm.selection, 4)
-    }
-
-    func testMoveUpSkipsSeparatorHeaderAndInfoRows() {
-        let vm = MenuSearchViewModel(entries: [
-            action("Alpha"), .separator, .header("Section"), info("Sub-text"), action("Beta")
-        ])
-        vm.selection = 4
-        vm.moveUp()
-        XCTAssertEqual(vm.selection, 0, "must skip the info row, header, and separator to land back on the first action")
-        vm.moveUp()                       // already the first action → clamp, no wrap
-        XCTAssertEqual(vm.selection, 0)
-    }
-
-    func testSelectedRowNilWhenNoActionRowsExist() {
-        let vm = MenuSearchViewModel(entries: [.header("Section"), info("Sub-text"), .separator])
-        XCTAssertEqual(vm.selection, -1)
-        XCTAssertNil(vm.selectedRow())
-    }
-
-    func testClearingQueryAfterTypingRestoresStructureAndSelection() {
-        let entries: [SearchEntry] = [.header("Section"), action("Alpha"), .separator, action("Beta")]
-        let vm = MenuSearchViewModel(entries: entries)
-        vm.query = "beta"
-        XCTAssertEqual(texts(vm.results), ["Beta"])
-        vm.query = ""
-        XCTAssertEqual(vm.results, entries, "idle passthrough restores the full structured list")
-        XCTAssertEqual(vm.selection, 1, "selection lands back on the first action row, after the header")
-        XCTAssertEqual(vm.selectedRow()?.item.text, "Alpha")
-    }
-
-    // MARK: - Refreshed entries (the detached window's liveness path)
-
-    func testUpdateReplacesTheEntrySetWholesale() {
-        let vm = MenuSearchViewModel(entries: [action("CPU 12%"), action("Disk 68%")])
-
-        vm.update(entries: [action("CPU 15%"), action("Disk 68%"), action("Net 4 Mb/s")])
-
-        XCTAssertEqual(texts(vm.results), ["CPU 15%", "Disk 68%", "Net 4 Mb/s"])
-    }
-
-    func testUpdatePreservesTheLiveQuery() {
-        let vm = MenuSearchViewModel(entries: [action("CPU 12%"), action("Disk 68%")])
-        vm.query = "cpu"
-        XCTAssertEqual(texts(vm.results), ["CPU 12%"])
-
-        vm.update(entries: [action("CPU 15%"), action("Disk 70%")])
-
-        XCTAssertEqual(vm.query, "cpu", "a window filtered to cpu stays filtered to cpu")
-        XCTAssertEqual(texts(vm.results), ["CPU 15%"], "re-filtered against the new output")
-    }
-
-    /// A watched row is precisely one whose text keeps changing, so the
-    /// selection is carried by position. Resetting to the top on every refresh
-    /// would snap the highlight back once a second on a 1-second plugin.
-    func testUpdateKeepsTheSelectionOnTheSamePositionEvenWhenTheTextChanges() {
-        let vm = MenuSearchViewModel(entries: [action("CPU 12%"), action("Disk 68%"), action("Net 1 Mb/s")])
-        vm.moveDown()
-        XCTAssertEqual(vm.selection, 1)
-
-        vm.update(entries: [action("CPU 99%"), action("Disk 70%"), action("Net 2 Mb/s")])
-
-        XCTAssertEqual(vm.selection, 1)
-        XCTAssertEqual(vm.selectedRow()?.item.text, "Disk 70%")
-    }
-
-    func testUpdateClampsForwardWhenThePluginEmitsFewerRows() {
-        let vm = MenuSearchViewModel(entries: [action("A"), action("B"), action("C")])
-        vm.moveDown(); vm.moveDown()
-        XCTAssertEqual(vm.selection, 2)
-
-        vm.update(entries: [action("A")])
-
-        XCTAssertEqual(vm.selection, 0, "falls back to a row that exists rather than dangling")
-        XCTAssertEqual(vm.selectedRow()?.item.text, "A")
-    }
-
-    func testUpdateWithNoActionableRowsLeavesNothingSelected() {
-        let vm = MenuSearchViewModel(entries: [action("A")])
-
-        vm.update(entries: [info("just text")])
-
-        XCTAssertEqual(vm.selection, -1)
-        XCTAssertNil(vm.selectedRow())
-    }
-
-    /// The transient panel never calls `update`; its entries are frozen at open
-    /// so rows cannot reorder under the pointer mid-search. This pins that the
-    /// frozen path is still the constructor's behavior.
-    func testEntriesAreOtherwiseFrozen() {
-        let entries = [action("Alpha"), action("Beta")]
-        let vm = MenuSearchViewModel(entries: entries)
-        vm.query = "al"
-
-        XCTAssertEqual(texts(vm.results), ["Alpha"])
-        XCTAssertEqual(texts(vm.allEntries), ["Alpha", "Beta"], "the source set is untouched by filtering")
+    func testNoSelectionWhenNothingMatches() {
+        let model = MenuSearchViewModel(nodes: tree([href("Alpha")]))
+        model.query = "zzzz"
+        XCTAssertEqual(model.selection, -1)
+        XCTAssertNil(model.selectedRow())
     }
 }

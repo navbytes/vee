@@ -1,9 +1,14 @@
 import Foundation
 import VeePluginFormat
 
-/// The public entry point for the searchable-menu core: flatten a plugin's menu
-/// tree, then filter + rank it by a typed query. Pure and AppKit-free — the UI
-/// layer owns presentation; all matching logic lives (and is tested) here.
+/// The public entry point for the **flat, ranked** menu search: flatten a
+/// plugin's menu tree, then filter + rank it by a typed query. Pure and
+/// AppKit-free — all matching logic lives (and is tested) here.
+///
+/// The app's menu surfaces filter the tree instead (`MenuTreeFilter`), which
+/// preserves structure and therefore cannot rank. This projection is what
+/// `vee search` uses, where there is no tree to draw and best-match-first is
+/// the right answer.
 public enum MenuSearch {
     /// Extra weight for a token that matches the item's own text rather than only
     /// an ancestor (breadcrumb) title, so direct hits outrank contextual ones.
@@ -19,47 +24,12 @@ public enum MenuSearch {
         MenuFlattener.flatten(nodes)
     }
 
-    /// Flattens a `ParsedOutput.body` into every panel-visible entry (rows,
-    /// headers, separators) — see `MenuFlattener.flattenEntries`.
-    public static func flattenEntries(_ nodes: [MenuNode]) -> [SearchEntry] {
-        MenuFlattener.flattenEntries(nodes)
-    }
-
     /// Filters and ranks `rows` for `query`. An empty/whitespace query is the idle
     /// state: every row, in original order. Otherwise a row is kept iff **every**
     /// whitespace-separated token fuzzy-matches (multi-token AND), ranked by score
     /// descending with original order as a stable tie-break.
     public static func search(_ query: String, in rows: [FlatRow]) -> [FlatRow] {
         scored(query, in: rows).map(\.row)
-    }
-
-    /// The `SearchEntry` counterpart of `search(_:in: [FlatRow])`. An empty/
-    /// whitespace query is idle: every entry unchanged (headers/separators
-    /// included), so the panel shows the plugin's full structure until the
-    /// user types. Once typing starts, headers and separators carry no match
-    /// target of their own and are dropped — only `.action`/`.info` rows are
-    /// ranked, via the same per-row scoring, AND semantics, and tie-break as
-    /// the `FlatRow` search above.
-    public static func search(_ query: String, in entries: [SearchEntry]) -> [SearchEntry] {
-        let tokens = SearchText.tokens(SearchText.fold(query))
-        guard !tokens.isEmpty else {
-            return entries   // idle: everything, original order
-        }
-
-        var matched: [(index: Int, score: Int, entry: SearchEntry)] = []
-        for (index, entry) in entries.enumerated() {
-            let row: FlatRow
-            switch entry {
-            case .action(let r), .info(let r): row = r
-            case .header, .separator: continue          // no match target, dropped from typed results
-            }
-            if let score = rowScore(tokens: tokens, row: row) {
-                matched.append((index, score, entry))
-            }
-        }
-        return matched
-            .sorted { $0.score != $1.score ? $0.score > $1.score : $0.index < $1.index }
-            .map(\.entry)
     }
 
     /// Like `search`, but returns the per-row scores (for tests / debugging).

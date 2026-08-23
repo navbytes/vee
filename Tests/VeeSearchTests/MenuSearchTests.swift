@@ -19,9 +19,6 @@ final class MenuSearchTests: XCTestCase {
 
     private func rows(_ texts: String...) -> [FlatRow] { texts.map { row($0) } }
 
-    private func actionEntry(_ text: String, path: [String] = []) -> SearchEntry { .action(row(text, path: path)) }
-    private func infoEntry(_ text: String, path: [String] = []) -> SearchEntry { .info(row(text, path: path)) }
-
     // MARK: - Idle
 
     func testEmptyQueryReturnsAllInOriginalOrder() {
@@ -114,33 +111,5 @@ final class MenuSearchTests: XCTestCase {
         let scored = MenuSearch.scored("set", in: rows("Settings"))
         XCTAssertEqual(scored.count, 1)
         XCTAssertGreaterThan(scored[0].score, 0)
-    }
-
-    // MARK: - search(_:in: [SearchEntry])
-
-    func testEntriesIdleQueryReturnsEverythingUnchangedIncludingHeadersAndSeparators() {
-        let entries: [SearchEntry] = [.header("Recent"), actionEntry("Alpha"), .separator, infoEntry("CPU: 42%")]
-        XCTAssertEqual(MenuSearch.search("", in: entries), entries)
-    }
-
-    func testEntriesTypedQueryDropsHeadersAndSeparatorsEvenWhenTheHeaderTextWouldMatch() {
-        let entries: [SearchEntry] = [.header("Alpha Section"), actionEntry("Alpha"), .separator, actionEntry("Beta")]
-        XCTAssertEqual(MenuSearch.search("alpha", in: entries), [actionEntry("Alpha")])
-    }
-
-    func testEntriesInfoRowsAreMatchableAlongsideActionRows() {
-        let entries: [SearchEntry] = [infoEntry("Settings Panel"), actionEntry("Reset Settings")]
-        let result = MenuSearch.search("settings", in: entries)
-        XCTAssertEqual(result.count, 2, "an .info row is just as matchable as an .action row")
-        XCTAssertTrue(result.contains(infoEntry("Settings Panel")))
-        XCTAssertTrue(result.contains(actionEntry("Reset Settings")))
-    }
-
-    /// Mirrors `testPrefixContiguousOutranksScattered` but with an `.info` row
-    /// on the winning side — proving `.info` goes through the identical
-    /// per-row scoring as `.action`, not a separate, weaker path.
-    func testEntriesInfoRowRankedByTheSameScoringAsAction() {
-        let result = MenuSearch.search("set", in: [actionEntry("Sweet Escape Tool"), infoEntry("Settings")])
-        XCTAssertEqual(result.first, infoEntry("Settings"))
     }
 }
