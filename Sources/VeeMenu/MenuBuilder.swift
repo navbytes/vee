@@ -69,7 +69,20 @@ public enum MenuBuilder {
 
         if row.isAlternate {
             menuItem.isAlternate = true
-            menuItem.keyEquivalentModifierMask = .option
+            // AppKit swaps an alternate for its predecessor only when the two
+            // carry the **same key equivalent** and differ in modifier mask. So
+            // the alternate takes the primary's key (inherited in `MenuTree`)
+            // and adds ⌥ to its modifiers; leaving the key empty while the
+            // primary declared one renders both rows at once with ⌥ inert.
+            if let key = row.keyEquivalent, let equivalent = KeyEquivalentParser.parse(key) {
+                menuItem.keyEquivalent = equivalent.key
+                // A primary that already declares ⌥ leaves the two masks equal
+                // and therefore indistinguishable — a plugin-authoring mistake
+                // AppKit gives us no way to resolve.
+                menuItem.keyEquivalentModifierMask = equivalent.modifiers.union(.option)
+            } else {
+                menuItem.keyEquivalentModifierMask = .option
+            }
         } else if let key = row.keyEquivalent, let equivalent = KeyEquivalentParser.parse(key) {
             // `key=`: a shortcut active while the menu is open.
             menuItem.keyEquivalent = equivalent.key

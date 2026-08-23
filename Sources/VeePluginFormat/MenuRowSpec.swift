@@ -163,8 +163,15 @@ public enum MenuTree {
                 // `alternate=true` is a *sibling* of the row it replaces, added
                 // immediately after it at the same level — not a child. AppKit
                 // shows it in place of its predecessor while ⌥ is held.
+                //
+                // It inherits the primary's `key=`. AppKit swaps the two only
+                // when they carry the **same key equivalent** and differ in
+                // modifier mask; give the alternate its own (or none, where the
+                // primary declared one) and the pair simply renders as two
+                // ordinary rows with ⌥ doing nothing. An alternate's own `key=`
+                // cannot be honoured for the same reason, so the primary's wins.
                 if let alternate = item.alternate {
-                    result.append(.row(row(for: alternate, isAlternate: true)))
+                    result.append(.row(row(for: alternate, isAlternate: true, inheritedKey: item.params.key)))
                 }
             }
         }
@@ -177,7 +184,11 @@ public enum MenuTree {
     /// native section header is title-only ("non-interactive and do not perform
     /// an action"), and its submenu is never part of the dropdown, so neither is
     /// walked here.
-    public static func row(for item: MenuItem, isAlternate: Bool = false) -> MenuRowSpec {
+    public static func row(
+        for item: MenuItem,
+        isAlternate: Bool = false,
+        inheritedKey: String? = nil
+    ) -> MenuRowSpec {
         if item.params.swiftbar.header == true {
             return MenuRowSpec(item: item, isHeader: true, isEnabled: false, isAlternate: isAlternate)
         }
@@ -199,7 +210,7 @@ public enum MenuTree {
             accessory: accessory(for: item.params),
             control: item.params.control,
             accessoryLeading: item.params.swiftbar.accessory == .leading,
-            keyEquivalent: item.params.key,
+            keyEquivalent: isAlternate ? inheritedKey : item.params.key,
             isAlternate: isAlternate,
             children: children,
             hasSubmenu: hasSubmenu
