@@ -27,7 +27,9 @@ public struct MenuRowAccessory: View {
         /// host one. The menu bar cannot, and draws the display graphic
         /// instead — the one difference between the two surfaces, and a
         /// property of the presentation rather than of the row.
-        case control(PluginControl)
+        ///
+        /// `width` is `accessoryw=`, or `nil` for the default track width.
+        case control(PluginControl, width: Double?)
         /// The row's display graphic, selected by the shared rule in
         /// `MenuTree.accessory` so this surface and the dropdown can never
         /// disagree about which one a row carries.
@@ -53,14 +55,14 @@ public struct MenuRowAccessory: View {
     ///
     /// Pure, so the precedence is unit-testable without rendering.
     public static func kind(for params: LineParams) -> Kind? {
-        if let control = params.control { return .control(control) }
+        if let control = params.control { return .control(control, width: params.controlWidth) }
         return MenuTree.accessory(for: params).map(Kind.display)
     }
 
     public var body: some View {
         switch kind {
-        case .control(let control):
-            InlineControl(control: control, onCommit: onCommit)
+        case .control(let control, let width):
+            InlineControl(control: control, width: width, onCommit: onCommit)
         case .display(.progress(let progress, let tint)):
             gauge(progress, tint: tint)
         case .display(.sparkline(let values, let style, let tint)):
@@ -147,10 +149,10 @@ public struct MenuRowAccessory: View {
 
     static let accessoryHeight: CGFloat = 18
 
-    /// Track width for an inline `slider=`. Its own constant rather than the
-    /// sparkline's: the two happened to share a number, not a reason, and a
-    /// sparkline's width is now the plugin's to set.
-    static let sliderWidth: CGFloat = 64
+    /// Track width for an inline `slider=` that declares no `accessoryw=`.
+    /// Its own constant rather than the sparkline's: the two happened to share
+    /// a number, not a reason.
+    static let defaultSliderWidth: CGFloat = 64
 }
 
 /// Sizes a sparkline from its `SparklineStyle`, honouring `sparklinew=full` the
@@ -236,13 +238,17 @@ private struct CompactChart: View {
 /// from under the pointer.
 private struct InlineControl: View {
     let control: PluginControl
+    /// `accessoryw=`, or `nil` for the default track width. A toggle ignores
+    /// it: a switch is a fixed system control with no width to give it.
+    let width: Double?
     let onCommit: @MainActor (Double) -> Void
 
     @State private var value: Double
     @State private var isEditing = false
 
-    init(control: PluginControl, onCommit: @escaping @MainActor (Double) -> Void) {
+    init(control: PluginControl, width: Double? = nil, onCommit: @escaping @MainActor (Double) -> Void) {
         self.control = control
+        self.width = width
         self.onCommit = onCommit
         _value = State(initialValue: Self.value(of: control))
     }
@@ -277,7 +283,7 @@ private struct InlineControl: View {
                 })
                 .controlSize(.mini)
                 .tint(.accentColor)
-                .frame(width: MenuRowAccessory.sliderWidth)
+                .frame(width: width.map { CGFloat($0) } ?? MenuRowAccessory.defaultSliderWidth)
                 Text(CompactNumber.label(value))
                     .font(.caption2).monospacedDigit()
                     .foregroundStyle(.secondary)

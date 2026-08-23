@@ -53,10 +53,11 @@ final class MenuRowAccessoryTests: XCTestCase {
 
     func testControlIsRecognised() {
         let kind = MenuRowAccessory.kind(for: params { $0.control = .toggle(on: true) })
-        guard case .control(let control) = kind else {
+        guard case .control(let control, let width) = kind else {
             return XCTFail("expected a control, got \(String(describing: kind))")
         }
         XCTAssertEqual(control, .toggle(on: true))
+        XCTAssertNil(width, "an unsized control keeps the default track width")
     }
 
     /// A live control is drawn in place of the row's display graphic **on this

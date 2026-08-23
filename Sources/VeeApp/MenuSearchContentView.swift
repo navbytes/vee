@@ -183,7 +183,7 @@ private struct MenuRowView: View {
     /// can host one; the dropdown draws the display graphic instead and opens
     /// the control on click. Both read the same resolved row.
     private var accessory: MenuRowAccessory.Kind? {
-        if let control = spec.control { return .control(control) }
+        if let control = spec.control { return .control(control, width: spec.controlWidth) }
         return spec.accessory.map(MenuRowAccessory.Kind.display)
     }
 

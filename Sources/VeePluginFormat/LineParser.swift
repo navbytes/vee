@@ -373,6 +373,10 @@ enum LineParser {
                 if let accessoryH { chartH = accessoryH }
                 if accessoryFullWidth { chartFullWidth = true }
             }
+            // A control takes a width but no height (see `LineParams
+            // .controlWidth`), and `full` has no meaning for one — a slider
+            // stretched across the row is a scrub bar, not a setting.
+            if p.control != nil, let accessoryW { p.controlWidth = accessoryW }
         }
 
         if sparklineW != nil || sparklineH != nil || sparklineColor != nil || sparklineFullWidth {

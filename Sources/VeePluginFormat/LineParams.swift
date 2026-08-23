@@ -220,6 +220,15 @@ public struct LineParams: Equatable, Sendable {
     /// re-invokes the item's `shell=`/`bash=` command with the chosen value.
     public var control: PluginControl?
 
+    /// `accessoryw=` applied to a live `toggle=`/`slider=`.
+    ///
+    /// Held here rather than folded into `PluginControl` because it is a
+    /// presentation measurement, not part of what the control *is* — the same
+    /// separation `MenuRowSpec` keeps between a row's control and its display
+    /// graphic. `accessoryh=` has no counterpart: a slider's height is its
+    /// control size and a toggle has none, so height is ignored for controls.
+    public var controlWidth: Double?
+
     /// An inline progress gauge (`progress=0.72` or `progress=value,max`). When
     /// non-nil, the item renders a real capsule bar in the menu row.
     public var progress: ProgressParams?
