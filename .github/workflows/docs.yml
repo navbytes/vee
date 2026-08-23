@@ -104,13 +104,33 @@ jobs:
             -H "Content-Type: application/json" \
             -H "Authorization: Bearer $API_KEY" \
             -d "{\"libraryName\": \"/${{ github.repository }}\"}")
+          body=$(cat /tmp/c7.json 2>/dev/null || true)
           echo "HTTP $code"
-          cat /tmp/c7.json || true
-          echo
+          echo "$body"
           # A refresh is a request, not a guarantee: Context7 queues the
-          # re-index. Anything other than a 2xx is worth failing on, since the
-          # request itself did not land.
+          # re-index. A non-2xx generally means the request did not land, and
+          # is worth failing on.
+          #
+          # With one exception, found the first time this ran. Context7 allows
+          # one library per account to be processing at a time, and rejects a
+          # second with 400 user-has-active-task. That is not a failure to
+          # request a re-index -- it means one is already underway, which is
+          # the outcome this job exists to produce. Failing here would turn a
+          # docs deploy red for having asked twice, and two pushes in quick
+          # succession is exactly when that happens.
           case "$code" in
-            2*) echo "Refresh requested." ;;
-            *) echo "Context7 refresh failed."; exit 1 ;;
+            2*)
+              echo "Refresh requested."
+              ;;
+            *)
+              case "$body" in
+                *user-has-active-task*)
+                  echo "A refresh is already in progress — nothing to do."
+                  ;;
+                *)
+                  echo "Context7 refresh failed."
+                  exit 1
+                  ;;
+              esac
+              ;;
           esac
