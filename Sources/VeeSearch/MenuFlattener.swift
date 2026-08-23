@@ -25,22 +25,13 @@ public enum MenuFlattener {
         return normalized(entries)
     }
 
-    /// Whether activating this item does something. Mirrors the dispatch order in
-    /// `AppActionDispatcher.perform` exactly — an item is a row iff the dispatcher
-    /// would act on it — so nothing surfaces that would be a no-op on Enter, and
-    /// nothing that *would* act is dropped. `progress=` is a display-only gauge
-    /// (never dispatched), so it does not by itself make an item actionable.
+    /// Whether activating this item does something.
+    ///
+    /// Delegates to `MenuTree.dispatches` — the single definition of the
+    /// dispatch set, shared with the AppKit dropdown. This used to be a second
+    /// copy kept in agreement with `MenuBuilder.isActionable` by a comment.
     static func isActionable(_ item: MenuItem) -> Bool {
-        let p = item.params
-        if p.control != nil { return true }
-        if p.shell != nil { return true }
-        if p.swiftbar.webview != nil { return true }
-        if p.sparkline != nil { return true }
-        if p.swiftbar.chart != nil { return true }
-        if p.href != nil { return true }
-        if let shortcut = p.swiftbar.shortcut, !shortcut.isEmpty { return true }
-        if p.refresh == true { return true }
-        return false
+        MenuTree.dispatches(item)
     }
 
     /// Depth-first walk (emission order matches descent order). A `header=true`

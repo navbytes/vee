@@ -23,10 +23,15 @@ import VeePluginFormat
 public struct MenuRowAccessory: View {
     /// Which graphic a row carries, if any.
     public enum Kind: Equatable, Sendable {
+        /// A live `toggle=`/`slider=`, drawn in place because a window *can*
+        /// host one. The menu bar cannot, and draws the display graphic
+        /// instead — the one difference between the two surfaces, and a
+        /// property of the presentation rather than of the row.
         case control(PluginControl)
-        case progress(ProgressParams, tint: VeeColor?)
-        case sparkline([Double], tint: VeeColor?)
-        case chart(ChartParams)
+        /// The row's display graphic, selected by the shared rule in
+        /// `MenuTree.accessory` so this surface and the dropdown can never
+        /// disagree about which one a row carries.
+        case display(MenuAccessory)
     }
 
     private let kind: Kind
@@ -41,30 +46,26 @@ public struct MenuRowAccessory: View {
 
     /// The graphic `params` declares, or `nil` for a plain row.
     ///
-    /// Precedence follows `AppActionDispatcher`'s dispatch order — control
-    /// first, then the display-only graphics in the order `MenuBuilder` draws
-    /// them inline (progress, sparkline, chart). A row declaring several shows
-    /// the one that would act on click, so the graphic never advertises a
-    /// different surface than the row opens.
+    /// A live control wins, because this surface can host one and the row's
+    /// click acts on it. Everything else defers to `MenuTree.accessory` — the
+    /// single definition of display-graphic precedence, shared with the AppKit
+    /// dropdown, which this method used to duplicate.
     ///
     /// Pure, so the precedence is unit-testable without rendering.
     public static func kind(for params: LineParams) -> Kind? {
         if let control = params.control { return .control(control) }
-        if let progress = params.progress { return .progress(progress, tint: params.color) }
-        if let series = params.sparkline, !series.isEmpty { return .sparkline(series, tint: params.color) }
-        if let chart = params.swiftbar.chart { return .chart(chart) }
-        return nil
+        return MenuTree.accessory(for: params).map(Kind.display)
     }
 
     public var body: some View {
         switch kind {
         case .control(let control):
             InlineControl(control: control, onCommit: onCommit)
-        case .progress(let progress, let tint):
+        case .display(.progress(let progress, let tint)):
             gauge(progress, tint: tint)
-        case .sparkline(let values, let tint):
-            sparkline(values, tint: tint)
-        case .chart(let chart):
+        case .display(.sparkline(let values, let style, let tint)):
+            sparkline(values, style: style, tint: tint)
+        case .display(.chart(let chart)):
             CompactChart(chart: chart)
         }
     }
@@ -106,9 +107,18 @@ public struct MenuRowAccessory: View {
     /// A bare trend line — no axes, no footer, no card. The popover
     /// (`SparklineChartView`) is where the value and range labels live, and a
     /// click still opens it.
+    ///
+    /// Colour and dimensions come from `SparklineStyle`, the same values the
+    /// AppKit menu row reads: `sparklinecolor=` wins, then the row's `color=`,
+    /// then the accent; `sparklinew=`/`sparklineh=` set the size, defaulting to
+    /// `SparklineStyle`'s. This row used to hardcode 64×20 and ignore all three
+    /// params, so the same series drew at a different size and colour here than
+    /// in the dropdown.
     @ViewBuilder
-    private func sparkline(_ values: [Double], tint: VeeColor?) -> some View {
-        let color = tint.flatMap(SwiftUIColor.resolve) ?? .accentColor
+    private func sparkline(_ values: [Double], style: SparklineStyle, tint: VeeColor?) -> some View {
+        let color = style.color.flatMap(SwiftUIColor.resolve)
+            ?? tint.flatMap(SwiftUIColor.resolve)
+            ?? .accentColor
         if values.count >= 2 {
             Chart(Array(values.enumerated()), id: \.offset) { index, value in
                 LineMark(x: .value("Index", index), y: .value("Value", value))
@@ -119,14 +129,14 @@ public struct MenuRowAccessory: View {
             .chartXAxis(.hidden)
             .chartYAxis(.hidden)
             .chartPlotStyle { $0.background(.clear) }
-            .frame(width: Self.sparklineWidth, height: Self.accessoryHeight)
+            .modifier(SparklineFrame(style: style))
             .accessibilityElement()
             .accessibilityLabel("Sparkline")
             .accessibilityValue(Self.sparklineSummary(values))
         } else {
             // One point (or none) is not a trend. Hold the slot so rows stay
             // aligned rather than jumping when a series grows to two.
-            Color.clear.frame(width: Self.sparklineWidth, height: Self.accessoryHeight)
+            Color.clear.modifier(SparklineFrame(style: style))
         }
     }
 
@@ -135,8 +145,27 @@ public struct MenuRowAccessory: View {
         return "latest \(CompactNumber.label(last)), range \(CompactNumber.label(low)) to \(CompactNumber.label(high))"
     }
 
-    static let sparklineWidth: CGFloat = 64
     static let accessoryHeight: CGFloat = 18
+
+    /// Track width for an inline `slider=`. Its own constant rather than the
+    /// sparkline's: the two happened to share a number, not a reason, and a
+    /// sparkline's width is now the plugin's to set.
+    static let sliderWidth: CGFloat = 64
+}
+
+/// Sizes a sparkline from its `SparklineStyle`, honouring `sparklinew=full` the
+/// same way `progressw=full` and `chartw=full` are honoured above: stretch to
+/// the row's leftover width instead of a fixed number of points.
+private struct SparklineFrame: ViewModifier {
+    let style: SparklineStyle
+
+    func body(content: Content) -> some View {
+        if style.isFullWidth {
+            content.frame(maxWidth: .infinity).frame(height: CGFloat(style.effectiveHeight))
+        } else {
+            content.frame(width: CGFloat(style.effectiveWidth), height: CGFloat(style.effectiveHeight))
+        }
+    }
 }
 
 // MARK: - Chart
@@ -248,7 +277,7 @@ private struct InlineControl: View {
                 })
                 .controlSize(.mini)
                 .tint(.accentColor)
-                .frame(width: MenuRowAccessory.sparklineWidth)
+                .frame(width: MenuRowAccessory.sliderWidth)
                 Text(CompactNumber.label(value))
                     .font(.caption2).monospacedDigit()
                     .foregroundStyle(.secondary)

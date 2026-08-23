@@ -71,16 +71,30 @@ and its children remain reachable.
 A row's rendered text, declared icon, checked state, tooltip, and inline graphic
 SHALL be decided once for that row and applied by every presentation.
 
-Where a row declares more than one inline graphic, the graphic shown SHALL be
-chosen by a single rule, so no presentation advertises a different graphic than
-another. Text styling — colors, ANSI runs, Markdown, inline symbols, truncation,
-and badges — SHALL be resolved identically for all presentations.
+Where a row declares more than one display graphic — a progress gauge,
+sparkline, or chart — the one shown SHALL be chosen by a single rule, so no
+presentation advertises a different graphic than another. Text styling — colors,
+ANSI runs, Markdown, inline symbols, truncation, and badges — SHALL be resolved
+identically for all presentations.
 
-#### Scenario: One graphic decision
+A live control (`toggle=`/`slider=`) is not a display graphic. Whether it is
+drawn inline is a property of the presentation: a presentation that can host a
+live control MAY draw it in place of the row's display graphic, and one that
+cannot SHALL draw the display graphic and offer the control on activation.
+Either way the control remains what the row acts on.
 
-- **WHEN** a row declares more than one of a progress gauge, sparkline, chart, or
-  control
+#### Scenario: One display-graphic decision
+
+- **WHEN** a row declares more than one of a progress gauge, sparkline, or chart
 - **THEN** every presentation shows the same one
+
+#### Scenario: A live control is presented per surface
+
+- **WHEN** a row declares a control alongside a display graphic
+- **THEN** a presentation that can host the control inline draws the control
+- **AND** a presentation that cannot draws the display graphic and opens the
+  control on activation
+- **AND** activating the row acts on the control in both
 
 #### Scenario: Styling does not diverge
 

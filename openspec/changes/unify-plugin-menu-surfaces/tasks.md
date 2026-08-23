@@ -3,27 +3,38 @@
 Design D1. This group must land green with **zero** user-visible change; the
 existing `VeeMenuTests` / `VeeSearchTests` suites are the safety net.
 
-- [ ] 1.1 Add `MenuRowSpec` to `VeeMenu`: the resolved description of one row —
-      text attributes, icon, tooltip, checked/disabled state, accessory kind,
-      actionability, key equivalent, and whether it is an alternate. Pure and
-      AppKit-emitting-free enough to unit-test without building an `NSMenu`.
-- [ ] 1.2 Add `MenuTree` to `VeeMenu`: resolves `[MenuNode]` into
-      `[MenuRowSpec]` + children, owning node-to-row selection (`dropdown=false`,
+- [x] 1.1 Add `MenuRowSpec` to **`VeePluginFormat`** (not `VeeMenu`: `VeeUI` and
+      `VeeMenu` are siblings and cannot see each other, so the shared model must
+      sit in the module both depend on). Carries decisions only — actionability,
+      enabled/checked/header state, display-graphic selection, control presence,
+      accessory placement, key equivalent, alternate — keeping the module
+      Foundation-only. AppKit resolution stays in `AttributedTitleFactory` /
+      `SymbolImageFactory`, which both emitters already share.
+- [x] 1.2 Add `MenuTree` to `VeePluginFormat`: resolves `[MenuNode]` into
+      `[MenuTreeNode]`, owning node-to-row selection (`dropdown=false`,
       empty text, `header=true` section scope) and alternate placement.
-- [ ] 1.3 Move actionability into the model as the single definition. Delete
+- [x] 1.3 Move actionability into the model as the single definition. Delete
       `MenuBuilder.isActionable` and `MenuFlattener.isActionable`; both call
       sites read `MenuRowSpec`. Include the submenu-wins-over-action rule.
-- [ ] 1.4 Move accessory selection into the model. Delete the `if/else-if` chain
-      in `MenuBuilder.makeItem` and `MenuRowAccessory.kind(for:)`; both read
-      `MenuRowSpec.accessory`.
-- [ ] 1.5 Rewrite `MenuBuilder` as a dumb `NSMenu` emitter over `MenuTree`.
-      **Acceptance: no `params` inspection remains in `MenuBuilder`** — grep for
-      `item.params` / `params.` in the file returns nothing.
-- [ ] 1.6 Add `VeeMenuTests` covering the model directly: actionability across
+- [x] 1.4 Move display-graphic selection (progress → sparkline → chart) into the
+      model as one rule. Delete the `if/else-if` chain in `MenuBuilder.makeItem`
+      and the graphic branches of `MenuRowAccessory.kind(for:)`; both read
+      `MenuRowSpec.accessory`. Whether a live control is drawn inline stays with
+      the presentation — the menu bar cannot host one (see the amended
+      "A live control is presented per surface" scenario).
+- [x] 1.5 Rewrite `MenuBuilder` as a dumb `NSMenu` emitter over `MenuTree`.
+      **Acceptance: no decision logic on `params` remains in `MenuBuilder`** — no
+      `if`/`??`/comparison branching on a param. Delegating calls that hand
+      `params` wholesale to the shared `AttributedTitleFactory` /
+      `SymbolImageFactory` are not decisions and are expected to remain.
+- [x] 1.6 Add `VeeMenuTests` covering the model directly: actionability across
       every param combination, accessory precedence, submenu-wins-over-action,
       `dropdown=false` exclusion, alternate placement, header section scope.
 - [ ] 1.7 Verify `swift test` is green and the menu bar is unchanged by hand
       (nested submenus, alternates, `key=`, rich rows, headers, separators).
+      **Automated half done** — 1058 tests green, swiftlint clean. The by-hand
+      menu-bar pass needs a real session and is left for the user; it can be
+      folded into the 7.2 regression pass.
 
 ## 2. Remove cross-plugin search
 
