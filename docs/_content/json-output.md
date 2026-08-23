@@ -1,5 +1,19 @@
-# JSON output format
-
+---
+title: "JSON output format"
+description: "Vee's optional structured-JSON output format: opt in with a top-level {\"vee\":1} object, skip the text protocol's quoting and escaping, and get typed items and clean nesting."
+sidebar:
+  label: "JSON output"
+  order: 9
+head:
+  - tag: link
+    attrs:
+      rel: "alternate"
+      type: "text/markdown"
+      href: "/guide/json-output.md"
+      title: "Markdown source"
+  - tag: title
+    content: "JSON output format — Vee docs"
+---
 Alongside the xbar/SwiftBar text protocol, Vee understands an **optional structured-JSON output format**. A plugin prints a single JSON object describing its title and menu, and Vee decodes it directly — no line parsing, no `|`-separated parameters, no quoting rules.
 
 ## When to use JSON vs the text protocol

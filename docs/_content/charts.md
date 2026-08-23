@@ -1,5 +1,19 @@
-# Charts
-
+---
+title: "Charts"
+description: "Every chart a Vee plugin can draw: sparklines, progress bars, pie, donut, and stacked-bar share charts, and widget gauges — how each is spelled on the text, JSON, and widget surfaces, and which options apply to which."
+sidebar:
+  label: "Charts"
+  order: 4
+head:
+  - tag: link
+    attrs:
+      rel: "alternate"
+      type: "text/markdown"
+      href: "/guide/charts.md"
+      title: "Markdown source"
+  - tag: title
+    content: "Charts — Vee docs"
+---
 Vee draws six kinds of chart, and a plugin reaches them through three different
 output formats. This page is the index: what exists, how to emit it, and what
 each one takes. The prose that explains any given chart lives with its surface —

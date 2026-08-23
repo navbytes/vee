@@ -1,5 +1,19 @@
-# Getting started with Vee
-
+---
+title: "Getting started with Vee"
+description: "Install Vee, write your first plugin, and learn where plugins live. A native macOS menu-bar script runner, xbar and SwiftBar compatible."
+sidebar:
+  label: "Getting started"
+  order: 1
+head:
+  - tag: link
+    attrs:
+      rel: "alternate"
+      type: "text/markdown"
+      href: "/guide/getting-started.md"
+      title: "Markdown source"
+  - tag: title
+    content: "Getting started with Vee — Vee docs"
+---
 Vee is a native macOS menu-bar script runner. It runs plugins — any executable, in any language — on a schedule and renders their standard output as menu-bar titles and dropdown menus. It is a fast, leak-free successor to [xbar](https://github.com/matryer/xbar) and [SwiftBar](https://github.com/swiftbar/SwiftBar), and it runs their plugins unchanged.
 
 ## Requirements

@@ -1,5 +1,19 @@
-# Preferences
-
+---
+title: "Preferences"
+description: "Plugins declare typed settings with <xbar.var>; Vee auto-generates a form and stores secrets in the macOS Keychain. Configuration belongs to the plugin."
+sidebar:
+  label: "Preferences"
+  order: 7
+head:
+  - tag: link
+    attrs:
+      rel: "alternate"
+      type: "text/markdown"
+      href: "/guide/preferences.md"
+      title: "Markdown source"
+  - tag: title
+    content: "Preferences — Vee docs"
+---
 Configuration in Vee belongs to the plugin, not the app. A plugin declares its own typed settings with `<xbar.var>` tags; Vee reads them, generates a settings form automatically, and injects the values back into the plugin as environment variables. The app never hardcodes service names, API keys, or credentials — it only renders whatever a plugin declares.
 
 ## Declaring a preference

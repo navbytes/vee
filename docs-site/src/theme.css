@@ -1,0 +1,7 @@
+/* Bridge Starlight's tokens to the landing page's palette, so /guide/ and the
+   hand-authored marketing pages read as one site rather than two that happen
+   to share a domain. */
+:root {
+  --sl-font: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --sl-font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+}

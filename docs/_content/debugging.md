@@ -1,5 +1,19 @@
-# Debugging and testing plugins
-
+---
+title: "Debugging and testing plugins"
+description: "Preview, watch, and lint a Vee plugin without installing it: vee render, vee show, vee dev, and vee lint, plus execution timeouts, exit codes, and the Debug console."
+sidebar:
+  label: "Debugging & testing"
+  order: 11
+head:
+  - tag: link
+    attrs:
+      rel: "alternate"
+      type: "text/markdown"
+      href: "/guide/debugging.md"
+      title: "Markdown source"
+  - tag: title
+    content: "Debugging and testing plugins — Vee docs"
+---
 Vee's authoring tools run without the app, without installing anything into your
 plugins folder, and against Vee's real parser — so what you see in the terminal is
 what the menu bar would build. This page is the workflow: preview a plugin, watch

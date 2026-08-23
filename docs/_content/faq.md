@@ -1,5 +1,19 @@
-# FAQ
-
+---
+title: "FAQ"
+description: "Answers about Vee: is it safe un-sandboxed, will my SwiftBar/xbar plugins work, macOS 26 and Apple Silicon requirements, where secrets are stored, and more."
+sidebar:
+  label: "FAQ"
+  order: 14
+head:
+  - tag: link
+    attrs:
+      rel: "alternate"
+      type: "text/markdown"
+      href: "/guide/faq.md"
+      title: "Markdown source"
+  - tag: title
+    content: "FAQ — Vee docs"
+---
 ### Is Vee safe if plugins run un-sandboxed?
 
 Plugins run as ordinary programs with your full user privileges — Vee does not sandbox them, and that is by design (a menu-bar script runner exists to run arbitrary scripts). The safety model is **transparency, not isolation**: plugins declare what they access with `<vee.*>` tags, and Vee shows a plain-language trust summary before you install and trust badges in the Manager. Treat a plugin like any other script you download: read the source of anything you do not trust. See the [trust model](trust-model.md) for the full picture.

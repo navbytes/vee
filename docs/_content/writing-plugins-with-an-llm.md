@@ -1,5 +1,19 @@
-# Writing plugins with an LLM
-
+---
+title: "Writing plugins with an LLM"
+description: "Hand a model the whole plugin format in one file, give it the JSON Schemas instead of prose, and close the loop with vee lint — plus the mistakes to watch for."
+sidebar:
+  label: "Writing plugins with an LLM"
+  order: 12
+head:
+  - tag: link
+    attrs:
+      rel: "alternate"
+      type: "text/markdown"
+      href: "/guide/writing-plugins-with-an-llm.md"
+      title: "Markdown source"
+  - tag: title
+    content: "Writing Vee plugins with an LLM — Vee docs"
+---
 A Vee plugin is a small, self-contained script with a strict output format and a
 fast way to check it. That shape suits an LLM well — but only if you give it the
 format and a way to verify what it wrote. This page is how.

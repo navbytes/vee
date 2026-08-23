@@ -12,10 +12,16 @@ merged.
 ## Ground rules
 
 - **Be kind.** Assume good faith and keep discussion technical.
-- **Zero third-party dependencies.** Vee ships with no external Swift packages,
-  and the TypeScript SDK is dependency-free (Node runs the `.ts` directly). A PR
-  that adds a dependency will almost always be declined — please open an issue to
-  discuss before writing code that needs one.
+- **Zero third-party dependencies in what ships.** Vee ships with no external
+  Swift packages, and all three SDKs are dependency-free (Node runs the `.ts`
+  directly; Python and Go are standard library only). A PR that adds a
+  dependency to the app or an SDK will almost always be declined — please open
+  an issue to discuss before writing code that needs one.
+
+  The documentation site under `docs-site/` is the one deliberate exception: it
+  builds with Astro and Starlight. Nothing it pulls in is linked into a binary,
+  executed by a user, or vendored into a plugin, and it is confined to that
+  directory. The policy protects the product, not the repository.
 - **Tests come with the change.** Vee is built test-first (a comprehensive XCTest suite).
   New behavior needs new tests; a bug fix needs a test that fails before and
   passes after.
@@ -86,7 +92,8 @@ the `vee` executable is a thin entry point.
 | `VeeApp`          | AppKit shell: status items, coordinators, app delegate (as a library). |
 | `vee`             | Thin executable entry point: boots the app, or dispatches CLI subcommands. |
 | `plugins/`        | Typed plugin SDKs (TypeScript, Python, Go), example plugins, and golden fixtures. |
-| `docs/`           | The GitHub Pages site. Guides are authored in `docs/_content/*.md`; `docs/guide/*.html` is generated from them by `docs/scripts/build_guide.py`. |
+| `docs/`           | Documentation sources: guides in `docs/_content/*.md`, the parameter record in `docs/api/params.json`, JSON Schemas, the hand-written landing and comparison pages, and the guard scripts. Nothing here is generated output. |
+| `docs-site/`      | The Astro + Starlight build that turns `docs/` into the published site. The only third-party dependency in the repository. |
 
 For a deeper tour of how the pieces fit together — the execution pipeline, the
 leak-free design, the trust model, and the widget channel — see
@@ -94,46 +101,50 @@ leak-free design, the trust model, and the widget channel — see
 
 App bundle configuration lives in `project.yml` (XcodeGen spec) and `App/`
 (Info.plist properties + entitlements). Showcase example plugins live in
-`examples/` at the repo root — see `examples/README.md`.
+`plugins/showcase/` — see `plugins/showcase/README.md`.
 
 ### Docs
 
-The guides are written in `docs/_content/*.md` — **edit those, never the HTML.**
-`docs/guide/*.html` is generated output, and it is what ships: GitHub Pages
-serves `docs/` straight from `main` with no build step at deploy time. After
-changing a guide, regenerate and commit the result:
+The guides are written in `docs/_content/*.md`. Nothing under `docs/` is
+generated output any more — the site is built from these sources by
+`docs-site/` and deployed by `.github/workflows/docs.yml`. Preview a change the
+way you would any web project:
 
 ```sh
-python3 docs/scripts/build_guide.py          # rewrite docs/guide/*.html
-python3 docs/scripts/build_guide.py --check  # what CI runs; fails if stale
+cd docs-site && npm install && npm run dev
 ```
 
-Adding a new guide means adding its page to `PAGES` in that script (it drives
-the sidebar order, the prev/next pager, and each page's title/description).
-The same run also emits `docs/sitemap.xml`, `docs/robots.txt`, a Markdown mirror
-of each page at `docs/guide/<slug>.md`, and `docs/llms.txt` / `docs/llms-full.txt`
-for LLM and agent consumers. `--check` covers all of them, so none can go stale.
+Each page carries its own frontmatter: `title`, `description` (the site's SEO
+metadata *and* its one-line summary in `llms.txt`), and `sidebar.label` /
+`sidebar.order`, which drive the sidebar and the prev/next pager. Adding a
+guide means adding the file; there is no page list to update.
 
-Search is a static [Pagefind](https://pagefind.app) index over the built HTML —
-a build-time binary, not a runtime dependency, and no package manifest in the
-repo. After changing a guide, rebuild it too and commit the result:
+The build also emits the machine-readable forms Vee publishes for LLM and agent
+consumers: a Markdown mirror of every page at `/guide/<slug>.md` with a
+`<link rel="alternate">` pointing at it, `llms.txt`, `llms-full.txt`, the
+parameter record at `/api/params.json`, and a redirect from every page's old
+`.html` URL. Search is a [Pagefind](https://pagefind.app) index built from the
+pages at build time — there is no index to regenerate and none to commit.
+
+**The parameter surface is data.** `docs/api/params.json` records every
+menu-line parameter with its type, accepted values, default, group, and the
+chart it belongs to. The reference tables in the published guides are generated
+from it — do not hand-edit a table:
 
 ```sh
-python3 docs/scripts/check_search_index.py --update
+python3 docs/scripts/build_reference.py          # write the generated partials
+python3 docs/scripts/build_reference.py --check  # fails if a partial is stale
 ```
 
-That runs Pagefind and records a fingerprint of the pages it indexed. CI checks
-that fingerprint, so a stale index fails the build the same way stale HTML does
-— which matters because a stale index is silent: every page renders correctly
-while search returns the previous text.
-
-Three more checks run on docs in CI, all pure standard library (the Pagefind
-binary is only needed for `--update`, never to verify):
+Four checks run on docs in CI, all pure standard library:
 
 ```sh
-python3 docs/scripts/check_params.py        # parser, linter, and docs agree on line params
-python3 docs/scripts/check_schemas.py       # docs/schemas matches the SDK golden fixtures
-python3 docs/scripts/check_search_index.py  # the search index is current with docs/guide
+python3 docs/scripts/check_params.py   # parser, linter, docs, and all three SDKs agree
+                                       # on the parameter set, and on the constants the
+                                       # docs state about it
+python3 docs/scripts/check_schemas.py  # docs/schemas matches the SDK golden fixtures
+python3 docs/scripts/check_links.py    # every documented repository and same-site link
+                                       # resolves, anchors included
 ```
 
 ### A rule of thumb for where a change goes

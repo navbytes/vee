@@ -19,7 +19,8 @@ The GitHub links are the reason this is not just a file-exists check: a link to
 and is really a path in this repository, so it is resolved locally. That is the
 exact shape of every link the reorganisation broke.
 
-Pure standard library, matching docs/scripts/build_guide.py.
+Pure standard library: the guard scripts stay dependency-free even though
+the site build no longer is.
 """
 import os
 import re
@@ -53,13 +54,30 @@ def sources():
                 yield os.path.join(root, name)
 
 
-# The anchor rule is build_guide's, imported rather than reimplemented: an
-# anchor this script accepts and the site does not generate is a link that
-# silently lands at the top of the page, which is worse than a 404 because
-# nothing looks wrong. A second copy of that rule would eventually be a
-# different rule.
-sys.path.insert(0, HERE)
-from build_guide import slugify  # noqa: E402
+def slugify(text):
+    """Heading id, matching the anchors the site generates.
+
+    Verified against the built site: all 188 h2/h3 anchors Starlight produces
+    with github-slugger agree with this function, which is why the migration
+    did not break a single in-page link. Kept in step with that deliberately —
+    an anchor this script accepts and the site does not generate is a link that
+    silently lands at the top of the page, worse than a 404 because nothing
+    looks wrong.
+
+    Punctuation is dropped rather than hyphenated (so ``Global hotkey
+    (`<vee.shortcut>`)`` is ``global-hotkey-veeshortcut``) and each remaining
+    whitespace character becomes its own hyphen — which is why removing a
+    ``/`` between two words leaves a double hyphen. Both quirks are
+    load-bearing: they match GitHub's own slugger, so an in-page link resolves
+    whether the file is read on GitHub or on the rendered site.
+
+    This differs from the anchors the old out-of-band tool produced for
+    headings containing an apostrophe or an em dash (``what-s-compatible``,
+    not ``whats-compatible``). Nothing in the repo links to those, and one rule
+    that agrees with GitHub beats two that agree with neither.
+    """
+    text = re.sub(r"[^\w\s-]", "", text.lower(), flags=re.UNICODE)
+    return "".join("-" if c.isspace() else c for c in text)
 
 
 def anchors(path):
@@ -109,8 +127,7 @@ def resolve(source, target):
         return (os.path.join(ROOT, path) if path else ROOT), None
 
     if target.startswith(SITE):
-        rest = target[len(SITE):].lstrip("/")
-        return os.path.join(DOCS, rest) if rest else DOCS, None
+        return site_path(target[len(SITE):])
 
     if "://" in target or target.startswith("mailto:"):
         return None, None
@@ -119,6 +136,31 @@ def resolve(source, target):
     if not path:
         return source, anchor
     return os.path.normpath(os.path.join(os.path.dirname(source), path)), anchor
+
+
+# Published paths with no file behind them: the build emits these, so there is
+# nothing on disk to point at. Listed rather than pattern-matched, so a typo in
+# one is still caught.
+BUILT = {"llms.txt", "llms-full.txt", "sitemap.xml", "sitemap-index.xml",
+         "robots.txt", "guide/", "guide/index.html"}
+
+
+def site_path(rest):
+    """Map a published URL back to the source it is built from.
+
+    The site is no longer a mirror of `docs/`: guide pages are rendered from
+    `docs/_content/*.md` to `/guide/<slug>/`, and several published paths are
+    emitted by the build with no source file at all. Checking a URL against
+    `docs/` verbatim would have passed while the site was committed and would
+    now report every guide link as broken.
+    """
+    rest = rest.lstrip("/")
+    if rest in BUILT:
+        return None, None
+    guide = re.match(r"^guide/([\w-]+)(?:/|\.md|\.html)?$", rest)
+    if guide:
+        return os.path.join(CONTENT, "%s.md" % guide.group(1)), None
+    return (os.path.join(DOCS, rest) if rest else DOCS), None
 
 
 def main():

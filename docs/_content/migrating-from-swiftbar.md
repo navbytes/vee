@@ -1,5 +1,19 @@
-# Migrating from SwiftBar / xbar
-
+---
+title: "Migrating from SwiftBar / xbar"
+description: "Move to Vee from SwiftBar or xbar in one step: point it at your existing plugins folder. Full protocol compatibility, plus a trust layer and typed SDK."
+sidebar:
+  label: "Migrating from SwiftBar / xbar"
+  order: 2
+head:
+  - tag: link
+    attrs:
+      rel: "alternate"
+      type: "text/markdown"
+      href: "/guide/migrating-from-swiftbar.md"
+      title: "Markdown source"
+  - tag: title
+    content: "Migrating from SwiftBar / xbar — Vee docs"
+---
 Vee is designed as a drop-in successor to [SwiftBar](https://github.com/swiftbar/SwiftBar) and [xbar](https://github.com/matryer/xbar). Your existing plugins run unchanged — migration is usually just pointing Vee at the folder you already have.
 
 ## Point Vee at your existing plugins folder
