@@ -4,23 +4,69 @@
 #
 #   curl -fsSL https://vee.navbytes.io/install.sh | bash
 #
-# Installs the latest release (or $VEE_VERSION) into /Applications and links the
-# CLI onto your PATH. Homebrew does the same thing and handles upgrades for you
+# Installs the latest release into /Applications and links the CLI onto your
+# PATH. Homebrew does the same thing and handles upgrades for you
 # (`brew install --cask vee`); this exists for machines without Homebrew.
 #
-# Environment:
-#   VEE_VERSION   release to install, e.g. v0.2.0 (default: latest)
-#   VEE_APP_DIR   where Vee.app goes (default: /Applications)
-#   VEE_BIN_DIR   where the `vee` symlink goes (default: the first writable of
-#                 ~/.local/bin, /usr/local/bin)
+# Options — pass them after `bash -s --`, which is the form that survives a
+# pipe. `VAR=x curl ... | bash` sets VAR for *curl*, not for the bash reading
+# the script, so the setting is silently ignored:
+#
+#   curl -fsSL https://vee.navbytes.io/install.sh | bash -s -- --app-dir ~/Applications
+#
+#   --app-dir DIR   where Vee.app goes (default: /Applications)
+#   --bin-dir DIR   where the `vee` symlink goes (default: the first writable
+#                   of ~/.local/bin, /usr/local/bin)
+#   --version TAG   release to install, e.g. v0.2.0 (default: latest)
+#
+# The matching environment variables (VEE_APP_DIR, VEE_BIN_DIR, VEE_VERSION)
+# also work when they genuinely reach this script — exported, or set on the
+# `bash` itself. A flag wins over the environment.
 set -euo pipefail
 
 REPO="navbytes/vee"
-APP_DIR="${VEE_APP_DIR:-/Applications}"
 
 info() { printf '\033[1;34m==>\033[0m %s\n' "$1"; }
 warn() { printf '\033[1;33mwarning:\033[0m %s\n' "$1" >&2; }
 die()  { printf '\033[1;31merror:\033[0m %s\n' "$1" >&2; exit 1; }
+
+usage() {
+  cat <<'USAGE'
+Install Vee — the menu-bar app and the `vee` CLI.
+
+  curl -fsSL https://vee.navbytes.io/install.sh | bash
+  curl -fsSL https://vee.navbytes.io/install.sh | bash -s -- --app-dir ~/Applications
+
+Options:
+  --app-dir DIR   where Vee.app goes (default: /Applications)
+  --bin-dir DIR   where the `vee` symlink goes (default: the first writable of
+                  ~/.local/bin, /usr/local/bin)
+  --version TAG   release to install, e.g. v0.2.0 (default: latest)
+  -h, --help      show this and exit
+USAGE
+}
+
+# Flags beat the environment. Both are supported because `VAR=x curl ... | bash`
+# looks like it should work and does not: the assignment applies to curl, and
+# the bash reading the script on stdin never sees it.
+app_dir="${VEE_APP_DIR:-}"
+bin_dir_opt="${VEE_BIN_DIR:-}"
+version="${VEE_VERSION:-}"
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --app-dir) [ $# -ge 2 ] || die "--app-dir needs a directory"; app_dir="$2"; shift 2 ;;
+    --bin-dir) [ $# -ge 2 ] || die "--bin-dir needs a directory"; bin_dir_opt="$2"; shift 2 ;;
+    --version) [ $# -ge 2 ] || die "--version needs a tag"; version="$2"; shift 2 ;;
+    --app-dir=*) app_dir="${1#*=}"; shift ;;
+    --bin-dir=*) bin_dir_opt="${1#*=}"; shift ;;
+    --version=*) version="${1#*=}"; shift ;;
+    -h|--help) usage; exit 0 ;;
+    *) die "unknown option '$1' (try --help)" ;;
+  esac
+done
+
+APP_DIR="${app_dir:-/Applications}"
 
 # ── Preflight ────────────────────────────────────────────────────────────────
 # Fail with the actual reason rather than letting an unpackable download or a
@@ -42,7 +88,6 @@ done
 
 # ── Resolve the release ──────────────────────────────────────────────────────
 
-version="${VEE_VERSION:-}"
 if [ -z "$version" ]; then
   info "Looking up the latest release…"
   version="$(curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest" \
@@ -91,7 +136,7 @@ xattr -dr com.apple.quarantine "$target" 2>/dev/null || true
 # The app bundle's executable is also the CLI, so the symlink costs nothing and
 # stays correct across upgrades.
 
-bin_dir="${VEE_BIN_DIR:-}"
+bin_dir="$bin_dir_opt"
 if [ -z "$bin_dir" ]; then
   for candidate in "$HOME/.local/bin" "/usr/local/bin"; do
     if [ -d "$candidate" ] && [ -w "$candidate" ]; then bin_dir="$candidate"; break; fi

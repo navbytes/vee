@@ -6,6 +6,15 @@ All notable changes to Vee are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed
+- **The installer's documented overrides did not work.** The README showed
+  `VEE_APP_DIR=… curl … | bash`, which sets the variable for `curl` — not for
+  the `bash` reading the script on stdin — so the setting was silently ignored
+  and the install went to the default location anyway. The script now takes
+  `--app-dir`, `--bin-dir` and `--version` flags, which survive the pipe
+  (`bash -s -- --app-dir ~/Applications`), and the docs show that form. The
+  environment variables still work when they genuinely reach the script.
+
 ## [0.2.0] - 2026-08-23
 
 This entry spans everything since 0.1.1: releases 0.1.2 through 0.1.22 shipped
