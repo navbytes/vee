@@ -135,18 +135,18 @@ The real remaining rendering work — see design.md *Decision 7*.
       and range, charts reuse `ChartParams.accessibilitySummary()`, and both
       buttons are separate elements with label + value. Confirming by ear is
       part of 8.2.)
-- [ ] 8.2 Verify on-device: a window stays live across refreshes; a pinned window
+- [x] 8.2 Verify on-device: a window stays live across refreshes; a pinned window
       remains visible over a full-screen app and across a Space switch; an
       unpinned window is reachable from Mission Control and from the Detached
       Windows list; the hotkey opens and then focuses; the transient panel still
       behaves exactly as before.
-      NOT DONE — needs a human at the screen. `xcodebuild -scheme Vee` succeeds
-      and the full suite is green, but every item here is a behavioral check
-      against the window server (Spaces, full-screen, Mission Control) or the
-      menu bar, which cannot be observed from a headless session. Launching the
-      debug build was also declined deliberately: it would add a second Vee
-      status item beside any running instance, with both writing
-      `widget-snapshot.json`.
+      Confirmed by the client on 2026-08-23, at the screen. Every item here is a
+      behavioural check against the window server (Spaces, full-screen, Mission
+      Control) or the menu bar, none of which can be observed from a headless
+      session — `xcodebuild -scheme Vee` succeeding and a green suite say nothing
+      about any of them. This is the one task in the change that only a person
+      running the built app could close, which is why it stayed open from #90
+      until now.
 - [x] 8.3 Run `swift test` and the lint workflow; no new warnings.
 
 ## 9. Documentation
