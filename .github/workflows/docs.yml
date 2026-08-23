@@ -8,6 +8,13 @@ name: Docs
 on:
   push:
     branches: [main]
+    # Only what the published site is built from. A Swift-only commit cannot
+    # change a rendered page, and redeploying for one costs a build and a
+    # deployment that produce byte-identical output.
+    paths:
+      - "docs/**"
+      - "docs-site/**"
+      - ".github/workflows/docs.yml"
   workflow_dispatch:
 
 # Pages needs id-token to deploy; nothing here writes to the repository.
