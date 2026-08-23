@@ -101,6 +101,7 @@ public final class AppController: NSObject, NSApplicationDelegate {
     public func applicationDidFinishLaunching(_ notification: Notification) {
         PluginsDirectory.ensureExists(directory)
         log.info("plugins directory: \(self.directory, privacy: .public)")
+        sweepLegacyActivities()
 
         installAppMenu()
 
@@ -164,6 +165,27 @@ public final class AppController: NSObject, NSApplicationDelegate {
         let monitor = WakeMonitor { [weak self] in self?.refreshAll() }
         monitor.start()
         wakeMonitor = monitor
+    }
+
+    /// Clears the launch-on-demand XPC activities earlier versions registered,
+    /// for every plugin Vee has **ever** loaded — not just the ones installed
+    /// now.
+    ///
+    /// Such an activity relaunches Vee moments after the user quits it, and it
+    /// lives in launchd rather than in the app, so it survives every update.
+    /// Its identifier can only be built from the plugin ID that created it, so
+    /// a plugin deleted before this shipped is exactly the case that keeps an
+    /// install un-quittable — and exactly the case a per-plugin clear at start
+    /// could never reach. Hence the remembered set, and hence running here at
+    /// launch rather than from `PluginCoordinator.start()`: the sweep must not
+    /// depend on any plugin being installed, enabled, or starting successfully.
+    ///
+    /// The on-disk listing is unioned in so the first launch after this ships
+    /// covers plugins that are present but not yet recorded.
+    private func sweepLegacyActivities() {
+        let onDisk = PluginDiscovery.enumerate(directory: directory).map(\.id.rawValue)
+        prefs.recordSeenPlugins(onDisk)
+        LegacyBackgroundActivity.clearAll(pluginIDs: prefs.seenPluginIDs())
     }
 
     private func startWatching() {
@@ -426,6 +448,10 @@ public final class AppController: NSObject, NSApplicationDelegate {
         reconcileDiskState()
 
         let plugins = enabledPlugins()
+        // Remember every plugin loaded, for the legacy-activity sweep — see
+        // `sweepLegacyActivities()`. A plugin's *removal* is the case that
+        // sweep exists to survive, so this record is never pruned.
+        prefs.recordSeenPlugins(plugins.map(\.id.rawValue))
         let signature = PluginChangeSnapshot.snapshot(plugins)
         // Rebuild when the effective set changes OR any plugin's file changes on
         // disk (by modification time/size). Keying on the path set alone missed

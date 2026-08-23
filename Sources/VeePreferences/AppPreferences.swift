@@ -16,6 +16,7 @@ public final class AppPreferences: @unchecked Sendable {
     private let firstRunDoneKey = "vee.hasCompletedFirstRun"
     private let compactMenuBarKey = "vee.compactMenuBar"
     private let secretPluginIDsKey = "vee.pluginsWithSecrets"
+    private let seenPluginIDsKey = "vee.seenPluginIDs"
 
     public init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
@@ -163,6 +164,35 @@ public final class AppPreferences: @unchecked Sendable {
         var ids = secretPluginIDs()
         if hasSecret { ids.insert(id) } else { ids.remove(id) }
         defaults.set(Array(ids), forKey: secretPluginIDsKey)
+    }
+
+    // MARK: - Plugins Vee has ever loaded
+
+    /// Every plugin ID Vee has loaded at least once, across all launches.
+    ///
+    /// Exists for one job: clearing the launch-on-demand XPC activities that
+    /// earlier versions registered per plugin (`LegacyBackgroundActivity`).
+    /// Those live in launchd rather than in the app, so they outlive the plugin
+    /// that created one — and an identifier can only be constructed from the
+    /// plugin's ID. Without a record of IDs Vee has *seen*, a plugin deleted
+    /// before the clearing shipped leaves an activity nothing can ever name,
+    /// and the app stays un-quittable forever.
+    ///
+    /// Deliberately never pruned. A plugin's removal is exactly the case this
+    /// exists to survive, so garbage-collecting an entry when its file
+    /// disappears would delete the only thing that makes the fix reachable.
+    /// It costs one short string per plugin ever installed.
+    public func seenPluginIDs() -> Set<String> {
+        Set(defaults.stringArray(forKey: seenPluginIDsKey) ?? [])
+    }
+
+    /// Records `ids` as loaded. Idempotent, and writes nothing when every ID is
+    /// already known — this runs for every plugin on every launch.
+    public func recordSeenPlugins(_ ids: some Sequence<String>) {
+        let known = seenPluginIDs()
+        let merged = known.union(ids)
+        guard merged != known else { return }
+        defaults.set(Array(merged), forKey: seenPluginIDsKey)
     }
 
 }
