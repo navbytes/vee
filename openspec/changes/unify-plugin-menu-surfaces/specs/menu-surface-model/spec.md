@@ -130,3 +130,16 @@ identity, ordering, actionability, or effect.
 - **THEN** the presentation that supports menu-scoped shortcuts binds it
 - **AND** a presentation that does not still shows the row and keeps it
   activatable by other means
+
+#### Scenario: An alternate replaces its row under the modifier
+
+- **WHEN** a plugin declares a row with an alternate, in a presentation that
+  supports modifier-held alternates
+- **THEN** only the primary row is shown until the modifier is held
+- **AND** holding the modifier shows the alternate in its place
+
+#### Scenario: An alternate of a row that declares a key equivalent
+
+- **WHEN** the row carrying the alternate also declares a key equivalent
+- **THEN** the alternate still replaces it under the modifier
+- **AND** the two are never shown at the same time

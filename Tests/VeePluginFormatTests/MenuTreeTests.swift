@@ -71,6 +71,43 @@ final class MenuTreeTests: XCTestCase {
         XCTAssertTrue(built[1].isAlternate)
     }
 
+    /// AppKit swaps an alternate for its predecessor only when the two carry
+    /// the same key equivalent. A primary declaring `key=` therefore has to
+    /// lend it to its alternate, or the pair renders as two ordinary rows with
+    /// nothing bound to the modifier.
+    func testAnAlternateInheritsItsPrimarysKeyEquivalent() {
+        var main = item("Refresh") {
+            $0.refresh = true
+            $0.key = "r"
+        }
+        main.alternate = item("Force Refresh") { $0.refresh = true }
+        let built = rows(MenuTree.build([.item(main)]))
+        XCTAssertEqual(built[0].keyEquivalent, "r")
+        XCTAssertEqual(built[1].keyEquivalent, "r", "the alternate carries the primary's key, not its own absence of one")
+    }
+
+    /// An alternate cannot hold a key equivalent of its own — AppKit requires it
+    /// to match the primary's — so the primary's wins outright.
+    func testAnAlternatesOwnKeyEquivalentIsIgnored() {
+        var main = item("Refresh") {
+            $0.refresh = true
+            $0.key = "r"
+        }
+        main.alternate = item("Force Refresh") {
+            $0.refresh = true
+            $0.key = "f"
+        }
+        XCTAssertEqual(rows(MenuTree.build([.item(main)]))[1].keyEquivalent, "r")
+    }
+
+    func testAnAlternateOfAKeylessPrimaryCarriesNoKey() {
+        var main = item("Reveal") { $0.href = self.link }
+        main.alternate = item("Reveal alternate") { $0.href = self.link }
+        let built = rows(MenuTree.build([.item(main)]))
+        XCTAssertNil(built[0].keyEquivalent)
+        XCTAssertNil(built[1].keyEquivalent)
+    }
+
     // MARK: - Headers
 
     func testAHeaderIsInertAndCarriesNothingElse() {

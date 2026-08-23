@@ -53,6 +53,12 @@ All notable changes to Vee are documented here. The format is based on
   version already on the registry, so every step after the tag is re-runnable.
   Skipping finished work is deliberately not the same as skipping on a missing
   credential — a missing NPM_TOKEN still fails the release.
+- **`alternate=true` did nothing when the row it belonged to declared `key=`.**
+  macOS shows an alternate in place of its primary only when the two carry the
+  same key equivalent, and the alternate was given none — so both rows appeared
+  in the dropdown at once and holding `⌥` changed nothing. An alternate now
+  inherits its primary's `key=`. (An alternate's own `key=` is ignored, because
+  macOS gives it nowhere to go.)
 - **Sparklines drew differently in a window than in the menu.** The window's
   rows hardcoded every `sparkline=` to 64×18 and ignored `sparklinecolor=`,
   `sparklinew=` and `sparklineh=` entirely, so the same series rendered at a
