@@ -38,8 +38,8 @@ only; there are no cycles.
 | `VeeCore`         | Shared value types with no platform dependencies: `RefreshInterval`, `PluginFilename`, `PluginID`, `VeeClock`, `VeeError`, `VeeLog`. |
 | `VeePluginFormat` | The pure parser. Turns plugin stdout into a `ParsedOutput` (title lines + a menu-node tree) plus `ParseDiagnostic`s. Handles the `---`/`--` menu structure, `\|`-delimited params, `<xbar.*>`/`<swiftbar.*>`/`<vee.*>` headers, ANSI, emoji `:shortcodes:`, colors, SF Symbols, and the alternative structured-JSON output. Never throws — malformed input degrades to best-effort output + diagnostics. |
 | `VeeRuntime`      | Plugin discovery, **leak-free execution**, scheduling, environment building, `PATH` resolution, and `~~~` streaming. The heart of the reliability story. |
-| `VeeMenu`         | Renders a `ParsedOutput` into an `NSMenu`: color/ANSI attribution, SF Symbol images, key equivalents, actions, and the custom in-row `progress=` view. |
-| `VeeSearch`       | Pure, AppKit-free searchable-menu core: flattens the menu-node tree into breadcrumb-annotated rows and fuzzy-filters/ranks them. Powers both presentations of the menu surface — the transient `<vee.filter>` panel and the detached window (`VeeApp/MenuSearchPanel.swift`, `VeeApp/DetachedPluginWindows.swift`) — and `vee search`. |
+| `VeeMenu`         | Emits an `NSMenu` from a resolved `MenuTree`, deciding nothing itself: color/ANSI attribution, SF Symbol images, key equivalents, actions, and the custom in-row `progress=` view. |
+| `VeeSearch`       | Pure, AppKit-free matching. `MenuTreeFilter` narrows a `MenuTree` to matches plus their ancestors, preserving structure and order — what the transient `<vee.filter>` panel and the detached window use; `MenuTreeDisplay` projects the result into the lines they draw. `MenuFlattener`/`MenuSearch` keep the older flat, breadcrumb-annotated, fuzzy-**ranked** projection, now used only by `vee search`. |
 | `VeePreferences`  | The `<xbar.var>` preferences sidecar and the Keychain-backed `SecretStore`; the cross-plugin `VariableAggregator` behind the Variables editor. |
 | `VeeTrust`        | The advisory trust layer: `SourceScan` statically scans plugin source for capability keywords and diffs detected-vs-declared; `TrustDiff` compares footprints across an update. |
 | `VeeCatalog`      | The Discover browser over `matryer/xbar-plugins`: catalog fetch/parse, freshness classification, install (with path-traversal-safe filenames), and `PluginProvenance` (source URL + content hash so later tampering is detectable). |
@@ -135,49 +135,79 @@ The `soak` CI job (`Tests/VeeRuntimeTests/MemorySoakBenchmarkTests.swift`)
 drives this pipeline for a sustained window and asserts bounded memory growth
 *and* that refreshes keep firing.
 
-## The menu surface has two presentations
+## One menu, resolved once, rendered twice
 
 A plugin's dropdown is an `NSMenu` (`VeeMenu/MenuBuilder`), and an `NSMenu`
 cannot be hosted in a window. Everything hanging off it is `NSMenuItem`-shaped —
-`AttributedTitleFactory`, the custom `NSMenuItem.view` row renderers,
-`NSMenuItem.sectionHeader`, `isAlternate`, `keyEquivalent` — so none of it
-transfers to a window.
+`NSMenuItem.view` row renderers, `NSMenuItem.sectionHeader`, `isAlternate`,
+`keyEquivalent` — so none of it transfers. Two renderers is forced by AppKit,
+not chosen.
 
-What *does* render a plugin's menu in SwiftUI is the search panel. It already
-flattens the whole tree (`MenuSearch.flattenEntries`), draws section headers and
-separators, and dispatches activations through the real
-`MenuActionHandling`. So the detached window is a **second presentation of that
-one surface**, not a fourth renderer:
+What keeps them from drifting is that **neither decides anything**.
+`VeePluginFormat/MenuRowSpec.swift` resolves a `[MenuNode]` into a `MenuTree`
+that answers every presentation question once — which nodes become rows
+(`dropdown=false`, `header=true`), whether a row acts, whether children win over
+its command, which display graphic it carries, where an `alternate=` sibling
+sits. Both renderers read that and assemble:
 
 ```
-  MenuSearchContentView  ── one view, one row renderer, one action path
-       │
-       ├─ transient   MenuSearchPanel: KeyablePanel, .popUpMenu, entries frozen
-       │              at open, dismissed by Esc / outside click / activation
-       │
-       └─ window      DetachedPluginWindows: titled + resizable, one per plugin,
-                      live entries pushed from StatusItemController.render,
-                      floating or ordinary (level and collectionBehavior always
-                      resolved together, in DetachedWindowPinning)
+                     MenuTree  (VeePluginFormat, Foundation-only)
+                   every decision made exactly once
+                              │
+              ┌───────────────┴───────────────┐
+              ▼                               ▼
+      MenuBuilder → NSMenu            MenuSearchContentView (SwiftUI)
+      native flyouts, key=,           inline disclosure, filter field
+      ⌥-alternates, type-select              │
+                                    ┌────────┴────────┐
+                                    ▼                 ▼
+                              transient          window
+                              MenuSearchPanel    DetachedPluginWindows
 ```
 
-Two consequences worth knowing before changing either:
+It lives in `VeePluginFormat` because `VeeMenu` and `VeeUI` are siblings that
+cannot see each other, and it carries **decisions, not pixels** so the parser
+stays Foundation-only. Resolving text to an `NSAttributedString` and an icon to
+an `NSImage` stays in `AttributedTitleFactory` / `SymbolImageFactory`, which
+both renderers already called. `ProgressParams.defaultWidth` lives in the format
+layer for the same reason.
 
-- **Liveness is window-only.** The panel's model documents why its entries are
-  frozen: it is on screen for seconds while the user types and moves a selection,
-  and re-ranking underneath them would reorder rows under the cursor. Only
-  `DetachedPluginWindowModel` calls `MenuSearchViewModel.update(entries:)`.
+Things worth knowing before changing any of it:
+
+- **Presentations may differ in how they unfold, never in what they contain.**
+  The menu bar opens a submenu as a flyout; a window opens it inline, and more
+  than one branch can be open at once — that is what a window left on the
+  desktop is for. Same rows, same order, same actions.
+- **A live control is the one per-surface graphic.** An `NSMenu` row cannot host
+  a slider, so the menu bar draws the row's display graphic and opens the
+  control on click; a window draws the control in place. `MenuRowSpec` carries
+  `control` separately from `accessory` so each surface can make that call
+  without either re-deciding which *graphic* a row has.
+- **Search is a filter over structure, not a projection to a list.**
+  `MenuTreeFilter` narrows the tree to matches plus the ancestors needed to
+  reach them, and reveals them. A tree cannot rank — reordering would move rows
+  out from under their parents — so results keep the plugin's authored order.
+  The ranked-flat projection (`MenuSearch`/`MenuFlattener`/`FlatRow`) survives
+  for `vee search`, its only remaining consumer.
+- **Liveness is window-only.** The panel is on screen for seconds while the user
+  types; replacing its tree underneath them would move rows under the cursor.
+  Only `DetachedPluginWindowModel` calls `MenuSearchViewModel.update(nodes:)`.
+- **Open branches survive a refresh.** Keyed by title path and intersected with
+  the keys the new tree has, so a branch that vanished — or was retitled, which
+  reads the same — closes *alone* and never cascades. Title keying is imperfect
+  by construction; containing the damage is the design, not a workaround.
 - **Chrome belongs to the presentation, never to the content.**
   `MenuSearchContentView` carries no size and no background; the panel wraps it
   in its fixed Liquid Glass card and the window lets it fill. The same rule puts
-  the *keep open* button on the panel's chrome and the pin control in the
-  window's title bar, so neither leaks into the shared view.
+  the *keep open* button on the panel, the pin control in the window's title
+  bar, and the plugin's Refresh/Settings/Debug controls in the window's footer —
+  none of them leak into the shared view, and the filter never matches them.
 
 Counting `vee show`'s `TerminalRenderer` and the WidgetKit extension's
 `WidgetNodeView`, a plugin's parsed output is rendered by four things in total.
 They all consume `ParsedOutput`, and shared leaf utilities (`SymbolImageFactory`,
 `ChartSegmentColor`, `ProgressParams`' gauge defaults, `ChartParams.color`) are
-what keep them from disagreeing.
+what keep the two that do not read `MenuTree` from disagreeing.
 
 ## Parsing: text and JSON
 
@@ -279,7 +309,9 @@ this entirely: the extension opens them directly via `Link`/`widgetURL`.
 | Add a trust signal                      | `VeeTrust/…` |
 | Add an App Intent / Shortcuts action    | `VeeApp/VeeAppIntents.swift` |
 | Change the widget card schema/templates | `VeeWidgetShared/WidgetCard.swift`, `VeePluginFormat/WidgetCardParser.swift`, `WidgetExtension/WidgetCardView.swift` |
-| Change search flattening / fuzzy ranking | `VeeSearch/…` (pure; mirrored by `vee search`) |
+| Change what a row *is* on every surface  | `VeePluginFormat/MenuRowSpec.swift` (`MenuTree`) |
+| Change tree filtering / disclosure       | `VeeSearch/MenuTreeFilter.swift`, `VeeSearch/MenuTreeDisplay.swift` |
+| Change `vee search` ranking              | `VeeSearch/MenuSearch.swift`, `VeeSearch/MenuFlattener.swift` |
 | Touch the search panel or global hotkey | `VeeApp/MenuSearchPanel.swift`, `VeeApp/GlobalHotKeys.swift` |
 | Add a `vee` CLI subcommand              | `Sources/VeeCLI/…` (keep `Sources/vee` thin) |
 

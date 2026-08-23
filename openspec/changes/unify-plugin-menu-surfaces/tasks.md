@@ -110,6 +110,7 @@ Design D4. Spec: "Open branches survive a refresh". The highest-risk group.
 - [ ] 4.5 Verify by hand against a fast plugin (≤5s interval) with two branches
       open, including one whose title changes each tick — confirm the
       degradation is confined to that branch.
+      **Needs a real session — left for the user.** Everything automatable is green: 1062 tests, swiftlint --strict clean, the app builds and launches without crashing, and the soak reports 450/450 refreshes with 0.2MB growth.
 
 ## 5. Window controls
 
@@ -127,29 +128,32 @@ Design D7. Spec: "A window carries its plugin's controls".
 
 ## 6. Documentation
 
-- [ ] 6.1 Update `ARCHITECTURE.md`: rewrite "The menu surface has two
+- [x] 6.1 Update `ARCHITECTURE.md`: rewrite "The menu surface has two
       presentations" for the model-plus-two-emitters shape, and correct the
       renderer count in the "four things in total" paragraph.
-- [ ] 6.2 Update the `VeeSearch` and `VeeMenu` rows in `ARCHITECTURE.md`'s module
+- [x] 6.2 Update the `VeeSearch` and `VeeMenu` rows in `ARCHITECTURE.md`'s module
       table to match their new responsibilities.
-- [ ] 6.3 Withdraw the "search everything" slice from
+- [x] 6.3 Withdraw the "search everything" slice from
       `docs/_content/roadmap.md`.
-- [ ] 6.4 Remove Search All Plugins from `docs-site` (and any `⌘F` reference).
-- [ ] 6.5 Add a `CHANGELOG.md` entry covering the removal — call out that an
+- [x] 6.4 Remove Search All Plugins from `docs-site` (and any `⌘F` reference).
+- [x] 6.5 Add a `CHANGELOG.md` entry covering the removal — call out that an
       enabled global hotkey silently stops working and its combination frees up.
 
 ## 7. Verification
 
-- [ ] 7.1 `swift test` green; `swiftlint` clean.
+- [x] 7.1 `swift test` green; `swiftlint` clean.
 - [ ] 7.2 Menu bar regression pass by hand: nested submenus, `⌥` alternates,
       `key=` equivalents, section headers, separators, checked state, tooltips,
       and every rich row (progress, sparkline, pie/donut/stackedbar, toggle,
       slider).
+      **Needs a real session — left for the user.** Everything automatable is green: 1062 tests, swiftlint --strict clean, the app builds and launches without crashing, and the soak reports 450/450 refreshes with 0.2MB growth.
 - [ ] 7.3 Window/panel pass against the same plugin: same rows, same order, same
       actions, nesting openable in place, two branches open together.
+      **Needs a real session — left for the user.** Everything automatable is green: 1062 tests, swiftlint --strict clean, the app builds and launches without crashing, and the soak reports 450/450 refreshes with 0.2MB growth.
 - [ ] 7.4 Confirm activation parity — a row activated from the window does
       exactly what the same row does from the dropdown, including control
       commits and post-commit refresh.
-- [ ] 7.5 Run the memory soak job to confirm the new view and expansion state
+      **Needs a real session — left for the user.** Everything automatable is green: 1062 tests, swiftlint --strict clean, the app builds and launches without crashing, and the soak reports 450/450 refreshes with 0.2MB growth.
+- [x] 7.5 Run the memory soak job to confirm the new view and expansion state
       introduce no growth over a sustained window.
-- [ ] 7.6 `openspec validate unify-plugin-menu-surfaces --strict` still passes.
+- [x] 7.6 `openspec validate unify-plugin-menu-surfaces --strict` still passes.

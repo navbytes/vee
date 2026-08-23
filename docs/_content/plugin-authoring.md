@@ -459,22 +459,29 @@ separators, section headers, colors and ANSI, icons, and the full rich-row famil
 A `toggle=` or `slider=` is live in the row: change it and the plugin's command
 runs, exactly as it does from the popover.
 
+**Submenus open in place.** Where the menu bar flies a submenu out to the side,
+a window discloses it inline — click the chevron, or use `→` and `←`. More than
+one branch can be open at once, which is the point: watch a disk and a network
+counter side by side without either hiding the other. Branches you open stay
+open across refreshes, so a one-second plugin does not close them under you.
+
+**Typing filters the structure** rather than replacing it with a list. Matching
+rows stay where the plugin put them, with whatever parents are needed to reach
+them revealed automatically; type a group's name and everything inside it comes
+up. Because the result is still a tree, rows keep the plugin's own order — there
+is no best-match-first reordering here. (`vee search` on the command line is the
+ranked one; a terminal has no tree to draw.)
+
+**The plugin's own controls** — Refresh, Settings, About, Reveal in Finder, Edit
+and Debug — sit in the window's footer, so you can act on what you are watching
+without going back to the menu bar. `⌘R` refreshes, `⌘F` returns to the filter
+field. They are chrome, not menu content: the filter never matches them.
+
 Two things are deliberately not reproduced, because they only mean anything
 inside an open menu. An `⌥` alternate is shown as an ordinary row of its own
 rather than something you hold a modifier to reveal — so it is visible and
 clickable, which is more than the dropdown offers. Per-row `key=` equivalents are
 not bound.
-
-### Cross-plugin search ("Search All Plugins")
-
-The panel above searches one plugin at a time. **Search All Plugins…**, in
-Vee's main menu-bar menu rather than any single plugin's, merges *every
-enabled* plugin's current menu into one panel — regardless of whether a
-plugin opted into `<vee.filter>` — with each row breadcrumb-prefixed by its
-plugin's name (itself part of the fuzzy match, so typing a plugin's name
-surfaces its rows). Selecting a row still runs that row's own plugin's
-action, never a different plugin's. It has its own opt-in global hotkey, off
-by default with no preset combination — set one in Vee's General settings.
 
 ## Widgets
 

@@ -6,6 +6,40 @@ All notable changes to Vee are documented here. The format is based on
 
 ## [Unreleased]
 
+### Changed
+- **A plugin's window and filter panel now show its structure.** They used to
+  flatten the whole menu into one ranked list with a `parent › child`
+  breadcrumb on every row — on the surface meant to be left open and *watched*,
+  which is the one place the shape a plugin authored matters most. Submenus now
+  open in place, with a chevron, `→`/`←`, and more than one branch open at once,
+  so a disk and a network counter can be watched side by side. Branches you open
+  stay open across refreshes, so a one-second plugin no longer closes them under
+  you.
+- **Typing now filters that structure instead of replacing it.** Matching rows
+  stay where the plugin put them, with the parents needed to reach them revealed
+  automatically, and typing a group's name brings up everything inside it. The
+  trade is deliberate: a tree cannot reorder without moving rows out from under
+  their parents, so results keep the plugin's own order rather than
+  best-match-first. `vee search` on the command line is still ranked — a
+  terminal has no tree to draw.
+- **A detached window can now operate its plugin.** Refresh, Settings, About,
+  Reveal in Finder, Edit and Debug were menu-bar-only, so a stale value in a
+  window meant going back to the dropdown to do anything about it. They now sit
+  in the window's footer, with `⌘R` to refresh and `⌘F` to return to the filter
+  field.
+- **The menu bar is unchanged.** Native flyouts, `key=` equivalents, `⌥`
+  alternates, type-select and section headers all still work exactly as before.
+  Both surfaces are now rendered from one resolved description of the menu, so
+  they cannot disagree about what a row is or what activating it does.
+
+### Removed
+- **Cross-plugin "Search All Plugins" is gone**, along with the item in Vee's
+  menu and its opt-in global hotkey. If you had enabled that hotkey it will
+  simply stop working, and the key combination you chose is free again — no
+  other plugin hotkey is affected. It was the only menu surface with no tree to
+  show: fifteen plugins are fifteen roots, so making it structural like the rest
+  would have meant inventing a plugin-name level purely to hold them.
+
 ### Fixed
 - **A failed release could not be re-run.** The tag is pushed before the build,
   so any later failure — notarization, the npm publish, the Homebrew sync — left
@@ -19,8 +53,11 @@ All notable changes to Vee are documented here. The format is based on
   version already on the registry, so every step after the tag is re-runnable.
   Skipping finished work is deliberately not the same as skipping on a missing
   credential — a missing NPM_TOKEN still fails the release.
-
-### Fixed
+- **Sparklines drew differently in a window than in the menu.** The window's
+  rows hardcoded every `sparkline=` to 64×18 and ignored `sparklinecolor=`,
+  `sparklinew=` and `sparklineh=` entirely, so the same series rendered at a
+  different size and colour on the two surfaces and three documented parameters
+  did nothing there. All three now apply, at the same defaults the menu uses.
 - **The installer's documented overrides did not work.** The README showed
   `VEE_APP_DIR=… curl … | bash`, which sets the variable for `curl` — not for
   the `bash` reading the script on stdin — so the setting was silently ignored
