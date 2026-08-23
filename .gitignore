@@ -22,4 +22,7 @@ __pycache__/
 # of bug that a build step cannot have.
 docs-site/node_modules/
 docs-site/dist/
+# Staged from scripts/install.sh at build time so the served copy and the real
+# script cannot drift; see .github/workflows/docs.yml.
+docs-site/public/install.sh
 docs-site/.astro/

@@ -7,6 +7,12 @@ All notable changes to Vee are documented here. The format is based on
 ## [Unreleased]
 
 ### Fixed
+- **`vee --version` reported a stale literal.** It read the app bundle's
+  `CFBundleShortVersionString` and fell back to a hardcoded string when there
+  was no bundle — so a CLI installed on its own always claimed the same old
+  version. The release workflow now stamps the real version into that fallback,
+  and the committed value says `0.0.0-dev` rather than naming a version that
+  shipped once.
 - **The vendored SDK is no longer run as a plugin.** `vee new` and `vee sdk`
   write `vee.ts`/`vee.py` into the plugins folder, and those are otherwise
   perfectly valid plugin filenames — name `vee`, manual interval — so Vee
@@ -113,6 +119,11 @@ All notable changes to Vee are documented here. The format is based on
   as `C:\\node`.
 
 ### Added
+- **One command installs both the app and the CLI.** Vee's binary has always
+  been both, but the Homebrew cask only placed `Vee.app` — nothing put `vee` on
+  your PATH, and nothing documented how to get it. The cask now links the CLI
+  alongside the app, and a `curl | bash` installer covers machines without
+  Homebrew. `mise use github:navbytes/vee` installs the CLI on its own.
 - **A typed builder for the structured-JSON format, in all three SDKs.**
   `JSONMenu` mirrors `Menu` method for method — `title`, `dropdown`, `item`,
   `separator`, `submenu`, `print` — so choosing a wire format no longer means

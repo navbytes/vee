@@ -47,6 +47,13 @@ jobs:
       # it: the pages include them, so they must exist before Astro renders.
       - name: Generate reference tables
         run: python3 docs/scripts/build_reference.py
+      # The install script is served at vee.navbytes.io/install.sh. Copied from
+      # scripts/ at build time rather than duplicated into the site, so the URL
+      # in the README and the file people actually curl cannot drift apart.
+      - name: Stage the install script
+        run: |
+          mkdir -p docs-site/public
+          cp scripts/install.sh docs-site/public/install.sh
       - name: Install
         run: npm ci
         working-directory: docs-site

@@ -55,6 +55,9 @@ cask "vee" do
   depends_on macos: :tahoe
 
   app "Vee.app"
+  # The app bundle's executable is also the \`vee\` CLI, so one cask delivers
+  # both. Homebrew removes the symlink on uninstall.
+  binary "#{appdir}/Vee.app/Contents/MacOS/Vee", target: "vee"
 
   zap trash: [
     "~/Library/Application Support/Vee",

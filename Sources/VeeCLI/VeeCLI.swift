@@ -61,8 +61,9 @@ public enum VeeCLI {
     }
 
     // Read from the bundle so `vee --version` can't drift from the app it ships
-    // inside; the literal is only the fallback for a bare binary (swift run).
-    static let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.1.2"
+    // inside; `fallbackVersion` (Version.swift, rewritten by the release
+    // workflow) covers a binary with no bundle around it.
+    static let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? fallbackVersion
 
     // MARK: - sdk
 

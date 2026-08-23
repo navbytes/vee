@@ -63,6 +63,12 @@ jobs:
           version="${TAG#v}"
           sed -i '' "s/CFBundleShortVersionString: \"[^\"]*\"/CFBundleShortVersionString: \"${version}\"/" project.yml
           sed -i '' "s/MARKETING_VERSION: \"[^\"]*\"/MARKETING_VERSION: \"${version}\"/" project.yml
+          # The CLI can run without an app bundle around it (installed on its
+          # own, or a bare build), so the fallback has to carry the real
+          # version too — otherwise `vee --version` reports a placeholder.
+          sed -i '' "s/^let fallbackVersion = \".*\"$/let fallbackVersion = \"${version}\"/" Sources/VeeCLI/Version.swift
+          grep -q "let fallbackVersion = \"${version}\"" Sources/VeeCLI/Version.swift \
+            || { echo "::error::failed to stamp the version into Sources/VeeCLI/Version.swift"; exit 1; }
 
       - name: Generate project
         run: xcodegen generate
