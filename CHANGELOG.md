@@ -6,6 +6,12 @@ All notable changes to Vee are documented here. The format is based on
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-08-23
+
+This entry spans everything since 0.1.1: releases 0.1.2 through 0.1.22 shipped
+without changelog entries, so their changes are recorded here rather than being
+lost. Comparison link below is `v0.1.1...v0.2.0` for the same reason.
+
 ### Fixed
 - **`vee --version` reported a stale literal.** It read the app bundle's
   `CFBundleShortVersionString` and fell back to a hardcoded string when there
@@ -677,6 +683,7 @@ All notable changes to Vee are documented here. The format is based on
 - Zero-dependency TypeScript SDK with a golden-fixture drift guard.
 - Developer-ID-signed, notarized distribution outside the Mac App Store.
 
-[Unreleased]: https://github.com/navbytes/vee/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/navbytes/vee/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/navbytes/vee/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/navbytes/vee/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/navbytes/vee/releases/tag/v0.1.0
