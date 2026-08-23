@@ -365,14 +365,16 @@ and triaged against what already ships. Ordered roughly by value.
   render; the gap is *live-updating a menu that's currently open* mid-refresh.
 - **Signed plugins** — provenance (source URL + content hash) already ships;
   cryptographic author signing is the next step up.
-- **Command-palette / fuzzy picker** — ✅ **shipped** (per-plugin *and*
-  cross-plugin). A Spotlight-style searchable filter panel opts in via
-  `<vee.filter>`, flattens the whole nested menu, and fuzzy-filters it;
+- **Command-palette / fuzzy picker** — ✅ **shipped** (per-plugin). A
+  searchable filter panel opts in via `<vee.filter>` and narrows the plugin's
+  menu to what matches, revealing the branches needed to reach it;
   `<vee.shortcut>` binds an optional global hotkey, and `vee search` exposes
-  the same matching on the CLI (`VeeSearch/…`, `VeeApp/MenuSearchPanel.swift`,
-  `VeeApp/GlobalHotKeys.swift`). The final slice — a single **cross-plugin**
-  "Search All Plugins" panel merging every enabled plugin's menu, with an
-  opt-in global hotkey — shipped as the main-menu item.
+  fuzzy *ranked* matching on the CLI (`VeeSearch/…`,
+  `VeeApp/MenuSearchPanel.swift`, `VeeApp/GlobalHotKeys.swift`).
+  The **cross-plugin** "Search All Plugins" slice shipped and was then
+  **withdrawn**: it was the only menu surface with no tree to show, so once the
+  in-app surfaces became structural it no longer had a shape. Ranked-flat
+  matching lives on in `vee search`, where a terminal has no tree to draw.
 
 ## Explicitly out of scope
 
