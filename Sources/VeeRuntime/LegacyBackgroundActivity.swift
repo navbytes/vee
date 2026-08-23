@@ -1,4 +1,5 @@
 import Foundation
+import VeeCore
 
 /// Removes `NSBackgroundActivityScheduler` registrations left behind by earlier
 /// versions of Vee.
@@ -25,9 +26,13 @@ import Foundation
 /// constructing a scheduler with the same identifier and invalidating it is the
 /// only way to refer to one that a previous process registered.
 ///
-/// This exists purely to unstick those installs and can be deleted once no
-/// affected version is in the wild.
+/// This exists purely to unstick those installs. It cannot be deleted until no
+/// affected version is in the wild — a condition demonstrably not yet met: an
+/// install was found in this state on 2026-08-23, relaunching within seconds of
+/// every quit.
 public enum LegacyBackgroundActivity {
+    private static let log = VeeLog.make("legacy-activity")
+
     /// The identifiers earlier versions used, for one plugin ID.
     public static func identifiers(forPluginID pluginID: String) -> [String] {
         ["com.vee.refresh.\(pluginID)", "com.vee.refresh.widget.\(pluginID)"]
@@ -40,5 +45,35 @@ public enum LegacyBackgroundActivity {
         for identifier in identifiers(forPluginID: pluginID) {
             NSBackgroundActivityScheduler(identifier: identifier).invalidate()
         }
+    }
+
+    /// Clears every supplied plugin ID, and reports what it swept.
+    ///
+    /// `pluginIDs` must be every ID Vee has **ever** loaded, not the ones
+    /// installed now. An activity outlives the plugin that registered it, and
+    /// its identifier can only be built from that plugin's ID — so sweeping only
+    /// what is currently on disk leaves a deleted plugin's activity permanently
+    /// unnameable, which is how an install stays stuck.
+    ///
+    /// Runs unconditionally on every launch, with no "already migrated" flag: a
+    /// stale registration can be reintroduced by downgrading, by restoring a
+    /// backup, or by a second machine syncing preferences, and the sweep is a
+    /// no-op when there is nothing to clear.
+    ///
+    /// ponytail: this reports what it *attempted*, not what it found.
+    /// `NSBackgroundActivityScheduler` offers no way to ask whether an
+    /// identifier was registered — `invalidate()` returns nothing and does not
+    /// distinguish a hit from a miss — so "cleared" here means "named and
+    /// invalidated". Anything that wanted to tell a user their stuck app was
+    /// just fixed would need that distinction, and the API cannot provide it.
+    @discardableResult
+    public static func clearAll(pluginIDs: some Sequence<String>) -> [String] {
+        let swept = pluginIDs.flatMap(identifiers(forPluginID:))
+        guard !swept.isEmpty else { return [] }
+        for identifier in swept {
+            NSBackgroundActivityScheduler(identifier: identifier).invalidate()
+        }
+        log.info("swept \(swept.count, privacy: .public) legacy activity identifier(s)")
+        return swept
     }
 }

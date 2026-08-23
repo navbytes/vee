@@ -208,10 +208,6 @@ final class PluginCoordinator {
     }
 
     func start() {
-        // Earlier versions registered a launch-on-demand XPC activity for this
-        // plugin, which survives in launchd and relaunches Vee after the user
-        // quits it. Clearing is a no-op when nothing was registered.
-        LegacyBackgroundActivity.clear(forPluginID: plugin.id.rawValue)
         registerHotKey()
         // `.widget` has no menu presence — skip the menu-mode run/schedule
         // entirely; only the widget-mode cadence below applies to it.
