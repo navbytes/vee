@@ -890,6 +890,9 @@ td code, th code { white-space: nowrap; }
 }
 .docs-toc a:hover { color: var(--ink-soft); border-left-color: var(--hair-strong); }
 .docs-toc code { font-size: 0.94em; }
+/* h3s sit under their h2: indented, and a touch quieter, so the page's top-level
+   shape still reads at a glance in a list that is now roughly twice as long. */
+.docs-toc .toc-sub a { padding-left: 22px; font-size: 0.92em; color: var(--ink-faint, var(--ink-soft)); }
 
 .docs-content pre { position: relative; }
 .copy-btn {

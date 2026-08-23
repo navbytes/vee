@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Charts — Vee docs</title>
+  <meta name="description" content="Every chart a Vee plugin can draw: sparklines, progress bars, pie, donut, and stacked-bar share charts, and widget gauges — how each is spelled on the text, JSON, and widget surfaces, and which options apply to which.">
+  <link rel="canonical" href="https://vee.navbytes.io/guide/charts.html">
+  <link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
+  <link rel="stylesheet" href="../assets/style.css">
+  <link rel="alternate" type="text/markdown" href="./charts.md" title="Markdown source">
+  <meta property="og:type" content="article">
+  <meta property="og:site_name" content="Vee">
+  <meta property="og:title" content="Charts — Vee docs">
+  <meta property="og:description" content="Every chart a Vee plugin can draw: sparklines, progress bars, pie, donut, and stacked-bar share charts, and widget gauges — how each is spelled on the text, JSON, and widget surfaces, and which options apply to which.">
+  <meta property="og:url" content="https://vee.navbytes.io/guide/charts.html">
+  <meta property="og:image" content="https://vee.navbytes.io/assets/og-image.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Charts — Vee docs">
+  <meta name="twitter:description" content="Every chart a Vee plugin can draw: sparklines, progress bars, pie, donut, and stacked-bar share charts, and widget gauges — how each is spelled on the text, JSON, and widget surfaces, and which options apply to which.">
+  <meta name="twitter:image" content="https://vee.navbytes.io/assets/og-image.png">
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="../index.html" aria-label="Vee home">
+      <img class="mark" src="../assets/favicon.svg" alt="" width="28" height="28">
+      <span><b>Vee</b></span>
+    </a>
+    <button class="nav-toggle" aria-label="Toggle navigation" aria-expanded="false" aria-controls="nav-links">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+    </button>
+    <ul class="nav-links" id="nav-links">
+      <li><a href="../index.html#features">Features</a></li>
+      <li><a href="../index.html#trust">Trust</a></li>
+      <li><a href="../compare/index.html">Compare</a></li>
+      <li><a href="./index.html" aria-current="page">Docs</a></li>
+      <li><a class="nav-cta" href="https://github.com/navbytes/vee" rel="noopener">GitHub</a></li>
+    </ul>
+  </div>
+</header>
+<div class="docs-layout">
+  <aside class="docs-side" aria-label="Documentation navigation">
+    <div id="docs-search" class="docs-search" data-pagefind-ignore></div>
+    <p class="docs-nav-title">Documentation</p>
+<ul class="docs-nav">
+<li><a href="./index.html">Overview</a></li>
+<li><a href="./getting-started.html">Getting started</a></li>
+<li><a href="./migrating-from-swiftbar.html">Migrating from SwiftBar / xbar</a></li>
+<li><a href="./plugin-authoring.html">Plugin authoring</a></li>
+<li><a href="./charts.html" aria-current="page">Charts</a></li>
+<li><a href="./widgets.html">Widgets</a></li>
+<li><a href="./trust-model.html">Trust model</a></li>
+<li><a href="./preferences.html">Preferences</a></li>
+<li><a href="./sdk.html">Plugin SDKs</a></li>
+<li><a href="./json-output.html">JSON output</a></li>
+<li><a href="./cli-and-urls.html">CLI &amp; URL actions</a></li>
+<li><a href="./debugging.html">Debugging &amp; testing</a></li>
+<li><a href="./writing-plugins-with-an-llm.html">Writing plugins with an LLM</a></li>
+<li><a href="./enterprise-store.html">Custom plugin stores</a></li>
+<li><a href="./faq.html">FAQ</a></li>
+<li><a href="./troubleshooting.html">Troubleshooting</a></li>
+</ul>
+<nav class="docs-toc" aria-labelledby="toc-title"><p class="docs-nav-title" id="toc-title">On this page</p><ul><li><a href="#the-matrix">The matrix</a></li><li><a href="#where-a-chart-appears">Where a chart appears</a></li><li><a href="#sizing">Sizing</a></li><li><a href="#choosing-one">Choosing one</a></li><li><a href="#colors">Colors</a></li><li><a href="#see-also">See also</a></li></ul></nav>
+  </aside>
+  <main class="docs-main" id="main">
+    <article class="docs-content" data-pagefind-body>
+      <p class="doc-hero-note">Vee documentation</p>
+<h1>Charts</h1>
+<p>Vee draws six kinds of chart, and a plugin reaches them through three different
+output formats. This page is the index: what exists, how to emit it, and what
+each one takes. The prose that explains any given chart lives with its surface —
+<a href="plugin-authoring.html">Plugin authoring</a> for the menu bar, <a href="widgets.html">Widgets</a>
+for the desktop — and each row below links into it.</p>
+<p>Every chart is drawn natively. There is no WebView anywhere in Vee, and no
+charting library: an inline chart is an AppKit or SwiftUI row view, a popover is
+Swift Charts, and a widget is WidgetKit.</p>
+<h2 id="the-matrix">The matrix</h2>
+<!-- Generated by docs/scripts/build_reference.py from docs/api/params.json. Do not edit; edit the JSON and re-run. -->
+<p><strong>Where each chart comes from.</strong> The same chart is spelled differently depending on which output format a plugin uses; a dash means that surface cannot draw it.</p>
+<div class="table-scroll"><table><thead><tr><th>Chart</th><th>Text protocol</th><th>JSON menu output</th><th>Widget card</th></tr></thead><tbody><tr><td><strong>Sparkline</strong> — A line/area series over time.</td><td><code>sparkline=1,2,3</code></td><td><code>"sparkline": [1,2,3]</code></td><td><code>node type "sparkline" with "values", or the "trend" template's "trend"</code></td></tr><tr><td><strong>Progress bar</strong> — One capsule bar filled to a fraction.</td><td><code>progress=0.72 or progress=23.65,100</code></td><td><code>"progress": 0.72</code></td><td><code>"progress" on the card, the "gauge" template's fill</code></td></tr><tr><td><strong>Pie</strong> — A filled circle divided into sectors.</td><td><code>pie=45,30,25</code></td><td><code>"chart": {"kind": "pie", "values": […]}</code></td><td>—</td></tr><tr><td><strong>Donut</strong> — A pie with the middle punched out; the hole carries the total.</td><td><code>donut=512,256,128</code></td><td><code>"chart": {"kind": "donut", "values": […]}</code></td><td>—</td></tr><tr><td><strong>Stacked bar</strong> — One horizontal bar whose segments lie end to end.</td><td><code>stackedbar=60,25,15</code></td><td><code>"chart": {"kind": "stackedbar", "values": […]}</code></td><td>—</td></tr><tr><td><strong>Widget gauge</strong> — A native WidgetKit gauge.</td><td>—</td><td>—</td><td><code>node type "gauge" with "value", or the "gauge" template</code></td></tr></tbody></table></div>
+<p><strong>What each chart takes.</strong> Options are named for the chart they belong to, not shared across all of them — a sparkline takes <code>sparklinew=</code>, a share chart takes <code>chartw=</code>, and a progress bar takes <code>progressw=</code>.</p>
+<div class="table-scroll"><table><thead><tr><th>Chart</th><th>Options</th><th>Default size</th><th>Full width</th><th>Limits</th><th>Click</th></tr></thead><tbody><tr><td><strong>Sparkline</strong></td><td><code>sparklinew</code>, <code>sparklineh</code>, <code>sparklinecolor</code>, <code>accessory</code>, <code>color</code></td><td>90×20 points</td><td><code>sparklinew=full</code></td><td>Widget sparkline nodes are truncated at 256 points; non-finite entries are dropped.</td><td>Yes — a full Swift Charts line/area chart.</td></tr><tr><td><strong>Progress bar</strong></td><td><code>progressw</code>, <code>progressh</code>, <code>progresstrackcolor</code>, <code>accessory</code>, <code>color</code></td><td>120×6 points</td><td><code>progressw=full</code></td><td>Clamped to 0…1; a non-finite value is dropped.</td><td>No — the bar is the whole surface.</td></tr><tr><td><strong>Pie</strong></td><td><code>chartw</code>, <code>charth</code>, <code>chartlabels</code>, <code>chartcolors</code>, <code>accessory</code></td><td>24pt diameter</td><td>Not supported — refused with a diagnostic.</td><td>8 segments (the tail folds into 'Other'); size clamped to 8–200 points.</td><td>Yes — full size with a labelled legend.</td></tr><tr><td><strong>Donut</strong></td><td><code>chartw</code>, <code>charth</code>, <code>chartlabels</code>, <code>chartcolors</code>, <code>accessory</code></td><td>24pt diameter</td><td>Not supported — refused with a diagnostic.</td><td>8 segments (the tail folds into 'Other'); size clamped to 8–200 points.</td><td>Yes — full size with a labelled legend.</td></tr><tr><td><strong>Stacked bar</strong></td><td><code>chartw</code>, <code>charth</code>, <code>chartlabels</code>, <code>chartcolors</code>, <code>accessory</code></td><td>110×12 points</td><td><code>chartw=full</code> — the only chart kind that accepts it.</td><td>8 segments (the tail folds into 'Other'); size clamped to 8–200 points.</td><td>Yes — full size with a labelled legend.</td></tr><tr><td><strong>Widget gauge</strong></td><td><code>gauge_style</code>, <code>style.tint</code></td><td>gauge_style: linear</td><td>Not applicable — a circular gauge takes no size knob.</td><td>value clamped to 0…1.</td><td>No — widgets have no popover surface.</td></tr></tbody></table></div>
+<h2 id="where-a-chart-appears">Where a chart appears</h2>
+<p>A menu-bar chart occupies the row's <strong>accessory slot</strong> — the same slot for all
+of them, which is why a row draws one chart and not three. When a line carries
+more than one, the last one wins in the order <code>progress=</code> → <code>sparkline=</code> →
+share chart. <code>accessory=leading</code> moves it to the other edge of the row.</p>
+<p>Most of them are also clickable. A sparkline or a share chart opens a Liquid
+Glass popover with the same data at full size — the legend that <code>chartlabels=</code>
+feeds is only visible there, since a menu row has no room for it. A progress bar
+has no popover: the bar already shows everything it has.</p>
+<h2 id="sizing">Sizing</h2>
+<p>Each chart is sized by knobs named after itself:</p>
+<div class="table-scroll"><table><thead><tr><th>Chart</th><th>Width</th><th>Height</th><th>Stretch to the row</th></tr></thead><tbody><tr><td>Sparkline</td><td><code>sparklinew=</code></td><td><code>sparklineh=</code></td><td><code>sparklinew=full</code></td></tr><tr><td>Progress bar</td><td><code>progressw=</code></td><td><code>progressh=</code></td><td><code>progressw=full</code></td></tr><tr><td>Pie, donut</td><td><code>chartw=</code> or <code>charth=</code> — either sizes both</td><td></td><td>not supported</td></tr><tr><td>Stacked bar</td><td><code>chartw=</code></td><td><code>charth=</code></td><td><code>chartw=full</code></td></tr></tbody></table></div>
+<p><code>full</code> stretches a chart to the width the row actually has, rather than a fixed
+number of points. It exists because a menu is as wide as its widest row, so a
+fixed width cannot fill a menu whose width some <em>other</em> row decides. It applies
+only to charts with free width: a pie and a donut are circles, whose width <em>is</em>
+their diameter, so stretching one would make the row as tall as the menu is
+wide. Vee refuses it there and says so in a diagnostic rather than guessing.</p>
+<h2 id="choosing-one">Choosing one</h2>
+<ul>
+<li>A value <strong>over time</strong> — load average, request rate, temperature — is a
+sparkline.</li>
+<li>A single value <strong>against a maximum</strong> — disk used, battery, quota — is a
+progress bar, or a gauge in a widget.</li>
+<li>A total that <strong>divides into categories</strong> — disk by folder, spend by
+department — is a share chart. Pie, donut, and stacked bar read the same
+numbers and differ only in shape, so switching between them needs no change
+to the values, labels, or colors.</li>
+</ul>
+<p>Share charts carry at most eight segments, because the categorical palette has
+eight slots and a ninth would have to reuse a hue — exactly the ambiguity a
+share chart must not have. A longer series is <strong>folded, not truncated</strong>: the
+leading segments are kept and the rest are summed into a final <code>Other</code>, so the
+shares still add up to the plugin's own total.</p>
+<h2 id="colors">Colors</h2>
+<p>A share chart's segments take a fixed eight-slot categorical palette, assigned
+in order and never cycled — slot <em>n</em> always means "the nth segment", so a series
+that shrinks does not repaint the segments that survived. Each slot is a
+light/dark pair chosen against its own mode's background rather than one color
+flipped, and the set is validated for colorblind separation including the
+first-to-last pair, which a pie makes adjacent by wrapping around.</p>
+<p><code>chartcolors=</code> overrides it positionally, and a blank or unrecognised entry
+keeps that segment's palette slot rather than shifting every later color left —
+so <code>chartcolors=,,red</code> recolors only the third segment.</p>
+<p>Color is never the only channel: every chart carries an accessibility summary
+reading its segments and their shares aloud, so the data survives for a reader
+who cannot see the difference.</p>
+<h2 id="see-also">See also</h2>
+<ul>
+<li><a href="plugin-authoring.html#rich-inline-charts-liquid-glass-popovers">Plugin authoring</a>
+— the menu-bar charts in full, with worked examples.</li>
+<li><a href="widgets.html">Widgets</a> — the gauge and sparkline layout nodes, and the <code>trend</code>
+and <code>gauge</code> templates.</li>
+<li><a href="json-output.html">JSON output</a> — the structured spelling of every chart.</li>
+<li><a href="sdk.html">Plugin SDKs</a> — emitting charts from TypeScript, Python, or Go.</li>
+</ul>
+    </article>
+    <nav class="doc-nextprev" aria-label="Guide pagination"><a class="prev" href="./plugin-authoring.html"><span class="dir">&larr; Previous</span><span class="lbl">Plugin authoring</span></a><a class="next" href="./widgets.html"><span class="dir">Next &rarr;</span><span class="lbl">Widgets</span></a></nav>
+  </main>
+</div>
+<link rel="stylesheet" href="../pagefind/pagefind-ui.css">
+<script src="../pagefind/pagefind-ui.js"></script>
+<script src="../assets/app.js" defer></script>
+</body>
+</html>

@@ -52,6 +52,11 @@ PAGES = [
         desc="The full Vee plugin reference: filenames and intervals, menu structure, line parameters, metadata headers, SF Symbols, ANSI, Markdown, streaming, and cron.",
     ),
     dict(
+        slug="charts", nav="Charts",
+        title="Charts — Vee docs",
+        desc="Every chart a Vee plugin can draw: sparklines, progress bars, pie, donut, and stacked-bar share charts, and widget gauges — how each is spelled on the text, JSON, and widget surfaces, and which options apply to which.",
+    ),
+    dict(
         slug="widgets", nav="Widgets",
         title="Widgets — Vee docs",
         desc="Render Vee plugins as native desktop and Notification Center widgets: the surface contract, the widget card schema, the five templates, and the composable layout tree.",
@@ -402,24 +407,61 @@ TEMPLATE = """<!doctype html>
 
 
 def toc(body_html):
-    """An "On this page" list from the h2s `render` just emitted.
+    """An "On this page" list from the h2s and h3s `render` just emitted.
 
     Reuses the ids `slugify` already produced, so the TOC cannot disagree with
     the anchors on the page.
+
+    h3s are listed, indented under their h2, because leaving them out made
+    whole subjects unreachable: the authoring reference is the longest page on
+    the site and `### Share charts` — the only place pie, donut, and stacked
+    bar are explained — appeared nowhere in its contents. A reader who did not
+    already know the section existed had no way to find it.
     """
-    heads = re.findall(r'<h2 id="([^"]+)">(.*?)</h2>', body_html, flags=re.S)
-    if len(heads) < 3:
+    heads = re.findall(r'<h([23]) id="([^"]+)">(.*?)</h[23]>', body_html, flags=re.S)
+    if sum(1 for level, _, _ in heads if level == "2") < 3:
         return ""  # too few sections for a contents list to earn its space
-    rows = "".join('<li><a href="#%s">%s</a></li>' % (hid, text) for hid, text in heads)
+    rows = "".join(
+        '<li%s><a href="#%s">%s</a></li>'
+        % (' class="toc-sub"' if level == "3" else "", hid, text)
+        for level, hid, text in heads)
     return ('<nav class="docs-toc" aria-labelledby="toc-title">'
             '<p class="docs-nav-title" id="toc-title">On this page</p>'
             '<ul>%s</ul></nav>' % rows)
 
 
+INCLUDE = re.compile(r"^<!--\s*include:\s*(\S+)\s*-->\s*$")
+
+
+def read_content(slug):
+    """A page's Markdown, with `<!-- include: path -->` directives expanded.
+
+    Generated tables live in `_content/_generated/` and are pulled in rather
+    than pasted, so `docs/api/params.json` stays the only place the parameter
+    surface is written down. Expansion happens here, in the one function every
+    output reads through, so the HTML, the Markdown mirror, and llms-full.txt
+    cannot disagree about what a page says.
+    """
+    with open(os.path.join(CONTENT, "%s.md" % slug), encoding="utf-8") as handle:
+        lines = handle.read().splitlines()
+    out = []
+    for line in lines:
+        match = INCLUDE.match(line)
+        if not match:
+            out.append(line)
+            continue
+        target = os.path.join(CONTENT, match.group(1))
+        if not os.path.exists(target):
+            raise SystemExit(
+                "build_guide: %s.md includes %s, which does not exist — run "
+                "docs/scripts/build_reference.py first" % (slug, match.group(1)))
+        with open(target, encoding="utf-8") as handle:
+            out.extend(handle.read().splitlines())
+    return "\n".join(out)
+
+
 def build(page, index):
-    source = os.path.join(CONTENT, "%s.md" % page["slug"])
-    with open(source, encoding="utf-8") as handle:
-        body = render(handle.read().splitlines())
+    body = render(read_content(page["slug"]).splitlines())
     body_html = "\n".join(body)
     return TEMPLATE.format(
         title=escape(page["title"]), desc=escape(page["desc"]), site=SITE,
@@ -469,7 +511,7 @@ def llms_txt():
             "", "## Optional", "",
             "- [Plugin SDKs](https://github.com/navbytes/vee/tree/main/plugins): zero-dependency "
             "TypeScript, Python, and Go builders that emit byte-identical output.",
-            "- [Example plugins](https://github.com/navbytes/vee/tree/main/examples): runnable, "
+            "- [Example plugins](https://github.com/navbytes/vee/tree/main/plugins/showcase): runnable, "
             "heavily commented showcase plugins.",
             ""]
     return "\n".join(out)
@@ -482,8 +524,7 @@ def llms_full_txt():
            "Machine-readable payload schemas: %s/schemas/" % SITE,
            "", "---", ""]
     for page in sourced_pages():
-        with open(os.path.join(CONTENT, "%s.md" % page["slug"]), encoding="utf-8") as handle:
-            body = handle.read().strip()
+        body = read_content(page["slug"]).strip()
         out += ["<!-- %s/guide/%s.html -->" % (SITE, page["slug"]), "", body, "", "---", ""]
     return "\n".join(out)
 
@@ -525,8 +566,7 @@ def main(argv):
     # beside it so /guide/x.md is derivable from /guide/x.html. Cross-links keep
     # their .md form here — correct for a Markdown reader, unlike the HTML.
     for page in sourced_pages():
-        with open(os.path.join(CONTENT, "%s.md" % page["slug"]), encoding="utf-8") as handle:
-            rendered = handle.read()
+        rendered = read_content(page["slug"]) + "\n"
         target = os.path.join(GUIDE, "%s.md" % page["slug"])
         current = open(target, encoding="utf-8").read() if os.path.exists(target) else None
         if current == rendered:

@@ -73,76 +73,19 @@ The `.5s` sets a 5-second refresh, exactly as with any other plugin.
 
 ## API
 
-### `Menu`
+The three SDKs expose the same `Menu` / `Section` / options surface, method for
+method, and are checked against each other so they cannot drift. Rather than
+restate a third of that contract here, the full cross-language reference —
+every method, every option, and the TypeScript spelling of each — lives in one
+place:
 
-- `title(text, options?)` — add a menu-bar title line (call more than once for
-  multiple lines).
-- `dropdown` — a `Section` for the dropdown body (everything after `---`).
-- `toString()` — render the whole menu to the text protocol.
-- `print()` — write `toString()` to stdout. This is what a real plugin calls.
+**[Plugin SDKs reference](https://vee.navbytes.io/guide/sdk.html)**
 
-### `Section`
-
-- `item(text, options?)` — add a menu item.
-- `separator()` — add a `---` separator at this depth.
-- `submenu(text, options?)` — add an item and return a `Section` for its
-  submenu.
-
-### `ItemOptions`
-
-Every parameter the format recognises, in one typed shape:
-
-- **Rendering** — `color`, `size`, `font`, `length`, `trim`, `ansi`, `emojize`
-- **Behaviour** — `href`, `shell` (+ `params`), `terminal`, `refresh`,
-  `dropdown`, `alternate`, `disabled`, `checked`, `key`, `tooltip`
-- **Images** — `image`, `templateImage`
-- **SF Symbols** — `sfimage`, `sfColor`, `sfSize`, `sfConfig`, `symbolize`
-- **SwiftBar extras** — `md`, `badge`, `webview`, `webviewW`, `webviewH`,
-  `shortcut`
-- **Vee-native rows** — `header`, `accessory`
-- **Controls** — `toggle`, `slider`, `progress` (a fraction, or `{ value, max }`
-  for the format's two-argument form)
-- **Inline visuals** — each takes the same `<control>W` / `<control>H` /
-  colour vocabulary:
-
-  | Control | Size | Colour |
-  | ------- | ---- | ------ |
-  | `sparkline` | `sparklineW`, `sparklineH` | `sparklineColor` |
-  | `progress` | `progressW`, `progressH` | `progressTrackColor` |
-  | `chart` | `chart.w`, `chart.h` | `chart.colors` |
-
-  `sparklineW`, `progressW`, and `chart.w` all accept `"full"` to stretch to
-  the row's own width.
-
-`trackColor` is the deprecated spelling of `progressTrackColor`; it still
-works and is still emitted as `progresstrackcolor=`. See the
-[SDK guide](../../docs/_content/sdk.md) for the rich-param details.
-
-## Widget cards
-
-Beyond menus, the SDK builds the [widget card](../../docs/_content/widgets.md)
-payload a plugin prints when Vee invokes it with `VEE_TARGET=widget`:
-
-```ts
-import { Stat } from "./vee.ts";
-
-if (process.env.VEE_TARGET === "widget") {
-  Stat({
-    title: "Revenue",
-    symbol: "chart.line.uptrend.xyaxis",
-    tint: "green",
-    value: "$18.2k",
-    status: "ok",
-    items: [{ label: "Orders", value: "214" }],
-    actions: [{ kind: "refresh", label: "Refresh" }],
-  }).print();
-}
-```
-
-`Stat`, `Gauge`, `Trend`, `List`, and `Board` preset the card's `template`;
-`widgetCard(...)` is the generic constructor. For layouts the five templates
-cannot express, build a **layout tree** with the `Node` builders and pass it as
-`layout`. See [Widgets](../../docs/_content/widgets.md) for every field.
+For the parameters themselves — what each one accepts, its default, and which
+chart it belongs to — see the [plugin authoring
+reference](https://vee.navbytes.io/guide/plugin-authoring.html) and
+[Charts](https://vee.navbytes.io/guide/charts.html), both generated from
+`docs/api/params.json`, the same record this SDK is verified against.
 
 ## Tests
 

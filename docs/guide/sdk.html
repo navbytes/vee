@@ -49,6 +49,7 @@
 <li><a href="./getting-started.html">Getting started</a></li>
 <li><a href="./migrating-from-swiftbar.html">Migrating from SwiftBar / xbar</a></li>
 <li><a href="./plugin-authoring.html">Plugin authoring</a></li>
+<li><a href="./charts.html">Charts</a></li>
 <li><a href="./widgets.html">Widgets</a></li>
 <li><a href="./trust-model.html">Trust model</a></li>
 <li><a href="./preferences.html">Preferences</a></li>
@@ -61,7 +62,7 @@
 <li><a href="./faq.html">FAQ</a></li>
 <li><a href="./troubleshooting.html">Troubleshooting</a></li>
 </ul>
-<nav class="docs-toc" aria-labelledby="toc-title"><p class="docs-nav-title" id="toc-title">On this page</p><ul><li><a href="#getting-the-sdk">Getting the SDK</a></li><li><a href="#requirements">Requirements</a></li><li><a href="#hello-world">Hello world</a></li><li><a href="#the-api">The API</a></li><li><a href="#rich-params">Rich params</a></li><li><a href="#widget-cards">Widget cards</a></li><li><a href="#the-no-build-step-note-typescript">The no-build-step note (TypeScript)</a></li><li><a href="#drift-guard-and-fixtures">Drift guard and fixtures</a></li><li><a href="#see-also">See also</a></li></ul></nav>
+<nav class="docs-toc" aria-labelledby="toc-title"><p class="docs-nav-title" id="toc-title">On this page</p><ul><li><a href="#getting-the-sdk">Getting the SDK</a></li><li><a href="#requirements">Requirements</a></li><li><a href="#hello-world">Hello world</a></li><li class="toc-sub"><a href="#typescript">TypeScript</a></li><li class="toc-sub"><a href="#python">Python</a></li><li class="toc-sub"><a href="#go">Go</a></li><li><a href="#the-api">The API</a></li><li class="toc-sub"><a href="#menu"><code>Menu</code></a></li><li class="toc-sub"><a href="#section"><code>Section</code></a></li><li class="toc-sub"><a href="#jsonmenu"><code>JSONMenu</code></a></li><li class="toc-sub"><a href="#options">Options</a></li><li><a href="#rich-params">Rich params</a></li><li class="toc-sub"><a href="#share-charts">Share charts</a></li><li><a href="#widget-cards">Widget cards</a></li><li class="toc-sub"><a href="#layout-nodes-take-only-the-options-that-fit-them">Layout nodes take only the options that fit them</a></li><li><a href="#the-no-build-step-note-typescript">The no-build-step note (TypeScript)</a></li><li><a href="#drift-guard-and-fixtures">Drift guard and fixtures</a></li><li><a href="#see-also">See also</a></li></ul></nav>
   </aside>
   <main class="docs-main" id="main">
     <article class="docs-content" data-pagefind-body>
@@ -166,7 +167,7 @@ func main() {
 <div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">sh</span></div><pre><code>go build -o cpu.5s ./...</code></pre></div>
 <p>A compiled binary is a first-class Vee plugin. The <code>.5s</code> in the filename sets a 5-second refresh, exactly as with any other plugin (see <a href="plugin-authoring.html#filenames-and-refresh-intervals">plugin authoring</a>).</p>
 <h2 id="the-api">The API</h2>
-<p>All three SDKs expose the same three types.</p>
+<p>All three SDKs expose the same four types.</p>
 <h3 id="menu"><code>Menu</code></h3>
 <p>The top-level menu: title line(s) plus a dropdown.</p>
 <div class="table-scroll"><table><thead><tr><th>Method</th><th>TypeScript</th><th>Python</th><th>Go</th></tr></thead><tbody><tr><td>Add a title line (call more than once for multiple lines)</td><td><code>title(text, options?)</code></td><td><code>title(text, **options)</code></td><td><code>Title(text, *Options)</code></td></tr><tr><td>The dropdown body (everything after <code>---</code>)</td><td><code>dropdown</code> (getter)</td><td><code>dropdown</code> (property)</td><td><code>Dropdown() Section</code></td></tr><tr><td>Render to the text protocol string</td><td><code>toString()</code></td><td><code>to_string()</code> / <code>str(menu)</code></td><td><code>String()</code></td></tr><tr><td>Write the rendered menu (+ newline) to stdout</td><td><code>print()</code></td><td><code>print()</code></td><td><code>Print()</code></td></tr></tbody></table></div>
@@ -178,6 +179,15 @@ func main() {
 <li><strong>Separator</strong> — <code>separator()</code> / <code>separator()</code> / <code>Separator()</code> adds a <code>---</code> divider.</li>
 <li><strong>Submenu</strong> — <code>submenu(text, ...)</code> / <code>Submenu(text, ...)</code> adds an item and returns a new <code>Section</code> for its children (one level deeper).</li>
 </ul>
+<h3 id="jsonmenu"><code>JSONMenu</code></h3>
+<p>The same surface as <code>Menu</code>, emitting the <a href="json-output.html">structured-JSON format</a>
+instead of the text protocol. It mirrors <code>Menu</code> method for method — <code>title</code>,
+<code>dropdown</code>, <code>item</code>, <code>separator</code>, <code>submenu</code>, <code>toString</code>/<code>to_string</code>/<code>String</code>,
+<code>print</code> — so choosing a wire format no longer means choosing a different way to
+work.</p>
+<p>Prefer it when a plugin's values contain characters the text protocol has to
+escape (pipes, quotes, newlines), since the JSON encoder handles them without
+the escaping rules the text format needs.</p>
 <h3 id="options">Options</h3>
 <p>Options map onto the line parameters in the <a href="plugin-authoring.html#line-parameters">authoring reference</a>. The supported keys are the same in every SDK (in TypeScript they are <code>ItemOptions</code>; in Python keyword arguments; in Go the <code>Options</code> struct fields):</p>
 <ul>
