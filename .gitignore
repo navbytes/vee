@@ -23,6 +23,3 @@ __pycache__/
 docs-site/node_modules/
 docs-site/dist/
 docs-site/.astro/
-# Generated into the content tree by docs/scripts/build_reference.py, and into
-# the build output by the Astro integration.
-docs/_content/_generated/

@@ -137,7 +137,7 @@ Every parameter below is generated from `docs/api/params.json`, the same
 record `vee lint` and the three SDKs are checked against — so a parameter
 that exists is listed here, and one listed here exists.
 
-<!-- include: _generated/params-table.md -->
+[**The full parameter table** →](_generated/params-table.md)
 
 Unknown parameters are preserved rather than dropped, so the format can evolve without breaking existing plugins.
 

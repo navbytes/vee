@@ -129,7 +129,20 @@ pages at build time — there is no index to regenerate and none to commit.
 **The parameter surface is data.** `docs/api/params.json` records every
 menu-line parameter with its type, accepted values, default, group, and the
 chart it belongs to. The reference tables in the published guides are generated
-from it — do not hand-edit a table:
+from it into `docs/_content/_generated/`, and pulled into a page with an
+ordinary Markdown link:
+
+```markdown
+[**The full parameter table** →](_generated/params-table.md)
+```
+
+The site splices the table in where that link sits; on GitHub, which renders
+`docs/_content/*.md` directly, it stays a link to the same file. That is why
+the partials are committed and why the directive is a link rather than an HTML
+comment — a comment renders as nothing, which left both generated tables
+invisible to anyone reading the docs in the repository.
+
+Do not hand-edit a generated table:
 
 ```sh
 python3 docs/scripts/build_reference.py          # write the generated partials
