@@ -121,7 +121,7 @@
           "description": "Inline chart data. Non-finite values are dropped."
         },
         "sparklineWidth": {
-          "description": "Sparkline width in points, or \"full\" to stretch to the row's width.",
+          "description": "Deprecated: use `accessoryWidth`. Sparkline width in points, or \"full\" to stretch to the row's width.",
           "oneOf": [
             {
               "type": "number"
@@ -129,11 +129,13 @@
             {
               "const": "full"
             }
-          ]
+          ],
+          "deprecated": true
         },
         "sparklineHeight": {
           "type": "number",
-          "description": "Sparkline height in points."
+          "description": "Deprecated: use `accessoryHeight`. Sparkline height in points.",
+          "deprecated": true
         },
         "sparklineColor": {
           "type": "string",
@@ -176,10 +178,10 @@
         },
         "trackColor": {
           "$ref": "#/$defs/color",
-          "description": "**Deprecated** \u2014 the pre-v2 spelling of `progressTrackColor`. Still accepted; removed in the next major version."
+          "description": "**Deprecated** — the pre-v2 spelling of `progressTrackColor`. Still accepted; removed in the next major version."
         },
         "progressWidth": {
-          "description": "Progress bar width in points, or \"full\" to stretch to the row's width.",
+          "description": "Deprecated: use `accessoryWidth`. Progress bar width in points, or \"full\" to stretch to the row's width.",
           "oneOf": [
             {
               "type": "number"
@@ -187,11 +189,13 @@
             {
               "const": "full"
             }
-          ]
+          ],
+          "deprecated": true
         },
         "progressHeight": {
           "type": "number",
-          "description": "Progress bar height in points."
+          "description": "Deprecated: use `accessoryHeight`. Progress bar height in points.",
+          "deprecated": true
         },
         "accessory": {
           "enum": [
@@ -207,7 +211,7 @@
             "kind"
           ],
           "additionalProperties": true,
-          "description": "A categorical share chart \u2014 the JSON spelling of pie=/donut=/stackedbar=, collapsed into one object because they describe the same data.",
+          "description": "A categorical share chart — the JSON spelling of pie=/donut=/stackedbar=, collapsed into one object because they describe the same data.",
           "properties": {
             "kind": {
               "enum": [
@@ -242,7 +246,7 @@
               "description": "Positional against `values`. An entry that is null, blank, malformed, or unrecognised keeps that segment's palette slot."
             },
             "w": {
-              "description": "Inline width in points (clamped 8\u2013200), or \"full\" to stretch to the row's width \u2014 stackedbar only; on pie/donut \"full\" is ignored with a warning.",
+              "description": "Deprecated: use `accessoryWidth` on the item. Inline width in points (clamped 8–200), or \"full\" to stretch to the row's width — stackedbar only; on pie/donut \"full\" is ignored with a warning.",
               "oneOf": [
                 {
                   "type": "number",
@@ -252,13 +256,15 @@
                 {
                   "const": "full"
                 }
-              ]
+              ],
+              "deprecated": true
             },
             "h": {
               "type": "number",
               "minimum": 8,
               "maximum": 200,
-              "description": "Inline height in points. Clamped."
+              "description": "Deprecated: use `accessoryHeight` on the item. Inline height in points. Clamped.",
+              "deprecated": true
             }
           }
         },
@@ -272,6 +278,21 @@
         "alternate": {
           "$ref": "#/$defs/item",
           "description": "The row shown while Option is held."
+        },
+        "accessoryWidth": {
+          "description": "Width in points for whichever accessory the item carries — a progress gauge, sparkline, chart, or slider — or \"full\" to stretch it to the row's width. Supersedes `progressWidth`, `sparklineWidth` and `chart.w`. \"full\" is refused on a pie or donut, which can only fill a width by growing the row.",
+          "oneOf": [
+            {
+              "type": "number"
+            },
+            {
+              "const": "full"
+            }
+          ]
+        },
+        "accessoryHeight": {
+          "type": "number",
+          "description": "Height in points for whichever accessory the item carries. Supersedes `progressHeight`, `sparklineHeight` and `chart.h`. Ignored for a slider or toggle, whose height is its control size."
         }
       }
     }

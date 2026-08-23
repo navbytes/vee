@@ -22,11 +22,11 @@
 
 ## 3. Structured output
 
-- [ ] 3.1 Accept `accessoryWidth` / `accessoryHeight` in `JSONOutputParser`.
-- [ ] 3.2 Deprecate `progressWidth`/`progressHeight`, `sparklineWidth`/
+- [x] 3.1 Accept `accessoryWidth` / `accessoryHeight` in `JSONOutputParser`.
+- [x] 3.2 Deprecate `progressWidth`/`progressHeight`, `sparklineWidth`/
       `sparklineHeight`, `chartWidth`/`chartHeight` with the same diagnostics.
-- [ ] 3.3 Update `docs/schemas/json-output.schema.json`.
-- [ ] 3.4 Tests mirroring 1.5 through the JSON path.
+- [x] 3.3 Update `docs/schemas/json-output.schema.json`.
+- [x] 3.4 Tests mirroring 1.5 through the JSON path.
 
 ## 4. Documentation
 
