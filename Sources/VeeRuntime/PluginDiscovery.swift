@@ -27,10 +27,22 @@ public enum PluginDiscovery {
         "bak", "orig", "tmp", "swp", "swo", "rej"
     ]
 
+    /// Filenames Vee itself writes into a plugins folder that are not plugins.
+    ///
+    /// `vee new` and `vee sdk` vendor the SDK beside a plugin, because a Vee
+    /// plugin is a single executable with no build step and so cannot resolve
+    /// the SDK from a package manager. The vendored file is a module, not a
+    /// plugin — and `vee.ts`/`vee.py` are otherwise perfectly valid plugin
+    /// filenames (name `vee`, manual interval), so without this they are
+    /// discovered, run, and surface as a broken menu-bar row beside the real
+    /// plugins they exist to support.
+    private static let vendoredSDKFilenames: Set<String> = ["vee.ts", "vee.py"]
+
     /// Lists candidate plugins in `directory`, sorted by filename. Skips hidden
     /// files, `.vars.json` preference sidecars, subdirectories (a `disabled/`
     /// subfolder is a common convention for parking plugins), editor backup/
-    /// autosave files, and obvious non-plugin document/data files.
+    /// autosave files, the vendored SDK (`vee.ts`/`vee.py`), and obvious
+    /// non-plugin document/data files.
     public static func enumerate(directory: String, fileManager: FileManager = .default) -> [DiscoveredPlugin] {
         guard let names = try? fileManager.contentsOfDirectory(atPath: directory) else { return [] }
 
@@ -43,6 +55,7 @@ public enum PluginDiscovery {
             // the real plugin.
             if name.hasSuffix("~") { return nil }
             if name.hasPrefix("#") && name.hasSuffix("#") { return nil }
+            if vendoredSDKFilenames.contains(name.lowercased()) { return nil }
 
             let path = (directory as NSString).appendingPathComponent(name)
             var isDir: ObjCBool = false

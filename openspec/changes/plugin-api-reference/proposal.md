@@ -26,9 +26,11 @@ sentence does not. That is the same failure `check_params.py` was built to stop
 for parameter *names*, left unguarded for parameter *values*.
 
 The `plugins/` reorganisation in `f7367b0` has already demonstrated the gap: it
-broke four documented links (`llms.txt:36`, `json-output.md:143`,
-`plugin-authoring.md:704`, `CONTRIBUTING.md:207`) and CI reported nothing,
-because no check looks at links.
+broke four documented links and CI reported nothing, because no check looks at
+links. #98 touched `json-output.md` for other reasons and repaired one of them
+incidentally; three are still broken on `main` today — `llms.txt:36`,
+`plugin-authoring.md:721`, and `CONTRIBUTING.md:207`. A defect that survives a
+1,500-line pass over the same files is not one review catches.
 
 ## What Changes
 
@@ -44,10 +46,12 @@ because no check looks at links.
   three entry paths (text protocol, JSON menu output, widget card), listing the
   six chart kinds with their value grammar, applicable knobs, limits, and
   click-to-popover behavior.
-- Extend `check_params.py` to read `params.json` as the documentation surface
-  instead of scraping a Markdown table with a regex, and to verify the recorded
-  chart constants against `ChartParams.swift`. Same three-way parity, one fewer
-  scraper, and numeric drift now fails CI.
+- Repoint `check_params.py`'s *documentation* surface at `params.json` instead
+  of scraping a Markdown table with a regex, and add a check of the recorded
+  chart constants against `ChartParams.swift`. #98 grew that script from three
+  surfaces to six — parser, linter, and each of the three SDKs separately — and
+  all of those stay exactly as they are. Only the surface that reads prose
+  changes, and numeric drift starts failing CI.
 - Collect `h3` headings into the generated "On this page" nav, so subsections
   like `### Share charts` are reachable.
 - Fix the four links `f7367b0` broke, and add a link check to `lint.yml` so the
@@ -63,9 +67,12 @@ default, and grouping metadata to some forty parser cases, which is a Swift
 change deserving its own proposal. This change proves the schema first.
 
 Also not in this change: TypeDoc / pdoc / `pkg.go.dev`. The three SDKs are
-byte-identical by design, so one cross-language table serves better than three
-generated sites, and `plugins/go/go.mod` declares `module vee`, which
-`pkg.go.dev` cannot serve.
+byte-identical by design — #98 made that structural by checking each one as its
+own surface — so one cross-language table serves better than three generated
+sites that would each describe a third of the same contract. Note that #98 gave
+`plugins/go/go.mod` the real module path `github.com/navbytes/vee/plugins/go`,
+so `pkg.go.dev` will serve the Go SDK automatically on the next tag. That is
+free and worth linking to; it is not a reason to generate the other two.
 
 ## Capabilities
 
@@ -80,13 +87,15 @@ generated sites, and `plugins/go/go.mod` declares `module vee`, which
 
 - **`docs/api/params.json`** (new) — the authored contract.
 - **`docs/scripts/build_reference.py`** (new) — the generator.
-- **`docs/scripts/check_params.py`** — reads `params.json`; gains the constants
-  check. Its Markdown-table scraper is deleted.
+- **`docs/scripts/check_params.py`** — its documentation surface reads
+  `params.json`; gains the constants check. The Markdown-table scraper is
+  deleted; the parser, linter, and three SDK surfaces #98 added are untouched.
 - **`docs/scripts/build_guide.py`** — one new `PAGES[]` entry; `toc()` collects
   `h3`.
 - **`docs/_content/`** — new `charts.md`; `plugin-authoring.md`'s table becomes
   generated; `sdk.md` keeps the cross-language table.
 - **`plugins/{typescript,python,go}/README.md`** — lose their duplicated API
   sections.
-- **`.github/workflows/lint.yml`** — one new link-check step.
+- **`.github/workflows/lint.yml`** — one new link-check step, joining the guards
+  #98 left at six.
 - **No Swift changes.** No parser, CLI, or SDK behavior changes.
