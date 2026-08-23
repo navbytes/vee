@@ -20,6 +20,9 @@ on:
       # installer silently lags the repo until some other docs file happens to
       # change alongside it.
       - "scripts/install.sh"
+      # Context7 indexes docs/_content and reads its parsing rules from here,
+      # so a rules change has to re-index even when no page moved.
+      - "context7.json"
   workflow_dispatch:
 
 # Pages needs id-token to deploy; nothing here writes to the repository.
@@ -70,3 +73,44 @@ jobs:
           path: docs-site/dist
       - id: deploy
         uses: actions/deploy-pages@v5
+
+  # Ask Context7 to re-index. It serves Vee's docs to LLMs and AI editors
+  # (context7.com/navbytes/vee, indexing docs/_content per context7.json), and
+  # it refreshes on its own schedule -- which means a shipped doc change can sit
+  # stale in front of every model using it until that fires. This closes the
+  # same gap the deploy above closes for the human-facing site.
+  #
+  # Runs after the deploy rather than beside it: there is no point asking for a
+  # re-index of pages that failed to publish.
+  context7:
+    needs: deploy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Refresh the Context7 index
+        env:
+          API_KEY: ${{ secrets.CONTEXT7_API_KEY }}
+        run: |
+          # Absent secret is not a failure. The docs deploy above is the job
+          # that matters, and failing it over an optional third-party index --
+          # on a fork, or before the key is set -- would be the tail wagging the
+          # dog. Say so and move on.
+          if [ -z "$API_KEY" ]; then
+            echo "CONTEXT7_API_KEY is not set — skipping the Context7 refresh."
+            echo "Set it in repository secrets to enable this; get a key at https://context7.com/dashboard"
+            exit 0
+          fi
+          code=$(curl -sS -o /tmp/c7.json -w '%{http_code}' -X POST \
+            https://context7.com/api/v1/refresh \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer $API_KEY" \
+            -d "{\"libraryName\": \"/${{ github.repository }}\"}")
+          echo "HTTP $code"
+          cat /tmp/c7.json || true
+          echo
+          # A refresh is a request, not a guarantee: Context7 queues the
+          # re-index. Anything other than a 2xx is worth failing on, since the
+          # request itself did not land.
+          case "$code" in
+            2*) echo "Refresh requested." ;;
+            *) echo "Context7 refresh failed."; exit 1 ;;
+          esac
