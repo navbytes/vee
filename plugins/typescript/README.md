@@ -69,11 +69,32 @@ The `.5s` sets a 5-second refresh, exactly as with any other plugin.
 
 ### `ItemOptions`
 
-`color`, `size`, `font`, `length`, `href`, `shell` (+ `params`), `terminal`,
-`refresh`, `alternate`, `disabled`, `checked`, `key`, `tooltip`, `sfimage`,
-`md`, `badge`, `symbolize`, and the rich controls `sparkline`, `toggle`,
-`slider`, `progress` (+ `trackColor`, `progressW`, `progressH`), and `chart`
-(the `pie`/`donut`/`stackedbar` share charts). See the
+Every parameter the format recognises, in one typed shape:
+
+- **Rendering** — `color`, `size`, `font`, `length`, `trim`, `ansi`, `emojize`
+- **Behaviour** — `href`, `shell` (+ `params`), `terminal`, `refresh`,
+  `dropdown`, `alternate`, `disabled`, `checked`, `key`, `tooltip`
+- **Images** — `image`, `templateImage`
+- **SF Symbols** — `sfimage`, `sfColor`, `sfSize`, `sfConfig`, `symbolize`
+- **SwiftBar extras** — `md`, `badge`, `webview`, `webviewW`, `webviewH`,
+  `shortcut`
+- **Vee-native rows** — `header`, `accessory`
+- **Controls** — `toggle`, `slider`, `progress` (a fraction, or `{ value, max }`
+  for the format's two-argument form)
+- **Inline visuals** — each takes the same `<control>W` / `<control>H` /
+  colour vocabulary:
+
+  | Control | Size | Colour |
+  | ------- | ---- | ------ |
+  | `sparkline` | `sparklineW`, `sparklineH` | `sparklineColor` |
+  | `progress` | `progressW`, `progressH` | `progressTrackColor` |
+  | `chart` | `chart.w`, `chart.h` | `chart.colors` |
+
+  `sparklineW`, `progressW`, and `chart.w` all accept `"full"` to stretch to
+  the row's own width.
+
+`trackColor` is the deprecated spelling of `progressTrackColor`; it still
+works and is still emitted as `progresstrackcolor=`. See the
 [SDK guide](../../docs/_content/sdk.md) for the rich-param details.
 
 ## Widget cards

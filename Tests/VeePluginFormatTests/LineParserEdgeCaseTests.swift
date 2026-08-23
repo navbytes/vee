@@ -176,4 +176,46 @@ final class LineParserEdgeCaseTests: XCTestCase {
         XCTAssertEqual(p.image, small)
         XCTAssertTrue(diags.isEmpty)
     }
+
+    // MARK: - sparkline size/colour (sparklinew=/sparklineh=/sparklinecolor=)
+
+    /// The sparkline was the only inline accessory without size or colour
+    /// knobs, while `progress=` and the chart shapes both had them. These
+    /// assert it now takes the same vocabulary, including `full`.
+    func testSparklineStyleParses() {
+        let parsed = params("sparkline=1,2,3 sparklinew=140 sparklineh=18 sparklinecolor=teal")
+        let style = parsed.swiftbar.sparklineStyle
+        XCTAssertEqual(style?.width, 140)
+        XCTAssertEqual(style?.height, 18)
+        XCTAssertEqual(style?.color, .named("teal"))
+        XCTAssertEqual(style?.isFullWidth, false)
+    }
+
+    func testSparklineFullWidthMirrorsProgressAndChart() {
+        let style = params("sparkline=1,2,3 sparklinew=full").swiftbar.sparklineStyle
+        XCTAssertEqual(style?.isFullWidth, true)
+        XCTAssertNil(style?.width)
+        // Falls back to the shared default rather than collapsing to zero.
+        XCTAssertEqual(style?.effectiveWidth, SparklineStyle.defaultWidth)
+        XCTAssertEqual(style?.effectiveHeight, SparklineStyle.defaultHeight)
+    }
+
+    /// A bare `sparkline=` carries no style at all, so the renderer keeps its
+    /// own defaults instead of being handed an empty override.
+    func testSparklineWithoutStyleLeavesStyleNil() {
+        let parsed = params("sparkline=1,2,3")
+        XCTAssertNil(parsed.swiftbar.sparklineStyle)
+        XCTAssertEqual(parsed.sparkline, [1, 2, 3])
+    }
+
+    // MARK: - progresstrackcolor= and its deprecated spelling
+
+    func testProgressTrackColorAcceptsBothSpellings() {
+        let current = params("progress=0.5 progresstrackcolor=gray")
+        let deprecated = params("progress=0.5 trackcolor=gray")
+        XCTAssertEqual(current.progress?.trackColor, .named("gray"))
+        XCTAssertEqual(deprecated.progress?.trackColor, .named("gray"),
+                       "trackcolor= is the pre-v2 spelling and must keep working for published plugins")
+        XCTAssertEqual(current.progress, deprecated.progress)
+    }
 }

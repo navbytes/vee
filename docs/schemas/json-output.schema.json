@@ -4,7 +4,9 @@
   "title": "Vee JSON menu output",
   "description": "The optional structured-JSON alternative to Vee's text protocol. A plugin opts in by printing one object with a top-level \"vee\" key. See https://vee.navbytes.io/guide/json-output.html",
   "type": "object",
-  "required": ["vee"],
+  "required": [
+    "vee"
+  ],
   "additionalProperties": true,
   "properties": {
     "vee": {
@@ -16,20 +18,34 @@
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["text"],
+        "required": [
+          "text"
+        ],
         "additionalProperties": true,
         "properties": {
-          "text": { "type": "string" },
-          "color": { "$ref": "#/$defs/color" },
-          "sfimage": { "type": "string", "description": "SF Symbol name." },
-          "size": { "type": "number", "description": "Font size in points." }
+          "text": {
+            "type": "string"
+          },
+          "color": {
+            "$ref": "#/$defs/color"
+          },
+          "sfimage": {
+            "type": "string",
+            "description": "SF Symbol name."
+          },
+          "size": {
+            "type": "number",
+            "description": "Font size in points."
+          }
         }
       }
     },
     "items": {
       "description": "The dropdown body, top to bottom.",
       "type": "array",
-      "items": { "$ref": "#/$defs/item" }
+      "items": {
+        "$ref": "#/$defs/item"
+      }
     }
   },
   "$defs": {
@@ -42,72 +58,221 @@
       "additionalProperties": true,
       "description": "A dropdown row. Every field is optional; the shape of the row depends on which fields are set. Nesting is capped at 64 levels.",
       "properties": {
-        "text": { "type": "string", "description": "The row's label. Omitted for a separator." },
-        "separator": { "type": "boolean", "description": "When true, this entry is a divider and all other fields are ignored." },
-        "header": { "type": "boolean", "description": "When true, render as a real non-interactive section header rather than a normal row." },
-        "color": { "$ref": "#/$defs/color" },
-        "href": { "type": "string", "description": "A URL to open on click. Scheme-filtered: http/https and app deep links only." },
-        "shell": { "type": "string", "description": "A command to run on click (a launch path or command name)." },
-        "params": { "type": "array", "items": { "type": "string" }, "description": "Arguments passed to `shell`, in order." },
-        "terminal": { "type": "boolean", "description": "Run the `shell` command in Terminal rather than in the background." },
-        "refresh": { "type": "boolean", "description": "Clicking re-runs the plugin." },
-        "sfimage": { "type": "string", "description": "SF Symbol name." },
-        "size": { "type": "number", "description": "Font size in points." },
-        "disabled": { "type": "boolean" },
-        "checked": { "type": "boolean" },
-        "tooltip": { "type": "string" },
-        "sparkline": { "type": "array", "items": { "type": "number" }, "description": "Inline chart data. Non-finite values are dropped." },
-        "toggle": { "type": "boolean", "description": "Renders an on/off switch in a popover." },
+        "text": {
+          "type": "string",
+          "description": "The row's label. Omitted for a separator."
+        },
+        "separator": {
+          "type": "boolean",
+          "description": "When true, this entry is a divider and all other fields are ignored."
+        },
+        "header": {
+          "type": "boolean",
+          "description": "When true, render as a real non-interactive section header rather than a normal row."
+        },
+        "color": {
+          "$ref": "#/$defs/color"
+        },
+        "href": {
+          "type": "string",
+          "description": "A URL to open on click. Scheme-filtered: http/https and app deep links only."
+        },
+        "shell": {
+          "type": "string",
+          "description": "A command to run on click (a launch path or command name)."
+        },
+        "params": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "Arguments passed to `shell`, in order."
+        },
+        "terminal": {
+          "type": "boolean",
+          "description": "Run the `shell` command in Terminal rather than in the background."
+        },
+        "refresh": {
+          "type": "boolean",
+          "description": "Clicking re-runs the plugin."
+        },
+        "sfimage": {
+          "type": "string",
+          "description": "SF Symbol name."
+        },
+        "size": {
+          "type": "number",
+          "description": "Font size in points."
+        },
+        "disabled": {
+          "type": "boolean"
+        },
+        "checked": {
+          "type": "boolean"
+        },
+        "tooltip": {
+          "type": "string"
+        },
+        "sparkline": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "description": "Inline chart data. Non-finite values are dropped."
+        },
+        "sparklineWidth": {
+          "description": "Sparkline width in points, or \"full\" to stretch to the row's width.",
+          "oneOf": [
+            {
+              "type": "number"
+            },
+            {
+              "const": "full"
+            }
+          ]
+        },
+        "sparklineHeight": {
+          "type": "number",
+          "description": "Sparkline height in points."
+        },
+        "sparklineColor": {
+          "type": "string",
+          "description": "Sparkline line colour (named or hex); falls back to the item's `color`."
+        },
+        "toggle": {
+          "type": "boolean",
+          "description": "Renders an on/off switch in a popover."
+        },
         "slider": {
           "type": "object",
-          "required": ["min", "max", "value"],
+          "required": [
+            "min",
+            "max",
+            "value"
+          ],
           "additionalProperties": true,
           "description": "Renders a slider in a popover. Requires min < max; value is clamped into range.",
           "properties": {
-            "min": { "type": "number" },
-            "max": { "type": "number" },
-            "value": { "type": "number" }
+            "min": {
+              "type": "number"
+            },
+            "max": {
+              "type": "number"
+            },
+            "value": {
+              "type": "number"
+            }
           }
         },
-        "progress": { "type": "number", "minimum": 0, "maximum": 1, "description": "A completion fraction, clamped. The fill uses the row's `color`." },
-        "trackColor": { "$ref": "#/$defs/color" },
+        "progress": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "A completion fraction, clamped. The fill uses the row's `color`."
+        },
+        "progressTrackColor": {
+          "type": "string",
+          "description": "Progress track colour (named or hex)."
+        },
+        "trackColor": {
+          "$ref": "#/$defs/color",
+          "description": "**Deprecated** \u2014 the pre-v2 spelling of `progressTrackColor`. Still accepted; removed in the next major version."
+        },
         "progressWidth": {
           "description": "Progress bar width in points, or \"full\" to stretch to the row's width.",
           "oneOf": [
-            { "type": "number" },
-            { "const": "full" }
+            {
+              "type": "number"
+            },
+            {
+              "const": "full"
+            }
           ]
         },
-        "progressHeight": { "type": "number", "description": "Progress bar height in points." },
-        "accessory": { "enum": ["leading", "trailing"], "default": "trailing", "description": "Which edge the row's accessory anchors to." },
+        "progressHeight": {
+          "type": "number",
+          "description": "Progress bar height in points."
+        },
+        "accessory": {
+          "enum": [
+            "leading",
+            "trailing"
+          ],
+          "default": "trailing",
+          "description": "Which edge the row's accessory anchors to."
+        },
         "chart": {
           "type": "object",
-          "required": ["kind"],
+          "required": [
+            "kind"
+          ],
           "additionalProperties": true,
-          "description": "A categorical share chart — the JSON spelling of pie=/donut=/stackedbar=, collapsed into one object because they describe the same data.",
+          "description": "A categorical share chart \u2014 the JSON spelling of pie=/donut=/stackedbar=, collapsed into one object because they describe the same data.",
           "properties": {
-            "kind": { "enum": ["pie", "donut", "stackedbar"] },
+            "kind": {
+              "enum": [
+                "pie",
+                "donut",
+                "stackedbar"
+              ]
+            },
             "values": {
-              "type": "array", "items": { "type": "number", "minimum": 0 },
+              "type": "array",
+              "items": {
+                "type": "number",
+                "minimum": 0
+              },
               "description": "Shares of a whole. Must be finite and non-negative with a positive total; at most 8 segments, and a longer series folds its tail into 'Other'."
             },
-            "labels": { "type": "array", "items": { "type": "string" }, "description": "Positional against `values`." },
+            "labels": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Positional against `values`."
+            },
             "colors": {
-              "type": "array", "items": { "type": ["string", "null"] },
+              "type": "array",
+              "items": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
               "description": "Positional against `values`. An entry that is null, blank, malformed, or unrecognised keeps that segment's palette slot."
             },
             "w": {
-              "description": "Inline width in points (clamped 8–200), or \"full\" to stretch to the row's width — stackedbar only; on pie/donut \"full\" is ignored with a warning.",
+              "description": "Inline width in points (clamped 8\u2013200), or \"full\" to stretch to the row's width \u2014 stackedbar only; on pie/donut \"full\" is ignored with a warning.",
               "oneOf": [
-                { "type": "number", "minimum": 8, "maximum": 200 },
-                { "const": "full" }
+                {
+                  "type": "number",
+                  "minimum": 8,
+                  "maximum": 200
+                },
+                {
+                  "const": "full"
+                }
               ]
             },
-            "h": { "type": "number", "minimum": 8, "maximum": 200, "description": "Inline height in points. Clamped." }
+            "h": {
+              "type": "number",
+              "minimum": 8,
+              "maximum": 200,
+              "description": "Inline height in points. Clamped."
+            }
           }
         },
-        "submenu": { "type": "array", "items": { "$ref": "#/$defs/item" }, "description": "Child rows, forming a nested submenu." },
-        "alternate": { "$ref": "#/$defs/item", "description": "The row shown while Option is held." }
+        "submenu": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/item"
+          },
+          "description": "Child rows, forming a nested submenu."
+        },
+        "alternate": {
+          "$ref": "#/$defs/item",
+          "description": "The row shown while Option is held."
+        }
       }
     }
   }

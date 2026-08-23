@@ -69,6 +69,17 @@ public enum JSONOutputParser {
         if let series = item.sparkline?.filter(\.isFinite), !series.isEmpty {
             p.sparkline = series
         }
+        // The JSON spelling of `sparklinew=`/`sparklineh=`/`sparklinecolor=`.
+        // Set independently of the series so a style without data is simply
+        // inert, matching how the text parser treats the same combination.
+        if item.sparklineWidth != nil || item.sparklineHeight != nil || item.sparklineColor != nil {
+            p.swiftbar.sparklineStyle = SparklineStyle(
+                width: item.sparklineWidth?.points.flatMap { $0.isFinite ? $0 : nil },
+                height: item.sparklineHeight.flatMap { $0.isFinite ? $0 : nil },
+                color: item.sparklineColor.flatMap(VeeColor.parse),
+                isFullWidth: item.sparklineWidth?.isFull ?? false
+            )
+        }
         if let on = item.toggle {
             p.control = .toggle(on: on)
         } else if let s = item.slider, s.min.isFinite, s.max.isFinite, s.value.isFinite, s.min < s.max {
@@ -77,7 +88,9 @@ public enum JSONOutputParser {
         if let raw = item.progress, raw.isFinite {
             p.progress = ProgressParams(
                 fraction: Swift.min(Swift.max(raw, 0), 1),
-                trackColor: item.trackColor.flatMap(VeeColor.parse),
+                // `trackColor` is the pre-v2 spelling, still accepted so
+                // published JSON plugins keep working.
+                trackColor: (item.progressTrackColor ?? item.trackColor).flatMap(VeeColor.parse),
                 width: item.progressWidth?.points.flatMap { $0.isFinite ? $0 : nil },
                 height: item.progressHeight.flatMap { $0.isFinite ? $0 : nil },
                 isFullWidth: item.progressWidth?.isFull ?? false
@@ -163,9 +176,14 @@ private final class JSONItem: Decodable {
     let header: Bool?
     // Rich params (Vee-native inline controls), mirroring the text protocol.
     let sparkline: [Double]?
+    let sparklineWidth: JSONWidth?
+    let sparklineHeight: Double?
+    let sparklineColor: String?
     let toggle: Bool?
     let slider: JSONSlider?
     let progress: Double?
+    let progressTrackColor: String?
+    /// Deprecated: the pre-v2 spelling of `progressTrackColor`.
     let trackColor: String?
     let progressWidth: JSONWidth?
     let progressHeight: Double?
@@ -195,7 +213,8 @@ private struct JSONChart: Decodable {
     let h: Double?
 }
 
-/// An inline accessory's width — `chart.w` or `progressWidth`: a number of
+/// An inline accessory's width — `chart.w`, `progressWidth`, or
+/// `sparklineWidth`: a number of
 /// points, or `"full"` to stretch to the row's width. One type for both, so the
 /// JSON spelling of `full` can't come to mean two different things.
 private enum JSONWidth: Decodable {

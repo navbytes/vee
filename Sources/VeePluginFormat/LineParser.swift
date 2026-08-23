@@ -115,6 +115,10 @@ enum LineParser {
         var terminal: Bool?
         var positional: [Int: String] = [:]
         var progressFraction: Double?
+        var sparklineW: Double?
+        var sparklineH: Double?
+        var sparklineColor: VeeColor?
+        var sparklineFullWidth = false
         var progressTrack: VeeColor?
         var progressW: Double?
         var progressH: Double?
@@ -268,13 +272,22 @@ enum LineParser {
                 // width rather than a fixed number of points.
                 if value.lowercased() == "full" { chartFullWidth = true } else { chartW = finite(value) }
             case "charth": chartH = finite(value)
-            case "trackcolor": progressTrack = VeeColor.parse(value)
+            case "progresstrackcolor", "trackcolor":
+                // `trackcolor=` is the pre-v2 spelling, kept working for
+                // plugins already published with it.
+                progressTrack = VeeColor.parse(value)
             case "progressw":
                 // `full` is the one non-numeric value, exactly as in `chartw=`:
                 // stretch to the row's own width rather than a fixed number of
                 // points.
                 if value.lowercased() == "full" { progressFullWidth = true } else { progressW = finite(value) }
             case "progressh": progressH = finite(value)
+            case "sparklinew":
+                // `full` is the one non-numeric value, exactly as in `progressw=`
+                // and `chartw=`: stretch to the row's own width.
+                if value.lowercased() == "full" { sparklineFullWidth = true } else { sparklineW = finite(value) }
+            case "sparklineh": sparklineH = finite(value)
+            case "sparklinecolor": sparklineColor = VeeColor.parse(value)
             case "header":
                 // Vee-native: a first-class, non-interactive section-header
                 // row. Stored on `p.swiftbar` — see the doc comment on
@@ -308,6 +321,13 @@ enum LineParser {
             p.shell = ShellCommand(launchPath: path, arguments: args, openInTerminal: terminal ?? false)
         } else if !positional.isEmpty {
             diagnostics.append(.init(severity: .warning, message: "paramN given without shell=/bash="))
+        }
+
+        if sparklineW != nil || sparklineH != nil || sparklineColor != nil || sparklineFullWidth {
+            p.swiftbar.sparklineStyle = SparklineStyle(
+                width: sparklineW, height: sparklineH,
+                color: sparklineColor, isFullWidth: sparklineFullWidth
+            )
         }
 
         if let fraction = progressFraction {

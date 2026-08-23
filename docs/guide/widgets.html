@@ -228,7 +228,7 @@ the card:</p>
 <code>Spacer</code>, <code>Divider</code> — and emit byte-identical JSON. Each of these produces
 exactly the payload shown at the top of this section:</p>
 <p><strong>TypeScript</strong></p>
-<div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">ts</span></div><pre><code>import { widgetCard, Node } from "./src/vee.ts";
+<div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">ts</span></div><pre><code>import { widgetCard, Node } from "./vee.ts";
 
 widgetCard({
   layout: Node.VStack(
@@ -310,7 +310,7 @@ arbitrary command without the menu's context.</p>
 <h2 id="building-the-card-with-the-sdk">Building the card with the SDK</h2>
 <p>The <a href="sdk.html">TypeScript, Python, and Go SDKs</a> all have <code>Stat</code>/<code>Gauge</code>/<code>Trend</code>/
 <code>List</code>/<code>Board</code> builders that emit this JSON for you:</p>
-<div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">ts</span></div><pre><code>import { Stat } from "./src/vee.ts";
+<div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">ts</span></div><pre><code>import { Stat } from "./vee.ts";
 
 if (process.env.VEE_TARGET === "widget") {
   Stat({

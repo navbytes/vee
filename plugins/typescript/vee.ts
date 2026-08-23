@@ -8,37 +8,95 @@ export interface ItemOptions {
   size?: number;
   font?: string;
   length?: number;
+  /** Trim surrounding whitespace from the text. */
+  trim?: boolean;
+  /** Interpret ANSI colour escapes in the text. */
+  ansi?: boolean;
+  /** Expand `:emoji:` shortcodes in the text. */
+  emojize?: boolean;
   href?: string;
   /** Shell command to run on click; `params` become param1..N. */
   shell?: string;
   params?: string[];
   terminal?: boolean;
   refresh?: boolean;
+  /** Show this line in the dropdown only, never in the menu bar. */
+  dropdown?: boolean;
   alternate?: boolean;
   disabled?: boolean;
   checked?: boolean;
   key?: string;
   tooltip?: string;
+  /** An image for the row: a base64 payload or a file path. */
+  image?: string;
+  /** Like `image`, but rendered as a template image (adapts to the theme). */
+  templateImage?: string;
   /** SF Symbol name (SwiftBar/Vee extension). */
   sfimage?: string;
+  /**
+   * SF Symbol colour(s) → `sfcolor=`. A list supplies one colour per layer of
+   * a multicolour symbol; Vee reads it as a comma-separated list, so keep
+   * commas out of colour names.
+   */
+  sfColor?: Color | Color[];
+  /** SF Symbol point size → `sfsize=`. */
+  sfSize?: number;
+  /** SF Symbol configuration string → `sfconfig=`. */
+  sfConfig?: string;
   /** Render the text as inline Markdown. */
   md?: boolean;
   /** Trailing badge chip. */
   badge?: string;
   /** Render `:sf.symbol:` tokens in the text as inline SF Symbols. */
   symbolize?: boolean;
+  /** Open this web URL in a web view on click → `webview=`. */
+  webview?: string;
+  /** Web view width in points → `webvieww=`. */
+  webviewW?: number;
+  /** Web view height in points → `webviewh=`. */
+  webviewH?: number;
+  /** Name of a macOS Shortcut to run on click → `shortcut=`. */
+  shortcut?: string;
+  /**
+   * Render as a native, non-interactive section header (`header=true`) — a
+   * real `NSMenuItem.sectionHeader`, not a disabled row dressed up as one.
+   */
+  header?: boolean;
+  /**
+   * Which edge this row's visual accessory anchors to → `accessory=`. Applies
+   * uniformly to `sparkline`, `progress`, and the `chart` shapes, since they
+   * share the same in-row geometry. Omitted, the accessory sits trailing.
+   */
+  accessory?: "leading" | "trailing";
   /** Inline data series → `sparkline=1,2,3`. */
   sparkline?: number[];
+  /**
+   * Sparkline width in points → `sparklinew=`. `"full"` stretches the chart to
+   * the row's own width instead — the same knob `progressW` and `chart.w` take.
+   */
+  sparklineW?: number | "full";
+  /** Sparkline height in points → `sparklineh=`. */
+  sparklineH?: number;
+  /** Sparkline line colour → `sparklinecolor=`. Falls back to the row's `color`. */
+  sparklineColor?: Color;
   /** On/off switch → `toggle=on` / `toggle=off`. */
   toggle?: boolean;
   /** Continuous control → `slider=min,max,value`. */
   slider?: { min: number; max: number; value: number };
   /**
-   * Progress gauge → `progress=<fraction>`. Pass a fraction directly, or
-   * `{ value, max }` to have the SDK compute `value / max`.
+   * Progress gauge. Pass a fraction directly → `progress=<fraction>`, or
+   * `{ value, max }` → `progress=<value>,<max>`, which the format accepts
+   * natively and Vee divides on parse. The two-argument form keeps the
+   * author's own numbers on the wire instead of a pre-divided float.
    */
   progress?: number | { value: number; max: number };
-  /** Progress track (background) color → `trackcolor=`. */
+  /** Progress track (background) colour → `progresstrackcolor=`. */
+  progressTrackColor?: Color;
+  /**
+   * @deprecated The pre-v2 spelling of `progressTrackColor`. Still accepted and
+   * still emitted as `progresstrackcolor=`; will be removed in the next major
+   * version.
+   */
   trackColor?: Color;
   /**
    * Progress bar width in points → `progressw=`. `"full"` stretches the bar to
@@ -84,12 +142,26 @@ function escapeText(value: string): string {
   return value.replace(/\\/g, "\\\\").replace(/\|/g, "\\|").replace(/\n/g, "\\n");
 }
 
+// The characters that force a value through the quoted path. `\s` here is the
+// reference definition the Python and Go SDKs mirror explicitly — each
+// language's own "whitespace" class differs at the edges (Python's adds
+// U+001C–U+001F, Go's `unicode.IsSpace` omits U+FEFF), so the set is written
+// out there rather than inherited.
+const NEEDS_QUOTE = /[\s|\\]/;
+
 function quote(value: string): string {
   const escaped = escapeText(value);
   // Backslash also forces quoting: an unquoted (bare) value is never
   // unescaped by the parser, so anything containing an escape must go through
   // the quoted path, which is.
-  if (/[\s|\\]/.test(value)) return `"${escaped.replace(/"/g, '\\"')}"`;
+  //
+  // A leading quote character forces it too: the parser decides a value is
+  // quoted by looking at its first character, so emitting `"a"` bare would
+  // round-trip back as `a` with the quotes eaten. Values that merely *contain*
+  // a quote are safe bare — only the first position is read as a delimiter.
+  if (NEEDS_QUOTE.test(value) || value.startsWith('"') || value.startsWith("'")) {
+    return `"${escaped.replace(/"/g, '\\"')}"`;
+  }
   return escaped;
 }
 
@@ -103,6 +175,9 @@ function encode(options?: ItemOptions): string {
   push("size", options.size);
   push("font", options.font);
   push("length", options.length);
+  push("trim", options.trim);
+  push("ansi", options.ansi);
+  push("emojize", options.emojize);
   push("href", options.href);
   if (options.shell !== undefined) {
     push("shell", options.shell);
@@ -110,16 +185,33 @@ function encode(options?: ItemOptions): string {
   }
   push("terminal", options.terminal);
   push("refresh", options.refresh);
+  push("dropdown", options.dropdown);
   push("alternate", options.alternate);
   push("disabled", options.disabled);
   push("checked", options.checked);
   push("key", options.key);
   push("tooltip", options.tooltip);
+  push("image", options.image);
+  push("templateimage", options.templateImage);
   push("sfimage", options.sfimage);
+  if (options.sfColor !== undefined) {
+    push("sfcolor", Array.isArray(options.sfColor) ? options.sfColor.join(",") : options.sfColor);
+  }
+  push("sfsize", options.sfSize);
+  push("sfconfig", options.sfConfig);
   push("md", options.md);
   push("badge", options.badge);
   push("symbolize", options.symbolize);
+  push("webview", options.webview);
+  push("webvieww", options.webviewW);
+  push("webviewh", options.webviewH);
+  push("shortcut", options.shortcut);
+  push("header", options.header);
+  push("accessory", options.accessory);
   if (options.sparkline !== undefined) push("sparkline", options.sparkline.map(String).join(","));
+  push("sparklinew", options.sparklineW);
+  push("sparklineh", options.sparklineH);
+  push("sparklinecolor", options.sparklineColor);
   if (options.toggle !== undefined) push("toggle", options.toggle ? "on" : "off");
   if (options.slider !== undefined) {
     const s = options.slider;
@@ -127,10 +219,9 @@ function encode(options?: ItemOptions): string {
   }
   if (options.progress !== undefined) {
     const p = options.progress;
-    const fraction = typeof p === "number" ? p : p.max === 0 ? 0 : p.value / p.max;
-    push("progress", String(fraction));
+    push("progress", typeof p === "number" ? String(p) : `${p.value},${p.max}`);
   }
-  push("trackcolor", options.trackColor);
+  push("progresstrackcolor", options.progressTrackColor ?? options.trackColor);
   push("progressw", options.progressW);
   push("progressh", options.progressH);
   if (options.chart !== undefined) {

@@ -17,20 +17,28 @@ func Build() string {
 	m.Title("Controls", &vee.Options{SFImage: vee.Str("slider.horizontal.3")})
 
 	d := m.Dropdown()
-	// progress as the single fraction 0.72 (the TS/Python examples compute
-	// 72/100 in-SDK), with a track color and explicit size. The tooltip has
+	// progress as the format's two-argument form `progress=72,100`, which Vee
+	// divides on parse, with a track color and explicit size. The tooltip has
 	// spaces to prove the shared quote helper flows through the rich-param path.
 	d.Item("Disk usage", &vee.Options{
-		Color:      vee.Str("green"),
-		Progress:   vee.Float(0.72),
-		TrackColor: vee.Str("#333333"),
-		ProgressW:  vee.Float(80),
-		ProgressH:  vee.Float(6),
-		Tooltip:    vee.Str("72 GB of 100 GB used"),
+		Color:              vee.Str("green"),
+		ProgressValue:      vee.Float(72),
+		ProgressMax:        vee.Float(100),
+		ProgressTrackColor: vee.Str("#333333"),
+		ProgressW:          vee.Float(80),
+		ProgressH:          vee.Float(6),
+		Tooltip:            vee.Str("72 GB of 100 GB used"),
 	})
 	d.Item("Notifications", &vee.Options{Toggle: vee.Bool(true)})
 	d.Item("Volume", &vee.Options{Slider: &vee.Slider{Min: 0, Max: 100, Value: 40}})
-	d.Item("Load history", &vee.Options{Sparkline: []float64{1, 2, 3, 5, 8, 13}})
+	// The sparkline takes the same size/colour vocabulary as progress= and the
+	// chart shapes: <Control>W / <Control>H / <Control>Color.
+	d.Item("Load history", &vee.Options{
+		Sparkline:      []float64{1, 2, 3, 5, 8, 13},
+		SparklineW:     vee.Float(120),
+		SparklineH:     vee.Float(18),
+		SparklineColor: vee.Str("teal"),
+	})
 	return m.String()
 }
 

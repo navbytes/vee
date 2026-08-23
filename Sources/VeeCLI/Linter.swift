@@ -118,6 +118,7 @@ public enum Linter {
     private static func analyzeParams(_ paramString: String, line: Int) -> [ParseDiagnostic] {
         var out: [ParseDiagnostic] = []
         var seenUnknown: Set<String> = []
+        var seenDeprecated: Set<String> = []
         let chars = Array(paramString)
         var i = 0
 
@@ -182,6 +183,15 @@ public enum Linter {
                     line: line))
             }
 
+            if let current = Self.deprecatedParams[lowerKey], !seenDeprecated.contains(lowerKey) {
+                seenDeprecated.insert(lowerKey)
+                out.append(.init(
+                    severity: .warning,
+                    message: "'\(lowerKey)' is deprecated; use '\(current)'. The old spelling still "
+                        + "works and will be removed in the next major version.",
+                    line: line))
+            }
+
             if !isKnownParam(lowerKey), !seenUnknown.contains(lowerKey) {
                 seenUnknown.insert(lowerKey)
                 out.append(.init(
@@ -193,6 +203,14 @@ public enum Linter {
 
         return out
     }
+
+    /// Parameter spellings that still parse but are on the way out, mapped to
+    /// the name that replaced them. Flagged so a plugin gets a migration
+    /// prompt from `vee lint` during the deprecation window rather than a
+    /// silent break when the old name is finally removed.
+    private static let deprecatedParams: [String: String] = [
+        "trackcolor": "progresstrackcolor",
+    ]
 
     /// Whether the linter treats `key` as known. Delegates to
     /// `VeePluginFormat.LineParameterKeys` rather than keeping a second copy of

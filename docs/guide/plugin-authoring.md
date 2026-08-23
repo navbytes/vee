@@ -151,10 +151,11 @@ A literal `|`, backslash, or newline in the display text (or in a quoted value) 
 | `badge` | A short badge/chip shown after the text (e.g. `badge=12`). |
 | `shortcut` | Run a macOS Shortcut by name when the item is clicked (e.g. `shortcut="Start Meeting"`). |
 | `webview`, `webvieww`, `webviewh` | Open a URL in a standalone WebView window (never inside the menu), with optional width/height. |
-| `sparkline` | A comma-separated list of numbers (e.g. `sparkline=1,2,3,4,5`). Renders as a small chart **inline in the menu row**; clicking the item also opens a fuller native Liquid Glass Swift Charts popover. |
+| `sparkline`, `sparklinew`, `sparklineh`, `sparklinecolor` | A comma-separated list of numbers (e.g. `sparkline=1,2,3,4,5`). Renders as a small chart **inline in the menu row**; clicking the item also opens a fuller native Liquid Glass Swift Charts popover. `sparklinew=`/`sparklineh=` set the chart size in points (defaults 90×20), `sparklinew=full` stretches it to the row's own width, and `sparklinecolor=` sets the line colour (falling back to the row's `color=`). |
 | `toggle` | `toggle=on` / `toggle=off` (also `true`/`false`/`1`/`0`). Clicking opens a Liquid Glass popover with a switch; flipping it re-invokes the item's `shell=`/`bash=` with the new value. |
 | `slider` | `slider=min,max,value` (e.g. `slider=0,100,40`). Clicking opens a Liquid Glass popover with a slider; releasing it re-invokes the item's `shell=`/`bash=` with the chosen value. |
-| `progress`, `trackcolor`, `progressw`, `progressh` | `progress=<0..1>` or `progress=value,max` (e.g. `progress=0.72` or `progress=23.65,100`). Draws a real capsule bar **inline in the menu row**. Fill uses `color=`; `trackcolor=` is the groove, `progressw=`/`progressh=` set the bar size in points, and `progressw=full` stretches the bar to the row's own width. |
+| `progress`, `progresstrackcolor`, `progressw`, `progressh` | `progress=<0..1>` or `progress=value,max` (e.g. `progress=0.72` or `progress=23.65,100`). Draws a real capsule bar **inline in the menu row**. Fill uses `color=`; `progresstrackcolor=` is the groove, `progressw=`/`progressh=` set the bar size in points, and `progressw=full` stretches the bar to the row's own width. |
+| `trackcolor` | **Deprecated** — the pre-v2 spelling of `progresstrackcolor=`. Still parsed, so published plugins keep working, but the SDKs no longer emit it and it will be removed in the next major version. |
 | `pie`, `donut`, `stackedbar` | A comma-separated list of non-negative numbers read as shares of a whole (e.g. `pie=45,30,25`). Draws the chart **inline in the menu row**; clicking the item opens a fuller Swift Charts popover with a labelled legend. See [Share charts](#share-charts-pie-donut-stackedbar). |
 | `chartw`, `charth` | The chart's inline size in points (defaults: a 24pt circle, a 110×12 bar; clamped to 8–200). A pie or donut is a circle, so either one sizes both sides. `chartw=full` stretches a `stackedbar=` to the row's own width instead. |
 | `chartlabels` | Segment names for a chart, positional against its values (e.g. `chartlabels=Docs,Photos,Apps`). Shown in the popover legend and read out by VoiceOver. |
@@ -179,6 +180,21 @@ everything is drawn with SwiftUI + Swift Charts and AppKit, so there is no
 embedded browser or cross-platform runtime. Malformed values are skipped; an
 empty list is ignored (no inline chart, no popover). A single value has no series
 to chart, so it draws as a flat centered baseline instead.
+
+The chart takes the same size and colour vocabulary as the other two inline
+accessories — `<control>w`, `<control>h`, `<control>color`:
+
+```
+Load average | sparkline=0.4,0.6,0.9,1.2 sparklinew=120 sparklineh=18 sparklinecolor=teal
+Requests     | sparkline=12,40,31,55,48 sparklinew=full
+```
+
+`sparklinew=`/`sparklineh=` set the chart size in points (defaults 90×20).
+`sparklinew=full` stretches it across whatever width the row actually has,
+exactly as `progressw=full` and `chartw=full` do — a menu is as wide as its
+widest row, so a fixed width cannot fill a menu some *other* row sizes.
+`sparklinecolor=` sets the line colour; without it the chart uses the row's
+`color=`, and without that, the control accent.
 
 ### Interactive controls (`toggle=` / `slider=`)
 
@@ -220,13 +236,14 @@ the menu row** — no click, no popover. It's the native answer to hand-drawn
 block-glyph bars:
 
 ```
-$23.65 of $100 | progress=23.65,100 color=#36C26E trackcolor=#3C4046 progressw=210
+$23.65 of $100 | progress=23.65,100 color=#36C26E progresstrackcolor=#3C4046 progressw=210
 Disk | progress=0.88 color=#F5A623
 ```
 
 - `progress=<0..1>` (a fraction) **or** `progress=value,max` (mirrors `slider=`'s
   grammar). The result is always clamped to `0…1`.
-- The **fill** color is the row's `color=`; `trackcolor=` sets the groove.
+- The **fill** color is the row's `color=`; `progresstrackcolor=` sets the groove.
+  (`trackcolor=` is the deprecated spelling and still works.)
 - `progressw=` / `progressh=` set the bar's width/height in points (defaults 120×6).
   `progressw=full` stretches the bar across whatever width the row actually has,
   less the row's own text — the same knob a `stackedbar=` takes as `chartw=full`.

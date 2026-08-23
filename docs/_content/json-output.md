@@ -140,7 +140,7 @@ An item that runs a command when clicked, passing arguments via `params`.
 
 ## A runnable example
 
-The repository ships a runnable JSON plugin at [`plugins/examples/json-demo.ts`](https://github.com/navbytes/vee/tree/main/plugins/examples/json-demo.ts). It builds a `{"vee":1,…}` object with a colored title, a link, a separator, and a submenu, then prints it — a good starting point to copy.
+The repository ships a runnable JSON plugin at [`plugins/typescript/examples/json-demo.ts`](https://github.com/navbytes/vee/tree/main/plugins/typescript/examples/json-demo.ts). It builds a `{"vee":1,…}` object with a colored title, a link, a separator, and a submenu, then prints it — a good starting point to copy.
 
 ## Rich params
 
@@ -149,10 +149,14 @@ The Vee-native inline controls are available in JSON too, as typed item fields:
 | Field | Type | Notes |
 |-------|------|-------|
 | `sparkline` | `number[]` | Inline chart popover data. Non-finite values are dropped. |
+| `sparklineWidth` | `number \| "full"` | Sparkline width in points; `"full"` stretches it to the row's width. |
+| `sparklineHeight` | `number` | Sparkline height in points. |
+| `sparklineColor` | `string` | Sparkline line color (named or hex). Falls back to the item's `color`. |
 | `toggle` | `boolean` | On/off switch. |
 | `slider` | `{ "min": number, "max": number, "value": number }` | Requires `min < max`; `value` is clamped into range. |
 | `progress` | `number` | A completion fraction, clamped to `0…1`. The fill uses the item's `color`. |
-| `trackColor` | `string` | Progress track color (named or hex). |
+| `progressTrackColor` | `string` | Progress track color (named or hex). |
+| `trackColor` | `string` | **Deprecated** — the pre-v2 spelling of `progressTrackColor`. Still accepted; removed in the next major version. |
 | `progressWidth` | `number` | Progress bar width in points. |
 | `progressHeight` | `number` | Progress bar height in points. |
 | `chart` | `{ "kind": "pie" \| "donut" \| "stackedbar", "values": number[], "labels"?: string[], "colors"?: string[], "w"?: number, "h"?: number }` | A categorical share chart. `values` must be finite and `>= 0` with a positive total; at most 8 segments (a longer series folds its tail into "Other"). `labels`/`colors` are positional — a color that is `null`, blank, malformed, or unrecognised keeps that segment's palette slot. `w`/`h` are the inline size in points (`chartw=`/`charth=`), clamped to 8–200; `"w": "full"` stretches the chart to the row's width. |
@@ -162,10 +166,10 @@ The Vee-native inline controls are available in JSON too, as typed item fields:
   "vee": 1,
   "title": [{ "text": "System" }],
   "items": [
-    { "text": "Load history", "sparkline": [1, 2, 3, 5, 8, 13] },
+    { "text": "Load history", "sparkline": [1, 2, 3, 5, 8, 13], "sparklineWidth": 120, "sparklineHeight": 18, "sparklineColor": "teal" },
     { "text": "Notifications", "toggle": true },
     { "text": "Volume", "slider": { "min": 0, "max": 100, "value": 40 } },
-    { "text": "Disk usage", "color": "green", "progress": 0.72, "trackColor": "#333333", "progressWidth": 80, "progressHeight": 6 },
+    { "text": "Disk usage", "color": "green", "progress": 0.72, "progressTrackColor": "#333333", "progressWidth": 80, "progressHeight": 6 },
     { "text": "By category", "chart": { "kind": "donut", "values": [45, 30, 25], "labels": ["Documents", "Photos", "Apps"] } }
   ]
 }

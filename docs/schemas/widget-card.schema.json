@@ -4,7 +4,9 @@
   "title": "Vee widget card",
   "description": "The JSON payload a Vee plugin prints when it is invoked with VEE_TARGET=widget. A card is either one of five preset templates or a composable layout tree. See https://vee.navbytes.io/guide/widgets.html",
   "type": "object",
-  "required": ["vee_widget"],
+  "required": [
+    "vee_widget"
+  ],
   "additionalProperties": true,
   "properties": {
     "vee_widget": {
@@ -13,39 +15,82 @@
     },
     "template": {
       "description": "Which preset template draws the tile. Ignored entirely when `layout` is present. An unknown value falls back to `stat` with a diagnostic.",
-      "enum": ["stat", "gauge", "trend", "list", "board"],
+      "enum": [
+        "stat",
+        "gauge",
+        "trend",
+        "list",
+        "board"
+      ],
       "default": "stat"
     },
-    "title": { "type": "string", "description": "Tile heading — the plugin or metric name." },
-    "symbol": { "type": "string", "description": "SF Symbol name for the glyph." },
-    "tint": { "$ref": "#/$defs/color" },
-    "value": { "type": "string", "description": "The headline value, already formatted by the plugin." },
-    "caption": { "type": "string", "description": "Small secondary line." },
-    "detail": { "type": "string", "description": "One more line of context." },
+    "title": {
+      "type": "string",
+      "description": "Tile heading \u2014 the plugin or metric name."
+    },
+    "symbol": {
+      "type": "string",
+      "description": "SF Symbol name for the glyph."
+    },
+    "tint": {
+      "$ref": "#/$defs/color"
+    },
+    "value": {
+      "type": "string",
+      "description": "The headline value, already formatted by the plugin."
+    },
+    "caption": {
+      "type": "string",
+      "description": "Small secondary line."
+    },
+    "detail": {
+      "type": "string",
+      "description": "One more line of context."
+    },
     "status": {
       "description": "Drives styling and the health roll-up. An unknown value is ignored with a diagnostic.",
-      "enum": ["ok", "warning", "error"]
+      "enum": [
+        "ok",
+        "warning",
+        "error"
+      ]
     },
     "progress": {
-      "description": "The `gauge` template's fill. Clamped to 0…1; a non-finite value is dropped.",
-      "type": "number", "minimum": 0, "maximum": 1
+      "description": "The `gauge` template's fill. Clamped to 0\u20261; a non-finite value is dropped.",
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
     },
     "trend": {
       "description": "The `trend` template's series. Non-finite entries are dropped.",
-      "type": "array", "items": { "type": "number" }
+      "type": "array",
+      "items": {
+        "type": "number"
+      }
     },
     "items": {
       "description": "Rows for the `list` and `board` templates.",
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["label"],
+        "required": [
+          "label"
+        ],
         "additionalProperties": true,
         "properties": {
-          "label": { "type": "string" },
-          "value": { "type": "string" },
-          "symbol": { "type": "string", "description": "SF Symbol name." },
-          "tint": { "$ref": "#/$defs/color" }
+          "label": {
+            "type": "string"
+          },
+          "value": {
+            "type": "string"
+          },
+          "symbol": {
+            "type": "string",
+            "description": "SF Symbol name."
+          },
+          "tint": {
+            "$ref": "#/$defs/color"
+          }
         }
       }
     },
@@ -54,21 +99,43 @@
       "type": "array",
       "items": {
         "type": "object",
-        "required": ["kind", "label"],
+        "required": [
+          "kind",
+          "label"
+        ],
         "additionalProperties": true,
         "properties": {
-          "kind": { "enum": ["refresh", "href", "shortcut"] },
-          "label": { "type": "string" },
+          "kind": {
+            "enum": [
+              "refresh",
+              "href",
+              "shortcut"
+            ]
+          },
+          "label": {
+            "type": "string"
+          },
           "url": {
             "type": "string",
-            "description": "For `kind: href`. Scheme-filtered like a menu `href=` — http/https and app deep links only, never file: or javascript:. A blocked or unparseable URL drops the action with a diagnostic."
+            "description": "For `kind: href`. Scheme-filtered like a menu `href=` \u2014 http/https and app deep links only, never file: or javascript:. A blocked or unparseable URL drops the action with a diagnostic."
           },
-          "name": { "type": "string", "description": "For `kind: shortcut` — the macOS Shortcut's name." }
+          "name": {
+            "type": "string",
+            "description": "For `kind: shortcut` \u2014 the macOS Shortcut's name."
+          }
         }
       }
     },
-    "refresh_after": { "type": "integer", "description": "Seconds; a hint for the next widget reload.", "minimum": 0 },
-    "stale_after": { "type": "integer", "description": "Seconds; when the tile should show a stale treatment.", "minimum": 0 },
+    "refresh_after": {
+      "type": "integer",
+      "description": "Seconds; a hint for the next widget reload.",
+      "minimum": 0
+    },
+    "stale_after": {
+      "type": "integer",
+      "description": "Seconds; when the tile should show a stale treatment.",
+      "minimum": 0
+    },
     "layout": {
       "$ref": "#/$defs/node",
       "description": "A composable layout tree. When present it replaces `template` entirely."
@@ -80,39 +147,240 @@
       "description": "A named color (for example `green`, `secondary`) or `#rrggbb` / `#rrggbbaa`."
     },
     "node": {
-      "type": "object",
-      "required": ["type"],
-      "additionalProperties": true,
-      "description": "One node of the layout tree. Containers carry `children`; leaves do not. The tree is capped at 8 levels deep and 64 nodes; anything beyond is dropped with a diagnostic.",
-      "properties": {
-        "type": {
-          "description": "An unrecognised type renders nothing and produces a diagnostic.",
-          "enum": ["vstack", "hstack", "zstack", "grid", "text", "image", "gauge", "sparkline", "spacer", "divider"]
+      "description": "One node of the layout tree. Containers carry `children`; leaves do not. The tree is capped at 8 levels deep and 64 nodes; anything beyond is dropped with a diagnostic. Each `type` accepts only the properties that mean something for it -- `columns` on a `text` node is rejected here, as it is by all three SDKs.",
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "type"
+          ],
+          "properties": {
+            "type": {
+              "const": "vstack"
+            },
+            "children": {
+              "$ref": "#/$defs/nodeProperties/children"
+            },
+            "align": {
+              "$ref": "#/$defs/nodeProperties/align"
+            },
+            "spacing": {
+              "$ref": "#/$defs/nodeProperties/spacing"
+            },
+            "families": {
+              "$ref": "#/$defs/nodeProperties/families"
+            },
+            "style": {
+              "$ref": "#/$defs/nodeProperties/style"
+            }
+          },
+          "additionalProperties": false
         },
-        "text": { "type": "string", "description": "For `text` nodes. Truncated at 512 characters." },
-        "symbol": { "type": "string", "description": "For `image` nodes — an SF Symbol name (v1 renders SF Symbols only)." },
-        "value": { "type": "number", "minimum": 0, "maximum": 1, "description": "For `gauge` nodes. Clamped to 0…1." },
-        "values": {
-          "type": "array", "items": { "type": "number" },
-          "description": "For `sparkline` nodes. Non-finite entries dropped; truncated at 256 points."
+        {
+          "type": "object",
+          "required": [
+            "type"
+          ],
+          "properties": {
+            "type": {
+              "const": "hstack"
+            },
+            "children": {
+              "$ref": "#/$defs/nodeProperties/children"
+            },
+            "align": {
+              "$ref": "#/$defs/nodeProperties/align"
+            },
+            "spacing": {
+              "$ref": "#/$defs/nodeProperties/spacing"
+            },
+            "families": {
+              "$ref": "#/$defs/nodeProperties/families"
+            },
+            "style": {
+              "$ref": "#/$defs/nodeProperties/style"
+            }
+          },
+          "additionalProperties": false
         },
-        "gauge_style": { "enum": ["linear", "circular"], "default": "linear" },
-        "align": {
-          "type": "string",
-          "description": "Cross-axis alignment. vstack: leading|center|trailing (default leading). hstack: top|center|bottom (default center). zstack: topLeading|top|bottom|leading|trailing|center (default center). An unrecognised value falls back to the default.",
-          "enum": ["leading", "center", "trailing", "top", "bottom", "topLeading"]
+        {
+          "type": "object",
+          "required": [
+            "type"
+          ],
+          "properties": {
+            "type": {
+              "const": "zstack"
+            },
+            "children": {
+              "$ref": "#/$defs/nodeProperties/children"
+            },
+            "align": {
+              "$ref": "#/$defs/nodeProperties/align"
+            },
+            "spacing": {
+              "$ref": "#/$defs/nodeProperties/spacing"
+            },
+            "families": {
+              "$ref": "#/$defs/nodeProperties/families"
+            },
+            "style": {
+              "$ref": "#/$defs/nodeProperties/style"
+            }
+          },
+          "additionalProperties": false
         },
-        "spacing": { "type": "number", "minimum": 0, "maximum": 64, "description": "Inter-child spacing in points. Clamped." },
-        "columns": { "type": "integer", "minimum": 1, "maximum": 4, "default": 2, "description": "For `grid`. Clamped." },
-        "min_length": { "type": "number", "minimum": 0, "maximum": 4096, "description": "For `spacer`. Clamped." },
-        "families": {
-          "type": "array",
-          "items": { "enum": ["small", "medium", "large"] },
-          "description": "Widget sizes this node renders in. Absent means all of them — one tree adapts by subtraction."
+        {
+          "type": "object",
+          "required": [
+            "type"
+          ],
+          "properties": {
+            "type": {
+              "const": "grid"
+            },
+            "children": {
+              "$ref": "#/$defs/nodeProperties/children"
+            },
+            "align": {
+              "$ref": "#/$defs/nodeProperties/align"
+            },
+            "spacing": {
+              "$ref": "#/$defs/nodeProperties/spacing"
+            },
+            "columns": {
+              "$ref": "#/$defs/nodeProperties/columns"
+            },
+            "families": {
+              "$ref": "#/$defs/nodeProperties/families"
+            },
+            "style": {
+              "$ref": "#/$defs/nodeProperties/style"
+            }
+          },
+          "additionalProperties": false
         },
-        "style": { "$ref": "#/$defs/style" },
-        "children": { "type": "array", "items": { "$ref": "#/$defs/node" }, "description": "For container nodes." }
-      }
+        {
+          "type": "object",
+          "required": [
+            "type"
+          ],
+          "properties": {
+            "type": {
+              "const": "text"
+            },
+            "text": {
+              "$ref": "#/$defs/nodeProperties/text"
+            },
+            "families": {
+              "$ref": "#/$defs/nodeProperties/families"
+            },
+            "style": {
+              "$ref": "#/$defs/nodeProperties/style"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "type"
+          ],
+          "properties": {
+            "type": {
+              "const": "image"
+            },
+            "symbol": {
+              "$ref": "#/$defs/nodeProperties/symbol"
+            },
+            "families": {
+              "$ref": "#/$defs/nodeProperties/families"
+            },
+            "style": {
+              "$ref": "#/$defs/nodeProperties/style"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "type"
+          ],
+          "properties": {
+            "type": {
+              "const": "gauge"
+            },
+            "value": {
+              "$ref": "#/$defs/nodeProperties/value"
+            },
+            "gauge_style": {
+              "$ref": "#/$defs/nodeProperties/gauge_style"
+            },
+            "families": {
+              "$ref": "#/$defs/nodeProperties/families"
+            },
+            "style": {
+              "$ref": "#/$defs/nodeProperties/style"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "type"
+          ],
+          "properties": {
+            "type": {
+              "const": "sparkline"
+            },
+            "values": {
+              "$ref": "#/$defs/nodeProperties/values"
+            },
+            "families": {
+              "$ref": "#/$defs/nodeProperties/families"
+            },
+            "style": {
+              "$ref": "#/$defs/nodeProperties/style"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "type"
+          ],
+          "properties": {
+            "type": {
+              "const": "spacer"
+            },
+            "min_length": {
+              "$ref": "#/$defs/nodeProperties/min_length"
+            },
+            "families": {
+              "$ref": "#/$defs/nodeProperties/families"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
+            "type"
+          ],
+          "properties": {
+            "type": {
+              "const": "divider"
+            },
+            "families": {
+              "$ref": "#/$defs/nodeProperties/families"
+            }
+          },
+          "additionalProperties": false
+        }
+      ]
     },
     "style": {
       "type": "object",
@@ -125,20 +393,162 @@
           "properties": {
             "size": {
               "description": "A semantic text style. Anything else falls back to body.",
-              "enum": ["caption2", "caption", "footnote", "subheadline", "headline", "title3", "title2", "title", "largeTitle"]
+              "enum": [
+                "caption2",
+                "caption",
+                "footnote",
+                "subheadline",
+                "headline",
+                "title3",
+                "title2",
+                "title",
+                "largeTitle"
+              ]
             },
-            "point_size": { "type": "number", "minimum": 8, "maximum": 96, "description": "An explicit size. Wins over `size` when both are set. Clamped." },
-            "weight": { "enum": ["medium", "semibold", "bold"], "description": "Anything else is regular." },
-            "design": { "enum": ["rounded", "monospaced", "serif"], "description": "Anything else is the default face." }
+            "point_size": {
+              "type": "number",
+              "minimum": 8,
+              "maximum": 96,
+              "description": "An explicit size. Wins over `size` when both are set. Clamped."
+            },
+            "weight": {
+              "enum": [
+                "medium",
+                "semibold",
+                "bold"
+              ],
+              "description": "Anything else is regular."
+            },
+            "design": {
+              "enum": [
+                "rounded",
+                "monospaced",
+                "serif"
+              ],
+              "description": "Anything else is the default face."
+            }
           }
         },
-        "tint": { "$ref": "#/$defs/color" },
-        "align": { "enum": ["leading", "center", "trailing"], "default": "leading", "description": "Multiline text alignment." },
-        "padding": { "type": "number", "minimum": 0, "maximum": 64, "description": "Uniform padding in points. Clamped." },
-        "line_limit": { "type": "integer", "minimum": 1, "maximum": 20, "description": "Maximum text lines. Clamped." },
-        "monospaced_digit": { "type": "boolean", "description": "Fixed-width digits — stops numeric columns jittering between refreshes." },
-        "min_scale": { "type": "number", "minimum": 0.3, "maximum": 1, "description": "Minimum scale factor: lets a headline shrink to fit rather than truncate. Clamped." },
-        "fill": { "type": "boolean", "description": "Grow to fill the available width. The only width control — arbitrary point frames are deliberately not exposed." }
+        "tint": {
+          "$ref": "#/$defs/color"
+        },
+        "align": {
+          "enum": [
+            "leading",
+            "center",
+            "trailing"
+          ],
+          "default": "leading",
+          "description": "Multiline text alignment."
+        },
+        "padding": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 64,
+          "description": "Uniform padding in points. Clamped."
+        },
+        "line_limit": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 20,
+          "description": "Maximum text lines. Clamped."
+        },
+        "monospaced_digit": {
+          "type": "boolean",
+          "description": "Fixed-width digits \u2014 stops numeric columns jittering between refreshes."
+        },
+        "min_scale": {
+          "type": "number",
+          "minimum": 0.3,
+          "maximum": 1,
+          "description": "Minimum scale factor: lets a headline shrink to fit rather than truncate. Clamped."
+        },
+        "fill": {
+          "type": "boolean",
+          "description": "Grow to fill the available width. The only width control \u2014 arbitrary point frames are deliberately not exposed."
+        }
+      }
+    },
+    "nodeProperties": {
+      "text": {
+        "type": "string",
+        "description": "For `text` nodes. Truncated at 512 characters."
+      },
+      "symbol": {
+        "type": "string",
+        "description": "For `image` nodes \u2014 an SF Symbol name (v1 renders SF Symbols only)."
+      },
+      "value": {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 1,
+        "description": "For `gauge` nodes. Clamped to 0\u20261."
+      },
+      "values": {
+        "type": "array",
+        "items": {
+          "type": "number"
+        },
+        "description": "For `sparkline` nodes. Non-finite entries dropped; truncated at 256 points."
+      },
+      "gauge_style": {
+        "enum": [
+          "linear",
+          "circular"
+        ],
+        "default": "linear"
+      },
+      "align": {
+        "type": "string",
+        "description": "Cross-axis alignment. vstack: leading|center|trailing (default leading). hstack: top|center|bottom (default center). zstack: topLeading|top|bottom|leading|trailing|center (default center). An unrecognised value falls back to the default.",
+        "enum": [
+          "leading",
+          "center",
+          "trailing",
+          "top",
+          "bottom",
+          "topLeading"
+        ]
+      },
+      "spacing": {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 64,
+        "description": "Inter-child spacing in points. Clamped."
+      },
+      "columns": {
+        "type": "integer",
+        "minimum": 1,
+        "maximum": 4,
+        "default": 2,
+        "description": "For `grid`. Clamped."
+      },
+      "min_length": {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 4096,
+        "description": "For `spacer`. Clamped."
+      },
+      "families": {
+        "type": "array",
+        "items": {
+          "enum": [
+            "small",
+            "medium",
+            "large"
+          ]
+        },
+        "description": "Widget sizes this node renders in. Absent means all of them \u2014 one tree adapts by subtraction."
+      },
+      "style": {
+        "$ref": "#/$defs/style"
+      },
+      "children": {
+        "type": "array",
+        "items": {
+          "$ref": "#/$defs/node"
+        },
+        "description": "For container nodes."
       }
     }
   }

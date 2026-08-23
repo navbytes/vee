@@ -7,6 +7,33 @@ All notable changes to Vee are documented here. The format is based on
 ## [Unreleased]
 
 ### Fixed
+- **The three plugin SDKs no longer disagree about numbers.** Each SDK's header
+  promised byte-identical output; each language's native float formatting
+  quietly broke it. Go's `'g'` verb rendered `1000000` as `1e+06` where
+  JavaScript and Python rendered `1000000` — so any sparkline, slider, or bar
+  carrying a value at or past 1e6 (byte counts, revenue, request totals) went
+  out differently from Go. Python and JavaScript in turn disagreed at `1e-7`
+  and `1e21`. All three now implement one written-down rule — ECMA-262
+  `Number::toString` — verified against 4,011 values including denormals and
+  the notation boundaries. No committed fixture exercised a number large enough
+  to catch this; `fixtures/edges.txt` now does.
+- **A parameter value beginning with a quote no longer loses it.** All three
+  SDKs decided whether to quote a value by looking for whitespace, so `"quoted"`
+  or `'tis` with no spaces went out bare — and the parser, which decides a value
+  is quoted by looking at its first character, read those delimiters as its own
+  and stripped them. `tooltip="quoted"` came back as `quoted`. All three now
+  quote on a leading `"` or `'`; a quote merely *contained* in a value is still
+  safe bare, so existing output is unchanged.
+- **The Go SDK under-quoted whitespace.** It tested four characters where the
+  TypeScript and Python SDKs test all of JavaScript's `\s`, so a carriage
+  return, form feed, vertical tab, or Unicode space went out unquoted. The set
+  is now written out by code point in all three, rather than inherited from
+  each language's own whitespace class — they differ at the edges.
+- **Unknown options in the Python SDK now raise.** They were dropped in
+  silence, so `colour="red"` — or `track_color=`, back when the option was
+  spelled `trackColor` — emitted nothing at all, with no error. TypeScript
+  rejects those at compile time and Go rejects them as unknown struct fields;
+  Python now raises `TypeError` and suggests the intended name.
 - **Vee can be quit again.** Any plugin with an interval of 10 minutes or more
   (e.g. `prs-and-jira.10m.js`) made the app impossible to close: quitting it —
   from the menu, `⌘Q`, or a `kill` — relaunched it within milliseconds. Long
@@ -24,6 +51,31 @@ All notable changes to Vee are documented here. The format is based on
   with that plugin present.
 
 ### Changed
+- **`trackcolor=` is deprecated in favour of `progresstrackcolor=`.** It was
+  the one control knob not named after its control. The old spelling still
+  parses and published plugins keep working; `vee lint` now points at the new
+  name, and the SDKs emit only that. Removal is scheduled for the next major
+  version.
+- **The Python SDK's tuple shorthands are deprecated.** `progress=(72, 100)`
+  and `slider=(0, 100, 40)` are spellings only Python accepted — TypeScript
+  takes the object form and Go the struct — so a plugin written with them did
+  not port. The mapping form works identically in all three; the tuples still
+  work behind a `DeprecationWarning`.
+- **The Python SDK's options are snake_case.** Menu options were camelCase
+  while layout-node options were snake_case, in the same file — so the spelling
+  a Python author would reach for first was the one that silently did nothing.
+  `trackColor`, `progressW`, `templateImage` and the rest still work and emit a
+  `DeprecationWarning`.
+- **Invalid layout-node options are rejected.** A `text` node carrying
+  `columns`, or a `divider` carrying `spacing`, was accepted by the Python and
+  Go SDKs and by the published schema — only TypeScript's types said no. Go now
+  refuses at compile time via typed option kinds, Python raises, and
+  `widget-card.schema.json` encodes the per-type rule.
+- **`check_params.py` checks six surfaces, not three.** The parser, the linter
+  and the docs were held in agreement while the SDKs sat outside that triangle,
+  which is how fifteen parameters went missing from all three at once. Each SDK
+  is now checked separately, so a parameter added to one and forgotten in the
+  others fails CI too.
 - **Edits to an installed plugin are picked up promptly.** Vee now watches each
   plugin file individually, not just the plugins directory. A vnode source on a
   directory does not fire when an existing file is written, so an in-place edit
@@ -39,6 +91,28 @@ All notable changes to Vee are documented here. The format is based on
   as `C:\\node`.
 
 ### Added
+- **The same sparkline knobs in the JSON output format.** `sparklineWidth`,
+  `sparklineHeight`, and `sparklineColor` join `progressWidth`/`progressHeight`
+  there, and `progressTrackColor` replaces `trackColor` (still accepted). The
+  JSON format documents its rich params as mapping onto "exactly the same
+  controls" as the text protocol, so it gains every control knob the text
+  protocol does.
+- **`sparklinew=`, `sparklineh=`, `sparklinecolor=`.** The sparkline was the
+  only inline accessory with no size or colour knob — `progress=` had
+  `progressw`/`progressh`/`trackcolor` and a chart had
+  `chartw`/`charth`/`chartcolors` — so it now takes the same vocabulary,
+  `sparklinew=full` included.
+- **Fifteen parameters the SDKs could not emit.** `accessory`, `header`,
+  `ansi`, `emojize`, `trim`, `dropdown`, `image`, `templateimage`, `sfcolor`,
+  `sfsize`, `sfconfig`, `shortcut`, `webview`, `webvieww`, and `webviewh` were
+  recognised by the parser, listed by the linter, and documented for authors —
+  and no SDK had any way to write them. `accessory` was the sharpest omission:
+  it places `progress=`, `sparkline=`, and every chart shape, all of which the
+  SDKs could already emit. The format's `progress=value,max` form is reachable
+  from the SDKs now too.
+- **`vee.Stat`, `vee.Gauge`, `vee.Trend`, `vee.List`, `vee.Board`.** The Go SDK
+  had none of the five widget template constructors TypeScript and Python both
+  shipped; a Go author set `Template:` by hand.
 - **`vee dev` — a save-driven authoring loop.** `vee dev <path>` watches one file
   and re-runs it on **every save**, repainting the parsed menu tree, the run
   status, and any lint findings. Where `vee show` re-runs on the plugin's own

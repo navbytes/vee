@@ -26,7 +26,7 @@ Create `cpu.5s.ts`. Node runs the `.ts` directly (type-stripping), so you drop t
 
 ```ts
 #!/usr/bin/env node
-import { Menu } from "./src/vee.ts";
+import { Menu } from "./vee.ts";
 
 const menu = new Menu();
 menu.title("CPU 12%", { color: "green", sfimage: "cpu" });
@@ -139,7 +139,16 @@ A menu section at a given submenu depth (0 = top level).
 
 Options map onto the line parameters in the [authoring reference](plugin-authoring.md#line-parameters). The supported keys are the same in every SDK (in TypeScript they are `ItemOptions`; in Python keyword arguments; in Go the `Options` struct fields):
 
-`color`, `size`, `font`, `length`, `href`, `shell` (with `params` → `param1..N`), `terminal`, `refresh`, `alternate`, `disabled`, `checked`, `key`, `tooltip`, `sfimage`, `md`, `badge`, `symbolize`.
+- **Rendering** — `color`, `size`, `font`, `length`, `trim`, `ansi`, `emojize`
+- **Behaviour** — `href`, `shell` (with `params` → `param1..N`), `terminal`, `refresh`, `dropdown`, `alternate`, `disabled`, `checked`, `key`, `tooltip`
+- **Images** — `image`, `templateImage` (Python `template_image`, Go `TemplateImage`)
+- **SF Symbols** — `sfimage`, `sfColor`, `sfSize`, `sfConfig`, `symbolize`
+- **SwiftBar extras** — `md`, `badge`, `webview`, `webviewW`, `webviewH`, `shortcut`
+- **Vee-native rows** — `header`, `accessory`
+
+Naming follows each language's idiom, not one shared spelling: TypeScript is
+camelCase (`templateImage`), Python is snake_case (`template_image`), Go is
+PascalCase (`TemplateImage`). The emitted parameter is the same in all three.
 
 For example, in each language:
 
@@ -164,45 +173,82 @@ d.Item("**Bold** text", &vee.Options{MD: vee.Bool(true)})
 d.Item("Status :checkmark.circle:", &vee.Options{Symbolize: vee.Bool(true)})
 ```
 
-Values containing spaces or `|` are quoted (and embedded quotes escaped) automatically, in every SDK — you never format the protocol by hand.
+Values containing spaces or `|` are quoted (and embedded quotes escaped) automatically, in every SDK — you never format the protocol by hand. So is a value that *begins* with a quote character, which the parser would otherwise read as its own delimiter.
+
+Numbers are formatted by one shared rule — JavaScript's `String(Number)`, i.e.
+ECMA-262 `Number::toString` — rather than each language's default, so the three
+SDKs emit the same bytes for the same value. (Go's own `'g'` verb would render
+`1000000` as `1e+06`.)
+
+**Unknown options are an error, not a no-op.** TypeScript rejects them at
+compile time, Go as an unknown struct field, and Python raises `TypeError`:
+
+```python
+d.item("Disk", progress=0.5, track_colour="gray")
+# TypeError: unknown option 'track_colour'. Did you mean 'progress_track_color'?
+```
 
 ## Rich params
 
 All three SDKs expose **typed builders** for Vee's inline controls —
-**sparkline**, **toggle**, **slider**, and **progress** — plus the progress
-tuning params (`trackColor`, `progressW`, `progressH`). You pass structured
-values; the SDK formats the protocol (numbers, ranges, and quoting) for you, so
-the whole class of "I hand-formatted `slider=` wrong" bugs is impossible to
-write. (These render natively in Vee; in xbar/SwiftBar the unknown params are
-ignored, so plugins stay portable.)
+**sparkline**, **toggle**, **slider**, and **progress** — plus each visual
+control's tuning params. You pass structured values; the SDK formats the
+protocol (numbers, ranges, and quoting) for you, so the whole class of "I
+hand-formatted `slider=` wrong" bugs is impossible to write. (These render
+natively in Vee; in xbar/SwiftBar the unknown params are ignored, so plugins
+stay portable.)
+
+Every inline visual takes the same size and colour vocabulary —
+`<control>W` / `<control>H` / a colour — and every width accepts `"full"` to
+stretch across whatever width the row actually has:
+
+| Control | Width | Height | Colour |
+| ------- | ----- | ------ | ------ |
+| `sparkline` | `sparklineW` | `sparklineH` | `sparklineColor` |
+| `progress` | `progressW` | `progressH` | `progressTrackColor` |
+| `chart` | `chart.w` | `chart.h` | `chart.colors` |
+
+In Go, a control with its own struct leaves its knobs unprefixed (`Chart.W`)
+because the struct already names the control, while the flat `Options` carries
+the control's name (`SparklineW`, `ProgressW`); `full` is a sibling boolean
+(`SparklineFullWidth`) since Go has no union type.
+
+`trackColor` is the deprecated spelling of `progressTrackColor`; it still works
+and still emits `progresstrackcolor=`.
 
 **TypeScript**
 
 ```ts
-d.item("Load history", { sparkline: [1, 2, 3, 5, 8, 13] });
+d.item("Load history", { sparkline: [1, 2, 3, 5, 8, 13], sparklineW: 120, sparklineH: 18, sparklineColor: "teal" });
 d.item("Notifications", { toggle: true });
 d.item("Volume", { slider: { min: 0, max: 100, value: 40 } });
-d.item("Disk usage", { color: "green", progress: 0.72, trackColor: "#333333", progressW: 80, progressH: 6 });
-// progress also accepts a value/max pair:
+d.item("Disk usage", { color: "green", progress: 0.72, progressTrackColor: "#333333", progressW: 80, progressH: 6 });
+// progress also accepts a value/max pair, emitted as `progress=72,100`:
 d.item("Budget", { progress: { value: 72, max: 100 } });
+// and any width takes "full":
+d.item("Requests", { sparkline: [12, 40, 31, 55], sparklineW: "full" });
 ```
 
 **Python**
 
 ```python
-d.item("Load history", sparkline=[1, 2, 3, 5, 8, 13])
+d.item("Load history", sparkline=[1, 2, 3, 5, 8, 13], sparkline_w=120, sparkline_h=18, sparkline_color="teal")
 d.item("Notifications", toggle=True)
 d.item("Volume", slider={"min": 0, "max": 100, "value": 40})
-d.item("Disk usage", color="green", progress=0.72, trackColor="#333333", progressW=80, progressH=6)
+d.item("Disk usage", color="green", progress=0.72, progress_track_color="#333333", progress_w=80, progress_h=6)
+d.item("Budget", progress={"value": 72, "max": 100})
+d.item("Requests", sparkline=[12, 40, 31, 55], sparkline_w="full")
 ```
 
 **Go**
 
 ```go
-d.Item("Load history", &vee.Options{Sparkline: []float64{1, 2, 3, 5, 8, 13}})
+d.Item("Load history", &vee.Options{Sparkline: []float64{1, 2, 3, 5, 8, 13}, SparklineW: vee.Float(120), SparklineH: vee.Float(18), SparklineColor: vee.Str("teal")})
 d.Item("Notifications", &vee.Options{Toggle: vee.Bool(true)})
 d.Item("Volume", &vee.Options{Slider: &vee.Slider{Min: 0, Max: 100, Value: 40}})
-d.Item("Disk usage", &vee.Options{Color: vee.Str("green"), Progress: vee.Float(0.72), TrackColor: vee.Str("#333333"), ProgressW: vee.Float(80), ProgressH: vee.Float(6)})
+d.Item("Disk usage", &vee.Options{Color: vee.Str("green"), Progress: vee.Float(0.72), ProgressTrackColor: vee.Str("#333333"), ProgressW: vee.Float(80), ProgressH: vee.Float(6)})
+d.Item("Budget", &vee.Options{ProgressValue: vee.Float(72), ProgressMax: vee.Float(100)})
+d.Item("Requests", &vee.Options{Sparkline: []float64{12, 40, 31, 55}, SparklineFullWidth: true})
 ```
 
 ### Share charts
@@ -262,7 +308,7 @@ returns/builds an object with the same `toString()`/`to_string()`/`String()`
 **TypeScript**
 
 ```ts
-import { Stat } from "./src/vee.ts";
+import { Stat } from "./vee.ts";
 
 Stat({
   title: "Revenue",
@@ -294,23 +340,47 @@ Stat(
 **Go**
 
 ```go
-c := &vee.WidgetCard{
-	Template: vee.TemplateStat,
-	Title:    vee.Str("Revenue"),
-	Symbol:   vee.Str("chart.line.uptrend.xyaxis"),
-	Tint:     vee.Str("green"),
-	Value:    vee.Str("$18.2k"),
-	Status:   vee.StatusOK,
-	Items:    []vee.WidgetCardItem{{Label: "Orders", Value: vee.Str("214"), Symbol: vee.Str("bag"), Tint: vee.Str("blue")}},
-	Actions:  []vee.WidgetCardAction{{Kind: vee.ActionRefresh, Label: "Refresh"}},
-}
-c.Print()
+vee.Stat(vee.WidgetCard{
+	Title:   vee.Str("Revenue"),
+	Symbol:  vee.Str("chart.line.uptrend.xyaxis"),
+	Tint:    vee.Str("green"),
+	Value:   vee.Str("$18.2k"),
+	Status:  vee.StatusOK,
+	Items:   []vee.WidgetCardItem{{Label: "Orders", Value: vee.Str("214"), Symbol: vee.Str("bag"), Tint: vee.Str("blue")}},
+	Actions: []vee.WidgetCardAction{{Kind: vee.ActionRefresh, Label: "Refresh"}},
+}).Print()
 ```
+
+Setting `Template:` on a `vee.WidgetCard` literal works too — the constructor
+just presets it, so the three languages choose a template the same way.
 
 All three emit byte-identical JSON for the same card (there's a `widget-card`
 example and a shared golden fixture proving it, also round-tripped through
 the Swift parser). See the full field/template/action reference in
 [Widgets](widgets.md).
+
+### Layout nodes take only the options that fit them
+
+For layouts the five templates can't express, the `Node` builders compose a
+layout tree. Each builder accepts only the options meaningful for its node type
+— `columns` belongs to a grid, `min_length` to a spacer — and all three SDKs
+enforce that, as does the published
+[`widget-card.schema.json`](https://github.com/navbytes/vee/tree/main/docs/schemas/widget-card.schema.json):
+
+```ts
+Node.Text("hi", { columns: 4 });   // TypeScript: compile error
+```
+
+```python
+Node.Text("hi", columns=4)
+# TypeError: 'columns' is not a valid option for a 'text' node; it accepts families, style
+```
+
+```go
+vee.Node.Text("hi", vee.Columns(4))
+// cannot use vee.Columns(4) (value of func type vee.gridOnlyOpt) as
+// vee.LeafOpt value in argument to vee.Node.Text
+```
 
 ## The no-build-step note (TypeScript)
 

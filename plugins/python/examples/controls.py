@@ -16,21 +16,30 @@ def build() -> str:
     menu.title("Controls", sfimage="slider.horizontal.3")
 
     d = menu.dropdown
-    # progress given as (value, max) → normalized to the single fraction 0.72,
+    # progress given as {value, max} → emitted as the format's two-argument
+    # form `progress=72,100`, which Vee divides on parse,
     # with a track color and explicit size. The tooltip has spaces to prove the
     # shared _quote helper flows through the rich-param path.
     d.item(
         "Disk usage",
         color="green",
-        progress=(72, 100),
-        trackColor="#333333",
-        progressW=80,
-        progressH=6,
+        progress={"value": 72, "max": 100},
+        progress_track_color="#333333",
+        progress_w=80,
+        progress_h=6,
         tooltip="72 GB of 100 GB used",
     )
     d.item("Notifications", toggle=True)
     d.item("Volume", slider={"min": 0, "max": 100, "value": 40})
-    d.item("Load history", sparkline=[1, 2, 3, 5, 8, 13])
+    # The sparkline takes the same size/colour vocabulary as progress= and the
+    # chart shapes: <control>_w / <control>_h / <control>_color.
+    d.item(
+        "Load history",
+        sparkline=[1, 2, 3, 5, 8, 13],
+        sparkline_w=120,
+        sparkline_h=18,
+        sparkline_color="teal",
+    )
     return menu.to_string()
 
 

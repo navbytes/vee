@@ -1,0 +1,10 @@
+Edges
+---
+large | sparkline=1000000,1234567,999999,12000000
+boundaries | sparkline=1e-7,0.000001,100000000000000000000,1e+21
+signs | sparkline=0,-1.5,0.30000000000000004
+nbsp | tooltip="a b"
+leading-double | tooltip="\"quoted\""
+leading-single | tooltip="'tis"
+inner-quote | tooltip=has"inside
+reserved | tooltip="a\|b\\c"
