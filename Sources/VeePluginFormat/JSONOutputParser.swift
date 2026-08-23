@@ -62,22 +62,64 @@ public enum JSONOutputParser {
         return p
     }
 
+    /// Reports the superseded per-accessory size fields an item used.
+    ///
+    /// The JSON counterpart of the text parser's deprecation notice, and named
+    /// in the same terms, so an author migrating one format sees the same advice
+    /// in the other. Unlike the text version this makes no mismatch claim: JSON
+    /// nests a chart's size under `chart`, so the "sized the wrong accessory"
+    /// mistake the text format allows is not expressible here.
+    private static func reportDeprecatedJSONSizing(
+        _ item: JSONItem,
+        supersededBy hasAccessorySize: Bool,
+        diagnostics: inout [ParseDiagnostic]
+    ) {
+        var used: [(String, String)] = []
+        if item.sparklineWidth != nil { used.append(("sparklineWidth", "accessoryWidth")) }
+        if item.sparklineHeight != nil { used.append(("sparklineHeight", "accessoryHeight")) }
+        if item.progressWidth != nil { used.append(("progressWidth", "accessoryWidth")) }
+        if item.progressHeight != nil { used.append(("progressHeight", "accessoryHeight")) }
+        if item.chart?.w != nil { used.append(("chart.w", "accessoryWidth")) }
+        if item.chart?.h != nil { used.append(("chart.h", "accessoryHeight")) }
+
+        for (field, replacement) in used {
+            diagnostics.append(.init(
+                severity: .warning,
+                message: hasAccessorySize
+                    ? "\(field) is deprecated and was ignored here — \(replacement) on the same item wins"
+                    : "\(field) is deprecated; use \(replacement), which sizes whichever accessory an item carries"
+            ))
+        }
+    }
+
     /// Maps the structured-JSON rich params onto the same `LineParams` fields the
     /// text parser sets, with identical validation (non-finite values rejected,
     /// ranges clamped) so JSON and text produce the same model.
     private static func applyRichParams(from item: JSONItem, to p: inout LineParams, diagnostics: inout [ParseDiagnostic]) {
+        // `accessoryWidth`/`accessoryHeight` win over the per-accessory fields
+        // they supersede, so an item can migrate one field at a time. Resolved
+        // once here and threaded below, mirroring the text parser's fan-out.
+        let sizeW = item.accessoryWidth ?? nil
+        let sizeH = item.accessoryHeight.flatMap { $0.isFinite ? $0 : nil }
+        func width(_ legacy: JSONWidth?) -> JSONWidth? { sizeW ?? legacy }
+        func height(_ legacy: Double?) -> Double? { sizeH ?? legacy.flatMap { $0.isFinite ? $0 : nil } }
+
+        reportDeprecatedJSONSizing(item, supersededBy: sizeW != nil || sizeH != nil, diagnostics: &diagnostics)
+
         if let series = item.sparkline?.filter(\.isFinite), !series.isEmpty {
             p.sparkline = series
         }
         // The JSON spelling of `sparklinew=`/`sparklineh=`/`sparklinecolor=`.
         // Set independently of the series so a style without data is simply
         // inert, matching how the text parser treats the same combination.
-        if item.sparklineWidth != nil || item.sparklineHeight != nil || item.sparklineColor != nil {
+        let sparklineW = width(item.sparklineWidth)
+        let sparklineH = height(item.sparklineHeight)
+        if sparklineW != nil || sparklineH != nil || item.sparklineColor != nil {
             p.swiftbar.sparklineStyle = SparklineStyle(
-                width: item.sparklineWidth?.points.flatMap { $0.isFinite ? $0 : nil },
-                height: item.sparklineHeight.flatMap { $0.isFinite ? $0 : nil },
+                width: sparklineW?.points.flatMap { $0.isFinite ? $0 : nil },
+                height: sparklineH,
                 color: item.sparklineColor.flatMap(VeeColor.parse),
-                isFullWidth: item.sparklineWidth?.isFull ?? false
+                isFullWidth: sparklineW?.isFull ?? false
             )
         }
         if let on = item.toggle {
@@ -91,10 +133,14 @@ public enum JSONOutputParser {
                 // `trackColor` is the pre-v2 spelling, still accepted so
                 // published JSON plugins keep working.
                 trackColor: (item.progressTrackColor ?? item.trackColor).flatMap(VeeColor.parse),
-                width: item.progressWidth?.points.flatMap { $0.isFinite ? $0 : nil },
-                height: item.progressHeight.flatMap { $0.isFinite ? $0 : nil },
-                isFullWidth: item.progressWidth?.isFull ?? false
+                width: width(item.progressWidth)?.points.flatMap { $0.isFinite ? $0 : nil },
+                height: height(item.progressHeight),
+                isFullWidth: width(item.progressWidth)?.isFull ?? false
             )
+        }
+        // A control takes a width and no height, exactly as in the text format.
+        if p.control != nil, let points = sizeW?.points, points.isFinite {
+            p.controlWidth = points
         }
         if let chart = item.chart {
             if let kind = ChartKind(rawValue: chart.kind.lowercased()) {
@@ -106,9 +152,9 @@ public enum JSONOutputParser {
                     // entry that doesn't parse stays a hole and takes the
                     // palette slot, rather than shifting later colors.
                     colors: (chart.colors ?? []).map(VeeColor.parse),
-                    width: chart.w?.points.flatMap { $0.isFinite ? $0 : nil },
-                    height: chart.h.flatMap { $0.isFinite ? $0 : nil },
-                    isFullWidth: chart.w?.isFull ?? false,
+                    width: width(chart.w)?.points.flatMap { $0.isFinite ? $0 : nil },
+                    height: height(chart.h),
+                    isFullWidth: width(chart.w)?.isFull ?? false,
                     diagnostics: &diagnostics
                 )
             } else {
@@ -185,8 +231,15 @@ private final class JSONItem: Decodable {
     let progressTrackColor: String?
     /// Deprecated: the pre-v2 spelling of `progressTrackColor`.
     let trackColor: String?
+    /// Deprecated: superseded by `accessoryWidth`/`accessoryHeight`.
     let progressWidth: JSONWidth?
     let progressHeight: Double?
+    /// One pair sizing whichever accessory the item carries — the JSON spelling
+    /// of `accessoryw=`/`accessoryh=`. Supersedes the per-accessory fields
+    /// above and `chart.w`/`chart.h`, which stay decodable so published plugins
+    /// keep working.
+    let accessoryWidth: JSONWidth?
+    let accessoryHeight: Double?
     let accessory: String?
     let chart: JSONChart?
     let submenu: [JSONItem]?
