@@ -15,7 +15,11 @@ const PASSTHROUGH = [
   "robots.txt", "CNAME", ".nojekyll", "site.webmanifest",
 ];
 
-const INCLUDE = /^<!--\s*include:\s*(\S+)\s*-->\s*$/;
+// A paragraph that is only a link into _generated/ is an include directive.
+// Written as a link rather than an HTML comment so the same file reads
+// correctly on GitHub, where the directive stays a link to the generated table
+// instead of rendering as nothing. See docs-site/src/remark-include.mjs.
+const INCLUDE = /^\[[^\]]*\]\((_generated\/[^)\s]+)\)\s*$/;
 
 /** Read a page's Markdown: frontmatter removed, `# Title` restored, includes expanded. */
 function readContent(slug) {

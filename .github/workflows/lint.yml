@@ -38,11 +38,11 @@ jobs:
       # surface alone is a six-by-three cross-product that went stale the
       # moment it was written by hand, and for years was simply absent.
       #
-      # Generated, not verified: the partials are build inputs and are not
-      # committed, so there is no stale copy for a --check to catch. Producing
-      # them here also proves params.json is still well-formed enough to render.
-      - name: Reference tables generate from docs/api/params.json
-        run: python3 docs/scripts/build_reference.py
+      # The partials are committed, because docs/_content is read directly on
+      # GitHub and the tables have to be reachable there too. Committed means a
+      # stale copy is possible, so it is checked rather than regenerated here.
+      - name: Generated reference tables are up to date with docs/api/params.json
+        run: python3 docs/scripts/build_reference.py --check
       # The menu-line parameter list is written down six times (parser switch,
       # the public key set the linter uses, the authoring reference, and each of
       # the three SDKs). The docs copy silently fell behind once, and fifteen

@@ -26,7 +26,7 @@ Swift Charts, and a widget is WidgetKit.
 
 ## The matrix
 
-<!-- include: _generated/chart-matrix.md -->
+[**The chart matrix** →](_generated/chart-matrix.md)
 
 ## Where a chart appears
 
