@@ -209,7 +209,7 @@ public enum Linter {
     /// prompt from `vee lint` during the deprecation window rather than a
     /// silent break when the old name is finally removed.
     private static let deprecatedParams: [String: String] = [
-        "trackcolor": "progresstrackcolor",
+        "trackcolor": "progresstrackcolor"
     ]
 
     /// Whether the linter treats `key` as known. Delegates to
