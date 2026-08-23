@@ -69,6 +69,20 @@ final class ProgressParamTests: XCTestCase {
         XCTAssertNil(p?.height)
     }
 
+    /// `progressw=full` is the same knob `chartw=full` is, spelled for the
+    /// gauge: a stretch flag, not a width, so it must not also land in `width`.
+    func testFullWidth() {
+        let full = progress("Disk | progress=0.5 progressw=full")
+        XCTAssertTrue(full?.isFullWidth == true)
+        XCTAssertNil(full?.width)
+        XCTAssertEqual(full?.effectiveWidth, ProgressParams.defaultWidth)  // the too-narrow fallback
+
+        let fixed = progress("Disk | progress=0.5 progressw=80")
+        XCTAssertFalse(fixed?.isFullWidth == true)
+        XCTAssertEqual(fixed?.width, 80)
+        XCTAssertFalse(progress("Disk | progress=0.5")?.isFullWidth == true)
+    }
+
     func testNonFiniteSizeAndSparklineAndSliderRejected() {
         XCTAssertNil(parse("x | size=nan").params.size)
         XCTAssertNil(parse("x | size=inf").params.size)

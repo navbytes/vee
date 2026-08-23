@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # Example Vee plugin exercising the categorical share charts — pie, donut, and
 # stacked bar. Doubles as a golden fixture: its build() output is committed to
-# plugins/python/fixtures/charts.txt and checked for drift. Produces
+# plugins/fixtures/charts.txt and checked for drift. Produces
 # byte-identical output to the TypeScript and Go examples.
 import os
 import sys

@@ -71,22 +71,6 @@ final class CategoryChartMenuItemView: NSView {
         return CGSize(width: size.width, height: size.height)
     }
 
-    /// Width a `chartw=full` chart takes: the row's content width, less its own
-    /// text when it has any. Computed at draw time rather than at init, because
-    /// the row is only as wide as the menu — which the *widest* row decides,
-    /// and that may be some other row entirely.
-    ///
-    /// Static and geometry-only so the stretch is unit-testable without a live
-    /// menu, like `sectorPath`.
-    static func stretchedWidth(layout: ProgressBarLayout, title: NSAttributedString, in bounds: CGRect) -> CGFloat {
-        let titleWidth = title.size().width.rounded(.up)
-        let reserved = titleWidth > 0 ? titleWidth + layout.gap : 0
-        let available = bounds.width - layout.leadingInset - layout.trailingInset - reserved
-        // Never collapse to nothing in a too-narrow menu: fall back to the
-        // declared/default slot, which is what a non-full chart would have taken.
-        return Swift.max(available, layout.barWidth)
-    }
-
     override func draw(_ dirtyRect: NSRect) {
         if let highlight = menuRowHighlightPath(highlighted: enclosingMenuItem?.isHighlighted ?? false, in: bounds) {
             NSColor.selectedContentBackgroundColor.setFill()
@@ -96,7 +80,7 @@ final class CategoryChartMenuItemView: NSView {
         // `fraction` drives progress='s fill rect only; a chart uses the track
         // rect as its whole drawing area and ignores it.
         var layout = self.layout
-        if chart.isFullWidth { layout.barWidth = Self.stretchedWidth(layout: layout, title: title, in: bounds) }
+        if chart.isFullWidth { layout.barWidth = ProgressBarLayout.stretchedWidth(layout: layout, title: title, in: bounds) }
         let rects = layout.rects(in: bounds, fraction: 0)
         title.drawTruncatedCentered(in: rects.label)
 

@@ -135,16 +135,39 @@ final class CategoryChartRenderSmokeTests: XCTestCase {
         XCTAssertEqual(size("x | pie=1,2"), CGSize(width: 24, height: 24))
     }
 
+    /// `full` is a width control, and a circle has no free width — stretching
+    /// one would grow the row to match. The model drops it so every renderer
+    /// agrees (the menu used to centre the circle in the stretched slot while
+    /// the detached window ignored the flag outright).
+    func testFullWidthIsRefusedOnCirclesAndKeptOnTheBar() {
+        func parse(_ line: String) -> (ChartParams, [ParseDiagnostic]) {
+            let (_, pairs, _) = LineParser.splitTextAndParams(line)
+            let mapped = LineParser.mapParams(pairs)
+            return (mapped.params.swiftbar.chart!, mapped.diagnostics)
+        }
+        for line in ["x | pie=1,2 chartw=full", "x | donut=1,2 chartw=full charth=40"] {
+            let (chart, diagnostics) = parse(line)
+            XCTAssertFalse(chart.isFullWidth, "a circle cannot stretch: \(line)")
+            XCTAssertTrue(
+                diagnostics.contains { $0.message.contains("chartw=full applies to stackedbar=") },
+                "dropping it silently is what made this look like a rendering bug: \(line)"
+            )
+        }
+        let (bar, diagnostics) = parse("x | stackedbar=1,2 chartw=full")
+        XCTAssertTrue(bar.isFullWidth)
+        XCTAssertTrue(diagnostics.isEmpty)
+    }
+
     func testFullWidthChartStretchesToTheRowLessItsLabel() {
         let chart = item("Budget | stackedbar=1,2 chartw=full").params.swiftbar.chart!
         XCTAssertTrue(chart.isFullWidth)
         let layout = ProgressBarLayout(barWidth: 110, barHeight: 12)
         let bounds = CGRect(x: 0, y: 0, width: 400, height: 22)
 
-        let labelled = CategoryChartMenuItemView.stretchedWidth(
+        let labelled = ProgressBarLayout.stretchedWidth(
             layout: layout, title: NSAttributedString(string: "Budget"), in: bounds
         )
-        let bare = CategoryChartMenuItemView.stretchedWidth(
+        let bare = ProgressBarLayout.stretchedWidth(
             layout: layout, title: NSAttributedString(string: ""), in: bounds
         )
         // A bare row gives the chart everything between the insets; a labelled
@@ -153,7 +176,7 @@ final class CategoryChartRenderSmokeTests: XCTestCase {
         XCTAssertLessThan(labelled, bare)
 
         // A menu too narrow to stretch into never collapses the chart.
-        let narrow = CategoryChartMenuItemView.stretchedWidth(
+        let narrow = ProgressBarLayout.stretchedWidth(
             layout: layout, title: NSAttributedString(string: ""),
             in: CGRect(x: 0, y: 0, width: 40, height: 22)
         )

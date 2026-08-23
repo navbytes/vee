@@ -64,6 +64,14 @@ public struct ChartParams: Equatable, Sendable {
     /// widest row, so a fixed width can't fill a menu whose width some *other*
     /// row decides — this can. The chart takes the row's content width, less
     /// the row's own text when it has any.
+    ///
+    /// Only ever true for `.stackedBar`: `full` is a *width* control, and a
+    /// circle has no free width — its width is its diameter, so stretching one
+    /// into a row's leftover space would make the row as tall as the menu is
+    /// wide. `make` drops it (with a diagnostic) on `.pie`/`.donut`, which are
+    /// sized by `chartw=`/`charth=` points instead. Same rule as the widget
+    /// layout tree, where `style.fill` grows a node to the available *width*
+    /// and a circular gauge takes no size knob at all.
     public var isFullWidth: Bool
 
     public init(
@@ -208,6 +216,22 @@ public struct ChartParams: Equatable, Sendable {
             return nil
         }
 
+        // `full` stretches an accessory across the row's leftover width. A
+        // pie/donut fills that width only by growing its diameter — i.e. by
+        // growing the row to match — so it is refused here rather than at each
+        // renderer: dropping it once in the model is what keeps the AppKit menu
+        // row, the SwiftUI window row, and the CLI from each inventing their own
+        // answer (they did: the menu centred the circle in the stretched slot,
+        // the window ignored the flag entirely).
+        var fullWidth = isFullWidth
+        if fullWidth, kind != .stackedBar {
+            diagnostics.append(.init(
+                severity: .warning,
+                message: "chartw=full applies to stackedbar=; size a \(kind.rawValue)= with chartw=/charth= points"
+            ))
+            fullWidth = false
+        }
+
         var outValues = values
         var outLabels = labels
         var outColors = colors
@@ -240,7 +264,7 @@ public struct ChartParams: Equatable, Sendable {
             isFolded: folded,
             width: width.map { Swift.min(Swift.max($0, sizeLimit.lowerBound), sizeLimit.upperBound) },
             height: height.map { Swift.min(Swift.max($0, sizeLimit.lowerBound), sizeLimit.upperBound) },
-            isFullWidth: isFullWidth
+            isFullWidth: fullWidth
         )
     }
 

@@ -199,13 +199,14 @@ not required.
 
 ## Proposing a new plugin
 
-Two different things live under similar names — pick the right one:
+Two folders take plugins — pick the right one:
 
+- **`plugins/showcase/`** — copy-paste showcase plugins (plain shell) that
+  demonstrate Vee features and the trust model. Add here for a runnable,
+  well-commented demo. Not wired into the test suite.
 - **`plugins/examples/`** — SDK examples that double as golden fixtures for the
   drift guard. Add here only if you're demonstrating the TypeScript SDK and are
   prepared to commit a matching fixture.
-- **`examples/`** (repo root) — copy-paste showcase plugins that demonstrate
-  Vee features and the trust model. Add here for a runnable, well-commented demo.
 
 To propose a plugin for the community catalog/gallery, open an issue using the
 **Plugin submission** template. Include what it does, its language and

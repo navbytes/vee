@@ -4,7 +4,7 @@ Vee ships tiny, zero-dependency SDKs for writing plugins with typed builders ins
 
 The SDKs live in the [`plugins/`](https://github.com/navbytes/vee/tree/main/plugins) directory of the repository:
 
-- TypeScript — [`plugins/src/vee.ts`](https://github.com/navbytes/vee/tree/main/plugins/src/vee.ts)
+- TypeScript — [`plugins/typescript/`](https://github.com/navbytes/vee/tree/main/plugins/typescript) ([README](https://github.com/navbytes/vee/tree/main/plugins/typescript/README.md))
 - Python — [`plugins/python/`](https://github.com/navbytes/vee/tree/main/plugins/python) ([README](https://github.com/navbytes/vee/tree/main/plugins/python/README.md))
 - Go — [`plugins/go/`](https://github.com/navbytes/vee/tree/main/plugins/go) ([README](https://github.com/navbytes/vee/tree/main/plugins/go/README.md))
 
@@ -212,7 +212,10 @@ The [share charts](plugin-authoring.md#share-charts-pie-donut-stackedbar)
 shapes take the same data, so `kind` is the only thing that changes between them.
 `labels` and `colors` are optional and positional; `w`/`h` (`W`/`H` in Go) set
 the inline size in points, the typed spelling of `chartw=`/`charth=`. Pass
-`w: "full"` (Go: `FullWidth: true`) to stretch the chart to the row's own width.
+`w: "full"` (Go: `FullWidth: true`) to stretch a `stackedbar` to the row's own
+width — a bar only, since a circle has no free width; on `pie`/`donut` Vee warns
+and falls back to points. `progress=` takes the same knob as
+`progressW: "full"` (Go: `ProgressFullWidth: true`).
 
 **TypeScript**
 
@@ -330,7 +333,7 @@ The SDKs, the golden fixtures, and the Swift parser are kept in lockstep by a fi
 Commands:
 
 ```sh
-# TypeScript (run from plugins/)
+# TypeScript (run from plugins/typescript)
 npm test                 # run the drift guard (node --test)
 npm run build:fixtures   # regenerate fixtures from the examples
 

@@ -12,7 +12,7 @@ import (
 
 func TestFixtureUpToDate(t *testing.T) {
 	name := "widget-layout"
-	fixture := filepath.Join("..", "..", "fixtures", name+".txt")
+	fixture := filepath.Join("..", "..", "..", "fixtures", name+".txt")
 	raw, err := os.ReadFile(fixture)
 	if err != nil {
 		t.Fatalf("read fixture %s: %v", fixture, err)
@@ -21,7 +21,7 @@ func TestFixtureUpToDate(t *testing.T) {
 	got := Build()
 	if got != expected {
 		t.Errorf("Build() drifted from fixtures/%s.txt.\nRegenerate with: "+
-			"go run ./examples/%s > fixtures/%s.txt\n--- got ---\n%s\n--- want ---\n%s",
+			"go run ./examples/%s > ../fixtures/%s.txt\n--- got ---\n%s\n--- want ---\n%s",
 			name, name, name, got, expected)
 	}
 }

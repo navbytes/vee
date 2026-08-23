@@ -78,8 +78,9 @@ public enum JSONOutputParser {
             p.progress = ProgressParams(
                 fraction: Swift.min(Swift.max(raw, 0), 1),
                 trackColor: item.trackColor.flatMap(VeeColor.parse),
-                width: item.progressWidth.flatMap { $0.isFinite ? $0 : nil },
-                height: item.progressHeight.flatMap { $0.isFinite ? $0 : nil }
+                width: item.progressWidth?.points.flatMap { $0.isFinite ? $0 : nil },
+                height: item.progressHeight.flatMap { $0.isFinite ? $0 : nil },
+                isFullWidth: item.progressWidth?.isFull ?? false
             )
         }
         if let chart = item.chart {
@@ -166,7 +167,7 @@ private final class JSONItem: Decodable {
     let slider: JSONSlider?
     let progress: Double?
     let trackColor: String?
-    let progressWidth: Double?
+    let progressWidth: JSONWidth?
     let progressHeight: Double?
     let accessory: String?
     let chart: JSONChart?
@@ -190,12 +191,14 @@ private struct JSONChart: Decodable {
     let colors: [String]?
     /// Inline size in points, the JSON spelling of `chartw=`/`charth=`. `w`
     /// also accepts the string `"full"`, matching `chartw=full`.
-    let w: JSONChartWidth?
+    let w: JSONWidth?
     let h: Double?
 }
 
-/// `chart.w`: a number of points, or `"full"` to stretch to the row's width.
-private enum JSONChartWidth: Decodable {
+/// An inline accessory's width — `chart.w` or `progressWidth`: a number of
+/// points, or `"full"` to stretch to the row's width. One type for both, so the
+/// JSON spelling of `full` can't come to mean two different things.
+private enum JSONWidth: Decodable {
     case points(Double)
     case full
 
@@ -207,7 +210,7 @@ private enum JSONChartWidth: Decodable {
         }
         let text = try container.decode(String.self)
         guard text.lowercased() == "full" else {
-            throw DecodingError.dataCorruptedError(in: container, debugDescription: "chart.w expects a number or \"full\"")
+            throw DecodingError.dataCorruptedError(in: container, debugDescription: "width expects a number or \"full\"")
         }
         self = .full
     }

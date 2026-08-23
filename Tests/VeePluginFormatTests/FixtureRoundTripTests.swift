@@ -2,7 +2,7 @@ import XCTest
 @testable import VeePluginFormat
 @testable import VeeWidgetShared
 
-/// Parses the golden fixtures produced by the TypeScript SDK (plugins/fixtures)
+/// Parses the golden fixtures shared by all three plugin SDKs (plugins/fixtures)
 /// and asserts they round-trip through the Swift parser. This ties the SDK's
 /// output to the parser: if either drifts, this fails.
 final class FixtureRoundTripTests: XCTestCase {

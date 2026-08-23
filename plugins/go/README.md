@@ -2,7 +2,7 @@
 
 A tiny, zero-dependency (standard-library only) Go SDK for writing Vee plugins
 with typed builders instead of hand-formatting the xbar/SwiftBar text protocol.
-It mirrors the [TypeScript](../src/vee.ts) and [Python](../python) SDKs — same
+It mirrors the [TypeScript](../typescript) and [Python](../python) SDKs — same
 builder shape, option names, encoding order, and quoting — and produces
 byte-identical output.
 
@@ -20,7 +20,7 @@ plugins/go/
 ├─ examples/cpu/cpu_test.go# drift guard for the example
 ├─ examples/controls/      # rich controls: sparkline / toggle / slider / progress
 ├─ examples/charts/        # share charts: pie / donut / stackedbar
-└─ fixtures/*.txt          # golden output (shared byte-for-byte with the TS/Python SDKs)
+└─ examples/widget-layout/
 ```
 
 ## Hello world
@@ -121,5 +121,6 @@ go test ./...
 ```
 
 The drift guard runs the example's `Build()` and asserts the output matches its
-committed golden fixture — shared byte-for-byte with the TypeScript and Python
-SDKs, keeping every SDK, the fixtures, and the Swift parser in lockstep.
+committed golden fixture in `../fixtures/` — the same files the TypeScript and
+Python SDKs assert against, keeping every SDK, the fixtures, and the Swift
+parser in lockstep.

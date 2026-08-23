@@ -87,12 +87,20 @@ public struct ProgressParams: Equatable, Sendable {
     public var width: Double?
     /// Bar height in points (`progressh=`). Default applied at render time.
     public var height: Double?
+    /// `progressw=full`: the bar stretches to whatever width the row actually
+    /// has, instead of a fixed number of points — the same knob, and the same
+    /// geometry, as `chartw=full` on a `stackedbar=` (`ProgressBarLayout.
+    /// stretchedWidth`). A menu is as wide as its widest row, so a fixed width
+    /// can't fill a menu whose width some *other* row decides; this can. The bar
+    /// takes the row's content width, less the row's own text when it has any.
+    public var isFullWidth: Bool
 
-    public init(fraction: Double, trackColor: VeeColor? = nil, width: Double? = nil, height: Double? = nil) {
+    public init(fraction: Double, trackColor: VeeColor? = nil, width: Double? = nil, height: Double? = nil, isFullWidth: Bool = false) {
         self.fraction = fraction
         self.trackColor = trackColor
         self.width = width
         self.height = height
+        self.isFullWidth = isFullWidth
     }
 
     /// Bar dimensions when the plugin declares none. They live here, in the

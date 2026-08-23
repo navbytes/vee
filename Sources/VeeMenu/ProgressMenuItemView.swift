@@ -45,6 +45,25 @@ public struct ProgressBarLayout: Equatable, Sendable {
         }
         return (label, track, fill)
     }
+
+    /// Width a `progressw=full`/`chartw=full` accessory takes: the row's content
+    /// width, less its own text when it has any. Computed at draw time rather
+    /// than at init, because the row is only as wide as the menu — which the
+    /// *widest* row decides, and that may be some other row entirely.
+    ///
+    /// Static and geometry-only so the stretch is unit-testable without a live
+    /// menu, and shared by every row view that draws a stretchable accessory
+    /// (`ProgressMenuItemView`, `CategoryChartMenuItemView`) so `full` cannot
+    /// come to mean two different widths.
+    static func stretchedWidth(layout: ProgressBarLayout, title: NSAttributedString, in bounds: CGRect) -> CGFloat {
+        let titleWidth = title.size().width.rounded(.up)
+        let reserved = titleWidth > 0 ? titleWidth + layout.gap : 0
+        let available = bounds.width - layout.leadingInset - layout.trailingInset - reserved
+        // Never collapse to nothing in a too-narrow menu: fall back to the
+        // declared/default slot, which is what a non-full accessory would have
+        // taken.
+        return Swift.max(available, layout.barWidth)
+    }
 }
 
 /// A custom menu-row view that draws a plugin's `progress=` gauge inline: the
@@ -58,19 +77,25 @@ final class ProgressMenuItemView: NSView {
     private let fillColor: NSColor
     private let trackColor: NSColor
     private let layout: ProgressBarLayout
+    private let isFullWidth: Bool
 
-    init(title: NSAttributedString, fraction: Double, fillColor: NSColor, trackColor: NSColor, barWidth: CGFloat, barHeight: CGFloat, leading: Bool = false) {
+    init(title: NSAttributedString, fraction: Double, fillColor: NSColor, trackColor: NSColor, barWidth: CGFloat, barHeight: CGFloat, leading: Bool = false, fullWidth: Bool = false) {
         self.title = title
         self.fraction = CGFloat(fraction)
         self.fillColor = fillColor
         self.trackColor = trackColor
+        self.isFullWidth = fullWidth
         let layout = ProgressBarLayout(barWidth: barWidth, barHeight: barHeight, leading: leading)
         self.layout = layout
         let rowHeight = Swift.max(22, barHeight + 10)
         // Size to fit label + bar so the menu grows wide enough — a fixed width
         // would squeeze a long label (e.g. a 210pt hero bar) into truncation.
+        // A `progressw=full` bar claims no width of its own here on purpose: it
+        // stretches to whatever width the menu ends up with, so it must not be
+        // the row that decides that width.
         let titleWidth = title.size().width.rounded(.up)
-        let desiredWidth = layout.leadingInset + titleWidth + layout.gap + barWidth + layout.trailingInset
+        let claimedWidth = fullWidth ? 0 : barWidth
+        let desiredWidth = layout.leadingInset + titleWidth + layout.gap + claimedWidth + layout.trailingInset
         super.init(frame: NSRect(x: 0, y: 0, width: Swift.max(240, desiredWidth), height: rowHeight))
         autoresizingMask = [.width] // still stretch if another row makes the menu wider
 
@@ -91,6 +116,8 @@ final class ProgressMenuItemView: NSView {
             highlight.fill()
         }
 
+        var layout = self.layout
+        if isFullWidth { layout.barWidth = ProgressBarLayout.stretchedWidth(layout: layout, title: title, in: bounds) }
         let rects = layout.rects(in: bounds, fraction: fraction)
 
         // Label — vertically centered in its column, truncated if it collides

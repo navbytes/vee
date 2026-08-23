@@ -1,45 +1,50 @@
-# Vee plugin SDK (TypeScript)
+# Vee plugins
 
-A tiny, zero-dependency TypeScript SDK for authoring Vee plugins with typed
-builders instead of hand-formatting the xbar/SwiftBar text protocol. Node runs
-the TypeScript directly (type-stripping), so there is no build step.
+Everything for authoring Vee plugins: three SDKs, one shared set of golden
+fixtures, and a set of runnable showcase plugins.
+
+| Folder | What it is |
+| ------ | ---------- |
+| [`showcase/`](showcase/) | **Showcase plugins** in plain shell — heavily commented, meant to be read and run. Start here. |
+| [`typescript/`](typescript/README.md) | The **TypeScript SDK** — zero-dep, Node 24+ runs it directly. |
+| [`python/`](python/README.md) | The **Python SDK** — standard library only. |
+| [`go/`](go/README.md) | The **Go SDK** — standard library only. |
+| [`fixtures/`](fixtures/) | **Golden output**, shared by all three SDKs. See below. |
+
+Each SDK folder has the same shape: a README, the single SDK file
+(`vee.ts` / `vee.py` / `vee.go`), `examples/`, and a test.
+
+## The shared fixtures
+
+The three SDKs expose the same builders and produce **byte-identical** output.
+`fixtures/` is what makes that true rather than aspirational: every SDK's drift
+guard asserts its examples' output against these same files, and the Swift
+`VeePluginFormat` round-trip tests parse them too. One set of goldens is the
+contract between four implementations — change any SDK's output and the other
+three fail until they agree.
+
+Regenerate them from the TypeScript examples:
+
+```sh
+cd plugins/typescript && npm run build:fixtures
+```
+
+Then run all four suites; anything that disagrees is a real divergence, not a
+stale copy:
+
+```sh
+cd plugins/typescript && npm test
+cd plugins/python     && python3 -m unittest discover -s test
+cd plugins/go         && go test ./...
+swift test --filter FixtureRoundTripTests    # from the repo root
+```
 
 ## Writing a plugin
 
-```ts
-#!/usr/bin/env node
-import { Menu } from "./src/vee.ts";
+A plugin is any executable that prints the xbar/SwiftBar format to stdout — the
+SDKs just save you from hand-formatting it. The filename encodes the refresh
+interval (`cpu.5s.ts`, `disk.30m.sh`), exactly as with xbar/SwiftBar.
 
-const menu = new Menu();
-menu.title("CPU 12%", { color: "green", sfimage: "cpu" });
-
-const d = menu.dropdown;
-d.item("Top processes", { href: "https://example.com/procs" });
-d.separator();
-const details = d.submenu("Details");
-details.item("Load: 1.20");
-
-menu.print();
-```
-
-Make it executable (`chmod +x cpu.5s.ts`) and drop it in your Vee plugins
-folder. The `.5s` in the filename sets a 5-second refresh, exactly as with
-xbar/SwiftBar.
-
-## Layout
-
-- `src/vee.ts` — the SDK (`Menu`, `Section`, `ItemOptions`).
-- `examples/*.ts` — example plugins; each exports `build(): string`.
-- `fixtures/*.txt` — golden output for each example.
-- `test/*.test.ts` — drift guard: asserts each example's `build()` matches its
-  fixture. The same fixtures are parsed by the Swift `VeePluginFormat` tests, so
-  the SDK, the fixtures, and the parser stay in lockstep.
-
-## Commands
-
-```sh
-npm test                 # run the fixture drift guard (node --test)
-npm run build:fixtures   # regenerate fixtures from the examples
-```
-
-Requires Node 24+ (for native TypeScript execution).
+See the [SDK guide](../docs/_content/sdk.md) for the full format, each SDK's
+README for its API, and [`showcase/`](showcase/) for commented, runnable
+examples of the format and the `<vee.*>` trust model.

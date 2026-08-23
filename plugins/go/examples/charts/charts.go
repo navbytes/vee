@@ -1,6 +1,6 @@
 // Example Vee plugin exercising the categorical share charts — pie, donut, and
 // stacked bar. Doubles as a golden fixture: its Build() output is committed to
-// plugins/go/fixtures/charts.txt and checked for drift by charts_test.go.
+// plugins/fixtures/charts.txt and checked for drift by charts_test.go.
 // Produces byte-identical output to the TypeScript and Python examples —
 // proving cross-language parity.
 package main

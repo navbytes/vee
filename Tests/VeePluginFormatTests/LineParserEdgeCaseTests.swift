@@ -118,7 +118,7 @@ final class LineParserEdgeCaseTests: XCTestCase {
         XCTAssertTrue(pairs.isEmpty)
     }
 
-    /// End-to-end: the exact line shape the bundled SDKs (plugins/src/vee.ts,
+    /// End-to-end: the exact line shape the bundled SDKs (plugins/typescript/vee.ts,
     /// plugins/python/vee.py, plugins/go/vee.go) emit for an item whose text is
     /// `Left | Right<newline>Second line` round-trips through the full parser
     /// back to the original text.

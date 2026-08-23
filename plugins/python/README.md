@@ -2,7 +2,7 @@
 
 A tiny, zero-dependency (standard-library only) Python SDK for writing Vee
 plugins with typed builders instead of hand-formatting the xbar/SwiftBar text
-protocol. It mirrors the [TypeScript SDK](../src/vee.ts) — same builder shape,
+protocol. It mirrors the [TypeScript SDK](../typescript) — same builder shape,
 option names, encoding order, and quoting — and produces byte-identical output,
 so a plugin reads the same in either language.
 
@@ -16,7 +16,6 @@ so a plugin reads the same in either language.
 plugins/python/
 ├─ vee.py            # the SDK: Menu, Section
 ├─ examples/*.py     # example plugins; each defines build() -> str
-├─ fixtures/*.txt    # golden output for each example (shared with the TS SDK)
 └─ test/             # drift guard (unittest)
 ```
 
@@ -136,5 +135,6 @@ python3 -m unittest discover -s test -v
 ```
 
 The drift guard runs each example's `build()` and asserts the output matches its
-committed golden fixture. Because the fixtures are shared with the TypeScript
-SDK, this keeps both SDKs, the fixtures, and the Swift parser in lockstep.
+committed golden fixture in `../fixtures/`. Those files are shared with the
+TypeScript and Go SDKs, so this keeps every SDK, the fixtures, and the Swift
+parser in lockstep.

@@ -122,7 +122,7 @@ Point Vee at your existing plugins folder (Plugin Manager → **Choose Folder**)
 
 ## Writing plugins
 
-A plugin is any executable that prints the xbar/SwiftBar format to stdout — bash, Python, Ruby, a compiled binary, anything. See the **[plugin authoring reference](docs/_content/plugin-authoring.md)** for the full format, and [`examples/`](examples/) for ready-to-run showcase plugins.
+A plugin is any executable that prints the xbar/SwiftBar format to stdout — bash, Python, Ruby, a compiled binary, anything. See the **[plugin authoring reference](docs/_content/plugin-authoring.md)** for the full format, and [`plugins/showcase/`](plugins/showcase/) for ready-to-run showcase plugins.
 
 For the edit loop, keep `vee dev` in a split terminal beside your editor — it re-runs the file and repaints the menu on every save:
 
@@ -138,6 +138,7 @@ vee lint --format compact FILE  # diagnostics your editor can place on a line
 Prefer typed builders to hand-formatting text? Vee ships zero-dependency SDKs in three languages, each with `Menu`/`Section` builders and typed builders for the rich params (`sparkline`/`toggle`/`slider`/`progress`/`chart`) so quoting and escaping are handled for you:
 
 - **[TypeScript](docs/_content/sdk.md)** ([`plugins/`](plugins/)) — Node 24+ runs the `.ts` directly, no build step.
+- **[TypeScript](plugins/typescript/README.md)** ([`plugins/typescript/`](plugins/typescript/)) — zero-dep, Node runs it directly.
 - **[Python](plugins/python/README.md)** ([`plugins/python/`](plugins/python/)) — standard library only.
 - **[Go](plugins/go/README.md)** ([`plugins/go/`](plugins/go/)) — standard library only.
 
@@ -174,7 +175,7 @@ Sources/
 ├─ VeeUI/           # SwiftUI settings + plugin-manager windows
 ├─ VeeApp/          # AppKit shell: status items, coordinators, app delegate
 └─ vee/             # executable entry point
-plugins/            # TypeScript plugin SDK + examples + golden fixtures
+plugins/            # plugin SDKs (TypeScript/Python/Go), showcase plugins, shared fixtures
 ```
 
 ## Contributing & license

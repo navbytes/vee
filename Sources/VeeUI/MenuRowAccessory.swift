@@ -74,21 +74,31 @@ public struct MenuRowAccessory: View {
     /// `progress=` as a capsule, at the same dimensions the menu row draws it:
     /// `progressw=`/`progressh=` when declared, otherwise `ProgressBarLayout`'s
     /// defaults, which `MenuBuilder` reads from the same place.
+    @ViewBuilder
     private func gauge(_ progress: ProgressParams, tint: VeeColor?) -> some View {
-        let width = CGFloat(progress.effectiveWidth)
-        let height = CGFloat(progress.effectiveHeight)
+        let bar = capsule(progress, tint: tint)
+            .frame(height: CGFloat(progress.effectiveHeight))
+            .accessibilityElement()
+            .accessibilityLabel("Progress")
+            .accessibilityValue("\(Int((progress.fraction * 100).rounded())) percent")
+        // `progressw=full`: take the row's leftover width, exactly as the menu
+        // row does — the same knob a `chartw=full` stacked bar uses below.
+        if progress.isFullWidth { bar.frame(maxWidth: .infinity) } else { bar.frame(width: CGFloat(progress.effectiveWidth)) }
+    }
+
+    /// The track and its fill. `GeometryReader` rather than a fraction of the
+    /// declared width, so a stretched bar fills the width it actually got.
+    private func capsule(_ progress: ProgressParams, tint: VeeColor?) -> some View {
         let fill = tint.flatMap(SwiftUIColor.resolve) ?? .accentColor
         let track = progress.trackColor.flatMap(SwiftUIColor.resolve)
             ?? Color(nsColor: .tertiaryLabelColor).opacity(0.25)
-        return ZStack(alignment: .leading) {
-            Capsule().fill(track)
-            Capsule().fill(fill)
-                .frame(width: width * CGFloat(min(max(progress.fraction, 0), 1)))
+        return GeometryReader { geometry in
+            ZStack(alignment: .leading) {
+                Capsule().fill(track)
+                Capsule().fill(fill)
+                    .frame(width: geometry.size.width * CGFloat(min(max(progress.fraction, 0), 1)))
+            }
         }
-        .frame(width: width, height: height)
-        .accessibilityElement()
-        .accessibilityLabel("Progress")
-        .accessibilityValue("\(Int((progress.fraction * 100).rounded())) percent")
     }
 
     // MARK: - Sparkline

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # Example Vee plugin exercising the typed rich-param builders — sparkline,
 # toggle, slider, and progress. Doubles as a golden fixture: its build() output
-# is committed to plugins/python/fixtures/controls.txt and checked for drift.
+# is committed to plugins/fixtures/controls.txt and checked for drift.
 # Produces byte-identical output to the TypeScript and Go examples.
 import os
 import sys
