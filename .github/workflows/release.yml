@@ -18,6 +18,9 @@ on:
 
 permissions:
   contents: write
+  # npm provenance signs the package against this workflow run; without it
+  # `npm publish --provenance` fails.
+  id-token: write
 
 jobs:
   release:
@@ -89,6 +92,10 @@ jobs:
           sed -i '' "s/^let fallbackVersion = \".*\"$/let fallbackVersion = \"${version}\"/" Sources/VeeCLI/Version.swift
           grep -q "let fallbackVersion = \"${version}\"" Sources/VeeCLI/Version.swift \
             || { echo "::error::failed to stamp the version into Sources/VeeCLI/Version.swift"; exit 1; }
+          # The npm package carries the same version as the app on purpose: the
+          # SDK and the parser that reads its output ship from one commit, so a
+          # matching pair is a guaranteed-compatible pair.
+          ( cd plugins/typescript && npm version "${version}" --no-git-tag-version --allow-same-version )
 
       - name: Generate project
         run: xcodegen generate
@@ -157,6 +164,28 @@ jobs:
           tag_name: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
           files: Vee.zip
           fail_on_unmatched_files: true
+
+      # Publish the TypeScript SDK. Deliberately NOT conditional on the token:
+      # the Homebrew step below skips silently when its secret is absent, and
+      # that is how the tap sat two releases stale. A missing NPM_TOKEN should
+      # fail the release, not quietly ship three artifacts out of four.
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          registry-url: "https://registry.npmjs.org"
+      - name: Publish @navbytes/vee to npm
+        working-directory: plugins/typescript
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          if [ -z "${NODE_AUTH_TOKEN}" ]; then
+            echo "::error::NPM_TOKEN is not set — cannot publish @navbytes/vee."
+            exit 1
+          fi
+          # prepublishOnly builds and re-checks the compiled output against the
+          # golden fixtures, so a package that would differ from the source
+          # never leaves the runner.
+          npm publish --provenance --access public
 
       # Keep navbytes/homebrew-tap tracking this release. Self-seeding: creates
       # Casks/vee.rb on the first run and bumps version + sha256 afterwards.
