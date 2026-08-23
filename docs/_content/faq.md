@@ -52,7 +52,7 @@ No. Vee is free and open source — [github.com/navbytes/vee](https://github.com
 
 ### How do I install it?
 
-Install with Homebrew — `brew tap navbytes/tap && brew install --cask vee` — or download the notarized `Vee.app` from [GitHub Releases](https://github.com/navbytes/vee/releases), drag it to `/Applications`, and launch. See [Getting started](getting-started.md).
+Install with Homebrew — `brew install --cask navbytes/tap/vee` — or run `curl -fsSL https://vee.navbytes.io/install.sh | bash`. Either one installs both the menu-bar app and the `vee` CLI. You can also download the notarized `Vee.app` from [GitHub Releases](https://github.com/navbytes/vee/releases), drag it to `/Applications`, and launch. See [Getting started](getting-started.md).
 
 ### How do I update Vee?
 

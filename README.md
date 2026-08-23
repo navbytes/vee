@@ -61,9 +61,27 @@ curl -fsSL https://vee.navbytes.io/install.sh | bash
 ```
 
 Same result — app in `/Applications`, `vee` linked into `~/.local/bin` (or
-`/usr/local/bin`). Re-run it to upgrade. Pin a version or change either location
-with `VEE_VERSION`, `VEE_APP_DIR`, `VEE_BIN_DIR`. Read it first if you would
-rather not pipe a script to a shell: [`scripts/install.sh`](scripts/install.sh).
+`/usr/local/bin`). Re-run it to upgrade. Read it first if you would rather not
+pipe a script to a shell: [`scripts/install.sh`](scripts/install.sh).
+
+The installer takes three overrides, so you are not stuck with its defaults:
+
+```sh
+# Install per-user instead of system-wide
+VEE_APP_DIR=~/Applications curl -fsSL https://vee.navbytes.io/install.sh | bash
+
+# Put the CLI somewhere else on your PATH
+VEE_BIN_DIR=/opt/homebrew/bin curl -fsSL https://vee.navbytes.io/install.sh | bash
+
+# Pin a specific release rather than the latest
+VEE_VERSION=v0.2.0 curl -fsSL https://vee.navbytes.io/install.sh | bash
+```
+
+| Variable | Default |
+| -------- | ------- |
+| `VEE_APP_DIR` | `/Applications` |
+| `VEE_BIN_DIR` | first writable of `~/.local/bin`, `/usr/local/bin` |
+| `VEE_VERSION` | the latest release |
 
 **Just the CLI, via [mise](https://mise.jdx.dev):**
 
