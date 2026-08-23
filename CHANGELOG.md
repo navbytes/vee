@@ -6,6 +6,19 @@ All notable changes to Vee are documented here. The format is based on
 
 ## [Unreleased]
 
+### Changed
+- **The npm package publishes without a token.** `@navbytes/vee` is now released
+  through npm trusted publishing: the registry verifies the release workflow's
+  OIDC identity instead of a stored credential. Nothing to leak, nothing to
+  rotate every 90 days, and no way for a publish to come from anywhere but
+  `.github/workflows/release.yml` in this repository. Provenance is attested
+  automatically.
+
+  This also removes the failure mode that broke 0.3.0's first attempt twice
+  over: a token without 2FA bypass is rejected outright (`EOTP`), and one with
+  it has its publishes held for manual confirmation — a restriction npm is
+  rolling out regardless.
+
 ## [0.3.0] - 2026-08-23
 
 ### Added
