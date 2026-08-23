@@ -66,30 +66,30 @@ surface to carry.
 Design D2, D3, D6. Specs: `detached-plugin-windows` — "Window content fidelity",
 "The window keeps the panel's search".
 
-- [ ] 3.1 Add tree filtering to `VeeSearch`: given a query, prune `MenuTree` to
+- [x] 3.1 Add tree filtering to `VeeSearch`: given a query, prune `MenuTree` to
       matching rows plus their ancestor chain, keeping authored order. Reuse
       `FuzzyScorer` / `SearchText` for matching; do **not** rank. Pure and
       unit-tested.
-- [ ] 3.2 Add `MenuTreeView` (SwiftUI) in `VeeApp`: renders `MenuTree` with
+- [x] 3.2 Add `MenuTreeView` (SwiftUI) in `VeeApp`: renders `MenuTree` with
       inline disclosure, replacing `MenuSearchContentView`'s flat list. Reuse
       the existing row rendering (`AttributedTitleFactory` bridge,
       `SearchRowIcon`, `MenuRowAccessory`); drop the breadcrumb line.
-- [ ] 3.3 Carry over the existing keyboard model: ↑/↓ move selection across
+- [x] 3.3 Carry over the existing keyboard model: ↑/↓ move selection across
       visible rows, Return activates, Esc dismisses (panel only). Add ←/→ to
       close/open the selected branch.
-- [ ] 3.4 Replace `[SearchEntry]` with the tree in `MenuSearchViewModel` and
+- [x] 3.4 Replace `[SearchEntry]` with the tree in `MenuSearchViewModel` and
       `DetachedPluginWindowModel`. Keep the panel's frozen-at-open rule and the
       window's live `update(entries:)` path.
-- [ ] 3.5 Point `DetachedPluginWindows` and `MenuSearchPanel` at `MenuTreeView`.
+- [x] 3.5 Point `DetachedPluginWindows` and `MenuSearchPanel` at `MenuTreeView`.
       Chrome stays with the presentation — the panel keeps its fixed Liquid
       Glass card and keep-open button, the window keeps its title-bar pin.
-- [ ] 3.6 Delete `SearchEntry`, `MenuFlattener.flattenEntries`, and the
+- [x] 3.6 Delete `SearchEntry`, `MenuFlattener.flattenEntries`, and the
       normalization pass (`normalized`, `collapseSeparators`,
       `dropDanglingHeaders`) with its tests. D6 — a tree creates no dangling
       furniture to repair.
-- [ ] 3.7 Confirm `MenuFlattener.flatten` / `FlatRow` / `FuzzyScorer` still
+- [x] 3.7 Confirm `MenuFlattener.flatten` / `FlatRow` / `FuzzyScorer` still
       build and `vee search` still works — it is now the only flat consumer.
-- [ ] 3.8 Add tests: filter prunes to matches plus ancestors, ancestors
+- [x] 3.8 Add tests: filter prunes to matches plus ancestors, ancestors
       auto-reveal, authored order preserved under filtering, ancestor-title
       match surfaces children, empty query shows full structure.
 
@@ -97,14 +97,14 @@ Design D2, D3, D6. Specs: `detached-plugin-windows` — "Window content fidelity
 
 Design D4. Spec: "Open branches survive a refresh". The highest-risk group.
 
-- [ ] 4.1 Key expansion by ancestor title path in `DetachedPluginWindowModel`,
+- [x] 4.1 Key expansion by ancestor title path in `DetachedPluginWindowModel`,
       applied when a refresh replaces the tree.
-- [ ] 4.2 Ensure a branch that cannot be matched after a refresh closes **alone**
+- [x] 4.2 Ensure a branch that cannot be matched after a refresh closes **alone**
       and never cascades into unrelated branches.
 - [ ] 4.3 Confirm the byte-identical short-circuit in
       `StatusItemController.render` still skips re-deriving the tree, so a
       1-second plugin does not churn expansion state.
-- [ ] 4.4 Add tests: a refresh with new values keeps a branch open; a vanished
+- [x] 4.4 Add tests: a refresh with new values keeps a branch open; a vanished
       branch closes without affecting siblings; repeated refreshes leave open
       branches open.
 - [ ] 4.5 Verify by hand against a fast plugin (≤5s interval) with two branches

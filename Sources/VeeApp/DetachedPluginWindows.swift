@@ -51,14 +51,14 @@ final class DetachedPluginWindowModel: ObservableObject {
     @Published var isStale = false
     @Published var isPinned: Bool
 
-    init(pluginName: String, entries: [SearchEntry], isPinned: Bool) {
+    init(pluginName: String, nodes: [MenuTreeNode], isPinned: Bool) {
         self.pluginName = pluginName
-        self.search = MenuSearchViewModel(entries: entries)
+        self.search = MenuSearchViewModel(nodes: nodes)
         self.isPinned = isPinned
     }
 
-    func update(entries: [SearchEntry]) {
-        search.update(entries: entries)
+    func update(nodes: [MenuTreeNode]) {
+        search.update(nodes: nodes)
         isStale = false
     }
 }
@@ -67,8 +67,8 @@ final class DetachedPluginWindowModel: ObservableObject {
 /// plugin stops reporting.
 private struct DetachedPluginWindowView: View {
     @ObservedObject var model: DetachedPluginWindowModel
-    let onActivate: (FlatRow) -> Void
-    let onCommit: @MainActor (FlatRow, Double) -> Void
+    let onActivate: (MenuRowSpec) -> Void
+    let onCommit: @MainActor (MenuRowSpec, Double) -> Void
 
     var body: some View {
         VStack(spacing: 0) {
@@ -191,12 +191,18 @@ final class DetachedPluginWindows {
     /// back.
     func visibleRowTitles(pluginName: String) -> [String] {
         guard let model = models[pluginName] else { return [] }
-        return model.search.results.compactMap { entry in
-            switch entry {
-            case .action(let row), .info(let row): return row.item.text
-            case .header, .separator: return nil
-            }
-        }
+        return model.search.visible.compactMap { $0.row?.spec.item.text }
+    }
+
+    /// Opens a branch in `pluginName`'s window by title path — the directly
+    /// assertable half of expansion, with no window to read back.
+    func toggleBranch(pluginName: String, key: MenuPath) {
+        models[pluginName]?.search.toggle(key)
+    }
+
+    /// Whether `key`'s branch is currently open in `pluginName`'s window.
+    func isBranchExpanded(pluginName: String, key: MenuPath) -> Bool {
+        models[pluginName]?.search.isExpanded(key) ?? false
     }
 
     // MARK: - Opening
@@ -207,16 +213,16 @@ final class DetachedPluginWindows {
     /// runs exactly what activating it in the dropdown runs, through the same
     /// dispatcher — there is no parallel action model.
     func show(pluginName: String, body: [MenuNode], handler: MenuActionHandling) {
-        let entries = MenuSearch.flattenEntries(body)
+        let nodes = MenuTree.build(body)
 
         if let existing = models[pluginName] {
-            existing.update(entries: entries)
+            existing.update(nodes: nodes)
             if let window = windows[pluginName] { focus(window) }
             return
         }
 
         let pinned = pinPreference[pluginName] ?? true
-        let model = DetachedPluginWindowModel(pluginName: pluginName, entries: entries, isPinned: pinned)
+        let model = DetachedPluginWindowModel(pluginName: pluginName, nodes: nodes, isPinned: pinned)
         let root = DetachedPluginWindowView(
             model: model,
             onActivate: { [weak handler] row in handler?.perform(row.item) },
@@ -282,7 +288,7 @@ final class DetachedPluginWindows {
     /// UI, and therefore the one place a window can be kept live.
     func update(pluginName: String, body: [MenuNode]) {
         guard let model = models[pluginName] else { return }
-        model.update(entries: MenuSearch.flattenEntries(body))
+        model.update(nodes: MenuTree.build(body))
     }
 
     /// Marks a plugin's window stale — its plugin is failing, disabled, or gone.
