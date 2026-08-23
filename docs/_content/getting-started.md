@@ -45,24 +45,29 @@ curl -fsSL https://vee.navbytes.io/install.sh | bash
 
 Same result, and re-running it upgrades in place.
 
-The installer takes three overrides, so you are not stuck with its defaults:
+The installer takes three options, so you are not stuck with its defaults. Pass
+them after `bash -s --`:
 
 ```sh
 # Install per-user instead of system-wide
-VEE_APP_DIR=~/Applications curl -fsSL https://vee.navbytes.io/install.sh | bash
+curl -fsSL https://vee.navbytes.io/install.sh | bash -s -- --app-dir ~/Applications
 
 # Put the CLI somewhere else on your PATH
-VEE_BIN_DIR=/opt/homebrew/bin curl -fsSL https://vee.navbytes.io/install.sh | bash
+curl -fsSL https://vee.navbytes.io/install.sh | bash -s -- --bin-dir /opt/homebrew/bin
 
 # Pin a specific release rather than the latest
-VEE_VERSION=v0.2.0 curl -fsSL https://vee.navbytes.io/install.sh | bash
+curl -fsSL https://vee.navbytes.io/install.sh | bash -s -- --version v0.2.0
 ```
 
-| Variable | Default |
-| -------- | ------- |
-| `VEE_APP_DIR` | `/Applications` |
-| `VEE_BIN_DIR` | first writable of `~/.local/bin`, `/usr/local/bin` |
-| `VEE_VERSION` | the latest release |
+| Option | Environment | Default |
+| ------ | ----------- | ------- |
+| `--app-dir DIR` | `VEE_APP_DIR` | `/Applications` |
+| `--bin-dir DIR` | `VEE_BIN_DIR` | first writable of `~/.local/bin`, `/usr/local/bin` |
+| `--version TAG` | `VEE_VERSION` | the latest release |
+
+> **Not** `VEE_APP_DIR=… curl … | bash`. That sets the variable for `curl`, not
+> for the `bash` reading the script, so it is silently ignored. Use a flag, or
+> `export` the variable first.
 
 **Just the CLI, via [mise](https://mise.jdx.dev):**
 
