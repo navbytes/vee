@@ -15,10 +15,16 @@ the reference actually needs before any of them are carved into Swift. The
 migration stays open: `params.json`'s schema is what a future `vee api --json`
 would emit.
 
-The parity check is what makes the hand-maintained list safe. It already fails
-CI when the parser, the linter, and the docs disagree on the parameter *set*;
-this change points its third surface at structured data instead of a Markdown
-table, which makes the check simpler, not more elaborate.
+The parity check is what makes the hand-maintained list safe, and #98 made that
+argument considerably stronger: `check_params.py` now holds *six* surfaces in
+agreement — the parser, the linter, and each of the three SDKs separately —
+because fifteen parameters had gone missing from all three SDKs at once while
+the old three-way triangle passed. A seventh hand-maintained list is not a new
+risk in that design; it is the one surface in it that a human is supposed to
+write, and it is the only one that can carry a type, a default, or a sentence.
+
+This change points the documentation surface at structured data instead of a
+Markdown table, which makes the check simpler, not more elaborate.
 
 ## Decision 2 — Constants are verified, not just names
 
@@ -80,6 +86,19 @@ risk is; three copies of `npm test` versus `go test ./...` is not.
 Deleting the READMEs entirely was rejected: `plugins/typescript/` is a directory
 someone lands in from GitHub, and an empty directory with a pointer elsewhere is
 worse than a short page that orients them.
+
+## Decision 6 — Deprecation is a field, not a footnote
+
+#98 introduced the format's first deprecations: `trackcolor=` superseded by
+`progresstrackcolor=`, both parsed, with removal scheduled for the next major
+version. There will be more, and a reference that renders a superseded
+parameter identically to a current one teaches new authors the old spelling.
+
+So `deprecated` and `replacedBy` are fields on the parameter record, and the
+generated table marks a deprecated row and names its replacement. This also
+gives the deprecation exactly one home: `vee lint` warns at authoring time,
+`LineParameterKeys` keeps parsing it, and the reference says so — rather than a
+prose aside in one page that the next reorganisation loses.
 
 ## Risks
 

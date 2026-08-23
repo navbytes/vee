@@ -7,6 +7,11 @@ All notable changes to Vee are documented here. The format is based on
 ## [Unreleased]
 
 ### Fixed
+- **The vendored SDK is no longer run as a plugin.** `vee new` and `vee sdk`
+  write `vee.ts`/`vee.py` into the plugins folder, and those are otherwise
+  perfectly valid plugin filenames — name `vee`, manual interval — so Vee
+  discovered them, ran them, and surfaced a broken menu-bar row beside the
+  plugins they exist to support. Discovery now skips them by name.
 - **`vee new` produced a plugin that could not run.** The scaffolded TypeScript
   plugin imported `./src/vee.ts` and the Python one imported `vee` from its own
   directory, and nothing ever put an SDK at either path — so both failed on

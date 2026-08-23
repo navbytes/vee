@@ -4,13 +4,19 @@ Nothing user-visible changes here. The acceptance bar is that `params.json`
 round-trips: every key the parser recognises appears exactly once, and every key
 in the file is one the parser recognises.
 
-- [ ] 1.1 Write `docs/api/params.json`. One record per menu-line parameter:
-      `key`, `aliases` (e.g. `md`/`markdown`, `shell`/`bash`), `type`, `grammar`
-      (the value's shape, e.g. `min,max,value`), `default`, `group`
-      (`rendering` / `behavior` / `images` / `symbols` / `charts` / `controls`),
-      `appliesTo`, `summary`, and `section` (the anchor that explains it).
-      Seed the prose from `plugin-authoring.md`'s existing table so no wording
-      is lost.
+- [ ] 1.1 Write `docs/api/params.json`. One record per menu-line parameter —
+      52 of them as of #98: `key`, `aliases` (e.g. `md`/`markdown`,
+      `shell`/`bash`), `type`, `grammar` (the value's shape, e.g.
+      `min,max,value`), `default`, `group` (`rendering` / `behavior` /
+      `images` / `symbols` / `charts` / `controls`), `appliesTo`, `summary`,
+      and `section` (the anchor that explains it). Seed the prose from
+      `plugin-authoring.md`'s existing table so no wording is lost.
+- [ ] 1.1a Carry deprecation as data: `deprecated` and `replacedBy`. #98
+      deprecated `trackcolor=` in favour of `progresstrackcolor=` and scheduled
+      its removal for the next major version, and `vee lint` already surfaces
+      it. The reference must be able to say so without a prose aside, and the
+      generated table must render a deprecated parameter differently from a
+      current one.
 - [ ] 1.2 Record the documented constants alongside: `chart.maxSegments`,
       `chart.sizeLimit`, `chart.defaults` per kind, and the widget sparkline's
       point cap — each with the Swift symbol it mirrors.
@@ -19,6 +25,12 @@ in the file is one the parser recognises.
       its spelling in each of the three entry paths, which knobs apply, and
       whether it opens a popover on click. `chartw=full` is `stackedbar`-only;
       pie and donut take one dimension that sizes both.
+- [ ] 1.3a Include the knobs #98 added, and mind that they do not follow the
+      `chart*` naming: the sparkline gained `sparklinew`, `sparklineh`, and
+      `sparklinecolor` (with `sparklinew=full`), while the share charts keep
+      `chartw`/`charth`, and `progress` uses `progressw`/`progressh`/
+      `progresstrackcolor`. Three sizing vocabularies for one accessory slot is
+      precisely what the matrix has to make visible rather than hide.
 
 ## 2. The generator
 
@@ -50,9 +62,12 @@ in the file is one the parser recognises.
 The point of the change. Each of these fails CI on a drift that ships silently
 today.
 
-- [ ] 4.1 Repoint `check_params.py`'s third surface at `params.json`; delete its
-      Markdown-table scraper. The parser and linter scrapers are unchanged, as
-      is the `EXCEPTIONS` mechanism and its `paramN` entry.
+- [ ] 4.1 Repoint `check_params.py`'s *documentation* surface at `params.json`;
+      delete its Markdown-table scraper. #98 took this script from three
+      surfaces to six — `parser_keys`, `public_keys`, and one `sdk_keys` per
+      SDK via `SDK_SOURCES`. Only `doc_keys` changes. Leave `SDK_SOURCES`, the
+      `EXCEPTIONS` mechanism, and its `paramN` entry alone, and confirm the
+      six-way report still names which surface is missing which key.
 - [ ] 4.2 Add the constants check: scrape the `public static let` declarations
       named in 1.2 from `ChartParams.swift` and compare against `params.json`,
       failing with the symbol, both values, and the file each came from.
@@ -61,13 +76,16 @@ today.
       failing on a target that does not exist. External URLs are out of scope.
 - [ ] 4.4 Wire `build_reference.py --check` and `check_links.py` into
       `lint.yml`'s `docs` job, each with the comment convention the existing
-      four steps use — what drifts, and what shipped because it was unguarded.
+      steps use — what drifts, and what shipped because it was unguarded. The
+      job now also carries `scripts/embed_sdk.py --check` from #98; keep the
+      ordering cheapest-first so a fast failure is the common one.
 
 ## 5. Fix what is already broken
 
-- [ ] 5.1 `docs/_content/json-output.md:143` — `plugins/examples/json-demo.ts`
-      is now `plugins/typescript/examples/json-demo.ts`.
-- [ ] 5.2 `docs/_content/plugin-authoring.md:704` — `tree/main/examples` is now
+- [x] 5.1 `docs/_content/json-output.md` — fixed incidentally by #98, which
+      rewrote that paragraph for `JSONMenu`. No action; listed so the set is
+      accounted for.
+- [ ] 5.2 `docs/_content/plugin-authoring.md:721` — `tree/main/examples` is now
       `tree/main/plugins/showcase`.
 - [ ] 5.3 `CONTRIBUTING.md:207` — `plugins/examples/` is now
       `plugins/typescript/examples/`; while there, describe the current
@@ -83,7 +101,14 @@ today.
 - [ ] 6.1 Cut `## API` and `## Widget cards` from
       `plugins/typescript/README.md`, `plugins/python/README.md`, and
       `plugins/go/README.md`; each gains one line pointing at the cross-language
-      table in the published SDK guide.
+      table in the published SDK guide. #98 grew all three (+49/+57/+57) and
+      `sdk.md` with them (+137), so there is more duplication to remove than
+      when this was planned, not less.
+- [ ] 6.1a Keep the genuinely per-language material #98 added: how each SDK
+      reaches a plugin (`vee sdk ts|py` writing the file beside it, versus Go's
+      `go get github.com/navbytes/vee/plugins/go`), and Python's
+      camelCase-to-snake_case and tuple-to-mapping deprecations. Those differ
+      per language and do not belong in a cross-language table.
 - [ ] 6.2 Keep per-language content: requirements, layout, hello world, tests.
 - [ ] 6.3 Verify `sdk.md`'s cross-language table covers every method the three
       cut sections named, adding any it was missing.

@@ -88,7 +88,9 @@ building the generator twice.
 - **`docs/scripts/check_params.py`, `check_schemas.py`, `build_reference.py`** —
   unchanged; they read `docs/_content` and `docs/api`, not the rendered site.
 - **`.github/workflows/`** — a new Pages deploy workflow; `lint.yml`'s docs job
-  loses the guide-freshness and search-index steps and gains a docs build.
+  loses the guide-freshness and search-index steps and gains a docs build. Every
+  other guard survives untouched, including the six-surface parameter parity and
+  `scripts/embed_sdk.py --check` from #98: none of them read the rendered site.
 - **`CONTRIBUTING.md`** — the authoring loop changes from "regenerate and commit"
   to "run the dev server".
 - **Repository settings, outside the repo:** the Pages source must change from
