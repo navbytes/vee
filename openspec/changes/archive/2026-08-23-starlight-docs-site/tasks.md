@@ -117,10 +117,13 @@ Starlight provides none of these. Losing any is a regression against the
 - [x] 6.2 Confirm every URL in 1.2 resolves, including the `.md` mirrors and
       both `llms` files.
       NOTE: two would not have. `/guide/` is a hand-written overview with its
-      own card grid and no Starlight equivalent — it would have 404'd silently,
-      and is now kept as `docs/guide-index.html`, copied in at its old path
-      with its links pointing at the new URL shape rather than through the
-      redirect stubs. And `/sitemap.xml`, the URL `robots.txt` names, became
+      own card grid and no Starlight equivalent — it would have 404'd silently.
+      It was first preserved as `docs/guide-index.html` and copied in at its old
+      path, which answered the wrong question: not whether it should still exist
+      but whether it existed before. It should not. Its fifteen cards restated
+      the fifteen sidebar entries rendered beside them, hand-numbered, and
+      inserting the Charts page meant renumbering eleven of them. It is deleted;
+      `/guide/` redirects to the first guide, and the sidebar is the index. And `/sitemap.xml`, the URL `robots.txt` names, became
       `/sitemap-index.xml`; both are published now, which avoids rewriting
       `robots.txt` and waiting for a recrawl. Verified: all 41 snapshot URLs
       resolve.
