@@ -97,9 +97,21 @@ for OS-level energy batching. That is **deliberately no longer used anywhere**:
 it registers a repeating, *launch-on-demand* XPC activity against Vee's own
 launchd job, so launchd relaunched Vee within moments of the user quitting it
 and the app could not be closed at all. The registration lives in launchd rather
-than in the app, so it also survives the update that stops creating it —
-`VeeRuntime/LegacyBackgroundActivity.swift` invalidates the old identifiers when
-a plugin starts, to unstick installs upgrading from an affected version. Energy
+than in the app, so it also survives the update that stops creating it.
+`VeeRuntime/LegacyBackgroundActivity.swift` invalidates the old identifiers, and
+`AppController` sweeps them **once at launch** over every plugin ID Vee has ever
+loaded (`AppPreferences.seenPluginIDs`) — not just the ones installed now.
+
+That distinction is the whole fix. An identifier can only be built from the
+plugin ID that registered it, so clearing per plugin at start leaves an activity
+registered by a since-deleted plugin permanently unnameable, and the install
+stays un-quittable forever. An affected machine was found in exactly that state:
+its remaining plugins refreshed at 30s and 90s, so nothing loaded could clear
+anything. The sweep therefore runs unconditionally, with no "already migrated"
+flag — a stale registration can return via a downgrade, a restored backup, or
+synced preferences — and it reports what it *attempted*, since
+`NSBackgroundActivityScheduler` cannot say whether an identifier was ever
+registered. Energy
 batching is a poor trade for an app the user cannot quit, and it bought little
 for a resident menu-bar app that is running anyway.
 
