@@ -70,6 +70,9 @@ public struct MenuRowSpec: Equatable, Sendable {
     /// `MenuAccessory`.
     public var control: PluginControl?
 
+    /// The width `accessoryw=` gives this row's control, if any.
+    public var controlWidth: Double?
+
     /// `accessory=leading`: the graphic sits before the label instead of after.
     public var accessoryLeading: Bool
 
@@ -104,6 +107,7 @@ public struct MenuRowSpec: Equatable, Sendable {
         isActionable: Bool = false,
         accessory: MenuAccessory? = nil,
         control: PluginControl? = nil,
+        controlWidth: Double? = nil,
         accessoryLeading: Bool = false,
         keyEquivalent: String? = nil,
         isAlternate: Bool = false,
@@ -118,6 +122,7 @@ public struct MenuRowSpec: Equatable, Sendable {
         self.isActionable = isActionable
         self.accessory = accessory
         self.control = control
+        self.controlWidth = controlWidth
         self.accessoryLeading = accessoryLeading
         self.keyEquivalent = keyEquivalent
         self.isAlternate = isAlternate
@@ -209,6 +214,7 @@ public enum MenuTree {
             isActionable: enabled && !hasSubmenu && dispatches(item),
             accessory: accessory(for: item.params),
             control: item.params.control,
+            controlWidth: item.params.controlWidth,
             accessoryLeading: item.params.swiftbar.accessory == .leading,
             keyEquivalent: isAlternate ? inheritedKey : item.params.key,
             isAlternate: isAlternate,

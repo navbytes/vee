@@ -15,10 +15,10 @@
 
 ## 2. Size a control
 
-- [ ] 2.1 Apply `accessoryw=` to the inline `slider=` in `VeeUI/MenuRowAccessory`,
+- [x] 2.1 Apply `accessoryw=` to the inline `slider=` in `VeeUI/MenuRowAccessory`,
       replacing the hard-coded `sliderWidth`, defaulting to today's value.
-- [ ] 2.2 `accessoryh=` is ignored for controls (design D5) — no diagnostic.
-- [ ] 2.3 Tests: a sized slider; an unsized slider keeps today's width.
+- [x] 2.2 `accessoryh=` is ignored for controls (design D5) — no diagnostic.
+- [x] 2.3 Tests: a sized slider; an unsized slider keeps today's width.
 
 ## 3. Structured output
 

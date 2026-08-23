@@ -77,6 +77,40 @@ final class AccessorySizingTests: XCTestCase {
         XCTAssertTrue(diagnostics.contains { $0.message.contains("applies to stackedbar=") })
     }
 
+    // MARK: - Controls
+
+    /// A slider had no way to be sized at all before this — its track width was
+    /// a hard-coded constant.
+    func testItSizesASlider() {
+        XCTAssertEqual(parse("x | slider=0,100,40 accessoryw=120").params.controlWidth, 120)
+    }
+
+    func testAnUnsizedSliderCarriesNoWidth() {
+        XCTAssertNil(parse("x | slider=0,100,40").params.controlWidth)
+    }
+
+    /// A slider's height is its control size and a toggle has none, so
+    /// `accessoryh=` is ignored for controls — silently, since setting one is
+    /// not harmful and a diagnostic would be noise.
+    func testAControlIgnoresHeightWithoutComplaining() {
+        let (params, diagnostics) = parse("x | slider=0,100,40 accessoryh=40")
+        XCTAssertNil(params.controlWidth)
+        XCTAssertTrue(diagnostics.isEmpty)
+    }
+
+    func testAToggleTakesAWidthLikeAnyControl() {
+        XCTAssertEqual(parse("x | toggle=on accessoryw=80").params.controlWidth, 80)
+    }
+
+    /// A control and a display graphic on one row are sized by the same
+    /// parameter, and both receive it — the surfaces differ on which they
+    /// *draw*, not on what the row declared.
+    func testARowWithBothAControlAndAGraphicSizesEach() {
+        let params = parse("x | toggle=on progress=0.5 accessoryw=90").params
+        XCTAssertEqual(params.controlWidth, 90)
+        XCTAssertEqual(params.progress?.effectiveWidth, 90)
+    }
+
     // MARK: - Deprecation
 
     func testEveryOldSpellingStillSizesItsAccessory() {
