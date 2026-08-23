@@ -59,15 +59,6 @@ public final class AppController: NSObject, NSApplicationDelegate {
     /// `applicationWillTerminate` for symmetry with the app's other observers.
     private var compactModeObserverToken: NSObjectProtocol?
 
-    /// The Carbon hotkey token for the opt-in cross-plugin "Search All Plugins"
-    /// hotkey, or `nil` when nothing is registered (off, invalid, or already
-    /// claimed elsewhere) — the app-level analog of `PluginCoordinator.hotKeyID`.
-    private var searchHotkeyID: UInt32?
-    /// The hotkey's live state, mirrored into an open Settings window
-    /// (`GeneralSettingsModel.searchAllHotkeyStatus`) the same way a plugin's
-    /// own hotkey status is.
-    private var searchHotkeyStatus: HotkeyStatus = .none
-
     private var directory: String = PluginsDirectory.resolve()
 
     /// Widget-snapshot publishing state/policy (coalesced writes, metered
@@ -118,7 +109,6 @@ public final class AppController: NSObject, NSApplicationDelegate {
             onDiscover: { [weak self] in self?.openBrowser() },
             onPreferences: { [weak self] in self?.openPreferences() },
             onRefreshAll: { [weak self] in self?.refreshAll() },
-            onSearchAll: { [weak self] in self?.openSearchAllPanel() },
             onOpenFolder: { [weak self] in self?.openFolder() }
         )
         // Issue #71 ("one icon total"): fold the app item's own controls under
@@ -130,10 +120,6 @@ public final class AppController: NSObject, NSApplicationDelegate {
         ) { [weak self] _ in
             MainActor.assumeIsolated { self?.applyCompactMode(self?.prefs.compactMenuBar ?? false) }
         }
-        // Opt-in, no default combo (see AppPreferences.searchAllHotkeyEnabled) —
-        // a no-op unless the user already set one in a prior launch.
-        registerSearchAllHotkey()
-
         // Register the notification delegate + action categories now, but defer
         // the permission prompt until a plugin actually posts an alert, so the
         // system dialog appears in context rather than at a cold launch.
@@ -244,7 +230,6 @@ public final class AppController: NSObject, NSApplicationDelegate {
         // exit (reparented to launchd, still running).
         coordinators.values.forEach { $0.stop() }
         ephemerals.values.forEach { $0.remove() }
-        if let searchHotkeyID { GlobalHotKeys.shared.unregister(searchHotkeyID) }
         if let compactModeObserverToken { NotificationCenter.default.removeObserver(compactModeObserverToken) }
         wakeMonitor?.stop()
         watcher?.stop()
@@ -673,100 +658,6 @@ public final class AppController: NSObject, NSApplicationDelegate {
         }
     }
 
-    // MARK: - Cross-plugin search
-
-    /// Opens the Spotlight-style panel over *every enabled plugin's* current
-    /// menu at once — the parked "search everything" slice from
-    /// `docs/_content/roadmap.md`. Reuses the exact per-plugin panel
-    /// (positioning, dismiss, frontmost-app restore) — only the row set and
-    /// per-row routing differ. Not private: the app-level global hotkey
-    /// registered below fires it the same way a plugin's own `<vee.shortcut>`
-    /// fires `StatusItemController.openSearchPanel()`.
-    func openSearchAllPanel() {
-        let plugins = enabledPlugins().map { plugin in
-            (name: plugin.filename.name, controller: coordinators[plugin.id.rawValue]?.controller)
-        }
-        let aggregated = Self.aggregateSearchRows(plugins)
-        MenuSearchPanel.shared.present(
-            entries: aggregated.entries,
-            pluginName: "All Plugins",
-            activate: { row in aggregated.pairs.first(where: { $0.row == row })?.activate() }
-        )
-    }
-
-    /// Flattens every given plugin's *current* menu into one search-ready
-    /// entry list, breadcrumb-prefixed with its display name and separated
-    /// plugin-to-plugin by a `.separator`, normalized once as a whole (so a
-    /// plugin boundary can't leave a dangling separator/header next to
-    /// another). Alongside it, pairs every `.action` row with a closure that
-    /// fires it through that SAME plugin's handler — a row from plugin A must
-    /// never fire through plugin B's. `controller` is `nil` for a
-    /// `.widget`-surface plugin (`PluginCoordinator.controller`, no menu at
-    /// all) — excluded naturally, not filtered explicitly by the caller.
-    /// `static`/pure given the snapshot, so it is unit-tested directly, without
-    /// a live `AppController`/`NSApplication`.
-    ///
-    /// ponytail: a row is matched back to its `activate` closure by linear scan
-    /// + `FlatRow` equality, not a stable id (no id field added to the pure,
-    /// cross-package `FlatRow` type for this). A collision needs two DIFFERENT
-    /// plugins to produce a byte-identical row (same display name *and*
-    /// identical item content) — at which point the two rows are
-    /// indistinguishable to the user anyway, so misrouting would be
-    /// inconsequential. Row counts here are small (an interactive, human-paced
-    /// action), so the scan itself is not a performance concern.
-    static func aggregateSearchRows(
-        _ plugins: [(name: String, controller: StatusItemController?)]
-    ) -> (entries: [SearchEntry], pairs: [(row: FlatRow, activate: () -> Void)]) {
-        var entries: [SearchEntry] = []
-        var pairs: [(row: FlatRow, activate: () -> Void)] = []
-        for (name, controller) in plugins {
-            guard let controller else { continue }
-            if !entries.isEmpty { entries.append(.separator) }
-            let handler = controller.handler
-            let pluginEntries = MenuSearch.flattenEntries(controller.lastBody).map { $0.prefixed(with: name) }
-            entries.append(contentsOf: pluginEntries)
-            pairs += pluginEntries.compactMap { entry in
-                guard case .action(let row) = entry else { return nil }
-                return (row: row, activate: { handler.perform(row.item) })
-            }
-        }
-        return (entries: MenuFlattener.normalized(entries), pairs: pairs)
-    }
-
-    /// Registers (or re-evaluates) the opt-in "Search All Plugins" global
-    /// hotkey from the current preference — the app-level analog of
-    /// `PluginCoordinator.registerHotKey()`, but with no declared default to
-    /// fall back to: off unless the user both enables it and supplies a valid,
-    /// available combo. Updates `searchHotkeyStatus` for an open Settings
-    /// window to reflect.
-    private func registerSearchAllHotkey() {
-        if let searchHotkeyID { GlobalHotKeys.shared.unregister(searchHotkeyID) }
-        searchHotkeyID = nil
-
-        guard prefs.searchAllHotkeyEnabled, let combo = prefs.searchAllHotkeyCombo, !combo.isEmpty else {
-            searchHotkeyStatus = .none
-            return
-        }
-        guard let spec = HotKeySpec.parse(combo) else {
-            searchHotkeyStatus = .invalid
-            return
-        }
-        let id = GlobalHotKeys.shared.register(spec) { [weak self] in self?.openSearchAllPanel() }
-        searchHotkeyStatus = id != nil ? .active(spec.display) : .unavailable(spec.display)
-        searchHotkeyID = id
-    }
-
-    /// Persists a hotkey change from Settings, re-registers live, and returns
-    /// the new status for immediate feedback — the app-level analog of
-    /// `PluginCoordinator.applyHotkey`.
-    private func applySearchAllHotkey(enabled: Bool, combo: String) -> HotkeyStatus {
-        prefs.searchAllHotkeyEnabled = enabled
-        let trimmed = combo.trimmingCharacters(in: .whitespaces)
-        prefs.searchAllHotkeyCombo = trimmed.isEmpty ? nil : trimmed
-        registerSearchAllHotkey()
-        return searchHotkeyStatus
-    }
-
     private func openFolder() { NSWorkspace.shared.open(URL(fileURLWithPath: directory)) }
 
     private func openManager() {
@@ -823,8 +714,6 @@ public final class AppController: NSObject, NSApplicationDelegate {
             onChooseFolder: { [weak self] in self?.chooseFolderFromPreferences() },
             onOpenFolder: { [weak self] in self?.openFolder() },
             onRefreshAll: { [weak self] in self?.refreshAll() },
-            searchAllHotkeyStatus: searchHotkeyStatus,
-            onApplySearchAllHotkey: { [weak self] enabled, combo in self?.applySearchAllHotkey(enabled: enabled, combo: combo) ?? .none }
         )
         generalSettingsModel = general
 

@@ -20,11 +20,8 @@ final class KeyablePanel: NSPanel {
 /// additional surface, not a replacement. Only one panel at a time.
 ///
 /// Selecting a row runs `activate`, which the caller wires to dispatch through
-/// the right plugin's `MenuActionHandling` — so href / shell / shortcut /
-/// refresh and the toggle/slider/sparkline popovers all fire with no new
-/// action model. A single-plugin caller closes over that one handler; the
-/// cross-plugin aggregator closes over a per-row lookup so a row from plugin A
-/// never fires through plugin B's handler.
+/// the plugin's own `MenuActionHandling` — so href / shell / shortcut / refresh
+/// and the toggle/slider/sparkline popovers all fire with no new action model.
 @MainActor
 final class MenuSearchPanel: NSObject {
     static let shared = MenuSearchPanel()
@@ -47,14 +44,13 @@ final class MenuSearchPanel: NSObject {
     /// `entries` carries the full panel-visible structure (rows, section
     /// headers, separators); only `.action` rows are ever selectable/
     /// activatable, so `activate` still deals only in `FlatRow`.
-    /// `keepOpen`, when supplied, adds the control that promotes this panel into
-    /// a detached window. Passing `nil` suppresses it — which is what the
-    /// cross-plugin "Search All Plugins" panel does, since there is no single
-    /// plugin for such a window to watch.
+    /// `keepOpen` supplies the control that promotes this panel into a detached
+    /// window. Every panel has one plugin behind it, so every caller has a
+    /// window to promote into.
     func present(
         entries: [SearchEntry],
         pluginName: String,
-        keepOpen: (() -> Void)? = nil,
+        keepOpen: @escaping () -> Void,
         activate: @escaping (FlatRow) -> Void
     ) {
         dismiss()
@@ -70,13 +66,11 @@ final class MenuSearchPanel: NSObject {
             model: model,
             pluginName: pluginName,
             onActivate: { [weak self] row in self?.activate(row) },
-            onKeepOpen: keepOpen.map { promote in
-                { [weak self] in
-                    // Close first: leaving the panel up behind its own window
-                    // would show the same plugin twice.
-                    self?.dismiss()
-                    promote()
-                }
+            onKeepOpen: { [weak self] in
+                // Close first: leaving the panel up behind its own window
+                // would show the same plugin twice.
+                self?.dismiss()
+                keepOpen()
             }
         )
 
@@ -179,7 +173,7 @@ private struct MenuSearchView: View {
     @ObservedObject var model: MenuSearchViewModel
     let pluginName: String
     let onActivate: (FlatRow) -> Void
-    let onKeepOpen: (() -> Void)?
+    let onKeepOpen: () -> Void
 
     var body: some View {
         MenuSearchContentView(model: model, pluginName: pluginName, onActivate: onActivate)
@@ -194,7 +188,7 @@ private struct MenuSearchView: View {
             // — and so the button is its own VoiceOver element rather than
             // being folded into the search field's row.
             .overlay(alignment: .topTrailing) {
-                if let onKeepOpen { KeepOpenButton(action: onKeepOpen) }
+                KeepOpenButton(action: onKeepOpen)
             }
     }
 }

@@ -20,7 +20,7 @@ import AppKit
 @MainActor
 final class MainMenuControllerTests: XCTestCase {
     private struct Recorder {
-        var manager = 0, discover = 0, preferences = 0, refreshAll = 0, searchAll = 0, openFolder = 0
+        var manager = 0, discover = 0, preferences = 0, refreshAll = 0, openFolder = 0
     }
 
     private final class Box {
@@ -33,7 +33,6 @@ final class MainMenuControllerTests: XCTestCase {
             onDiscover: { box.recorder.discover += 1 },
             onPreferences: { box.recorder.preferences += 1 },
             onRefreshAll: { box.recorder.refreshAll += 1 },
-            onSearchAll: { box.recorder.searchAll += 1 },
             onOpenFolder: { box.recorder.openFolder += 1 },
             attachesStatusItem: false
         )
@@ -72,7 +71,7 @@ final class MainMenuControllerTests: XCTestCase {
     func testOwnMenuContainsTheExpectedRowsInOrder() {
         XCTAssertEqual(
             makeController().menu.items.map(\.title),
-            ["Preferences…", "Plugin Manager…", "Discover Plugins…", "Refresh All Plugins", "Search All Plugins…", "Detached Windows", "", "Launch Vee at Login", "Open Plugins Folder…", "", "Quit Vee"]
+            ["Preferences…", "Plugin Manager…", "Discover Plugins…", "Refresh All Plugins", "Detached Windows", "", "Launch Vee at Login", "Open Plugins Folder…", "", "Quit Vee"]
         )
     }
 
@@ -105,14 +104,12 @@ final class MainMenuControllerTests: XCTestCase {
         fire(items.first { $0.title == "Plugin Manager…" })
         fire(items.first { $0.title == "Discover Plugins…" })
         fire(items.first { $0.title == "Refresh All Plugins" })
-        fire(items.first { $0.title == "Search All Plugins…" })
         fire(items.first { $0.title == "Open Plugins Folder…" })
 
         XCTAssertEqual(box.recorder.preferences, 1)
         XCTAssertEqual(box.recorder.manager, 1)
         XCTAssertEqual(box.recorder.discover, 1)
         XCTAssertEqual(box.recorder.refreshAll, 1)
-        XCTAssertEqual(box.recorder.searchAll, 1)
         XCTAssertEqual(box.recorder.openFolder, 1)
     }
 

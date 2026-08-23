@@ -48,7 +48,7 @@ final class StatusItemTitleSanitizerPureFunctionTests: XCTestCase {
 /// (`render(_:)` → `frames` → the compact row's `attributedTitle`), not just
 /// correct in isolation. Uses `CompactMenuBarController(attachesStatusItem:
 /// false)` — the same `NSApplication`-free construction
-/// `SearchAllPluginsAggregatorTests` uses — so this never touches
+/// the aggregator tests used to use — so this never touches
 /// `NSStatusBar`/`NSApplication.shared`.
 @MainActor
 final class StatusItemTitleSanitizationRenderTests: XCTestCase {

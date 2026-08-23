@@ -18,7 +18,6 @@ final class MainMenuController: NSObject, NSMenuDelegate {
     private let onDiscover: () -> Void
     private let onPreferences: () -> Void
     private let onRefreshAll: () -> Void
-    private let onSearchAll: () -> Void
     private let onOpenFolder: () -> Void
     private var loginItem: NSMenuItem!
 
@@ -39,12 +38,11 @@ final class MainMenuController: NSObject, NSMenuDelegate {
     /// to visible, matching the app always showing its icon prior to #71.
     private(set) var isVisible = true
 
-    init(onManager: @escaping () -> Void, onDiscover: @escaping () -> Void, onPreferences: @escaping () -> Void, onRefreshAll: @escaping () -> Void, onSearchAll: @escaping () -> Void, onOpenFolder: @escaping () -> Void, attachesStatusItem: Bool = true) {
+    init(onManager: @escaping () -> Void, onDiscover: @escaping () -> Void, onPreferences: @escaping () -> Void, onRefreshAll: @escaping () -> Void, onOpenFolder: @escaping () -> Void, attachesStatusItem: Bool = true) {
         self.onManager = onManager
         self.onDiscover = onDiscover
         self.onPreferences = onPreferences
         self.onRefreshAll = onRefreshAll
-        self.onSearchAll = onSearchAll
         self.onOpenFolder = onOpenFolder
         self.attachesStatusItem = attachesStatusItem
         super.init()
@@ -71,7 +69,7 @@ final class MainMenuController: NSObject, NSMenuDelegate {
     }
 
     /// Builds the standard "Vee" app-controls rows (Preferences/Plugin
-    /// Manager/Discover/Refresh All/Search All Plugins/Launch at Login/Open
+    /// Manager/Discover/Refresh All/Launch at Login/Open
     /// Plugins Folder/Quit) into `menu`, targeting `target` for every row's
     /// action. The one place these rows are built — used both by this
     /// controller's own standalone menu (`init`, above) and by
@@ -85,10 +83,6 @@ final class MainMenuController: NSObject, NSMenuDelegate {
         menu.addItem(target.item("Plugin Manager…", #selector(manage), key: "m"))
         menu.addItem(target.item("Discover Plugins…", #selector(discover), key: "d"))
         menu.addItem(target.item("Refresh All Plugins", #selector(refreshAll), key: "r"))
-        // Cross-plugin "search everything" panel (docs/_content/roadmap.md's
-        // parked slice): fuzzy-searches every enabled plugin's current menu at
-        // once, not just one plugin's — see `AppController.openSearchAllPanel()`.
-        menu.addItem(target.item("Search All Plugins…", #selector(searchAll), key: "f"))
         // Every open detached window, and a way back to each. Added here rather
         // than in either caller so the standalone item and compact mode's footer
         // get it from the same seam, like every other row.
@@ -111,7 +105,6 @@ final class MainMenuController: NSObject, NSMenuDelegate {
     @objc private func manage() { onManager() }
     @objc private func discover() { onDiscover() }
     @objc private func refreshAll() { onRefreshAll() }
-    @objc private func searchAll() { onSearchAll() }
     @objc private func openFolder() { onOpenFolder() }
     @objc private func toggleLogin() { LoginItemManager.setEnabled(!LoginItemManager.isEnabled) }
     @objc private func quit() { NSApp.terminate(nil) }

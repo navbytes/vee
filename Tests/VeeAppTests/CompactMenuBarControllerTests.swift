@@ -325,7 +325,7 @@ final class CompactMenuBarControllerTests: XCTestCase {
 
     private func makeMainMenuTarget() -> MainMenuController {
         MainMenuController(
-            onManager: {}, onDiscover: {}, onPreferences: {}, onRefreshAll: {}, onSearchAll: {}, onOpenFolder: {},
+            onManager: {}, onDiscover: {}, onPreferences: {}, onRefreshAll: {}, onOpenFolder: {},
             attachesStatusItem: false
         )
     }

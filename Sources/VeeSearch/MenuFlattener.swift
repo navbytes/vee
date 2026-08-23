@@ -133,10 +133,8 @@ public enum MenuFlattener {
     /// (immediately followed by another header, a separator, or the end of the
     /// list). Iterates to a fixpoint — dropping a dangling header can expose a
     /// newly-trailing separator (and vice versa) — lists here are menu-sized,
-    /// so this is cheap. Public so the cross-plugin aggregator, which
-    /// concatenates several already-normalized lists with a separator spliced
-    /// between each, can re-run it on the merged result.
-    public static func normalized(_ entries: [SearchEntry]) -> [SearchEntry] {
+    /// so this is cheap.
+    static func normalized(_ entries: [SearchEntry]) -> [SearchEntry] {
         var result = entries
         var previous: [SearchEntry] = []
         while result != previous {
