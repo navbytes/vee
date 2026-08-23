@@ -14,6 +14,14 @@ All notable changes to Vee are documented here. The format is based on
   `--app-dir`, `--bin-dir` and `--version` flags, which survive the pipe
   (`bash -s -- --app-dir ~/Applications`), and the docs show that form. The
   environment variables still work when they genuinely reach the script.
+- **The installer asked for a password it did not need.** It predicted whether
+  it could write with `[ -w DIR ]`, which is false for a directory that does
+  not exist yet — so `--app-dir ~/Applications` on a Mac without that folder
+  escalated to `sudo` instead of just creating it. The same test is true for
+  directories macOS then refuses to write to under App Management, so it was
+  wrong in both directions. It now attempts each step unprivileged and
+  escalates only on a real failure, surfacing the underlying error when even
+  that does not help.
 
 ## [0.2.0] - 2026-08-23
 

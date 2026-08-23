@@ -113,19 +113,36 @@ ditto -x -k "$tmp/Vee.zip" "$tmp/unpacked" || die "Could not unpack Vee.zip."
 # Replace rather than merge: a stale file left from an older build inside the
 # bundle can break code signing in ways that surface much later.
 
+# Try the operation and escalate only when it actually fails, rather than
+# predicting with `[ -w ]`. That test is wrong in both directions here: it is
+# false for a directory that does not exist yet (so `--app-dir ~/Applications`
+# on a Mac without that folder would ask for a password instead of just
+# creating it), and it is true for a directory macOS then refuses to let us
+# write to under App Management/TCC.
+escalated=false
+run_maybe_sudo() {
+  first_error="$("$@" 2>&1 >/dev/null)" && return 0
+  if [ "$escalated" = false ]; then
+    warn "Need administrator rights — asking for your password."
+    escalated=true
+  fi
+  if sudo "$@"; then return 0; fi
+  # Both attempts failed, so the cause is not permissions. Show what the
+  # unprivileged attempt actually said rather than leaving a bare exit code.
+  [ -n "$first_error" ] && warn "$first_error"
+  die "Could not write to $APP_DIR."
+}
+
+[ -d "$APP_DIR" ] || run_maybe_sudo mkdir -p "$APP_DIR"
+
 target="$APP_DIR/Vee.app"
 if [ -e "$target" ]; then
   info "Replacing the existing ${target}…"
-  if [ -w "$APP_DIR" ]; then rm -rf "$target"; else sudo rm -rf "$target"; fi
+  run_maybe_sudo rm -rf "$target"
 fi
 
 info "Installing to ${target}…"
-if [ -w "$APP_DIR" ]; then
-  ditto "$tmp/unpacked/Vee.app" "$target"
-else
-  warn "$APP_DIR is not writable — asking for your password."
-  sudo ditto "$tmp/unpacked/Vee.app" "$target"
-fi
+run_maybe_sudo ditto "$tmp/unpacked/Vee.app" "$target"
 
 # Releases are notarized and stapled, so Gatekeeper is satisfied offline. The
 # quarantine flag curl attaches is still cleared here so the first launch does
@@ -139,19 +156,14 @@ xattr -dr com.apple.quarantine "$target" 2>/dev/null || true
 bin_dir="$bin_dir_opt"
 if [ -z "$bin_dir" ]; then
   for candidate in "$HOME/.local/bin" "/usr/local/bin"; do
-    if [ -d "$candidate" ] && [ -w "$candidate" ]; then bin_dir="$candidate"; break; fi
+    if [ -d "$candidate" ]; then bin_dir="$candidate"; break; fi
   done
-  # Nothing suitable exists yet — ~/.local/bin needs no sudo, so prefer it.
-  [ -n "$bin_dir" ] || { bin_dir="$HOME/.local/bin"; mkdir -p "$bin_dir"; }
+  # Nothing exists yet — ~/.local/bin needs no sudo, so prefer it.
+  [ -n "$bin_dir" ] || bin_dir="$HOME/.local/bin"
 fi
 
-mkdir -p "$bin_dir" 2>/dev/null || true
-if [ -w "$bin_dir" ]; then
-  ln -sf "$target/Contents/MacOS/Vee" "$bin_dir/vee"
-else
-  sudo mkdir -p "$bin_dir"
-  sudo ln -sf "$target/Contents/MacOS/Vee" "$bin_dir/vee"
-fi
+[ -d "$bin_dir" ] || run_maybe_sudo mkdir -p "$bin_dir"
+run_maybe_sudo ln -sf "$target/Contents/MacOS/Vee" "$bin_dir/vee"
 info "Linked the CLI at $bin_dir/vee"
 
 case ":${PATH}:" in
