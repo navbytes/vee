@@ -82,7 +82,7 @@ jobs:
     timeout-minutes: 5
     defaults:
       run:
-        working-directory: plugins
+        working-directory: plugins/typescript
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7

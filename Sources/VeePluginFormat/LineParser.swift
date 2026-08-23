@@ -129,6 +129,7 @@ enum LineParser {
         var chartW: Double?
         var chartH: Double?
         var chartFullWidth = false
+        var progressFullWidth = false
         var seenKeys: Set<String> = []
 
         func bool(_ v: String) -> Bool { v == "true" || v == "1" || v == "yes" }
@@ -268,7 +269,11 @@ enum LineParser {
                 if value.lowercased() == "full" { chartFullWidth = true } else { chartW = finite(value) }
             case "charth": chartH = finite(value)
             case "trackcolor": progressTrack = VeeColor.parse(value)
-            case "progressw": progressW = finite(value)
+            case "progressw":
+                // `full` is the one non-numeric value, exactly as in `chartw=`:
+                // stretch to the row's own width rather than a fixed number of
+                // points.
+                if value.lowercased() == "full" { progressFullWidth = true } else { progressW = finite(value) }
             case "progressh": progressH = finite(value)
             case "header":
                 // Vee-native: a first-class, non-interactive section-header
@@ -306,7 +311,10 @@ enum LineParser {
         }
 
         if let fraction = progressFraction {
-            p.progress = ProgressParams(fraction: fraction, trackColor: progressTrack, width: progressW, height: progressH)
+            p.progress = ProgressParams(
+                fraction: fraction, trackColor: progressTrack,
+                width: progressW, height: progressH, isFullWidth: progressFullWidth
+            )
         }
 
         if let kind = chartKind {

@@ -1,7 +1,7 @@
 """Vee plugin SDK — typed builders that emit the xbar/SwiftBar text format Vee
 parses. Zero dependencies; pure standard-library Python.
 
-Mirrors the TypeScript SDK (``plugins/src/vee.ts``): the same builder shape,
+Mirrors the TypeScript SDK (``plugins/typescript/vee.ts``): the same builder shape,
 option names, encoding order, and quoting, so a plugin reads the same in either
 language and both produce byte-identical output for the same menu.
 """
@@ -125,6 +125,8 @@ def _encode(options: dict[str, Any] | None) -> str:
         push("progress", _fmt(fraction))
 
     push("trackcolor", options.get("trackColor"))
+    # ``progressW`` takes points or ``"full"`` — the same width vocabulary as
+    # ``chart["w"]`` below.
     push("progressw", options.get("progressW"))
     push("progressh", options.get("progressH"))
 
@@ -137,7 +139,8 @@ def _encode(options: dict[str, Any] | None) -> str:
         push(chart["kind"], ",".join(_fmt(v) for v in chart["values"]))
         # Inline size in points. A pie/donut is a circle, so either knob sizes
         # both sides; a stacked bar takes them independently. ``"full"`` is the
-        # one non-numeric width: stretch to the row's own width.
+        # one non-numeric width: stretch to the row's own width — stacked bars
+        # only, since a circle has no free width.
         w = chart.get("w")
         if w is not None:
             push("chartw", w if isinstance(w, str) else _fmt(w))

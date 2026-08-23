@@ -71,7 +71,13 @@
         },
         "progress": { "type": "number", "minimum": 0, "maximum": 1, "description": "A completion fraction, clamped. The fill uses the row's `color`." },
         "trackColor": { "$ref": "#/$defs/color" },
-        "progressWidth": { "type": "number", "description": "Progress bar width in points." },
+        "progressWidth": {
+          "description": "Progress bar width in points, or \"full\" to stretch to the row's width.",
+          "oneOf": [
+            { "type": "number" },
+            { "const": "full" }
+          ]
+        },
         "progressHeight": { "type": "number", "description": "Progress bar height in points." },
         "accessory": { "enum": ["leading", "trailing"], "default": "trailing", "description": "Which edge the row's accessory anchors to." },
         "chart": {
@@ -91,7 +97,7 @@
               "description": "Positional against `values`. An entry that is null, blank, malformed, or unrecognised keeps that segment's palette slot."
             },
             "w": {
-              "description": "Inline width in points (clamped 8–200), or \"full\" to stretch to the row's width.",
+              "description": "Inline width in points (clamped 8–200), or \"full\" to stretch to the row's width — stackedbar only; on pie/donut \"full\" is ignored with a warning.",
               "oneOf": [
                 { "type": "number", "minimum": 8, "maximum": 200 },
                 { "const": "full" }

@@ -12,7 +12,7 @@ import unittest
 
 _HERE = os.path.dirname(__file__)
 _EXAMPLES = os.path.join(_HERE, "..", "examples")
-_FIXTURES = os.path.join(_HERE, "..", "fixtures")
+_FIXTURES = os.path.join(_HERE, "..", "..", "fixtures")
 
 
 def _load(path: str):
@@ -40,9 +40,9 @@ class DriftTests(unittest.TestCase):
                 self.assertEqual(
                     output,
                     expected,
-                    f"{file} output drifted from fixtures/{file[:-3]}.txt. "
+                    f"{file} output drifted from ../fixtures/{file[:-3]}.txt. "
                     f"Regenerate with: python3 examples/{file} > "
-                    f"fixtures/{file[:-3]}.txt",
+                    f"../fixtures/{file[:-3]}.txt",
                 )
 
 

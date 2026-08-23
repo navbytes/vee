@@ -70,7 +70,7 @@
 <p>Vee ships tiny, zero-dependency SDKs for writing plugins with typed builders instead of hand-formatting the xbar/SwiftBar text protocol. There are three, one per language — <strong>TypeScript</strong>, <strong>Python</strong>, and <strong>Go</strong> — and they mirror each other exactly: the same builder shape, option names, encoding order, and quoting, so a plugin reads the same in any language and all three produce <strong>byte-identical</strong> output for the same menu.</p>
 <p>The SDKs live in the <a href="https://github.com/navbytes/vee/tree/main/plugins" rel="noopener"><code>plugins/</code></a> directory of the repository:</p>
 <ul>
-<li>TypeScript — <a href="https://github.com/navbytes/vee/tree/main/plugins/src/vee.ts" rel="noopener"><code>plugins/src/vee.ts</code></a></li>
+<li>TypeScript — <a href="https://github.com/navbytes/vee/tree/main/plugins/typescript" rel="noopener"><code>plugins/typescript/</code></a> (<a href="https://github.com/navbytes/vee/tree/main/plugins/typescript/README.md" rel="noopener">README</a>)</li>
 <li>Python — <a href="https://github.com/navbytes/vee/tree/main/plugins/python" rel="noopener"><code>plugins/python/</code></a> (<a href="https://github.com/navbytes/vee/tree/main/plugins/python/README.md" rel="noopener">README</a>)</li>
 <li>Go — <a href="https://github.com/navbytes/vee/tree/main/plugins/go" rel="noopener"><code>plugins/go/</code></a> (<a href="https://github.com/navbytes/vee/tree/main/plugins/go/README.md" rel="noopener">README</a>)</li>
 </ul>
@@ -209,7 +209,10 @@ d.Item("Disk usage", &amp;vee.Options{Color: vee.Str("green"), Progress: vee.Flo
 shapes take the same data, so <code>kind</code> is the only thing that changes between them.
 <code>labels</code> and <code>colors</code> are optional and positional; <code>w</code>/<code>h</code> (<code>W</code>/<code>H</code> in Go) set
 the inline size in points, the typed spelling of <code>chartw=</code>/<code>charth=</code>. Pass
-<code>w: "full"</code> (Go: <code>FullWidth: true</code>) to stretch the chart to the row's own width.</p>
+<code>w: "full"</code> (Go: <code>FullWidth: true</code>) to stretch a <code>stackedbar</code> to the row's own
+width — a bar only, since a circle has no free width; on <code>pie</code>/<code>donut</code> Vee warns
+and falls back to points. <code>progress=</code> takes the same knob as
+<code>progressW: "full"</code> (Go: <code>ProgressFullWidth: true</code>).</p>
 <p><strong>TypeScript</strong></p>
 <div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">ts</span></div><pre><code>d.item("By category", { chart: { kind: "pie", values: [45, 30, 25], labels: ["Documents", "Photos", "Apps"] } });
 d.item("By volume", { chart: { kind: "donut", values: [512, 256, 128], colors: ["blue", "teal", "orange"] } });</code></pre></div>
@@ -292,7 +295,7 @@ the Swift parser). See the full field/template/action reference in
 <li>The <strong>same fixtures</strong> are shared byte-for-byte across all three SDKs and are parsed by the Swift <code>VeePluginFormat</code> tests. So if any SDK's output ever diverges from what the Swift parser expects, a test fails on one side or the other.</li>
 </ul>
 <p>Commands:</p>
-<div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">sh</span></div><pre><code># TypeScript (run from plugins/)
+<div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">sh</span></div><pre><code># TypeScript (run from plugins/typescript)
 npm test                 # run the drift guard (node --test)
 npm run build:fixtures   # regenerate fixtures from the examples
 

@@ -69,7 +69,8 @@ public enum MenuBuilder {
                     ?? NSColor.tertiaryLabelColor.withAlphaComponent(0.25),
                 barWidth: CGFloat(progress.effectiveWidth),
                 barHeight: CGFloat(progress.effectiveHeight),
-                leading: accessoryLeading
+                leading: accessoryLeading,
+                fullWidth: progress.isFullWidth
             )
             view.toolTip = item.params.swiftbar.tooltip
             menuItem.view = view

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # Example Vee plugin built with the Python SDK. Doubles as a golden fixture: its
-# build() output is committed to plugins/python/fixtures/cpu.txt and checked for
+# build() output is committed to plugins/fixtures/cpu.txt and checked for
 # drift by the test suite. Produces byte-identical output to the TypeScript
 # example (plugins/examples/cpu.ts) — proving cross-language parity.
 import os

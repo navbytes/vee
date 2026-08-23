@@ -44,8 +44,12 @@ type Options struct {
 	Progress   *float64
 	TrackColor *string
 	ProgressW  *float64
-	ProgressH  *float64
-	Chart      *Chart
+	// ProgressFullWidth emits `progressw=full`: stretch the bar to the row's
+	// own width rather than a fixed number of points. Takes precedence over
+	// ProgressW, mirroring Chart.FullWidth.
+	ProgressFullWidth bool
+	ProgressH         *float64
+	Chart             *Chart
 }
 
 // Chart is a categorical share chart, emitted as `pie=`/`donut=`/`stackedbar=`
@@ -69,7 +73,9 @@ type Chart struct {
 	W *float64
 	H *float64
 	// FullWidth emits `chartw=full`: stretch to the row's own width rather
-	// than a fixed number of points. Takes precedence over W.
+	// than a fixed number of points. Takes precedence over W. Stacked bars
+	// only — a circle has no free width, and Vee warns and falls back to
+	// points on a pie/donut.
 	FullWidth bool
 }
 
@@ -203,7 +209,9 @@ func encode(o *Options) string {
 	if o.TrackColor != nil {
 		push("trackcolor", *o.TrackColor)
 	}
-	if o.ProgressW != nil {
+	if o.ProgressFullWidth {
+		push("progressw", "full")
+	} else if o.ProgressW != nil {
 		push("progressw", fmtFloat(*o.ProgressW))
 	}
 	if o.ProgressH != nil {

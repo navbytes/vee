@@ -1,5 +1,0 @@
-Disk | sfimage=chart.pie
----
-By category | pie=45,30,25 chartlabels=Documents,Photos,Apps
-By volume | tooltip="896 GB across 3 volumes" donut=512,256,128 chartlabels="Macintosh HD,Backup,Scratch" chartcolors=blue,teal,orange
-Budget | stackedbar=60,25,15 chartlabels=Used,Cache,Free
