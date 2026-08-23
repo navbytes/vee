@@ -66,7 +66,7 @@
       alias, changelog, migration docs.
 - [x] 6.4 `vee lint` on a plugin using the old spellings reports the deprecation
       and nothing else.
-- [ ] 6.5 By hand: a plugin using the new pair renders identically in the menu
+- [x] 6.5 By hand: a plugin using the new pair renders identically in the menu
       bar and a detached window, for gauge, sparkline, stacked bar and slider —
       including `full`. Needs a real session.
 
