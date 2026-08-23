@@ -106,11 +106,6 @@ export function veeStaticAndMachineReadable() {
         }
         logger.info(`copied ${PASSTHROUGH.length} hand-authored surfaces`);
 
-        // /guide/ is a hand-written overview with its own card grid — a
-        // published URL Starlight has no equivalent for, so it would have
-        // 404'd silently. Copied in under its old path.
-        copy(path.join(DOCS, "guide-index.html"), path.join(out, "guide", "index.html"));
-
         const all = pages();
 
         // Markdown mirrors: /guide/<slug>.md beside /guide/<slug>/, so swapping
@@ -163,31 +158,47 @@ export function veeStaticAndMachineReadable() {
         // serves static files and has no redirect rules, so each old path gets
         // a stub naming the new one as canonical.
         for (const page of all) {
-          const to = `${SITE}/guide/${page.slug}/`;
-          fs.writeFileSync(path.join(out, "guide", `${page.slug}.html`), [
-            "<!doctype html>",
-            '<html lang="en">',
-            "<head>",
-            '<meta charset="utf-8">',
-            `<link rel="canonical" href="${to}">`,
-            `<meta http-equiv="refresh" content="0; url=${to}">`,
-            '<meta name="robots" content="noindex">',
-            `<title>${page.meta.title} — moved</title>`,
-            "</head>",
-            // data-pagefind-ignore: a stub is not a result. Without it the
-            // search index carries two entries per page, one of them "moved".
-            `<body data-pagefind-ignore><p>This page moved to <a href="${to}">${to}</a>.</p></body>`,
-            "</html>", "",
-          ].join("\n"));
+          writeStub(path.join(out, "guide", `${page.slug}.html`),
+                    `${SITE}/guide/${page.slug}/`, page.meta.title);
         }
+
+        // /guide/ was a hand-written overview whose card grid restated the 15
+        // sidebar entries beside it — 171 lines, renumbered by hand whenever a
+        // page was inserted. Starlight's sidebar is that index, so the URL
+        // redirects to the first guide rather than duplicating it.
+        writeStub(path.join(out, "guide", "index.html"),
+                  `${SITE}/guide/${all[0].slug}/`, "Documentation");
+
         // /sitemap.xml is the URL robots.txt names and search engines already
         // hold; @astrojs/sitemap emits /sitemap-index.xml. Publish both rather
         // than rewrite robots.txt and wait for a recrawl.
         const generated = path.join(out, "sitemap-index.xml");
         if (fs.existsSync(generated)) copy(generated, path.join(out, "sitemap.xml"));
 
-        logger.info(`wrote ${all.length} Markdown mirrors, ${all.length} redirect stubs, llms.txt, llms-full.txt`);
+        logger.info(`wrote ${all.length} Markdown mirrors, ${all.length + 1} redirect stubs, llms.txt, llms-full.txt`);
       },
     },
   };
+}
+
+/**
+ * A page that moved: canonical at the new location, and a refresh to follow it.
+ *
+ * data-pagefind-ignore keeps stubs out of the search index — without it every
+ * page has a second result reading "moved".
+ */
+function writeStub(file, to, title) {
+  fs.writeFileSync(file, [
+    "<!doctype html>",
+    '<html lang="en">',
+    "<head>",
+    '<meta charset="utf-8">',
+    `<link rel="canonical" href="${to}">`,
+    `<meta http-equiv="refresh" content="0; url=${to}">`,
+    '<meta name="robots" content="noindex">',
+    `<title>${title} — moved</title>`,
+    "</head>",
+    `<body data-pagefind-ignore><p>This page moved to <a href="${to}">${to}</a>.</p></body>`,
+    "</html>", "",
+  ].join("\n"));
 }
