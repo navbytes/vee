@@ -260,10 +260,16 @@ private struct MenuRowView: View {
         }
     }
 
-    /// An interactive row always shows an icon (a placeholder when the item
-    /// declares none); an inert row only shows one when the item actually
-    /// declares `sfimage=`/`image=`/`templateImage=` — but keeps the 18pt frame
-    /// either way, so text stays aligned across rows.
+    /// The row's declared icon, or empty space of the same size.
+    ///
+    /// A row declaring no `sfimage=`/`image=`/`templateImage=` draws **nothing**
+    /// here. The flat list this view replaced used a dashed-circle placeholder,
+    /// which earned its keep when every row sat at the same indent and the icon
+    /// column was the only thing holding the text in line. A tree already says
+    /// where a row sits — through its indent and its chevron — so the
+    /// placeholder stopped carrying information and became a dotted circle on
+    /// nearly every row. The 18pt frame stays, so a plugin that gives *some*
+    /// rows icons keeps the rest aligned with them; only the glyph is gone.
     @ViewBuilder
     private var icon: some View {
         Group {
@@ -276,8 +282,6 @@ private struct MenuRowView: View {
                     .resizable()
                     .renderingMode(nsImage.isTemplate ? .template : .original)
                     .aspectRatio(contentMode: .fit)
-            } else if enabled {
-                Image(systemName: "circle.dashed")
             }
         }
         .font(.system(size: 13))
