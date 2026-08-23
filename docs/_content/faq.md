@@ -89,3 +89,5 @@ Yes. Vee ships desktop **widgets** (Notification Center / desktop). The **Vee Pl
 ### A plugin isn't showing up or is erroring — what do I do?
 
 Check that it is executable (`chmod +x`), in the right folder, and that any interpreter or tool it needs is installed. See [Troubleshooting](troubleshooting.md).
+
+<!-- probe: verifying required-check behaviour with skipped jobs -->
