@@ -101,7 +101,7 @@ Design D4. Spec: "Open branches survive a refresh". The highest-risk group.
       applied when a refresh replaces the tree.
 - [x] 4.2 Ensure a branch that cannot be matched after a refresh closes **alone**
       and never cascades into unrelated branches.
-- [ ] 4.3 Confirm the byte-identical short-circuit in
+- [x] 4.3 Confirm the byte-identical short-circuit in
       `StatusItemController.render` still skips re-deriving the tree, so a
       1-second plugin does not churn expansion state.
 - [x] 4.4 Add tests: a refresh with new values keeps a branch open; a vanished
@@ -115,14 +115,14 @@ Design D4. Spec: "Open branches survive a refresh". The highest-risk group.
 
 Design D7. Spec: "A window carries its plugin's controls".
 
-- [ ] 5.1 Surface Refresh / Settings / About / Reveal in Finder / Edit Plugin /
+- [x] 5.1 Surface Refresh / Settings / About / Reveal in Finder / Edit Plugin /
       Debug in the detached window's chrome, routed through the same closures
       `ControlsTarget` already holds — no second action path.
-- [ ] 5.2 Keep controls out of the row list so the filter cannot match them.
-- [ ] 5.3 Bind `⌘R` and `⌘,` as window-level shortcuts; make `⌘F` focus the
+- [x] 5.2 Keep controls out of the row list so the filter cannot match them.
+- [x] 5.3 Bind `⌘R` and `⌘,` as window-level shortcuts; make `⌘F` focus the
       filter field in the window and panel. The menu bar's `⌘F` still opens the
       panel (an `NSMenu` cannot host a text field).
-- [ ] 5.4 Add tests: controls are absent from filtered results for a query
+- [x] 5.4 Add tests: controls are absent from filtered results for a query
       matching a control's name; refresh from a window re-runs the plugin.
 
 ## 6. Documentation

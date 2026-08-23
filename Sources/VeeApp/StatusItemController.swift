@@ -221,7 +221,22 @@ public final class StatusItemController {
     /// reason `openSearchPanel` is: the plugin's global hotkey can be bound to
     /// this presentation instead of the transient one.
     public func openDetachedWindow() {
-        DetachedPluginWindows.shared.show(pluginName: pluginName, body: lastBody, handler: handler)
+        DetachedPluginWindows.shared.show(
+            pluginName: pluginName, body: lastBody, handler: handler, controls: windowControls
+        )
+    }
+
+    /// The plugin actions a detached window offers, taken from the same targets
+    /// the dropdown's footer fires, so the window is not a second action path.
+    private var windowControls: PluginWindowControls {
+        PluginWindowControls(
+            onRefresh: controls.onRefresh,
+            onSettings: controls.onSettings,
+            onAbout: controls.onAbout,
+            onReveal: controls.onReveal,
+            onEdit: controls.onEdit,
+            onDebug: controls.onDebug
+        )
     }
 
     /// Updates the Features shown in the capabilities area and rebuilds the open
@@ -263,6 +278,12 @@ public final class StatusItemController {
             // Unchanged output is still output: a window marked stale by an
             // earlier failure stops saying so, even though it has nothing new
             // to draw.
+            //
+            // Returning here also means a window's open branches are not even
+            // re-derived for an unchanged tick — the cheapest and most
+            // effective guard on expansion state, since the plugins most likely
+            // to churn it are the fast ones, and a fast plugin whose output
+            // hasn't changed never reaches `update` at all.
             DetachedPluginWindows.shared.markFresh(pluginName: pluginName)
             return
         }

@@ -63,12 +63,28 @@ final class DetachedPluginWindowModel: ObservableObject {
     }
 }
 
-/// A detached window's contents: the shared menu surface, plus a note when its
-/// plugin stops reporting.
+/// The plugin actions a window offers, the same set its dropdown's footer does.
+///
+/// Carried as plain closures taken from the controller's existing footer
+/// targets, so operating a plugin from the window it is being watched in runs
+/// exactly what operating it from the menu bar runs — there is no second action
+/// path to keep in step.
+struct PluginWindowControls {
+    var onRefresh: () -> Void = {}
+    var onSettings: () -> Void = {}
+    var onAbout: () -> Void = {}
+    var onReveal: () -> Void = {}
+    var onEdit: () -> Void = {}
+    var onDebug: () -> Void = {}
+}
+
+/// A detached window's contents: the shared menu surface, its plugin's
+/// controls, plus a note when the plugin stops reporting.
 private struct DetachedPluginWindowView: View {
     @ObservedObject var model: DetachedPluginWindowModel
     let onActivate: (MenuRowSpec) -> Void
     let onCommit: @MainActor (MenuRowSpec, Double) -> Void
+    let controls: PluginWindowControls
 
     var body: some View {
         VStack(spacing: 0) {
@@ -82,8 +98,45 @@ private struct DetachedPluginWindowView: View {
                 Divider()
                 staleNote
             }
+            Divider()
+            controlBar
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+    }
+
+    /// The plugin's own controls, in the window's chrome rather than among its
+    /// rows — they are Vee's actions, not the plugin's output, so the filter
+    /// never matches them and they can't be confused for menu content.
+    private var controlBar: some View {
+        HStack(spacing: 8) {
+            Button(action: controls.onRefresh) {
+                Label("Refresh", systemImage: "arrow.clockwise")
+            }
+            .buttonStyle(.borderless)
+            .keyboardShortcut("r", modifiers: .command)
+            .help("Re-run \(model.pluginName)")
+
+            Spacer(minLength: 0)
+
+            Menu {
+                Button("Settings…", action: controls.onSettings)
+                    .keyboardShortcut(",", modifiers: .command)
+                Button("About \(model.pluginName)…", action: controls.onAbout)
+                Divider()
+                Button("Reveal in Finder", action: controls.onReveal)
+                Button("Edit Plugin…", action: controls.onEdit)
+                Button("Debug…", action: controls.onDebug)
+            } label: {
+                Image(systemName: "ellipsis.circle")
+            }
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .fixedSize()
+            .help("Plugin actions")
+            .accessibilityLabel("Plugin actions")
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 7)
     }
 
     private var staleNote: some View {
@@ -145,6 +198,7 @@ final class DetachedPluginWindows {
     private var windows: [String: NSWindow] = [:]
     private var models: [String: DetachedPluginWindowModel] = [:]
     private var observerTokens: [String: NSObjectProtocol] = [:]
+    private var controlsByPlugin: [String: PluginWindowControls] = [:]
     /// Pin state per plugin, remembered for the session. A window that reopens
     /// unpinned when the user last left it unpinned is the difference between a
     /// preference and a chore.
@@ -194,6 +248,10 @@ final class DetachedPluginWindows {
         return model.search.visible.compactMap { $0.row?.spec.item.text }
     }
 
+    /// The controls `pluginName`'s window was opened with — directly
+    /// assertable without a real window to click.
+    func controls(pluginName: String) -> PluginWindowControls? { controlsByPlugin[pluginName] }
+
     /// Opens a branch in `pluginName`'s window by title path — the directly
     /// assertable half of expansion, with no window to read back.
     func toggleBranch(pluginName: String, key: MenuPath) {
@@ -212,7 +270,12 @@ final class DetachedPluginWindows {
     /// `handler` is the plugin's own action handler, so a row activated here
     /// runs exactly what activating it in the dropdown runs, through the same
     /// dispatcher — there is no parallel action model.
-    func show(pluginName: String, body: [MenuNode], handler: MenuActionHandling) {
+    func show(
+        pluginName: String,
+        body: [MenuNode],
+        handler: MenuActionHandling,
+        controls: PluginWindowControls = PluginWindowControls()
+    ) {
         let nodes = MenuTree.build(body)
 
         if let existing = models[pluginName] {
@@ -226,10 +289,12 @@ final class DetachedPluginWindows {
         let root = DetachedPluginWindowView(
             model: model,
             onActivate: { [weak handler] row in handler?.perform(row.item) },
-            onCommit: { [weak handler] row, value in handler?.commitControl(row.item, value: value) }
+            onCommit: { [weak handler] row, value in handler?.commitControl(row.item, value: value) },
+            controls: controls
         )
 
         models[pluginName] = model
+        controlsByPlugin[pluginName] = controls
         guard attachesWindows else { return }
 
         let window = NSWindow(contentViewController: NSHostingController(rootView: root))
@@ -344,6 +409,7 @@ final class DetachedPluginWindows {
     private func windowWillClose(_ pluginName: String) {
         windows[pluginName] = nil
         models[pluginName] = nil
+        controlsByPlugin[pluginName] = nil
         if let token = observerTokens.removeValue(forKey: pluginName) {
             NotificationCenter.default.removeObserver(token)
         }
