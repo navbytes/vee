@@ -1,17 +1,17 @@
 ## 1. Parse the new pair (no output change)
 
-- [ ] 1.1 Add `accessoryw` / `accessoryh` to `LineParameterKeys`.
-- [ ] 1.2 Parse them in `LineParser`, reusing the existing `full` handling, and
+- [x] 1.1 Add `accessoryw` / `accessoryh` to `LineParameterKeys`.
+- [x] 1.2 Parse them in `LineParser`, reusing the existing `full` handling, and
       fan the values out to whichever of `ProgressParams` / `SparklineStyle` /
       `ChartParams` the row builds (design D2).
-- [ ] 1.3 Emit a deprecation diagnostic for each of `progressw`, `progressh`,
+- [x] 1.3 Emit a deprecation diagnostic for each of `progressw`, `progressh`,
       `sparklinew`, `sparklineh`, `chartw`, `charth`, naming its replacement.
       Follow the `trackcolor=` precedent already in the file.
-- [ ] 1.4 Where a row declares both, the new parameter wins.
-- [ ] 1.5 Tests: each accessory kind sized by the new pair; `full` on each;
+- [x] 1.4 Where a row declares both, the new parameter wins.
+- [x] 1.5 Tests: each accessory kind sized by the new pair; `full` on each;
       `full` still refused on `pie=`/`donut=`; old spellings still work and warn;
       new-wins-over-old; an accessory width on a row with no accessory is inert.
-- [ ] 1.6 Confirm the existing suite is green — this step changes no rendering.
+- [x] 1.6 Confirm the existing suite is green — this step changes no rendering.
 
 ## 2. Size a control
 
@@ -70,11 +70,20 @@
       bar and a detached window, for gauge, sparkline, stacked bar and slider —
       including `full`. Needs a real session.
 
-## 7. Open question to settle first
+## 7. Resolved
 
-- [ ] 7.1 **The reported `chartw=full` stacked-bar bug is still unreproduced.**
-      Shared geometry, the model flag, and parsing all verified correct
-      (`FullWidthAccessoryTests`), so the surface it fails on is unknown. Get
-      that from the user before touching the stretch path — this change renames
-      the parameter and must not be credited with fixing, or blamed for
-      breaking, a defect nobody has located.
+- [x] 7.1 ~~The reported `chartw=full` stacked-bar bug~~ — **not a bug.**
+      `chartw=full` works; the row had been sized with `progressw=full`, which
+      a `stackedbar=` silently ignores. The shared geometry, the model flag and
+      the parsing were all verified correct (`FullWidthAccessoryTests`), which
+      is why nothing turned up. Nothing in the stretch path changes.
+
+      This is the failure this whole change exists to prevent, and it argues for
+      one addition beyond a rename notice — see 1.7.
+
+- [x] 1.7 A sizing parameter aimed at an accessory the row does not carry is
+      silently ignored today, which is exactly how the report above happened.
+      When a deprecated parameter names a different family than the row's
+      accessory (`progressw=` on a `stackedbar=` row), say so in the diagnostic
+      rather than only naming the replacement. A row with no accessory at all
+      stays silent — that is a plugin mid-edit, not a mistake.
