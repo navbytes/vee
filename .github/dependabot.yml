@@ -1,6 +1,6 @@
 version: 2
 updates:
-  # GitHub Actions used by the workflows above.
+  # GitHub Actions used by the workflows.
   - package-ecosystem: github-actions
     directory: "/"
     schedule:
@@ -8,6 +8,24 @@ updates:
     groups:
       actions:
         patterns: ["*"]
-  # No npm or SwiftPM entries: Vee currently has no external dependencies (all
-  # Swift targets are first-party). Re-add an npm entry when the TypeScript
-  # plugin SDK lands (Stage 8).
+
+  # The documentation site (Astro + Starlight) — the only third-party
+  # dependency tree in the repository, and the reason the zero-dependency
+  # policy now reads "in what ships" rather than "anywhere". Nothing here is
+  # linked into a binary, executed by a user, or vendored into a plugin, but a
+  # build toolchain is still a supply chain and is treated as one.
+  #
+  # Grouped and weekly: individual bumps across a transitive tree this size are
+  # noise, and noise is how a real advisory gets scrolled past.
+  - package-ecosystem: npm
+    directory: "/docs-site"
+    schedule:
+      interval: weekly
+    groups:
+      docs-site:
+        patterns: ["*"]
+    open-pull-requests-limit: 3
+
+  # No SwiftPM entry: every Swift target is first-party, and the app and all
+  # three plugin SDKs remain dependency-free by policy. Add one only if that
+  # ever stops being true.
