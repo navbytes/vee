@@ -21,10 +21,14 @@
 ## 3. Surface it
 
 - [x] 3.1 Log each cleared identifier through `VeeLog`.
-- [ ] 3.2 Decide with the user where this surfaces beyond the log — plugin
-      manager row, a one-time notification, or log only. Do not build a
-      notification unprompted; an invisible fix is what made this take a machine
-      inspection to find, but a nagging one is worse.
+- [x] 3.2 Decide with the user where this surfaces beyond the log — plugin
+      manager row, a one-time notification, or log only. **Resolved as log only,
+      by the API rather than by preference:** `NSBackgroundActivityScheduler`
+      offers no way to ask whether an identifier is registered, and invalidating
+      one that never existed is indistinguishable from invalidating one that
+      did. Any "we just fixed your stuck app" notice would be a guess on every
+      launch of every install. The spec requirement was rewritten from "a
+      detected registration is surfaced" to "the sweep leaves a record".
 
 ## 4. Tests
 

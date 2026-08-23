@@ -80,16 +80,30 @@ cleared after the plugin itself is gone.
 - **WHEN** a plugin Vee has previously loaded is deleted
 - **THEN** its identifier is still remembered
 
-### Requirement: A detected relaunch registration is surfaced
+### Requirement: The sweep leaves a record
 
-Where Vee detects that it has cleared a legacy registration, it SHALL make that
-visible to the user rather than recovering silently, so someone whose app would
-not quit can tell what happened.
+Vee SHALL record that the sweep ran, and what it covered, so someone whose app
+would not quit can confirm the recovery happened rather than guess.
 
-Recovery itself SHALL NOT require any user action.
+The sweep SHALL NOT claim to have found anything. Whether a given registration
+existed is **not observable** — the system offers no way to ask whether an
+identifier is registered, and invalidating one that never existed is
+indistinguishable from invalidating one that did. A report of "we fixed your
+stuck app" would therefore be a guess, and is not made. Recovery SHALL require
+no user action either way.
 
-#### Scenario: Reporting a cleared registration
+#### Scenario: The sweep is recorded
 
-- **WHEN** Vee clears a legacy registration at launch
-- **THEN** the user can discover that this happened
-- **AND** no action is required of them for the fix to take effect
+- **WHEN** Vee runs the sweep at launch
+- **THEN** a record of it, and of how many identifiers it covered, is available
+  in the app's logs
+
+#### Scenario: No claim is made about what existed
+
+- **WHEN** the sweep runs on an install that never had a legacy registration
+- **THEN** nothing reports that anything was found or repaired
+
+#### Scenario: Recovery needs no user action
+
+- **WHEN** an affected install launches the fixed build
+- **THEN** the registration is cleared without the user doing anything
