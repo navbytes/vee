@@ -46,10 +46,11 @@ Each chart is sized by knobs named after itself:
 
 | Chart | Width | Height | Stretch to the row |
 | ----- | ----- | ------ | ------------------ |
-| Sparkline | `sparklinew=` | `sparklineh=` | `sparklinew=full` |
-| Progress bar | `progressw=` | `progressh=` | `progressw=full` |
-| Pie, donut | `chartw=` or `charth=` — either sizes both | | not supported |
-| Stacked bar | `chartw=` | `charth=` | `chartw=full` |
+| Sparkline | `accessoryw=` | `accessoryh=` | `accessoryw=full` |
+| Progress bar | `accessoryw=` | `accessoryh=` | `accessoryw=full` |
+| Pie, donut | `accessoryw=` or `accessoryh=` — either sizes both | | not supported |
+| Stacked bar | `accessoryw=` | `accessoryh=` | `accessoryw=full` |
+| Slider | `accessoryw=` | — its height is its control size | not supported |
 
 `full` stretches a chart to the width the row actually has, rather than a fixed
 number of points. It exists because a menu is as wide as its widest row, so a

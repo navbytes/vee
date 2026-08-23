@@ -109,10 +109,11 @@ def chart_matrix(spec):
             code_or_dash(surfaces["json"]),
             code_or_dash(surfaces["widget"])))
 
-    out += ["", "**What each chart takes.** Options are named for the chart "
-            "they belong to, not shared across all of them — a sparkline takes "
-            "`sparklinew=`, a share chart takes `chartw=`, and a progress bar "
-            "takes `progressw=`.", "",
+    out += ["", "**What each chart takes.** One pair sizes any of them: "
+            "`accessoryw=` and `accessoryh=`, whichever accessory the row "
+            "carries. The per-chart names (`sparklinew=`, `chartw=`, "
+            "`progressw=` and their heights) still parse but are deprecated, "
+            "and do nothing when aimed at a chart the row does not draw.", "",
             "| Chart | Options | Default size | Full width | Limits | Click |",
             "| ----- | ------- | ------------ | ---------- | ------ | ----- |"]
     for chart in charts:
