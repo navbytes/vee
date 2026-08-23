@@ -6,6 +6,16 @@ All notable changes to Vee are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed
+- **Vee could not be quit on some installs — it relaunched itself within
+  seconds.** An older version registered a launch-on-demand background activity
+  per plugin, and those live in launchd rather than in the app, so they survive
+  every update. Vee already cleared them, but only for plugins still installed —
+  and the activity's name can only be derived from the plugin that created it,
+  so one registered by a plugin you had since deleted was unreachable forever.
+  Vee now remembers every plugin it has ever loaded and clears all of them at
+  launch. Launch the updated build once and the app stays quit.
+
 ### Changed
 - **A plugin's window and filter panel now show its structure.** They used to
   flatten the whole menu into one ranked list with a `parent › child`
