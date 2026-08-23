@@ -27,7 +27,9 @@ export function build(): string {
     tooltip: "72 GB of 100 GB used",
   });
   d.item("Notifications", { toggle: true });
-  d.item("Volume", { slider: { min: 0, max: 100, value: 40 } });
+  // accessoryW sizes whichever accessory a row carries — here the slider
+  // track, which had no size of its own before.
+  d.item("Volume", { slider: { min: 0, max: 100, value: 40 }, accessoryW: 120 });
   // The sparkline takes the same size/colour vocabulary as progress= and the
   // chart shapes: <control>w / <control>h / <control>color.
   d.item("Load history", {

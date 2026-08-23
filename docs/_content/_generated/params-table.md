@@ -82,19 +82,21 @@ The inline accessory slot: a sparkline, a progress bar, or a share chart. See th
 | Parameter | Type | Default | Applies to | Description |
 | --------- | ---- | ------- | ---------- | ----------- |
 | `sparkline` | n[,n…] | — | any line | A comma-separated list of numbers read as a series over time. Renders inline in the menu row; clicking opens a fuller Swift Charts popover. [More](#rich-inline-charts-liquid-glass-popovers) |
-| `sparklinew` | points \| full | 90 | sparkline | Sparkline width in points, or `full` to stretch it to the row's own width. |
-| `sparklineh` | points | 20 | sparkline | Sparkline height in points. |
+| `accessoryw` | points \| full | the accessory's own default | progress, sparkline, pie, donut, stackedbar, slider | Width in points for whichever accessory the row carries, or `full` to stretch it to the row's own width. A row draws at most one accessory, so one parameter sizes any of them. Defaults differ per accessory — see the chart matrix. `full` is refused on `pie=`/`donut=`, which can only fill a width by growing the row. Replaces `progressw=`, `sparklinew=` and `chartw=`. |
+| `accessoryh` | points | the accessory's own default | progress, sparkline, pie, donut, stackedbar | Height in points for whichever accessory the row carries. Ignored for `toggle=`/`slider=`, whose height is its control size. Replaces `progressh=`, `sparklineh=` and `charth=`. |
+| `sparklinew` | points \| full | 90 | sparkline | **Deprecated** — use `accessoryw=` instead. Sparkline width in points, or `full` to stretch it to the row's own width. |
+| `sparklineh` | points | 20 | sparkline | **Deprecated** — use `accessoryh=` instead. Sparkline height in points. |
 | `sparklinecolor` | color | — | sparkline | Sparkline line color. Falls back to the row's `color=`, then to the control accent. |
 | `progress` | 0..1 \| value,max | — | any line | Draws a real capsule bar inline in the menu row (e.g. `progress=0.72` or `progress=23.65,100`). Fill uses `color=`. [More](#inline-progress-bars-progress) |
-| `progressw` | points \| full | 120 | progress | Bar width in points, or `full` to stretch it to the row's own width. |
-| `progressh` | points | 6 | progress | Bar height in points. |
+| `progressw` | points \| full | 120 | progress | **Deprecated** — use `accessoryw=` instead. Bar width in points, or `full` to stretch it to the row's own width. |
+| `progressh` | points | 6 | progress | **Deprecated** — use `accessoryh=` instead. Bar height in points. |
 | `progresstrackcolor` | color | — | progress | The color of the bar's groove, behind the fill. |
 | `trackcolor` | color | — | progress | **Deprecated** — use `progresstrackcolor=` instead. The pre-v2 spelling of `progresstrackcolor=`. Still parsed, so published plugins keep working, but the SDKs no longer emit it and `vee lint` warns on it. |
 | `pie` | n[,n…] | — | any line | Non-negative numbers read as shares of a whole (e.g. `pie=45,30,25`), drawn as a filled circle divided into sectors. [More](#share-charts-pie-donut-stackedbar) |
 | `donut` | n[,n…] | — | any line | The same shares as `pie=`, drawn with the middle punched out; the hole carries the total. [More](#share-charts-pie-donut-stackedbar) |
 | `stackedbar` | n[,n…] | — | any line | The same shares as `pie=`, drawn as one horizontal bar whose segments are laid end to end. [More](#share-charts-pie-donut-stackedbar) |
-| `chartw` | points \| full | — | pie, donut, stackedbar | The chart's inline width in points, clamped to 8–200. A pie or donut is a circle, so either dimension sizes both. `chartw=full` stretches a `stackedbar=` to the row's own width, and is refused on `pie=`/`donut=` with a diagnostic. |
-| `charth` | points | — | pie, donut, stackedbar | The chart's inline height in points, clamped to 8–200. Defaults to a 24pt circle for `pie=`/`donut=` and 110×12 for `stackedbar=`. |
+| `chartw` | points \| full | — | pie, donut, stackedbar | **Deprecated** — use `accessoryw=` instead. The chart's inline width in points, clamped to 8–200. A pie or donut is a circle, so either dimension sizes both. `chartw=full` stretches a `stackedbar=` to the row's own width, and is refused on `pie=`/`donut=` with a diagnostic. |
+| `charth` | points | — | pie, donut, stackedbar | **Deprecated** — use `accessoryh=` instead. The chart's inline height in points, clamped to 8–200. Defaults to a 24pt circle for `pie=`/`donut=` and 110×12 for `stackedbar=`. |
 | `chartlabels` | name[,name…] | — | pie, donut, stackedbar | Segment names, positional against the values (e.g. `chartlabels=Docs,Photos,Apps`). Shown in the popover legend and read out by VoiceOver. |
 | `chartcolors` | color[,color…] | — | pie, donut, stackedbar | Segment colors, positional against the values (e.g. `chartcolors=blue,,orange`). A blank, malformed, or unknown entry keeps that segment's default palette color rather than shifting the rest. |
 

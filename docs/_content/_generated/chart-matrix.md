@@ -15,9 +15,9 @@
 
 | Chart | Options | Default size | Full width | Limits | Click |
 | ----- | ------- | ------------ | ---------- | ------ | ----- |
-| **Sparkline** | `sparklinew`, `sparklineh`, `sparklinecolor`, `accessory`, `color` | 90×20 points | `sparklinew=full` | Widget sparkline nodes are truncated at 256 points; non-finite entries are dropped. | Yes — a full Swift Charts line/area chart. |
-| **Progress bar** | `progressw`, `progressh`, `progresstrackcolor`, `accessory`, `color` | 120×6 points | `progressw=full` | Clamped to 0…1; a non-finite value is dropped. | No — the bar is the whole surface. |
+| **Sparkline** | `sparklinew`, `sparklineh`, `sparklinecolor`, `accessory`, `color` | 90×20 points | `accessoryw=full` | Widget sparkline nodes are truncated at 256 points; non-finite entries are dropped. | Yes — a full Swift Charts line/area chart. |
+| **Progress bar** | `progressw`, `progressh`, `progresstrackcolor`, `accessory`, `color` | 120×6 points | `accessoryw=full` | Clamped to 0…1; a non-finite value is dropped. | No — the bar is the whole surface. |
 | **Pie** | `chartw`, `charth`, `chartlabels`, `chartcolors`, `accessory` | 24pt diameter | Not supported — refused with a diagnostic. | 8 segments (the tail folds into 'Other'); size clamped to 8–200 points. | Yes — full size with a labelled legend. |
 | **Donut** | `chartw`, `charth`, `chartlabels`, `chartcolors`, `accessory` | 24pt diameter | Not supported — refused with a diagnostic. | 8 segments (the tail folds into 'Other'); size clamped to 8–200 points. | Yes — full size with a labelled legend. |
-| **Stacked bar** | `chartw`, `charth`, `chartlabels`, `chartcolors`, `accessory` | 110×12 points | `chartw=full` — the only chart kind that accepts it. | 8 segments (the tail folds into 'Other'); size clamped to 8–200 points. | Yes — full size with a labelled legend. |
+| **Stacked bar** | `chartw`, `charth`, `chartlabels`, `chartcolors`, `accessory` | 110×12 points | `accessoryw=full` — the only chart kind that accepts it. | 8 segments (the tail folds into 'Other'); size clamped to 8–200 points. | Yes — full size with a labelled legend. |
 | **Widget gauge** | `gauge_style`, `style.tint` | gauge_style: linear | Not applicable — a circular gauge takes no size knob. | value clamped to 0…1. | No — widgets have no popover surface. |

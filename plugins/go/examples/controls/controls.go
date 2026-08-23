@@ -32,7 +32,9 @@ func Build() string {
 		Tooltip:            vee.Str("72 GB of 100 GB used"),
 	})
 	d.Item("Notifications", &vee.Options{Toggle: vee.Bool(true)})
-	d.Item("Volume", &vee.Options{Slider: &vee.Slider{Min: 0, Max: 100, Value: 40}})
+	// AccessoryW sizes whichever accessory a row carries -- here the slider
+	// track, which had no size of its own before.
+	d.Item("Volume", &vee.Options{Slider: &vee.Slider{Min: 0, Max: 100, Value: 40}, AccessoryW: vee.Float(120)})
 	// The sparkline takes the same size/colour vocabulary as progress= and the
 	// chart shapes: <Control>W / <Control>H / <Control>Color.
 	d.Item("Load history", &vee.Options{

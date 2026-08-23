@@ -30,10 +30,10 @@
 
 ## 4. Documentation
 
-- [ ] 4.1 Update `docs/api/params.json`: add the new pair, mark the six old ones
+- [x] 4.1 Update `docs/api/params.json`: add the new pair, mark the six old ones
       deprecated. `accessoryw=` has no single default — state "the accessory's
       own default" and point at the chart matrix (design D4).
-- [ ] 4.2 Regenerate with `python3 docs/scripts/build_reference.py`, then verify
+- [x] 4.2 Regenerate with `python3 docs/scripts/build_reference.py`, then verify
       `--check` passes.
 - [ ] 4.3 Prose pages: `charts.md`, `plugin-authoring.md`, `json-output.md`,
       `sdk.md`, `migrating-from-swiftbar.md`.
@@ -45,16 +45,16 @@
 
 ## 5. SDKs, examples and fixtures (must land together)
 
-- [ ] 5.1 `plugins/typescript/vee.ts` — new options, old ones deprecated.
-- [ ] 5.2 `plugins/python/vee.py` and `plugins/python/README.md`.
-- [ ] 5.3 `plugins/go/vee.go`.
-- [ ] 5.4 `Sources/VeeCLI/EmbeddedSDK.swift` — the vendored copy `vee sdk` emits;
+- [x] 5.1 `plugins/typescript/vee.ts` — new options, old ones deprecated.
+- [x] 5.2 `plugins/python/vee.py` and `plugins/python/README.md`.
+- [x] 5.3 `plugins/go/vee.go`.
+- [x] 5.4 `Sources/VeeCLI/EmbeddedSDK.swift` — the vendored copy `vee sdk` emits;
       it must match the SDK files exactly.
-- [ ] 5.5 SDK examples: `plugins/typescript/examples/`, `plugins/python/examples/`.
+- [x] 5.5 SDK examples: `plugins/typescript/examples/`, `plugins/python/examples/`.
 - [ ] 5.6 `plugins/showcase/` plugins that size an accessory.
-- [ ] 5.7 `plugins/fixtures/controls.txt` and any other golden output. Review the
+- [x] 5.7 `plugins/fixtures/controls.txt` and any other golden output. Review the
       diff as intent — these are compared byte-for-byte across all three SDKs.
-- [ ] 5.8 Confirm the SDK conformance tests pass for all three.
+- [x] 5.8 Confirm the SDK conformance tests pass for all three.
 
 ## 6. Verification
 
