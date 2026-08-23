@@ -32,6 +32,16 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v7
+      # Cheapest first, so the common failure reports fastest. The generated
+      # tables come before the pages that include them: a stale partial makes
+      # every page including it stale too, and the partial is the real cause.
+      #
+      # docs/api/params.json is the parameter surface as data. The published
+      # tables are built from it, never typed, because the chart surface alone
+      # is a six-by-three cross-product that went stale the moment it was
+      # written by hand — and for years was simply absent.
+      - name: Generated reference tables are up to date with docs/api/params.json
+        run: python3 docs/scripts/build_reference.py --check
       - name: Guide pages are up to date with docs/_content
         run: python3 docs/scripts/build_guide.py --check
       # The menu-line parameter list is written down six times (parser switch,
@@ -49,6 +59,12 @@ jobs:
       # golden fixtures all three SDKs produce byte-identically.
       - name: Published JSON Schemas match the shipped fixtures
         run: python3 docs/scripts/check_schemas.py
+      # The plugins/ reorganisation moved examples/ and plugins/src/, breaking
+      # four documented links with nothing to notice; three were still broken
+      # two pull requests later. GitHub tree/blob URLs count as repository
+      # paths here, because that is the shape every one of them had.
+      - name: Documented links resolve
+        run: python3 docs/scripts/check_links.py
       # A stale search index is the quietest docs failure there is: every page
       # renders correctly while search returns the previous release's text.
       # Verifying the fingerprint needs no network and no Pagefind binary.

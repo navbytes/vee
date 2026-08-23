@@ -1,0 +1,669 @@
+{
+  "$schema": "./params.schema.json",
+  "version": 1,
+  "about": "The menu-line parameter surface of the Vee plugin format, as data. This file is the documentation surface that docs/scripts/check_params.py holds in agreement with the parser (LineParser.mapParams), the linter (LineParameterKeys.recognized), and each of the three SDKs. Every published parameter table is generated from it by docs/scripts/build_reference.py; do not hand-edit a generated table. Keys are lowercase because LineParser lowercases before dispatching.",
+  "groups": [
+    {
+      "id": "rendering",
+      "title": "Text and rendering",
+      "blurb": "How the row's own text is drawn."
+    },
+    {
+      "id": "behavior",
+      "title": "Behavior on click",
+      "blurb": "What happens when a reader activates the row."
+    },
+    {
+      "id": "layout",
+      "title": "Placement",
+      "blurb": "Where the line appears, and where its accessory sits."
+    },
+    {
+      "id": "images",
+      "title": "Images",
+      "blurb": "Bitmap artwork beside the text."
+    },
+    {
+      "id": "symbols",
+      "title": "SF Symbols",
+      "blurb": "Apple's symbol set as a row icon, or inline in the text."
+    },
+    {
+      "id": "annotations",
+      "title": "Annotations",
+      "blurb": "Small marks attached to a row."
+    },
+    {
+      "id": "charts",
+      "title": "Charts and gauges",
+      "blurb": "The inline accessory slot: a sparkline, a progress bar, or a share chart. See the chart index for the whole matrix."
+    },
+    {
+      "id": "controls",
+      "title": "Interactive controls",
+      "blurb": "Rows that take input and re-invoke the plugin with it."
+    }
+  ],
+  "parameters": [
+    {
+      "key": "color",
+      "group": "rendering",
+      "type": "color",
+      "grammar": "name | #rrggbb",
+      "summary": "Text color — a named color (`red`, `green`, …) or a hex value like `#00ff00`."
+    },
+    {
+      "key": "font",
+      "group": "rendering",
+      "type": "string",
+      "summary": "Font family name for the text."
+    },
+    {
+      "key": "size",
+      "group": "rendering",
+      "type": "number",
+      "grammar": "points",
+      "summary": "Font point size."
+    },
+    {
+      "key": "length",
+      "group": "rendering",
+      "type": "integer",
+      "grammar": "characters",
+      "summary": "Truncate the displayed text to this many characters."
+    },
+    {
+      "key": "trim",
+      "group": "rendering",
+      "type": "boolean",
+      "summary": "Trim surrounding whitespace from the text."
+    },
+    {
+      "key": "ansi",
+      "group": "rendering",
+      "type": "boolean",
+      "default": "true",
+      "summary": "Interpret ANSI color escape codes in the text. On by default; set `ansi=false` to disable.",
+      "section": "ansi-color"
+    },
+    {
+      "key": "emojize",
+      "group": "rendering",
+      "type": "boolean",
+      "summary": "Convert `:shortcode:` tokens (e.g. `:smile:`) into emoji."
+    },
+    {
+      "key": "md",
+      "aliases": [
+        "markdown"
+      ],
+      "group": "rendering",
+      "type": "boolean",
+      "summary": "Render the text as inline Markdown (bold, italics, etc.).",
+      "section": "markdown"
+    },
+    {
+      "key": "symbolize",
+      "group": "symbols",
+      "type": "boolean",
+      "summary": "Render inline `:symbol.name:` tokens in the text as SF Symbols.",
+      "section": "sf-symbols"
+    },
+    {
+      "key": "href",
+      "group": "behavior",
+      "type": "url",
+      "summary": "Open this URL when the item is clicked."
+    },
+    {
+      "key": "shell",
+      "aliases": [
+        "bash"
+      ],
+      "group": "behavior",
+      "type": "string",
+      "summary": "Run this command on click. Positional args come from `param0`, `param1`, …"
+    },
+    {
+      "key": "paramN",
+      "displayKey": "param0, param1, …",
+      "group": "behavior",
+      "type": "string",
+      "openEnded": true,
+      "summary": "Ordered arguments passed to `shell`/`bash`.",
+      "note": "An open-ended family matched by prefix rather than enumerated, so it is the one declared exception in the parity check."
+    },
+    {
+      "key": "terminal",
+      "group": "behavior",
+      "type": "boolean",
+      "summary": "`true` to run the `shell` command in a visible Terminal window; `false` to run it in the background."
+    },
+    {
+      "key": "refresh",
+      "group": "behavior",
+      "type": "boolean",
+      "summary": "Re-run the plugin when the item is clicked."
+    },
+    {
+      "key": "alternate",
+      "group": "behavior",
+      "type": "boolean",
+      "summary": "This line is the Option-key alternate of the line above it."
+    },
+    {
+      "key": "disabled",
+      "group": "behavior",
+      "type": "boolean",
+      "summary": "Render the item greyed-out and non-clickable."
+    },
+    {
+      "key": "key",
+      "group": "behavior",
+      "type": "hotkey",
+      "grammar": "Cmd+R | shift+F2 | cmd+space",
+      "summary": "Keyboard shortcut for the item, active while the menu is open."
+    },
+    {
+      "key": "shortcut",
+      "group": "behavior",
+      "type": "string",
+      "summary": "Run a macOS Shortcut by name when the item is clicked (e.g. `shortcut=\"Start Meeting\"`)."
+    },
+    {
+      "key": "webview",
+      "group": "behavior",
+      "type": "url",
+      "summary": "Open a URL in a standalone WebView window, never inside the menu."
+    },
+    {
+      "key": "webvieww",
+      "group": "behavior",
+      "type": "number",
+      "grammar": "points",
+      "appliesTo": "webview",
+      "summary": "Width of the `webview=` window."
+    },
+    {
+      "key": "webviewh",
+      "group": "behavior",
+      "type": "number",
+      "grammar": "points",
+      "appliesTo": "webview",
+      "summary": "Height of the `webview=` window."
+    },
+    {
+      "key": "dropdown",
+      "group": "layout",
+      "type": "boolean",
+      "summary": "`false` — show the line only in the menu bar, not the dropdown.",
+      "section": "title-vs-dropdown"
+    },
+    {
+      "key": "header",
+      "group": "layout",
+      "type": "boolean",
+      "summary": "Render this line as a real, non-interactive section header instead of a normal item.",
+      "section": "section-headers"
+    },
+    {
+      "key": "accessory",
+      "group": "layout",
+      "type": "enum",
+      "grammar": "leading | trailing",
+      "default": "trailing",
+      "appliesTo": "progress, sparkline, pie, donut, stackedbar",
+      "summary": "Which edge of the row the inline accessory anchors to.",
+      "section": "accessory-placement-accessory"
+    },
+    {
+      "key": "image",
+      "group": "images",
+      "type": "string",
+      "grammar": "base64 | file reference",
+      "summary": "Base64-encoded image (or file reference) shown next to the text."
+    },
+    {
+      "key": "templateimage",
+      "displayKey": "templateImage",
+      "group": "images",
+      "type": "string",
+      "grammar": "base64 | file reference",
+      "summary": "Like `image`, but treated as a template image that adapts to light/dark."
+    },
+    {
+      "key": "sfimage",
+      "group": "symbols",
+      "type": "string",
+      "summary": "SF Symbol name to show as the item's icon (e.g. `sfimage=cpu`).",
+      "section": "sf-symbols"
+    },
+    {
+      "key": "sfcolor",
+      "group": "symbols",
+      "type": "color-list",
+      "grammar": "color[,color…]",
+      "appliesTo": "sfimage",
+      "summary": "Color(s) for the SF Symbol; comma-separated for multicolor symbols.",
+      "section": "sf-symbols"
+    },
+    {
+      "key": "sfsize",
+      "group": "symbols",
+      "type": "number",
+      "grammar": "points",
+      "appliesTo": "sfimage",
+      "summary": "Point size for the SF Symbol.",
+      "section": "sf-symbols"
+    },
+    {
+      "key": "sfconfig",
+      "group": "symbols",
+      "type": "json",
+      "grammar": "{\"scale\":\"small|medium|large\",\"weight\":\"…\"}",
+      "appliesTo": "sfimage",
+      "summary": "SF Symbol configuration as JSON. Example: `sfconfig='{\"scale\":\"large\",\"weight\":\"bold\"}'`.",
+      "section": "sf-symbols"
+    },
+    {
+      "key": "tooltip",
+      "group": "annotations",
+      "type": "string",
+      "summary": "Hover tooltip text."
+    },
+    {
+      "key": "checked",
+      "group": "annotations",
+      "type": "boolean",
+      "summary": "Show a checkmark next to the item."
+    },
+    {
+      "key": "badge",
+      "group": "annotations",
+      "type": "string",
+      "summary": "A short badge/chip shown after the text (e.g. `badge=12`)."
+    },
+    {
+      "key": "sparkline",
+      "group": "charts",
+      "chart": "sparkline",
+      "type": "number-list",
+      "grammar": "n[,n…]",
+      "summary": "A comma-separated list of numbers read as a series over time. Renders inline in the menu row; clicking opens a fuller Swift Charts popover.",
+      "section": "rich-inline-charts-liquid-glass-popovers"
+    },
+    {
+      "key": "sparklinew",
+      "group": "charts",
+      "chart": "sparkline",
+      "type": "number-or-full",
+      "grammar": "points | full",
+      "default": "90",
+      "appliesTo": "sparkline",
+      "summary": "Sparkline width in points, or `full` to stretch it to the row's own width.",
+      "constant": "sparkline.defaultWidth"
+    },
+    {
+      "key": "sparklineh",
+      "group": "charts",
+      "chart": "sparkline",
+      "type": "number",
+      "grammar": "points",
+      "default": "20",
+      "appliesTo": "sparkline",
+      "summary": "Sparkline height in points.",
+      "constant": "sparkline.defaultHeight"
+    },
+    {
+      "key": "sparklinecolor",
+      "group": "charts",
+      "chart": "sparkline",
+      "type": "color",
+      "appliesTo": "sparkline",
+      "summary": "Sparkline line color. Falls back to the row's `color=`, then to the control accent."
+    },
+    {
+      "key": "progress",
+      "group": "charts",
+      "chart": "progress",
+      "type": "number-or-pair",
+      "grammar": "0..1 | value,max",
+      "summary": "Draws a real capsule bar inline in the menu row (e.g. `progress=0.72` or `progress=23.65,100`). Fill uses `color=`.",
+      "section": "inline-progress-bars-progress"
+    },
+    {
+      "key": "progressw",
+      "group": "charts",
+      "chart": "progress",
+      "type": "number-or-full",
+      "grammar": "points | full",
+      "default": "120",
+      "appliesTo": "progress",
+      "summary": "Bar width in points, or `full` to stretch it to the row's own width.",
+      "constant": "progress.defaultWidth"
+    },
+    {
+      "key": "progressh",
+      "group": "charts",
+      "chart": "progress",
+      "type": "number",
+      "grammar": "points",
+      "default": "6",
+      "appliesTo": "progress",
+      "summary": "Bar height in points.",
+      "constant": "progress.defaultHeight"
+    },
+    {
+      "key": "progresstrackcolor",
+      "group": "charts",
+      "chart": "progress",
+      "type": "color",
+      "appliesTo": "progress",
+      "summary": "The color of the bar's groove, behind the fill."
+    },
+    {
+      "key": "trackcolor",
+      "group": "charts",
+      "chart": "progress",
+      "type": "color",
+      "appliesTo": "progress",
+      "deprecated": true,
+      "replacedBy": "progresstrackcolor",
+      "removedIn": "the next major version",
+      "summary": "The pre-v2 spelling of `progresstrackcolor=`. Still parsed, so published plugins keep working, but the SDKs no longer emit it and `vee lint` warns on it."
+    },
+    {
+      "key": "pie",
+      "group": "charts",
+      "chart": "pie",
+      "type": "number-list",
+      "grammar": "n[,n…]",
+      "summary": "Non-negative numbers read as shares of a whole (e.g. `pie=45,30,25`), drawn as a filled circle divided into sectors.",
+      "section": "share-charts-pie-donut-stackedbar"
+    },
+    {
+      "key": "donut",
+      "group": "charts",
+      "chart": "donut",
+      "type": "number-list",
+      "grammar": "n[,n…]",
+      "summary": "The same shares as `pie=`, drawn with the middle punched out; the hole carries the total.",
+      "section": "share-charts-pie-donut-stackedbar"
+    },
+    {
+      "key": "stackedbar",
+      "group": "charts",
+      "chart": "stackedbar",
+      "type": "number-list",
+      "grammar": "n[,n…]",
+      "summary": "The same shares as `pie=`, drawn as one horizontal bar whose segments are laid end to end.",
+      "section": "share-charts-pie-donut-stackedbar"
+    },
+    {
+      "key": "chartw",
+      "group": "charts",
+      "chart": "pie,donut,stackedbar",
+      "type": "number-or-full",
+      "grammar": "points | full",
+      "appliesTo": "pie, donut, stackedbar",
+      "summary": "The chart's inline width in points, clamped to 8–200. A pie or donut is a circle, so either dimension sizes both. `chartw=full` stretches a `stackedbar=` to the row's own width, and is refused on `pie=`/`donut=` with a diagnostic.",
+      "constant": "chart.sizeLimit"
+    },
+    {
+      "key": "charth",
+      "group": "charts",
+      "chart": "pie,donut,stackedbar",
+      "type": "number",
+      "grammar": "points",
+      "appliesTo": "pie, donut, stackedbar",
+      "summary": "The chart's inline height in points, clamped to 8–200. Defaults to a 24pt circle for `pie=`/`donut=` and 110×12 for `stackedbar=`.",
+      "constant": "chart.sizeLimit"
+    },
+    {
+      "key": "chartlabels",
+      "group": "charts",
+      "chart": "pie,donut,stackedbar",
+      "type": "string-list",
+      "grammar": "name[,name…]",
+      "appliesTo": "pie, donut, stackedbar",
+      "summary": "Segment names, positional against the values (e.g. `chartlabels=Docs,Photos,Apps`). Shown in the popover legend and read out by VoiceOver."
+    },
+    {
+      "key": "chartcolors",
+      "group": "charts",
+      "chart": "pie,donut,stackedbar",
+      "type": "color-list",
+      "grammar": "color[,color…]",
+      "appliesTo": "pie, donut, stackedbar",
+      "summary": "Segment colors, positional against the values (e.g. `chartcolors=blue,,orange`). A blank, malformed, or unknown entry keeps that segment's default palette color rather than shifting the rest."
+    },
+    {
+      "key": "toggle",
+      "group": "controls",
+      "type": "enum",
+      "grammar": "on | off | true | false | 1 | 0",
+      "summary": "Clicking opens a popover with a switch; flipping it re-invokes the item's `shell=`/`bash=` with the new value.",
+      "section": "interactive-controls-toggle-slider"
+    },
+    {
+      "key": "slider",
+      "group": "controls",
+      "type": "triple",
+      "grammar": "min,max,value",
+      "summary": "Clicking opens a popover with a slider; releasing it re-invokes the item's `shell=`/`bash=` with the chosen value (e.g. `slider=0,100,40`).",
+      "section": "interactive-controls-toggle-slider"
+    }
+  ],
+  "constants": [
+    {
+      "id": "chart.maxSegments",
+      "symbol": "ChartParams.maxSegments",
+      "file": "Sources/VeePluginFormat/ChartParams.swift",
+      "value": 8,
+      "statedAs": "the most segments a share chart carries before the tail folds into 'Other'"
+    },
+    {
+      "id": "chart.sizeLimit.min",
+      "symbol": "ChartParams.sizeLimit",
+      "member": "lowerBound",
+      "file": "Sources/VeePluginFormat/ChartParams.swift",
+      "value": 8,
+      "statedAs": "the floor `chartw=`/`charth=` are clamped to, in points"
+    },
+    {
+      "id": "chart.sizeLimit.max",
+      "symbol": "ChartParams.sizeLimit",
+      "member": "upperBound",
+      "file": "Sources/VeePluginFormat/ChartParams.swift",
+      "value": 200,
+      "statedAs": "the ceiling `chartw=`/`charth=` are clamped to, in points"
+    },
+    {
+      "id": "chart.defaultCircleSide",
+      "symbol": "ChartParams.defaultCircleSide",
+      "file": "Sources/VeePluginFormat/ChartParams.swift",
+      "value": 24,
+      "statedAs": "the default diameter of an inline pie or donut, in points"
+    },
+    {
+      "id": "chart.defaultBarWidth",
+      "symbol": "ChartParams.defaultBarWidth",
+      "file": "Sources/VeePluginFormat/ChartParams.swift",
+      "value": 110,
+      "statedAs": "the default width of an inline stacked bar, in points"
+    },
+    {
+      "id": "chart.defaultBarHeight",
+      "symbol": "ChartParams.defaultBarHeight",
+      "file": "Sources/VeePluginFormat/ChartParams.swift",
+      "value": 12,
+      "statedAs": "the default height of an inline stacked bar, in points"
+    },
+    {
+      "id": "progress.defaultWidth",
+      "symbol": "ProgressParams.defaultWidth",
+      "file": "Sources/VeePluginFormat/LineParams.swift",
+      "value": 120,
+      "statedAs": "the default width of an inline progress bar, in points"
+    },
+    {
+      "id": "progress.defaultHeight",
+      "symbol": "ProgressParams.defaultHeight",
+      "file": "Sources/VeePluginFormat/LineParams.swift",
+      "value": 6,
+      "statedAs": "the default height of an inline progress bar, in points"
+    },
+    {
+      "id": "sparkline.defaultWidth",
+      "symbol": "SparklineStyle.defaultWidth",
+      "file": "Sources/VeePluginFormat/LineParams.swift",
+      "value": 90,
+      "statedAs": "the default width of an inline sparkline, in points"
+    },
+    {
+      "id": "sparkline.defaultHeight",
+      "symbol": "SparklineStyle.defaultHeight",
+      "file": "Sources/VeePluginFormat/LineParams.swift",
+      "value": 20,
+      "statedAs": "the default height of an inline sparkline, in points"
+    },
+    {
+      "id": "widget.maxSparklineValues",
+      "symbol": "WidgetCardParser.maxSparklineValues",
+      "file": "Sources/VeePluginFormat/WidgetCardParser.swift",
+      "value": 256,
+      "statedAs": "the point cap on a widget sparkline node's series"
+    }
+  ],
+  "charts": [
+    {
+      "id": "sparkline",
+      "name": "Sparkline",
+      "shape": "A line/area series over time.",
+      "surfaces": {
+        "text": "sparkline=1,2,3",
+        "json": "\"sparkline\": [1,2,3]",
+        "widget": "node type \"sparkline\" with \"values\", or the \"trend\" template's \"trend\""
+      },
+      "knobs": [
+        "sparklinew",
+        "sparklineh",
+        "sparklinecolor",
+        "accessory",
+        "color"
+      ],
+      "fullWidth": "`sparklinew=full`",
+      "defaults": "90×20 points",
+      "limits": "Widget sparkline nodes are truncated at 256 points; non-finite entries are dropped.",
+      "popover": "Yes — a full Swift Charts line/area chart.",
+      "notes": "A single value has no series to chart, so it draws as a flat centered baseline; an empty list is ignored entirely."
+    },
+    {
+      "id": "progress",
+      "name": "Progress bar",
+      "shape": "One capsule bar filled to a fraction.",
+      "surfaces": {
+        "text": "progress=0.72 or progress=23.65,100",
+        "json": "\"progress\": 0.72",
+        "widget": "\"progress\" on the card, the \"gauge\" template's fill"
+      },
+      "knobs": [
+        "progressw",
+        "progressh",
+        "progresstrackcolor",
+        "accessory",
+        "color"
+      ],
+      "fullWidth": "`progressw=full`",
+      "defaults": "120×6 points",
+      "limits": "Clamped to 0…1; a non-finite value is dropped.",
+      "popover": "No — the bar is the whole surface.",
+      "notes": "Fill takes the row's color=; progresstrackcolor= paints the groove behind it. trackcolor= is the deprecated spelling."
+    },
+    {
+      "id": "pie",
+      "name": "Pie",
+      "shape": "A filled circle divided into sectors.",
+      "surfaces": {
+        "text": "pie=45,30,25",
+        "json": "\"chart\": {\"kind\": \"pie\", \"values\": […]}",
+        "widget": "—"
+      },
+      "knobs": [
+        "chartw",
+        "charth",
+        "chartlabels",
+        "chartcolors",
+        "accessory"
+      ],
+      "fullWidth": "Not supported — refused with a diagnostic.",
+      "defaults": "24pt diameter",
+      "limits": "8 segments (the tail folds into 'Other'); size clamped to 8–200 points.",
+      "popover": "Yes — full size with a labelled legend.",
+      "notes": "A circle, so chartw= or charth= alone sizes both dimensions."
+    },
+    {
+      "id": "donut",
+      "name": "Donut",
+      "shape": "A pie with the middle punched out; the hole carries the total.",
+      "surfaces": {
+        "text": "donut=512,256,128",
+        "json": "\"chart\": {\"kind\": \"donut\", \"values\": […]}",
+        "widget": "—"
+      },
+      "knobs": [
+        "chartw",
+        "charth",
+        "chartlabels",
+        "chartcolors",
+        "accessory"
+      ],
+      "fullWidth": "Not supported — refused with a diagnostic.",
+      "defaults": "24pt diameter",
+      "limits": "8 segments (the tail folds into 'Other'); size clamped to 8–200 points.",
+      "popover": "Yes — full size with a labelled legend.",
+      "notes": "Same data as pie=; switching between them needs no change to values, labels, or colors."
+    },
+    {
+      "id": "stackedbar",
+      "name": "Stacked bar",
+      "shape": "One horizontal bar whose segments lie end to end.",
+      "surfaces": {
+        "text": "stackedbar=60,25,15",
+        "json": "\"chart\": {\"kind\": \"stackedbar\", \"values\": […]}",
+        "widget": "—"
+      },
+      "knobs": [
+        "chartw",
+        "charth",
+        "chartlabels",
+        "chartcolors",
+        "accessory"
+      ],
+      "fullWidth": "`chartw=full` — the only chart kind that accepts it.",
+      "defaults": "110×12 points",
+      "limits": "8 segments (the tail folds into 'Other'); size clamped to 8–200 points.",
+      "popover": "Yes — full size with a labelled legend.",
+      "notes": "The only share chart with free width, which is why full applies here and nowhere else."
+    },
+    {
+      "id": "widget-gauge",
+      "name": "Widget gauge",
+      "shape": "A native WidgetKit gauge.",
+      "surfaces": {
+        "text": "—",
+        "json": "—",
+        "widget": "node type \"gauge\" with \"value\", or the \"gauge\" template"
+      },
+      "knobs": [
+        "gauge_style",
+        "style.tint"
+      ],
+      "fullWidth": "Not applicable — a circular gauge takes no size knob.",
+      "defaults": "gauge_style: linear",
+      "limits": "value clamped to 0…1.",
+      "popover": "No — widgets have no popover surface.",
+      "notes": "Widget-only. The menu bar's nearest equivalent is progress=."
+    }
+  ]
+}

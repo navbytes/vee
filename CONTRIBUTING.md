@@ -204,9 +204,12 @@ Two folders take plugins — pick the right one:
 - **`plugins/showcase/`** — copy-paste showcase plugins (plain shell) that
   demonstrate Vee features and the trust model. Add here for a runnable,
   well-commented demo. Not wired into the test suite.
-- **`plugins/examples/`** — SDK examples that double as golden fixtures for the
-  drift guard. Add here only if you're demonstrating the TypeScript SDK and are
-  prepared to commit a matching fixture.
+- **`plugins/typescript/examples/`**, **`plugins/python/examples/`**,
+  **`plugins/go/examples/`** — SDK examples that double as golden fixtures for
+  the drift guard. Each language mirrors the same example set, and all three
+  are checked byte-for-byte against the shared fixtures in
+  **`plugins/fixtures/`**. Add here only if you're prepared to commit a
+  matching fixture and port the example to the other two SDKs.
 
 To propose a plugin for the community catalog/gallery, open an issue using the
 **Plugin submission** template. Include what it does, its language and

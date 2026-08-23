@@ -119,50 +119,124 @@ Append `| key=value key2=value2 …` to any line to attach parameters. Quote val
 
 A literal `|`, backslash, or newline in the display text (or in a quoted value) must be escaped as `\|`, `\\`, or `\n` — otherwise an unescaped `|` is read as the params delimiter and truncates the item, and a raw newline splits it into two corrupted lines. The bundled [TypeScript, Python, and Go SDKs](sdk.md) escape these automatically for any text/value you pass in; only hand-written plugin output needs to do it explicitly.
 
-| Parameter | Description |
-|-----------|-------------|
-| `color` | Text color — a named color (`red`, `green`, …) or a hex value like `#00ff00`. |
-| `font` | Font family name for the text. |
-| `size` | Font point size. |
-| `length` | Truncate the displayed text to this many characters. |
-| `trim` | `true`/`false` — trim surrounding whitespace from the text. |
-| `href` | Open this URL when the item is clicked. |
-| `shell` / `bash` | Run this command on click. Positional args come from `param0`, `param1`, … |
-| `param0`, `param1`, … | Ordered arguments passed to `shell`/`bash`. |
-| `terminal` | `true` to run the `shell` command in a visible Terminal window; `false` to run it in the background. |
-| `refresh` | `true` — re-run the plugin when the item is clicked. |
-| `dropdown` | `false` — show the line only in the menu bar, not the dropdown. |
-| `alternate` | `true` — this line is the Option-key alternate of the line above it. |
-| `disabled` | `true` — render the item greyed-out and non-clickable. |
-| `header` | `true` — render this line as a real, non-interactive [section header](#section-headers) instead of a normal item. |
-| `key` | Keyboard shortcut for the item, active while the menu is open (e.g. `key=Cmd+R`, `key=shift+F2`, `key=cmd+space`). |
-| `image` | Base64-encoded image (or file reference) shown next to the text. |
-| `templateImage` | Like `image`, but treated as a template image that adapts to light/dark. |
-| `sfimage` | SF Symbol name to show as the item's icon (e.g. `sfimage=cpu`). |
-| `sfcolor` | Color(s) for the SF Symbol; comma-separated for multicolor symbols. |
-| `sfsize` | Point size for the SF Symbol. |
-| `sfconfig` | SF Symbol configuration as JSON — `scale` (`small`/`medium`/`large`) and `weight` (e.g. `bold`). Example: `sfconfig='{"scale":"large","weight":"bold"}'`. |
-| `symbolize` | `true` — render inline `:symbol.name:` tokens in the text as SF Symbols. |
-| `md` / `markdown` | `true` — render the text as inline Markdown (bold, italics, etc.). |
-| `ansi` | `true`/`false` — interpret ANSI color escape codes in the text. On by default; set `ansi=false` to disable. |
-| `emojize` | `true`/`false` — convert `:shortcode:` tokens (e.g. `:smile:`) into emoji. |
-| `tooltip` | Hover tooltip text. |
-| `checked` | `true` — show a checkmark next to the item. |
-| `badge` | A short badge/chip shown after the text (e.g. `badge=12`). |
-| `shortcut` | Run a macOS Shortcut by name when the item is clicked (e.g. `shortcut="Start Meeting"`). |
-| `webview`, `webvieww`, `webviewh` | Open a URL in a standalone WebView window (never inside the menu), with optional width/height. |
-| `sparkline`, `sparklinew`, `sparklineh`, `sparklinecolor` | A comma-separated list of numbers (e.g. `sparkline=1,2,3,4,5`). Renders as a small chart **inline in the menu row**; clicking the item also opens a fuller native Liquid Glass Swift Charts popover. `sparklinew=`/`sparklineh=` set the chart size in points (defaults 90×20), `sparklinew=full` stretches it to the row's own width, and `sparklinecolor=` sets the line colour (falling back to the row's `color=`). |
-| `toggle` | `toggle=on` / `toggle=off` (also `true`/`false`/`1`/`0`). Clicking opens a Liquid Glass popover with a switch; flipping it re-invokes the item's `shell=`/`bash=` with the new value. |
-| `slider` | `slider=min,max,value` (e.g. `slider=0,100,40`). Clicking opens a Liquid Glass popover with a slider; releasing it re-invokes the item's `shell=`/`bash=` with the chosen value. |
-| `progress`, `progresstrackcolor`, `progressw`, `progressh` | `progress=<0..1>` or `progress=value,max` (e.g. `progress=0.72` or `progress=23.65,100`). Draws a real capsule bar **inline in the menu row**. Fill uses `color=`; `progresstrackcolor=` is the groove, `progressw=`/`progressh=` set the bar size in points, and `progressw=full` stretches the bar to the row's own width. |
-| `trackcolor` | **Deprecated** — the pre-v2 spelling of `progresstrackcolor=`. Still parsed, so published plugins keep working, but the SDKs no longer emit it and it will be removed in the next major version. |
-| `pie`, `donut`, `stackedbar` | A comma-separated list of non-negative numbers read as shares of a whole (e.g. `pie=45,30,25`). Draws the chart **inline in the menu row**; clicking the item opens a fuller Swift Charts popover with a labelled legend. See [Share charts](#share-charts-pie-donut-stackedbar). |
-| `chartw`, `charth` | The chart's inline size in points (defaults: a 24pt circle, a 110×12 bar; clamped to 8–200). A pie or donut is a circle, so either one sizes both sides. `chartw=full` stretches a `stackedbar=` to the row's own width instead. |
-| `chartlabels` | Segment names for a chart, positional against its values (e.g. `chartlabels=Docs,Photos,Apps`). Shown in the popover legend and read out by VoiceOver. |
-| `chartcolors` | Segment colors for a chart, positional against its values (e.g. `chartcolors=blue,,orange`). An entry that is blank, malformed, or names a color Vee doesn't know keeps that segment's default palette color. |
-| `accessory` | `leading` / `trailing` — which edge of the row a `progress=`/`sparkline=`/chart accessory anchors to (default `trailing`, today's rendering). See [Accessory placement](#accessory-placement-accessory). |
+Every parameter below is generated from `docs/api/params.json`, the same
+record `vee lint` and the three SDKs are checked against — so a parameter
+that exists is listed here, and one listed here exists.
+
+<!-- Generated by docs/scripts/build_reference.py from docs/api/params.json. Do not edit; edit the JSON and re-run. -->
+
+### Text and rendering
+
+How the row's own text is drawn.
+
+| Parameter | Type | Default | Applies to | Description |
+| --------- | ---- | ------- | ---------- | ----------- |
+| `color` | name \| #rrggbb | — | any line | Text color — a named color (`red`, `green`, …) or a hex value like `#00ff00`. |
+| `font` | string | — | any line | Font family name for the text. |
+| `size` | points | — | any line | Font point size. |
+| `length` | characters | — | any line | Truncate the displayed text to this many characters. |
+| `trim` | boolean | — | any line | Trim surrounding whitespace from the text. |
+| `ansi` | boolean | true | any line | Interpret ANSI color escape codes in the text. On by default; set `ansi=false` to disable. [More](#ansi-color) |
+| `emojize` | boolean | — | any line | Convert `:shortcode:` tokens (e.g. `:smile:`) into emoji. |
+| `md` / `markdown` | boolean | — | any line | Render the text as inline Markdown (bold, italics, etc.). [More](#markdown) |
+
+### Behavior on click
+
+What happens when a reader activates the row.
+
+| Parameter | Type | Default | Applies to | Description |
+| --------- | ---- | ------- | ---------- | ----------- |
+| `href` | url | — | any line | Open this URL when the item is clicked. |
+| `shell` / `bash` | string | — | any line | Run this command on click. Positional args come from `param0`, `param1`, … |
+| `param0, param1, …` | string | — | any line | Ordered arguments passed to `shell`/`bash`. An open-ended family matched by prefix rather than enumerated, so it is the one declared exception in the parity check. |
+| `terminal` | boolean | — | any line | `true` to run the `shell` command in a visible Terminal window; `false` to run it in the background. |
+| `refresh` | boolean | — | any line | Re-run the plugin when the item is clicked. |
+| `alternate` | boolean | — | any line | This line is the Option-key alternate of the line above it. |
+| `disabled` | boolean | — | any line | Render the item greyed-out and non-clickable. |
+| `key` | Cmd+R \| shift+F2 \| cmd+space | — | any line | Keyboard shortcut for the item, active while the menu is open. |
+| `shortcut` | string | — | any line | Run a macOS Shortcut by name when the item is clicked (e.g. `shortcut="Start Meeting"`). |
+| `webview` | url | — | any line | Open a URL in a standalone WebView window, never inside the menu. |
+| `webvieww` | points | — | webview | Width of the `webview=` window. |
+| `webviewh` | points | — | webview | Height of the `webview=` window. |
+
+### Placement
+
+Where the line appears, and where its accessory sits.
+
+| Parameter | Type | Default | Applies to | Description |
+| --------- | ---- | ------- | ---------- | ----------- |
+| `dropdown` | boolean | — | any line | `false` — show the line only in the menu bar, not the dropdown. [More](#title-vs-dropdown) |
+| `header` | boolean | — | any line | Render this line as a real, non-interactive section header instead of a normal item. [More](#section-headers) |
+| `accessory` | leading \| trailing | trailing | progress, sparkline, pie, donut, stackedbar | Which edge of the row the inline accessory anchors to. [More](#accessory-placement-accessory) |
+
+### Images
+
+Bitmap artwork beside the text.
+
+| Parameter | Type | Default | Applies to | Description |
+| --------- | ---- | ------- | ---------- | ----------- |
+| `image` | base64 \| file reference | — | any line | Base64-encoded image (or file reference) shown next to the text. |
+| `templateImage` | base64 \| file reference | — | any line | Like `image`, but treated as a template image that adapts to light/dark. |
+
+### SF Symbols
+
+Apple's symbol set as a row icon, or inline in the text.
+
+| Parameter | Type | Default | Applies to | Description |
+| --------- | ---- | ------- | ---------- | ----------- |
+| `symbolize` | boolean | — | any line | Render inline `:symbol.name:` tokens in the text as SF Symbols. [More](#sf-symbols) |
+| `sfimage` | string | — | any line | SF Symbol name to show as the item's icon (e.g. `sfimage=cpu`). [More](#sf-symbols) |
+| `sfcolor` | color[,color…] | — | sfimage | Color(s) for the SF Symbol; comma-separated for multicolor symbols. [More](#sf-symbols) |
+| `sfsize` | points | — | sfimage | Point size for the SF Symbol. [More](#sf-symbols) |
+| `sfconfig` | {"scale":"small\|medium\|large","weight":"…"} | — | sfimage | SF Symbol configuration as JSON. Example: `sfconfig='{"scale":"large","weight":"bold"}'`. [More](#sf-symbols) |
+
+### Annotations
+
+Small marks attached to a row.
+
+| Parameter | Type | Default | Applies to | Description |
+| --------- | ---- | ------- | ---------- | ----------- |
+| `tooltip` | string | — | any line | Hover tooltip text. |
+| `checked` | boolean | — | any line | Show a checkmark next to the item. |
+| `badge` | string | — | any line | A short badge/chip shown after the text (e.g. `badge=12`). |
+
+### Charts and gauges
+
+The inline accessory slot: a sparkline, a progress bar, or a share chart. See the chart index for the whole matrix.
+
+| Parameter | Type | Default | Applies to | Description |
+| --------- | ---- | ------- | ---------- | ----------- |
+| `sparkline` | n[,n…] | — | any line | A comma-separated list of numbers read as a series over time. Renders inline in the menu row; clicking opens a fuller Swift Charts popover. [More](#rich-inline-charts-liquid-glass-popovers) |
+| `sparklinew` | points \| full | 90 | sparkline | Sparkline width in points, or `full` to stretch it to the row's own width. |
+| `sparklineh` | points | 20 | sparkline | Sparkline height in points. |
+| `sparklinecolor` | color | — | sparkline | Sparkline line color. Falls back to the row's `color=`, then to the control accent. |
+| `progress` | 0..1 \| value,max | — | any line | Draws a real capsule bar inline in the menu row (e.g. `progress=0.72` or `progress=23.65,100`). Fill uses `color=`. [More](#inline-progress-bars-progress) |
+| `progressw` | points \| full | 120 | progress | Bar width in points, or `full` to stretch it to the row's own width. |
+| `progressh` | points | 6 | progress | Bar height in points. |
+| `progresstrackcolor` | color | — | progress | The color of the bar's groove, behind the fill. |
+| `trackcolor` | color | — | progress | **Deprecated** — use `progresstrackcolor=` instead. The pre-v2 spelling of `progresstrackcolor=`. Still parsed, so published plugins keep working, but the SDKs no longer emit it and `vee lint` warns on it. |
+| `pie` | n[,n…] | — | any line | Non-negative numbers read as shares of a whole (e.g. `pie=45,30,25`), drawn as a filled circle divided into sectors. [More](#share-charts-pie-donut-stackedbar) |
+| `donut` | n[,n…] | — | any line | The same shares as `pie=`, drawn with the middle punched out; the hole carries the total. [More](#share-charts-pie-donut-stackedbar) |
+| `stackedbar` | n[,n…] | — | any line | The same shares as `pie=`, drawn as one horizontal bar whose segments are laid end to end. [More](#share-charts-pie-donut-stackedbar) |
+| `chartw` | points \| full | — | pie, donut, stackedbar | The chart's inline width in points, clamped to 8–200. A pie or donut is a circle, so either dimension sizes both. `chartw=full` stretches a `stackedbar=` to the row's own width, and is refused on `pie=`/`donut=` with a diagnostic. |
+| `charth` | points | — | pie, donut, stackedbar | The chart's inline height in points, clamped to 8–200. Defaults to a 24pt circle for `pie=`/`donut=` and 110×12 for `stackedbar=`. |
+| `chartlabels` | name[,name…] | — | pie, donut, stackedbar | Segment names, positional against the values (e.g. `chartlabels=Docs,Photos,Apps`). Shown in the popover legend and read out by VoiceOver. |
+| `chartcolors` | color[,color…] | — | pie, donut, stackedbar | Segment colors, positional against the values (e.g. `chartcolors=blue,,orange`). A blank, malformed, or unknown entry keeps that segment's default palette color rather than shifting the rest. |
+
+### Interactive controls
+
+Rows that take input and re-invoke the plugin with it.
+
+| Parameter | Type | Default | Applies to | Description |
+| --------- | ---- | ------- | ---------- | ----------- |
+| `toggle` | on \| off \| true \| false \| 1 \| 0 | — | any line | Clicking opens a popover with a switch; flipping it re-invokes the item's `shell=`/`bash=` with the new value. [More](#interactive-controls-toggle-slider) |
+| `slider` | min,max,value | — | any line | Clicking opens a popover with a slider; releasing it re-invokes the item's `shell=`/`bash=` with the chosen value (e.g. `slider=0,100,40`). [More](#interactive-controls-toggle-slider) |
 
 Unknown parameters are preserved rather than dropped, so the format can evolve without breaking existing plugins.
+
+Every chart parameter above belongs to one specific chart. For the whole set
+side by side — which charts exist, how each is spelled on the text, JSON, and
+widget surfaces, and which options apply to which — see [Charts](charts.md).
 
 ## Rich inline charts (Liquid Glass popovers)
 
@@ -718,7 +792,7 @@ manifest, no install step.
 Two courtesies make a shared plugin pleasant to receive:
 
 - **Ship it without the executable bit**, so the recipient reads the source
-  before marking it `+x`. The bundled [examples](https://github.com/navbytes/vee/tree/main/examples)
+  before marking it `+x`. The bundled [examples](https://github.com/navbytes/vee/tree/main/plugins/showcase)
   do exactly this.
 - **Fill in the metadata.** `<xbar.title>`, `<xbar.desc>`, `<xbar.author>`, and
   `<xbar.dependencies>` are what Vee shows about your plugin, and

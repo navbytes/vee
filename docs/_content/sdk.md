@@ -149,7 +149,7 @@ A compiled binary is a first-class Vee plugin. The `.5s` in the filename sets a 
 
 ## The API
 
-All three SDKs expose the same three types.
+All three SDKs expose the same four types.
 
 ### `Menu`
 
@@ -171,6 +171,18 @@ A menu section at a given submenu depth (0 = top level).
 - **Item** — `item(text, options?)` / `item(text, **options)` / `Item(text, *Options)` adds a menu item.
 - **Separator** — `separator()` / `separator()` / `Separator()` adds a `---` divider.
 - **Submenu** — `submenu(text, ...)` / `Submenu(text, ...)` adds an item and returns a new `Section` for its children (one level deeper).
+
+### `JSONMenu`
+
+The same surface as `Menu`, emitting the [structured-JSON format](json-output.md)
+instead of the text protocol. It mirrors `Menu` method for method — `title`,
+`dropdown`, `item`, `separator`, `submenu`, `toString`/`to_string`/`String`,
+`print` — so choosing a wire format no longer means choosing a different way to
+work.
+
+Prefer it when a plugin's values contain characters the text protocol has to
+escape (pipes, quotes, newlines), since the JSON encoder handles them without
+the escaping rules the text format needs.
 
 ### Options
 

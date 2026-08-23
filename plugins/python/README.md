@@ -66,113 +66,42 @@ The `.5s` sets a 5-second refresh, exactly as with any other plugin.
 
 ## API
 
-### `Menu`
+The three SDKs expose the same `Menu` / `Section` / options surface, method for
+method, and are checked against each other so they cannot drift. Rather than
+restate a third of that contract here, the full cross-language reference —
+every method, every option, and the Python spelling of each — lives in one
+place:
 
-- `title(text, **options)` — add a menu-bar title line (call more than once for
-  multiple lines).
-- `dropdown` — a property returning a `Section` for the dropdown body
-  (everything after `---`).
-- `to_string()` / `str(menu)` — render the whole menu to the text protocol.
-- `print()` — write `to_string()` (plus a trailing newline) to stdout. This is
-  what a real plugin calls.
+**[Plugin SDKs reference](https://vee.navbytes.io/guide/sdk.html)**
 
-### `Section`
+For the parameters themselves — what each one accepts, its default, and which
+chart it belongs to — see the [plugin authoring
+reference](https://vee.navbytes.io/guide/plugin-authoring.html) and
+[Charts](https://vee.navbytes.io/guide/charts.html), both generated from
+`docs/api/params.json`, the same record this SDK is verified against.
 
-- `item(text, **options)` — add a menu item. Returns `self` for chaining.
-- `separator()` — add a `---` separator at this depth.
-- `submenu(text, **options)` — add an item and return a `Section` for its
-  submenu.
+## Naming and deprecations
 
-### Options
-
+Python-specific, and the one thing this SDK does not share with the other two.
 Option names are **snake_case** throughout — menu options and layout-node
-options alike:
-
-- **Rendering** — `color`, `size`, `font`, `length`, `trim`, `ansi`, `emojize`
-- **Behaviour** — `href`, `shell` (+ `params`), `terminal`, `refresh`,
-  `dropdown`, `alternate`, `disabled`, `checked`, `key`, `tooltip`
-- **Images** — `image`, `template_image`
-- **SF Symbols** — `sfimage`, `sf_color`, `sf_size`, `sf_config`, `symbolize`
-- **SwiftBar extras** — `md`, `badge`, `webview`, `webview_w`, `webview_h`,
-  `shortcut`
-- **Vee-native rows** — `header`, `accessory`
-- **Controls** — `toggle`, `slider`, `progress` (a fraction, or `(value, max)`
-  for the format's two-argument form)
-- **Inline visuals** — each takes the same `<control>_w` / `<control>_h` /
-  colour vocabulary:
-
-  | Control | Size | Colour |
-  | ------- | ---- | ------ |
-  | `sparkline` | `sparkline_w`, `sparkline_h` | `sparkline_color` |
-  | `progress` | `progress_w`, `progress_h` | `progress_track_color` |
-  | `chart` | `chart["w"]`, `chart["h"]` | `chart["colors"]` |
-
-  `sparkline_w`, `progress_w`, and `chart["w"]` all accept `"full"` to stretch
-  to the row's own width.
+options alike — so the format's `templateImage` is `template_image` here,
+`sfcolor` is `sf_color`, and `progresstrackcolor` is `progress_track_color`.
 
 **Unknown options raise `TypeError`.** They used to be dropped in silence, so a
-typo — or the idiomatic snake_case spelling, back when these were camelCase —
-emitted nothing at all:
+typo emitted nothing at all:
 
 ```python
 d.item("Disk", progress=0.5, track_colour="gray")
 # TypeError: unknown option 'track_colour'. Did you mean 'progress_track_color'?
 ```
 
-The old camelCase spellings (`trackColor`, `progressW`, `templateImage`, …)
-still work and emit a `DeprecationWarning`; they will be removed in the next
-major version. See the [SDK guide](../../docs/_content/sdk.md) for the
-rich-param details.
+Two spellings are deprecated and still work, each emitting a
+`DeprecationWarning`; both go in the next major version:
 
-## Widget cards
-
-Beyond menus, the SDK builds the [widget card](../../docs/_content/widgets.md)
-payload a plugin prints when Vee invokes it with `VEE_TARGET=widget`:
-
-```python
-import os
-from vee import Stat
-
-if os.environ.get("VEE_TARGET") == "widget":
-    Stat(
-        title="Revenue",
-        symbol="chart.line.uptrend.xyaxis",
-        tint="green",
-        value="$18.2k",
-        status="ok",
-        items=[{"label": "Orders", "value": "214", "symbol": "bag", "tint": "blue"}],
-        actions=[{"kind": "refresh", "label": "Refresh"}],
-    ).print()
-else:
-    ...  # ordinary menu output
-```
-
-`Stat`, `Gauge`, `Trend`, `List`, and `Board` preset the card's `template`;
-`widget_card(...)` is the generic constructor. Each returns an object with the
-same `to_string()` / `print()` shape as `Menu`.
-
-For layouts the five templates cannot express, build a **layout tree** with the
-`Node` builders and pass it as `layout=`:
-
-```python
-from vee import widget_card, Node
-
-widget_card(
-    layout=Node.VStack(
-        [
-            Node.Text("CPU", style={"font": {"size": "caption"}, "tint": "secondary"}),
-            Node.Text("38%", style={"font": {"size": "title"}, "monospaced_digit": True}),
-            Node.Gauge(0.38, gauge_style="circular"),
-        ],
-        align="leading",
-        spacing=6,
-    ),
-).print()
-```
-
-`Node.VStack`, `HStack`, `ZStack`, `Grid`, `Text`, `Image`, `Gauge`,
-`Sparkline`, `Spacer`, and `Divider` are the full vocabulary. See
-[Widgets](../../docs/_content/widgets.md) for every field and its limits.
+| Deprecated | Use instead |
+| ---------- | ----------- |
+| camelCase (`trackColor`, `progressW`, `templateImage`, …) | snake_case (`progress_track_color`, `progress_w`, `template_image`, …) |
+| tuple forms (`progress=(72, 100)`) | mapping forms |
 
 ## Tests
 

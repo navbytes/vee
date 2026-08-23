@@ -13,6 +13,7 @@ The complete documentation is also available as a single document:
 - [Getting started](https://vee.navbytes.io/guide/getting-started.md): Install Vee, write your first plugin, and learn where plugins live. A native macOS menu-bar script runner, xbar and SwiftBar compatible.
 - [Migrating from SwiftBar / xbar](https://vee.navbytes.io/guide/migrating-from-swiftbar.md): Move to Vee from SwiftBar or xbar in one step: point it at your existing plugins folder. Full protocol compatibility, plus a trust layer and typed SDK.
 - [Plugin authoring](https://vee.navbytes.io/guide/plugin-authoring.md): The full Vee plugin reference: filenames and intervals, menu structure, line parameters, metadata headers, SF Symbols, ANSI, Markdown, streaming, and cron.
+- [Charts](https://vee.navbytes.io/guide/charts.md): Every chart a Vee plugin can draw: sparklines, progress bars, pie, donut, and stacked-bar share charts, and widget gauges — how each is spelled on the text, JSON, and widget surfaces, and which options apply to which.
 - [Widgets](https://vee.navbytes.io/guide/widgets.md): Render Vee plugins as native desktop and Notification Center widgets: the surface contract, the widget card schema, the five templates, and the composable layout tree.
 - [Trust model](https://vee.navbytes.io/guide/trust-model.md): How Vee makes plugins transparent: authors declare what they touch with <vee.*> tags, and Vee shows a plain-language trust summary before install. Advisory, not a sandbox.
 - [Preferences](https://vee.navbytes.io/guide/preferences.md): Plugins declare typed settings with <xbar.var>; Vee auto-generates a form and stores secrets in the macOS Keychain. Configuration belongs to the plugin.
@@ -33,4 +34,4 @@ The complete documentation is also available as a single document:
 ## Optional
 
 - [Plugin SDKs](https://github.com/navbytes/vee/tree/main/plugins): zero-dependency TypeScript, Python, and Go builders that emit byte-identical output.
-- [Example plugins](https://github.com/navbytes/vee/tree/main/examples): runnable, heavily commented showcase plugins.
+- [Example plugins](https://github.com/navbytes/vee/tree/main/plugins/showcase): runnable, heavily commented showcase plugins.
