@@ -11,7 +11,34 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  # Which surfaces this change touches. Only SwiftLint is gated — it is the one
+  # macOS runner here, billed at ten times the Linux rate, and it reads nothing
+  # but Swift.
+  changes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      swift: ${{ steps.filter.outputs.swift }}
+    steps:
+      - id: filter
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ "${{ github.event_name }}" != "pull_request" ]; then
+            echo "swift=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          files=$(gh api --paginate \
+            "repos/${{ github.repository }}/pulls/${{ github.event.number }}/files" \
+            --jq '.[].filename')
+          if echo "$files" | grep -qE '^(Sources|Tests|App|WidgetExtension)/|^Package\.swift$|^\.swiftlint\.yml$|^\.github/workflows/lint\.yml$'; then
+            echo "swift=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "swift=false" >> "$GITHUB_OUTPUT"
+          fi
+
   swiftlint:
+    needs: changes
+    if: needs.changes.outputs.swift == 'true'
     # macos-26 to match the project's macOS 26 deployment target (Liquid Glass).
     runs-on: macos-26
     timeout-minutes: 10
