@@ -41,24 +41,24 @@ existing `VeeMenuTests` / `VeeSearchTests` suites are the safety net.
 Design D5. Independently revertible; do before the tree work so step 3 has less
 surface to carry.
 
-- [ ] 2.1 Delete `AppController.openSearchAllPanel`, `aggregateSearchRows`,
+- [x] 2.1 Delete `AppController.openSearchAllPanel`, `aggregateSearchRows`,
       `registerSearchAllHotkey`, `applySearchAllHotkey`, `searchHotkeyID`, and
       `searchHotkeyStatus`.
-- [ ] 2.2 Delete the "Search All Plugins…" item, its `⌘F` binding, and the
+- [x] 2.2 Delete the "Search All Plugins…" item, its `⌘F` binding, and the
       `onSearchAll` parameter from `MainMenuController` and its `AppController`
       call site.
-- [ ] 2.3 Delete `searchAllHotkeyEnabled` / `searchAllHotkeyCombo` from
+- [x] 2.3 Delete `searchAllHotkeyEnabled` / `searchAllHotkeyCombo` from
       `AppPreferences`. Leave the two `UserDefaults` keys orphaned — no
       migration (D5).
-- [ ] 2.4 Delete the search-all hotkey row and its four model properties from
+- [x] 2.4 Delete the search-all hotkey row and its four model properties from
       `VeeUI/GeneralSettingsView`.
-- [ ] 2.5 Delete `FlatRow.prefixed(with:)` and `SearchEntry.prefixed(with:)`.
-- [ ] 2.6 Delete the `aggregateSearchRows` test suite and any
+- [x] 2.5 Delete `FlatRow.prefixed(with:)` and `SearchEntry.prefixed(with:)`.
+- [x] 2.6 Delete the `aggregateSearchRows` test suite and any
       `prefixed(with:)` coverage.
-- [ ] 2.7 Make `MenuSearchPanel.present`'s `keepOpen:` non-optional and drop the
+- [x] 2.7 Make `MenuSearchPanel.present`'s `keepOpen:` non-optional and drop the
       `pluginName: "All Plugins"` special case — the aggregator was the only
       caller passing `nil`.
-- [ ] 2.8 Verify `swift test` is green and no reference to search-all remains
+- [x] 2.8 Verify `swift test` is green and no reference to search-all remains
       (`grep -ri "searchall\|search all"` over `Sources` and `Tests`).
 
 ## 3. Hierarchical tree view for the window and panel

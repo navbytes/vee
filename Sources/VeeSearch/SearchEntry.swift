@@ -16,17 +16,4 @@ public enum SearchEntry: Equatable, Sendable {
     case header(String)
     /// A divider between groups.
     case separator
-
-    /// Returns a copy of this entry with `pluginName` prepended to its
-    /// breadcrumb path — the `SearchEntry` counterpart of
-    /// `FlatRow.prefixed(with:)`, used when aggregating every plugin's
-    /// flattened menu into one cross-plugin panel. Headers/separators carry no
-    /// breadcrumb, so they pass through unchanged.
-    public func prefixed(with pluginName: String) -> SearchEntry {
-        switch self {
-        case .action(let row): return .action(row.prefixed(with: pluginName))
-        case .info(let row): return .info(row.prefixed(with: pluginName))
-        case .header, .separator: return self
-        }
-    }
 }
