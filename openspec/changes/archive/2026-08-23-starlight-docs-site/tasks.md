@@ -91,18 +91,21 @@ Starlight provides none of these. Losing any is a regression against the
       build fails on the PR.
 - [x] 5.3 Leave `check_params.py`, `check_schemas.py`, `build_reference.py
       --check`, and `check_links.py` in place unchanged.
-- [ ] 5.4 Flip the repository's Pages source from branch `/docs` to GitHub
+- [x] 5.4 Flip the repository's Pages source from branch `/docs` to GitHub
       Actions. Until this is done the workflow deploys nothing — call it out in
       the PR description, since it is a settings change no reviewer can make by
       approving a diff.
 
 ## 6. Verify against section 1
 
-      BLOCKED — not a code change. Settings > Pages > Source: "Deploy from a
-      branch" to "GitHub Actions". Until it is flipped, docs.yml builds and
-      uploads the artifact but the live site keeps being served from the
-      branch, which no longer contains a rendered site — so the flip and this
-      merge have to land together.
+      NOTE: done, immediately after the merge. Not a code change — Settings >
+      Pages > Source, "Deploy from a branch" to "GitHub Actions". The merge had
+      already triggered docs.yml on `main`, so a successful deployment was
+      waiting when the source changed and the site never went dark. Verified
+      live: the landing and comparison pages, /guide/ and every guide page, the
+      Markdown mirrors, llms.txt, /api/params.json, the schemas, and
+      /sitemap.xml all return 200, and /guide/<slug>.html carries a canonical
+      pointing at its new URL.
 - [x] 6.1 Diff the new `<head>` of every page against 1.1. Any tag present
       before and absent now is a regression to fix, not a default to accept.
       NOTE: found a real regression. Starlight emits `og:title`,
