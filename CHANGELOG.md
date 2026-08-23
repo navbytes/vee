@@ -7,6 +7,19 @@ All notable changes to Vee are documented here. The format is based on
 ## [Unreleased]
 
 ### Fixed
+- **`vee new` produced a plugin that could not run.** The scaffolded TypeScript
+  plugin imported `./src/vee.ts` and the Python one imported `vee` from its own
+  directory, and nothing ever put an SDK at either path — so both failed on
+  first run with a module-not-found error. `vee new --out DIR` now writes the
+  SDK beside the plugin (and leaves an existing one alone), which is also the
+  answer to how a plugin is meant to reach the SDK at all: a Vee plugin is a
+  single executable with no build step, so the SDK travels with it.
+- **The three SDKs encoded JSON strings three different ways.** Python escaped
+  non-ASCII (`✓` became `\u2713`) and Go escaped `<`, `>` and `&` for HTML
+  embedding (`R&D` became `R\u0026D`), while JavaScript emitted all of them
+  literally. Any widget card with an ampersand in its title already differed
+  between Go and the other two. All three now match `JSON.stringify`; the
+  `json-demo` fixture carries the characters that expose it.
 - **The three plugin SDKs no longer disagree about numbers.** Each SDK's header
   promised byte-identical output; each language's native float formatting
   quietly broke it. Go's `'g'` verb rendered `1000000` as `1e+06` where
@@ -51,6 +64,10 @@ All notable changes to Vee are documented here. The format is based on
   with that plugin present.
 
 ### Changed
+- **The Go SDK's module path is `github.com/navbytes/vee/plugins/go`.** It was
+  `vee`, a name that only resolved through a local `replace` directive, so
+  `go get` could not reach it. A Go plugin compiles to a binary, so a real
+  module path — rather than a vendored file — is how it takes the SDK.
 - **`trackcolor=` is deprecated in favour of `progresstrackcolor=`.** It was
   the one control knob not named after its control. The old spelling still
   parses and published plugins keep working; `vee lint` now points at the new
@@ -91,6 +108,16 @@ All notable changes to Vee are documented here. The format is based on
   as `C:\\node`.
 
 ### Added
+- **A typed builder for the structured-JSON format, in all three SDKs.**
+  `JSONMenu` mirrors `Menu` method for method — `title`, `dropdown`, `item`,
+  `separator`, `submenu`, `print` — so choosing a wire format no longer means
+  hand-assembling an object literal. The three emit byte-identical JSON, proven
+  by a shared golden fixture. Because the JSON format carries a subset of the
+  text protocol's parameters, its option type is distinct: an option JSON
+  cannot express is a compile error in TypeScript and Go and a `TypeError` in
+  Python, rather than a key dropped on the way out.
+- **`vee sdk <ts|py> [--out DIR]`** writes the plugin SDK into a directory, so a
+  plugin copied out of the examples can import it as a sibling file.
 - **The same sparkline knobs in the JSON output format.** `sparklineWidth`,
   `sparklineHeight`, and `sparklineColor` join `progressWidth`/`progressHeight`
   there, and `progressTrackColor` replaces `trackColor` (still accepted). The

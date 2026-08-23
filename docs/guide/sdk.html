@@ -61,7 +61,7 @@
 <li><a href="./faq.html">FAQ</a></li>
 <li><a href="./troubleshooting.html">Troubleshooting</a></li>
 </ul>
-<nav class="docs-toc" aria-labelledby="toc-title"><p class="docs-nav-title" id="toc-title">On this page</p><ul><li><a href="#requirements">Requirements</a></li><li><a href="#hello-world">Hello world</a></li><li><a href="#the-api">The API</a></li><li><a href="#rich-params">Rich params</a></li><li><a href="#widget-cards">Widget cards</a></li><li><a href="#the-no-build-step-note-typescript">The no-build-step note (TypeScript)</a></li><li><a href="#drift-guard-and-fixtures">Drift guard and fixtures</a></li><li><a href="#see-also">See also</a></li></ul></nav>
+<nav class="docs-toc" aria-labelledby="toc-title"><p class="docs-nav-title" id="toc-title">On this page</p><ul><li><a href="#getting-the-sdk">Getting the SDK</a></li><li><a href="#requirements">Requirements</a></li><li><a href="#hello-world">Hello world</a></li><li><a href="#the-api">The API</a></li><li><a href="#rich-params">Rich params</a></li><li><a href="#widget-cards">Widget cards</a></li><li><a href="#the-no-build-step-note-typescript">The no-build-step note (TypeScript)</a></li><li><a href="#drift-guard-and-fixtures">Drift guard and fixtures</a></li><li><a href="#see-also">See also</a></li></ul></nav>
   </aside>
   <main class="docs-main" id="main">
     <article class="docs-content" data-pagefind-body>
@@ -75,6 +75,24 @@
 <li>Go — <a href="https://github.com/navbytes/vee/tree/main/plugins/go" rel="noopener"><code>plugins/go/</code></a> (<a href="https://github.com/navbytes/vee/tree/main/plugins/go/README.md" rel="noopener">README</a>)</li>
 </ul>
 <p>Pick whichever language you are most comfortable in; the API is the same shape in all three.</p>
+<h2 id="getting-the-sdk">Getting the SDK</h2>
+<p>A Vee plugin is a single executable you drop in your plugins folder — no build
+step, no <code>node_modules</code>, no virtualenv. So the TypeScript and Python SDKs travel
+<em>with</em> the plugin as a sibling file rather than being resolved from a package
+manager:</p>
+<div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">sh</span></div><pre><code>vee sdk ts --out ~/Library/Application\ Support/Vee/plugins   # writes vee.ts
+vee sdk py --out ~/Library/Application\ Support/Vee/plugins   # writes vee.py</code></pre></div>
+<div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">ts</span></div><pre><code>import { Menu } from "./vee.ts";</code></pre></div>
+<div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">python</span></div><pre><code>from vee import Menu  # vee.py sits beside this plugin</code></pre></div>
+<p><code>vee new --lang ts --out DIR</code> does both in one step: it scaffolds a plugin and
+writes the SDK beside it, so the result runs immediately.</p>
+<p>Go is the exception. A Go plugin compiles to a binary, so it takes the SDK as a
+normal module dependency:</p>
+<div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">sh</span></div><pre><code>go get github.com/navbytes/vee/plugins/go</code></pre></div>
+<div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">go</span></div><pre><code>import vee "github.com/navbytes/vee/plugins/go"</code></pre></div>
+<p>The examples in this repository import <code>../vee.ts</code> (and the local module)
+because they sit beside the SDK there. Copying one out means running
+<code>vee sdk</code> beside it — and, for TypeScript, changing that import to <code>./vee.ts</code>.</p>
 <h2 id="requirements">Requirements</h2>
 <ul>
 <li><strong>TypeScript</strong> — Node 24 or later (for native TypeScript execution / type stripping; there is <strong>no build step</strong>).</li>
@@ -107,8 +125,7 @@ menu.print();</code></pre></div>
 <p>Create <code>cpu.5s.py</code>. Options are passed as keyword arguments.</p>
 <div class="code-window"><div class="code-window__bar"><span class="traffic"><i></i><i></i><i></i></span><span class="fname">python</span></div><pre><code>#!/usr/bin/env python3
 import sys
-sys.path.insert(0, "/path/to/plugins/python")
-from vee import Menu
+from vee import Menu  # vee.py sits beside this plugin
 
 menu = Menu()
 menu.title("CPU 12%", color="green", sfimage="cpu")

@@ -42,7 +42,18 @@ final class FixtureRoundTripTests: XCTestCase {
         let source = try String(contentsOf: url, encoding: .utf8)
         let output = try XCTUnwrap(JSONOutputParser.parse(source))
         XCTAssertEqual(output.titleLines.first?.text, "JSON ✓")
-        XCTAssertEqual(output.body.count, 3) // item · separator · submenu
+        XCTAssertEqual(output.body.count, 4) // item · separator · submenu · escaping
+
+        // The last item carries the characters the three SDKs' JSON encoders
+        // disagree about by default — Python escapes non-ASCII, Go escapes
+        // `<`, `>` and `&`. Recovering them intact proves the fixture was
+        // written the way JSON.stringify writes it, in whichever SDK produced
+        // it, and that the parser reads that spelling back unchanged.
+        let items = output.body.compactMap { node -> MenuItem? in
+            if case .item(let i) = node { return i } else { return nil }
+        }
+        XCTAssertEqual(items.last?.text, "R&D <beta> ✓")
+        XCTAssertEqual(items.last?.params.swiftbar.tooltip, "a & b")
     }
 
     func testRichFixtureParams() throws {

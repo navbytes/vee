@@ -3,6 +3,10 @@
 # VEE_TARGET=widget stdout payload described in
 # docs/design/widget-surface-contract.md §4. Doubles as a golden fixture,
 # byte-identical to the TypeScript/Go widget-card examples.
+#
+# Using this outside the repository: run `vee sdk py` to write vee.py beside
+# your copy. No edit needed -- Python already searches the script's own
+# directory.
 import os
 import sys
 

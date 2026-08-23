@@ -2,6 +2,10 @@
 # Encoder edge cases, as a golden fixture. See plugins/typescript/examples/
 # edges.ts for what each line pins down; this file must produce byte-identical
 # output. Committed to plugins/fixtures/edges.txt.
+#
+# Using this outside the repository: run `vee sdk py` to write vee.py beside
+# your copy. No edit needed -- Python already searches the script's own
+# directory.
 import os
 import sys
 

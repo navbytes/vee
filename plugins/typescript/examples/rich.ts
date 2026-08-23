@@ -1,6 +1,9 @@
 #!/usr/bin/env node
 // Exercises the richer rendering params (Markdown, badge, symbolize) so the
 // fixture drift guard and the Swift parser tests cover them.
+//
+// Using this outside the repository: run `vee sdk ts` to write vee.ts beside
+// your copy, then change the import below to "./vee.ts".
 import { fileURLToPath } from "node:url";
 import { Menu } from "../vee.ts";
 

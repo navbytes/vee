@@ -3,12 +3,14 @@
 // Builds a CPU tile as a tree — a header row, a big monospaced value that scales
 // to fit, and a circular gauge. Doubles as a golden fixture, byte-identical to
 // the TypeScript/Python widget-layout examples.
+//
+// Using this outside the repository: go get github.com/navbytes/vee/plugins/go
 package main
 
 import (
 	"fmt"
 
-	"vee"
+	vee "github.com/navbytes/vee/plugins/go"
 )
 
 // Build assembles the widget card and returns its JSON payload.

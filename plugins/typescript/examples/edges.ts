@@ -17,6 +17,9 @@
 // Its output is committed to plugins/fixtures/edges.txt and asserted by all
 // three SDKs, so any of these regressing in one language fails that language's
 // drift guard.
+//
+// Using this outside the repository: run `vee sdk ts` to write vee.ts beside
+// your copy, then change the import below to "./vee.ts".
 import { fileURLToPath } from "node:url";
 import { Menu } from "../vee.ts";
 

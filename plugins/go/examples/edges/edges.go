@@ -1,12 +1,14 @@
 // Encoder edge cases, as a golden fixture. See plugins/typescript/examples/
 // edges.ts for what each line pins down; this file must produce byte-identical
 // output. Committed to plugins/fixtures/edges.txt.
+//
+// Using this outside the repository: go get github.com/navbytes/vee/plugins/go
 package main
 
 import (
 	"fmt"
 
-	"vee"
+	vee "github.com/navbytes/vee/plugins/go"
 )
 
 // Build renders the example menu.

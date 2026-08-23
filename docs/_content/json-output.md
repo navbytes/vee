@@ -138,9 +138,62 @@ An item that runs a command when clicked, passing arguments via `params`.
 }
 ```
 
+## Building it with an SDK
+
+All three SDKs have a typed builder for this format, mirroring the text-protocol
+`Menu` method for method — `title`, `dropdown`, `item`, `separator`, `submenu`,
+`print` — so choosing a wire format does not mean learning a second builder:
+
+```ts
+import { JSONMenu } from "./vee.ts";
+
+const menu = new JSONMenu();
+menu.title("JSON ✓", { color: "green", sfimage: "curlybraces" });
+
+const d = menu.dropdown;
+d.item("Structured item", { href: "https://example.com" });
+d.separator();
+d.submenu("Submenu").item("Child", { color: "blue" });
+
+menu.print();
+```
+
+```python
+from vee import JSONMenu
+
+menu = JSONMenu()
+menu.title("JSON ✓", color="green", sfimage="curlybraces")
+
+d = menu.dropdown
+d.item("Structured item", href="https://example.com")
+d.separator()
+d.submenu("Submenu").item("Child", color="blue")
+
+menu.print()
+```
+
+```go
+m := &vee.JSONMenu{}
+m.Title("JSON ✓", &vee.JSONOptions{Color: vee.Str("green"), SFImage: vee.Str("curlybraces")})
+
+d := m.Dropdown()
+d.Item("Structured item", &vee.JSONOptions{Href: vee.Str("https://example.com")})
+d.Separator()
+d.Submenu("Submenu", nil).Item("Child", &vee.JSONOptions{Color: vee.Str("blue")})
+
+m.Print()
+```
+
+The builder emits the keys in one canonical order, so the three SDKs produce
+byte-identical JSON for the same menu (a shared golden fixture proves it).
+Because the JSON format carries a subset of the text protocol's parameters, its
+option type is a distinct one: an option JSON cannot express is a compile error
+in TypeScript and Go, and a `TypeError` in Python, rather than a key silently
+dropped on the way out.
+
 ## A runnable example
 
-The repository ships a runnable JSON plugin at [`plugins/typescript/examples/json-demo.ts`](https://github.com/navbytes/vee/tree/main/plugins/typescript/examples/json-demo.ts). It builds a `{"vee":1,…}` object with a colored title, a link, a separator, and a submenu, then prints it — a good starting point to copy.
+The repository ships a runnable JSON plugin at [`plugins/typescript/examples/json-demo.ts`](https://github.com/navbytes/vee/tree/main/plugins/typescript/examples/json-demo.ts). It builds a `{"vee":1,…}` object with `JSONMenu` — a colored title, a link, a separator, and a submenu — then prints it. A good starting point to copy.
 
 ## Rich params
 

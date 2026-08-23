@@ -2,6 +2,9 @@
 // Example Vee plugin built with the SDK. Doubles as a golden fixture: its
 // `build()` output is committed to plugins/fixtures/cpu.txt and checked for
 // drift by the test suite.
+//
+// Using this outside the repository: run `vee sdk ts` to write vee.ts beside
+// your copy, then change the import below to "./vee.ts".
 import { fileURLToPath } from "node:url";
 import { Menu } from "../vee.ts";
 

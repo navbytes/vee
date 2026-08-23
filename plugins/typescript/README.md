@@ -10,6 +10,27 @@ TypeScript directly (type-stripping), so there is no build step.
 
 - Node 24+ (for native TypeScript execution). No dependencies.
 
+## Installing
+
+A Vee plugin is a single executable dropped in your plugins folder — no build
+step, no `node_modules`. The SDK therefore travels *with* the plugin as a
+sibling file rather than being resolved from a package manager:
+
+```sh
+vee sdk ts --out ~/path/to/your/plugins   # writes vee.ts there
+```
+
+```ts
+import { Menu } from "./vee.ts";
+```
+
+`vee new --lang ts --out DIR` does both at once — it scaffolds a plugin and
+writes `vee.ts` beside it, so the result runs immediately.
+
+The examples in this repository import `../vee.ts` because they sit next to the
+SDK here. Copying one out means running `vee sdk ts` beside it and changing that
+import to `./vee.ts`.
+
 ## Layout
 
 ```
@@ -29,7 +50,7 @@ Create `cpu.5s.ts` in your plugins folder:
 
 ```ts
 #!/usr/bin/env node
-import { Menu } from "/path/to/plugins/typescript/vee.ts";
+import { Menu } from "./vee.ts";
 
 const menu = new Menu();
 menu.title("CPU 12%", { color: "green", sfimage: "cpu" });
@@ -103,7 +124,7 @@ Beyond menus, the SDK builds the [widget card](../../docs/_content/widgets.md)
 payload a plugin prints when Vee invokes it with `VEE_TARGET=widget`:
 
 ```ts
-import { Stat } from "/path/to/plugins/typescript/vee.ts";
+import { Stat } from "./vee.ts";
 
 if (process.env.VEE_TARGET === "widget") {
   Stat({

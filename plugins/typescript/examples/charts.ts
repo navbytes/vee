@@ -3,6 +3,9 @@
 // stacked bar. Doubles as a golden fixture: its `build()` output is committed
 // to plugins/fixtures/charts.txt and checked for drift. The three language
 // examples (TS/Python/Go) produce byte-identical output.
+//
+// Using this outside the repository: run `vee sdk ts` to write vee.ts beside
+// your copy, then change the import below to "./vee.ts".
 import { fileURLToPath } from "node:url";
 import { Menu } from "../vee.ts";
 

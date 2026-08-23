@@ -1676,6 +1676,44 @@ The SDKs live in the [`plugins/`](https://github.com/navbytes/vee/tree/main/plug
 
 Pick whichever language you are most comfortable in; the API is the same shape in all three.
 
+## Getting the SDK
+
+A Vee plugin is a single executable you drop in your plugins folder — no build
+step, no `node_modules`, no virtualenv. So the TypeScript and Python SDKs travel
+*with* the plugin as a sibling file rather than being resolved from a package
+manager:
+
+```sh
+vee sdk ts --out ~/Library/Application\ Support/Vee/plugins   # writes vee.ts
+vee sdk py --out ~/Library/Application\ Support/Vee/plugins   # writes vee.py
+```
+
+```ts
+import { Menu } from "./vee.ts";
+```
+
+```python
+from vee import Menu  # vee.py sits beside this plugin
+```
+
+`vee new --lang ts --out DIR` does both in one step: it scaffolds a plugin and
+writes the SDK beside it, so the result runs immediately.
+
+Go is the exception. A Go plugin compiles to a binary, so it takes the SDK as a
+normal module dependency:
+
+```sh
+go get github.com/navbytes/vee/plugins/go
+```
+
+```go
+import vee "github.com/navbytes/vee/plugins/go"
+```
+
+The examples in this repository import `../vee.ts` (and the local module)
+because they sit beside the SDK there. Copying one out means running
+`vee sdk` beside it — and, for TypeScript, changing that import to `./vee.ts`.
+
 ## Requirements
 
 - **TypeScript** — Node 24 or later (for native TypeScript execution / type stripping; there is **no build step**).
@@ -1721,8 +1759,7 @@ Create `cpu.5s.py`. Options are passed as keyword arguments.
 ```python
 #!/usr/bin/env python3
 import sys
-sys.path.insert(0, "/path/to/plugins/python")
-from vee import Menu
+from vee import Menu  # vee.py sits beside this plugin
 
 menu = Menu()
 menu.title("CPU 12%", color="green", sfimage="cpu")
@@ -2236,9 +2273,62 @@ An item that runs a command when clicked, passing arguments via `params`.
 }
 ```
 
+## Building it with an SDK
+
+All three SDKs have a typed builder for this format, mirroring the text-protocol
+`Menu` method for method — `title`, `dropdown`, `item`, `separator`, `submenu`,
+`print` — so choosing a wire format does not mean learning a second builder:
+
+```ts
+import { JSONMenu } from "./vee.ts";
+
+const menu = new JSONMenu();
+menu.title("JSON ✓", { color: "green", sfimage: "curlybraces" });
+
+const d = menu.dropdown;
+d.item("Structured item", { href: "https://example.com" });
+d.separator();
+d.submenu("Submenu").item("Child", { color: "blue" });
+
+menu.print();
+```
+
+```python
+from vee import JSONMenu
+
+menu = JSONMenu()
+menu.title("JSON ✓", color="green", sfimage="curlybraces")
+
+d = menu.dropdown
+d.item("Structured item", href="https://example.com")
+d.separator()
+d.submenu("Submenu").item("Child", color="blue")
+
+menu.print()
+```
+
+```go
+m := &vee.JSONMenu{}
+m.Title("JSON ✓", &vee.JSONOptions{Color: vee.Str("green"), SFImage: vee.Str("curlybraces")})
+
+d := m.Dropdown()
+d.Item("Structured item", &vee.JSONOptions{Href: vee.Str("https://example.com")})
+d.Separator()
+d.Submenu("Submenu", nil).Item("Child", &vee.JSONOptions{Color: vee.Str("blue")})
+
+m.Print()
+```
+
+The builder emits the keys in one canonical order, so the three SDKs produce
+byte-identical JSON for the same menu (a shared golden fixture proves it).
+Because the JSON format carries a subset of the text protocol's parameters, its
+option type is a distinct one: an option JSON cannot express is a compile error
+in TypeScript and Go, and a `TypeError` in Python, rather than a key silently
+dropped on the way out.
+
 ## A runnable example
 
-The repository ships a runnable JSON plugin at [`plugins/typescript/examples/json-demo.ts`](https://github.com/navbytes/vee/tree/main/plugins/typescript/examples/json-demo.ts). It builds a `{"vee":1,…}` object with a colored title, a link, a separator, and a submenu, then prints it — a good starting point to copy.
+The repository ships a runnable JSON plugin at [`plugins/typescript/examples/json-demo.ts`](https://github.com/navbytes/vee/tree/main/plugins/typescript/examples/json-demo.ts). It builds a `{"vee":1,…}` object with `JSONMenu` — a colored title, a link, a separator, and a submenu — then prints it. A good starting point to copy.
 
 ## Rich params
 

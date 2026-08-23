@@ -5,6 +5,9 @@
 // big monospaced value that scales to fit, and a circular gauge — to exercise
 // stacks, the two pressure-test modifiers (monospaced_digit, min_scale), and
 // the circular gauge. See docs/design/widget-surface-contract.md §"Layout tree".
+//
+// Using this outside the repository: run `vee sdk ts` to write vee.ts beside
+// your copy, then change the import below to "./vee.ts".
 import { fileURLToPath } from "node:url";
 import { widgetCard, Node } from "../vee.ts";
 

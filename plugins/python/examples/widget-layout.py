@@ -4,6 +4,10 @@
 # Builds a CPU tile as a tree — a header row, a big monospaced value that scales
 # to fit, and a circular gauge. Doubles as a golden fixture, byte-identical to
 # the TypeScript/Go widget-layout examples.
+#
+# Using this outside the repository: run `vee sdk py` to write vee.py beside
+# your copy. No edit needed -- Python already searches the script's own
+# directory.
 import os
 import sys
 

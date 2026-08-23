@@ -102,10 +102,24 @@ public enum Scaffold {
         """
     }
 
+    /// The SDK language a scaffolded plugin vendors, if any. Shell plugins
+    /// format the protocol by hand; Go compiles to a binary and consumes the
+    /// SDK as a module, so neither vendors a sibling file.
+    static func vendoredSDK(for lang: Language) -> String? {
+        switch lang {
+        case .ts: return "typescript"
+        case .py: return "python"
+        case .sh: return nil
+        }
+    }
+
     private static func tsBody(title: String) -> String {
-        // Seeds with the SDK import so `new` teaches the SDK.
+        // Seeds with the SDK import so `new` teaches the SDK. The path is
+        // `./vee.ts` because `vee new --out` writes the SDK next to the plugin:
+        // a Vee plugin is a single executable with no install step, so the SDK
+        // travels beside it rather than being resolved from a package manager.
         """
-        import { Menu } from "./src/vee.ts";
+        import { Menu } from "./vee.ts";
 
         const menu = new Menu();
         menu.title("\(title)");
@@ -123,7 +137,9 @@ public enum Scaffold {
         import os
         import sys
 
-        sys.path.insert(0, os.path.dirname(__file__))
+        # `vee new --out` writes vee.py next to this plugin; look there first so
+        # the plugin runs wherever it is dropped.
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
         from vee import Menu  # noqa: E402
 
         menu = Menu()

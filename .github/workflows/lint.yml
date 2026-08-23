@@ -34,11 +34,16 @@ jobs:
       - uses: actions/checkout@v7
       - name: Guide pages are up to date with docs/_content
         run: python3 docs/scripts/build_guide.py --check
-      # The menu-line parameter list is written down three times (parser switch,
-      # the public key set the linter uses, and the authoring reference). The
-      # docs copy silently fell behind once; this is what stops it recurring.
-      - name: Menu-line parameters agree across parser, linter, and docs
+      # The menu-line parameter list is written down six times (parser switch,
+      # the public key set the linter uses, the authoring reference, and each of
+      # the three SDKs). The docs copy silently fell behind once, and fifteen
+      # parameters were once missing from every SDK at once; this stops both.
+      - name: Menu-line parameters agree across parser, linter, docs, and SDKs
         run: python3 docs/scripts/check_params.py
+      # `vee new`/`vee sdk` write the SDK beside a plugin from a copy embedded
+      # in the binary. If that copy goes stale, they vendor an old SDK.
+      - name: Embedded SDK sources are current
+        run: python3 scripts/embed_sdk.py --check
       # docs/schemas is what a plugin author's editor validates against, so it
       # has to stay true to what the Swift parsers accept. Checked against the
       # golden fixtures all three SDKs produce byte-identically.

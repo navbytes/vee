@@ -836,14 +836,173 @@ type widgetCardEnvelope struct {
 
 // String renders the card as its JSON payload.
 func (c *WidgetCard) String() string {
-	data, err := json.Marshal(widgetCardEnvelope{VeeWidget: 1, WidgetCard: *c})
-	if err != nil {
+	return marshalJSON(widgetCardEnvelope{VeeWidget: 1, WidgetCard: *c})
+}
+
+// marshalJSON encodes v the way JSON.stringify does, which is the reference
+// the three SDKs share.
+//
+// encoding/json escapes <, > and & as \u003c/\u003e/\u0026 by default -- a
+// defence against embedding JSON in HTML that this payload never does -- so a
+// card titled "R&D" would go out differently from the TypeScript and Python
+// SDKs. Encoder.SetEscapeHTML(false) turns it off; the trailing newline
+// Encode appends is trimmed.
+func marshalJSON(v any) string {
+	var buf strings.Builder
+	enc := json.NewEncoder(&buf)
+	enc.SetEscapeHTML(false)
+	if err := enc.Encode(v); err != nil {
 		return "{}"
 	}
-	return string(data)
+	return strings.TrimSuffix(buf.String(), "\n")
 }
 
 // Print writes String() plus a trailing newline to stdout.
 func (c *WidgetCard) Print() {
 	fmt.Fprintln(os.Stdout, c.String())
+}
+
+// ---------------------------------------------------------------------------
+// Structured-JSON output — the optional alternative to the text protocol above.
+// A plugin opts in by printing a single `{"vee":1,…}` object; Vee decodes it
+// directly, with no line parsing, no `|`-separated parameters and no quoting
+// rules. See docs/_content/json-output.md.
+//
+// JSONMenu deliberately mirrors Menu method for method — Title, Dropdown,
+// Item, Separator, Submenu, String, Print — so choosing a wire format does not
+// mean learning a second builder.
+
+// JSONOptions are the per-item parameters of a JSON menu item.
+//
+// The JSON protocol carries a subset of the text protocol's parameters, so
+// this is a distinct type rather than Options: a parameter JSON cannot express
+// is simply not a field here, rather than one that is silently dropped on the
+// way out. Field order is the canonical key order the three SDKs share.
+type JSONOptions struct {
+	Color    *string  `json:"color,omitempty"`
+	Size     *float64 `json:"size,omitempty"`
+	Href     *string  `json:"href,omitempty"`
+	Shell    *string  `json:"shell,omitempty"`
+	Params   []string `json:"params,omitempty"`
+	Terminal *bool    `json:"terminal,omitempty"`
+	Refresh  *bool    `json:"refresh,omitempty"`
+	SFImage  *string  `json:"sfimage,omitempty"`
+	Disabled *bool    `json:"disabled,omitempty"`
+	Checked  *bool    `json:"checked,omitempty"`
+	Tooltip  *string  `json:"tooltip,omitempty"`
+	Header   *bool    `json:"header,omitempty"`
+	// Accessory is "leading" or "trailing".
+	Accessory *string   `json:"accessory,omitempty"`
+	Sparkline []float64 `json:"sparkline,omitempty"`
+	// SparklineWidth is a number of points, or the string "full".
+	SparklineWidth  any      `json:"sparklineWidth,omitempty"`
+	SparklineHeight *float64 `json:"sparklineHeight,omitempty"`
+	SparklineColor  *string  `json:"sparklineColor,omitempty"`
+	Toggle          *bool    `json:"toggle,omitempty"`
+	Slider          *Slider  `json:"slider,omitempty"`
+	// Progress is a completion fraction, clamped to 0…1 by Vee.
+	Progress           *float64 `json:"progress,omitempty"`
+	ProgressTrackColor *string  `json:"progressTrackColor,omitempty"`
+	// ProgressWidth is a number of points, or the string "full".
+	ProgressWidth  any        `json:"progressWidth,omitempty"`
+	ProgressHeight *float64   `json:"progressHeight,omitempty"`
+	Chart          *JSONChart `json:"chart,omitempty"`
+	// Alternate is a row shown while ⌥ is held.
+	Alternate *JSONItem `json:"alternate,omitempty"`
+}
+
+// JSONChart is the structured-JSON spelling of `pie=`/`donut=`/`stackedbar=`:
+// one object rather than three sibling keys, because the shape is a property
+// of the same data.
+type JSONChart struct {
+	// Kind is "pie", "donut", or "stackedbar".
+	Kind   string    `json:"kind"`
+	Values []float64 `json:"values,omitempty"`
+	Labels []string  `json:"labels,omitempty"`
+	Colors []string  `json:"colors,omitempty"`
+	// W is a number of points, or the string "full".
+	W any      `json:"w,omitempty"`
+	H *float64 `json:"h,omitempty"`
+}
+
+// JSONItem is one item in a JSON menu: JSONOptions plus the structural keys.
+type JSONItem struct {
+	Text      *string `json:"text,omitempty"`
+	Separator *bool   `json:"separator,omitempty"`
+	JSONOptions
+	Submenu []JSONItem `json:"submenu,omitempty"`
+}
+
+// JSONSection is a JSON menu section at a given submenu depth. Mirrors Section.
+type JSONSection struct {
+	items *[]JSONItem
+}
+
+// Item adds a menu item. Pass nil for opts when there are no options.
+func (s JSONSection) Item(text string, opts *JSONOptions) JSONSection {
+	*s.items = append(*s.items, newJSONItem(text, opts))
+	return s
+}
+
+// Separator adds a separator row at this depth.
+func (s JSONSection) Separator() JSONSection {
+	yes := true
+	*s.items = append(*s.items, JSONItem{Separator: &yes})
+	return s
+}
+
+// Submenu adds an item and returns a JSONSection for its submenu.
+func (s JSONSection) Submenu(text string, opts *JSONOptions) JSONSection {
+	item := newJSONItem(text, opts)
+	item.Submenu = []JSONItem{}
+	*s.items = append(*s.items, item)
+	return JSONSection{items: &(*s.items)[len(*s.items)-1].Submenu}
+}
+
+func newJSONItem(text string, opts *JSONOptions) JSONItem {
+	item := JSONItem{Text: &text}
+	if opts != nil {
+		item.JSONOptions = *opts
+	}
+	return item
+}
+
+// JSONMenu is the top-level JSON menu: title line(s) plus a dropdown.
+// Mirrors Menu.
+type JSONMenu struct {
+	titles []JSONItem
+	body   []JSONItem
+}
+
+// Title adds a menu-bar title line. Call more than once for multiple lines.
+func (m *JSONMenu) Title(text string, opts *JSONOptions) *JSONMenu {
+	m.titles = append(m.titles, newJSONItem(text, opts))
+	return m
+}
+
+// Dropdown returns a JSONSection for the dropdown body.
+func (m *JSONMenu) Dropdown() JSONSection {
+	return JSONSection{items: &m.body}
+}
+
+// jsonMenuEnvelope is the wire object: the format version, then the menu.
+type jsonMenuEnvelope struct {
+	Vee   int        `json:"vee"`
+	Title []JSONItem `json:"title"`
+	Items []JSONItem `json:"items,omitempty"`
+}
+
+// String renders the whole menu as its JSON payload.
+func (m *JSONMenu) String() string {
+	titles := m.titles
+	if titles == nil {
+		titles = []JSONItem{}
+	}
+	return marshalJSON(jsonMenuEnvelope{Vee: 1, Title: titles, Items: m.body})
+}
+
+// Print writes String() plus a trailing newline to stdout. This is what a real
+// plugin calls.
+func (m *JSONMenu) Print() {
+	fmt.Fprintln(os.Stdout, m.String())
 }

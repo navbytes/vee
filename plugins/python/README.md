@@ -10,6 +10,24 @@ so a plugin reads the same in either language.
 
 - Python 3.9+ (uses only the standard library).
 
+## Installing
+
+A Vee plugin is a single executable dropped in your plugins folder — no
+virtualenv, no `pip install`. The SDK travels *with* the plugin as a sibling
+file:
+
+```sh
+vee sdk py --out ~/path/to/your/plugins   # writes vee.py there
+```
+
+```python
+from vee import Menu
+```
+
+No `sys.path` juggling is needed: Python already searches the running script's
+own directory, so a sibling `vee.py` is importable as-is. `vee new --lang py
+--out DIR` scaffolds a plugin and writes `vee.py` beside it in one step.
+
 ## Layout
 
 ```
@@ -25,9 +43,7 @@ Create `cpu.5s.py` in your plugins folder:
 
 ```python
 #!/usr/bin/env python3
-import sys, os
-sys.path.insert(0, "/path/to/plugins/python")
-from vee import Menu
+from vee import Menu  # vee.py sits beside this file
 
 menu = Menu()
 menu.title("CPU 12%", color="green", sfimage="cpu")

@@ -560,3 +560,139 @@ export function List(options: TemplatelessOptions): WidgetCard {
 export function Board(options: TemplatelessOptions): WidgetCard {
   return new WidgetCard({ ...options, template: "board" });
 }
+
+// ---------------------------------------------------------------------------
+// Structured-JSON output — the optional alternative to the text protocol above.
+// A plugin opts in by printing a single `{"vee":1,…}` object; Vee decodes it
+// directly, with no line parsing, no `|`-separated parameters and no quoting
+// rules. See docs/_content/json-output.md.
+//
+// `JSONMenu` deliberately mirrors `Menu` method for method — `title`,
+// `dropdown`, `item`, `separator`, `submenu`, `toString`, `print` — so choosing
+// a wire format does not mean learning a second builder.
+
+/** Options for a JSON menu item.
+ *
+ * The JSON protocol carries a subset of the text protocol's parameters, so this
+ * is a distinct type rather than `ItemOptions`: an option JSON cannot express
+ * is a compile error here, not a key that is silently dropped on the way out.
+ */
+export interface JSONItemOptions {
+  color?: Color;
+  size?: number;
+  href?: string;
+  shell?: string;
+  params?: string[];
+  terminal?: boolean;
+  refresh?: boolean;
+  sfimage?: string;
+  disabled?: boolean;
+  checked?: boolean;
+  tooltip?: string;
+  header?: boolean;
+  accessory?: "leading" | "trailing";
+  sparkline?: number[];
+  /** Sparkline width in points; `"full"` stretches it to the row's width. */
+  sparklineWidth?: number | "full";
+  sparklineHeight?: number;
+  sparklineColor?: Color;
+  toggle?: boolean;
+  slider?: { min: number; max: number; value: number };
+  /** A completion fraction, clamped to `0…1` by Vee. */
+  progress?: number;
+  progressTrackColor?: Color;
+  /** Progress bar width in points; `"full"` stretches it to the row's width. */
+  progressWidth?: number | "full";
+  progressHeight?: number;
+  chart?: {
+    kind: "pie" | "donut" | "stackedbar";
+    values: number[];
+    labels?: string[];
+    colors?: Color[];
+    w?: number | "full";
+    h?: number;
+  };
+  /** An alternate row, shown while ⌥ is held. */
+  alternate?: JSONItem;
+}
+
+/** One item in a JSON menu: `JSONItemOptions` plus the structural keys. */
+export interface JSONItem extends JSONItemOptions {
+  text?: string;
+  separator?: boolean;
+  submenu?: JSONItem[];
+}
+
+// The key order every SDK emits, so the three produce byte-identical JSON.
+const JSON_ITEM_KEYS: Array<keyof JSONItem> = [
+  "text", "separator", "color", "size", "href", "shell", "params", "terminal",
+  "refresh", "sfimage", "disabled", "checked", "tooltip", "header", "accessory",
+  "sparkline", "sparklineWidth", "sparklineHeight", "sparklineColor",
+  "toggle", "slider", "progress", "progressTrackColor", "progressWidth",
+  "progressHeight", "chart", "submenu", "alternate",
+];
+
+/** Rebuilds an item with keys in the shared canonical order, dropping absent
+ *  ones and recursing into `submenu`/`alternate`. */
+function orderJSONItem(item: JSONItem): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const key of JSON_ITEM_KEYS) {
+    const value = item[key];
+    if (value === undefined) continue;
+    if (key === "submenu") out[key] = (value as JSONItem[]).map(orderJSONItem);
+    else if (key === "alternate") out[key] = orderJSONItem(value as JSONItem);
+    else out[key] = value;
+  }
+  return out;
+}
+
+/** A JSON menu section at a given submenu depth. Mirrors `Section`. */
+export class JSONSection {
+  private readonly items: JSONItem[];
+
+  constructor(items: JSONItem[]) {
+    this.items = items;
+  }
+
+  item(text: string, options?: JSONItemOptions): this {
+    this.items.push({ text, ...options });
+    return this;
+  }
+
+  separator(): this {
+    this.items.push({ separator: true });
+    return this;
+  }
+
+  /** Adds an item and returns a `JSONSection` for its submenu. */
+  submenu(text: string, options?: JSONItemOptions): JSONSection {
+    const submenu: JSONItem[] = [];
+    this.items.push({ text, ...options, submenu });
+    return new JSONSection(submenu);
+  }
+}
+
+/** The top-level JSON menu: title line(s) plus a dropdown. Mirrors `Menu`. */
+export class JSONMenu {
+  private readonly titles: JSONItem[] = [];
+  private readonly body: JSONItem[] = [];
+
+  title(text: string, options?: JSONItemOptions): this {
+    this.titles.push({ text, ...options });
+    return this;
+  }
+
+  get dropdown(): JSONSection {
+    return new JSONSection(this.body);
+  }
+
+  toString(): string {
+    const payload: Record<string, unknown> = { vee: 1, title: this.titles.map(orderJSONItem) };
+    if (this.body.length) payload.items = this.body.map(orderJSONItem);
+    return JSON.stringify(payload);
+  }
+
+  print(): void {
+    process.stdout.write(this.toString() + "\n");
+  }
+}

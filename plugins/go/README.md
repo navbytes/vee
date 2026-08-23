@@ -10,6 +10,19 @@ byte-identical output.
 
 - Go 1.21+ (uses only the standard library).
 
+## Installing
+
+A Go plugin compiles to a binary, so the SDK is a normal module dependency —
+there is nothing to vendor beside the plugin:
+
+```sh
+go get github.com/navbytes/vee/plugins/go
+```
+
+```go
+import vee "github.com/navbytes/vee/plugins/go"
+```
+
 ## Layout
 
 ```
