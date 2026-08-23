@@ -38,6 +38,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          # PROBE: force the skip path to observe required-check behaviour.
+          echo "swift=false" >> "$GITHUB_OUTPUT"; echo "plugins=false" >> "$GITHUB_OUTPUT"; exit 0
           if [ "${{ github.event_name }}" != "pull_request" ]; then
             echo "not a pull request — running everything"
             echo "swift=true"   >> "$GITHUB_OUTPUT"
