@@ -15,6 +15,11 @@ on:
       - "docs/**"
       - "docs-site/**"
       - ".github/workflows/docs.yml"
+      # The site serves this at /install.sh (staged from scripts/ during the
+      # build), so a change to it has to redeploy. Without this the published
+      # installer silently lags the repo until some other docs file happens to
+      # change alongside it.
+      - "scripts/install.sh"
   workflow_dispatch:
 
 # Pages needs id-token to deploy; nothing here writes to the repository.
