@@ -48,6 +48,10 @@ The examples in this repository import `../vee.ts` because they sit next to the
 SDK here. Copying one out means running `vee sdk ts` beside it and changing that
 import to `./vee.ts`.
 
+For a new plugin, prefer `JSONMenu` over `Menu` — see
+[`examples/json-demo.ts`](examples/json-demo.ts) and the
+[JSON output format](https://vee.navbytes.io/guide/json-output/) docs.
+
 ## Layout
 
 ```

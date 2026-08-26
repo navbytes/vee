@@ -69,6 +69,10 @@ Build it to a binary and drop it in your plugins folder as `cpu.5s`
 (`go build -o cpu.5s ./...`); a compiled binary is a first-class Vee plugin. The
 `.5s` sets a 5-second refresh, exactly as with any other plugin.
 
+For a new plugin, prefer `JSONMenu` over `Menu` — see
+[`examples/json-demo/`](examples/json-demo/) and the
+[JSON output format](https://vee.navbytes.io/guide/json-output/) docs.
+
 ## API
 
 The three SDKs expose the same `Menu` / `Section` / options surface, method for

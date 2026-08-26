@@ -24,6 +24,8 @@ Vee is designed as a drop-in successor to [SwiftBar](https://github.com/swiftbar
 
 That is the whole migration. You do not need to rename, rewrite, or re-tag anything.
 
+Everything below describes the xbar/SwiftBar text protocol your migrated plugins already use — it keeps working exactly as written. For **new** plugins, or ones you're rewriting anyway, Vee also understands a [structured-JSON output format](json-output.md) (`{"vee":1,…}`) that's easier to author than the text protocol's `|`-param quoting; see the [comparison](json-output.md#when-to-use-json-vs-the-text-protocol).
+
 ## What's compatible
 
 Vee implements the xbar/SwiftBar plugin protocol, so the things you already rely on keep working:

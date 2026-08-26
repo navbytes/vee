@@ -28,6 +28,10 @@ No `sys.path` juggling is needed: Python already searches the running script's
 own directory, so a sibling `vee.py` is importable as-is. `vee new --lang py
 --out DIR` scaffolds a plugin and writes `vee.py` beside it in one step.
 
+For a new plugin, prefer `JSONMenu` over `Menu` — see
+[`examples/json-demo.py`](examples/json-demo.py) and the
+[JSON output format](https://vee.navbytes.io/guide/json-output/) docs.
+
 ## Layout
 
 ```
