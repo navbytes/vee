@@ -75,6 +75,22 @@ struct MenuSearchContentView: View {
         }
     }
 
+    /// Whether any visible row can disclose children / declares an icon. A
+    /// slot (chevron gutter, icon column) is reserved only when some row in the
+    /// current list actually uses it — a flat, icon-less menu keeps its text at
+    /// the leading edge instead of paying for columns nothing fills, which is
+    /// how the AppKit dropdown behaves.
+    private var anyExpandable: Bool {
+        model.visible.contains { if case .row(let row) = $0 { return row.canExpand } else { return false } }
+    }
+
+    private var anyIcon: Bool {
+        model.visible.contains {
+            guard case .row(let row) = $0 else { return false }
+            return row.spec.item.params.swiftbar.sfimage != nil || SearchRowIcon.decodedImage(for: row.spec.item.params) != nil
+        }
+    }
+
     private var rowList: some View {
         ScrollViewReader { proxy in
             ScrollView {
@@ -109,6 +125,8 @@ struct MenuSearchContentView: View {
             MenuRowView(
                 row: row,
                 selected: index == model.selection,
+                showsChevronSlot: anyExpandable,
+                showsIconSlot: anyIcon,
                 onToggleBranch: { model.toggle(row.key) },
                 onCommit: { onCommit(row.spec, $0) }
             )
@@ -162,6 +180,11 @@ enum SearchRowIcon {
 private struct MenuRowView: View {
     let row: VisibleRow
     let selected: Bool
+    /// Whether this list reserves a chevron / icon column at all — computed
+    /// over the visible rows by the caller, so rows agree on their left edge
+    /// and a menu with nothing to disclose (or no icons) pays for no gutter.
+    var showsChevronSlot: Bool = true
+    var showsIconSlot: Bool = true
     var onToggleBranch: () -> Void = {}
     var onCommit: @MainActor (Double) -> Void = { _ in }
 
@@ -243,7 +266,9 @@ private struct MenuRowView: View {
     }
 
     /// The disclosure control, or an equal-width blank so leaf rows and parent
-    /// rows keep their text on the same vertical line.
+    /// rows keep their text on the same vertical line. When no visible row can
+    /// expand, the whole column disappears rather than indenting every row of a
+    /// flat menu behind an always-empty gutter.
     @ViewBuilder
     private var chevron: some View {
         if row.canExpand {
@@ -255,38 +280,39 @@ private struct MenuRowView: View {
                 .contentShape(Rectangle())
                 .onTapGesture(perform: onToggleBranch)
                 .accessibilityLabel(row.isExpanded ? "Collapse" : "Expand")
-        } else {
+        } else if showsChevronSlot {
             Color.clear.frame(width: 10)
         }
     }
 
     /// The row's declared icon, or empty space of the same size.
     ///
-    /// A row declaring no `sfimage=`/`image=`/`templateImage=` draws **nothing**
-    /// here. The flat list this view replaced used a dashed-circle placeholder,
-    /// which earned its keep when every row sat at the same indent and the icon
-    /// column was the only thing holding the text in line. A tree already says
-    /// where a row sits — through its indent and its chevron — so the
-    /// placeholder stopped carrying information and became a dotted circle on
-    /// nearly every row. The 18pt frame stays, so a plugin that gives *some*
-    /// rows icons keeps the rest aligned with them; only the glyph is gone.
+    /// A row declaring no `sfimage=`/`image=`/`templateImage=` draws a blank
+    /// 18pt slot when some other visible row *does* declare one — that column
+    /// is what keeps the two aligned — and no slot at all in a menu with no
+    /// icons anywhere. The blank must be a concrete `Color.clear`, not an
+    /// empty `Group` with a frame: a `Group` applies its modifiers to each
+    /// child, so with no child the frame sizes nothing and the "reserved"
+    /// column silently collapses, un-aligning icon-less rows.
     @ViewBuilder
     private var icon: some View {
-        Group {
-            if let sfimage = spec.item.params.swiftbar.sfimage {
-                Image(systemName: sfimage)
-            } else if let nsImage = SearchRowIcon.decodedImage(for: spec.item.params) {
-                // A `templateImage=` tints with row selection like an SF Symbol;
-                // a plain `image=` keeps its own colors.
-                Image(nsImage: nsImage)
-                    .resizable()
-                    .renderingMode(nsImage.isTemplate ? .template : .original)
-                    .aspectRatio(contentMode: .fit)
-            }
+        if let sfimage = spec.item.params.swiftbar.sfimage {
+            Image(systemName: sfimage)
+                .font(.system(size: 13))
+                .foregroundStyle(selected ? AnyShapeStyle(.white) : AnyShapeStyle(.secondary))
+                .frame(width: 18, height: 18)
+        } else if let nsImage = SearchRowIcon.decodedImage(for: spec.item.params) {
+            // A `templateImage=` tints with row selection like an SF Symbol;
+            // a plain `image=` keeps its own colors.
+            Image(nsImage: nsImage)
+                .resizable()
+                .renderingMode(nsImage.isTemplate ? .template : .original)
+                .aspectRatio(contentMode: .fit)
+                .foregroundStyle(selected ? AnyShapeStyle(.white) : AnyShapeStyle(.secondary))
+                .frame(width: 18, height: 18)
+        } else if showsIconSlot {
+            Color.clear.frame(width: 18, height: 18)
         }
-        .font(.system(size: 13))
-        .foregroundStyle(selected ? AnyShapeStyle(.white) : AnyShapeStyle(.secondary))
-        .frame(width: 18, height: 18)
     }
 }
 
