@@ -107,6 +107,14 @@ To use a different folder (for example, an existing SwiftBar plugins directory),
 
 A plugin is just an executable file whose name encodes how often Vee re-runs it. The pattern is `name.INTERVAL.ext`, where the interval is a number plus a unit: `s` (seconds), `m` (minutes), `h` (hours), `d` (days), or `ms` (milliseconds).
 
+The example below prints the xbar/SwiftBar text protocol, which every plugin can use and which keeps existing xbar/SwiftBar plugins working unchanged. For a plugin you're starting from scratch, printing the [structured-JSON format](json-output.md) (`{"vee":1,…}`) instead is recommended — typed values and no `|`-param escaping. Download [`plugins/showcase/kitchen-sink.1m.sh`](https://raw.githubusercontent.com/navbytes/vee/main/plugins/showcase/kitchen-sink.1m.sh) to see one file that exercises the whole JSON format:
+
+```sh
+curl -o ~/Library/Application\ Support/Vee/plugins/kitchen-sink.1m.sh \
+  https://raw.githubusercontent.com/navbytes/vee/main/plugins/showcase/kitchen-sink.1m.sh
+chmod +x ~/Library/Application\ Support/Vee/plugins/kitchen-sink.1m.sh
+```
+
 Vee creates the plugins folder on first launch. If you haven't launched Vee yet, create it first:
 
 ```sh
@@ -181,4 +189,4 @@ contract.
 - [Widgets](widgets.md) — the full widget surface contract, card schema, and layout tree.
 - [Debugging and testing plugins](debugging.md) — preview a plugin, watch it re-render on save, and lint it.
 - [Plugin SDKs](sdk.md) — build plugins with typed builders (TypeScript, Python, or Go) instead of hand-formatting text.
-- [JSON output format](json-output.md) — the optional structured-JSON alternative to the text protocol.
+- [JSON output format](json-output.md) — the structured-JSON format, recommended for new plugins.

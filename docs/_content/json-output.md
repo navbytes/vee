@@ -18,13 +18,21 @@ Alongside the xbar/SwiftBar text protocol, Vee understands an **optional structu
 
 ## When to use JSON vs the text protocol
 
-The text protocol is compact and familiar, and every plugin can use it. Reach for JSON when the escaping and nesting of the text format start to get in the way:
+**JSON is the recommended format for a new plugin.** It avoids the escaping and nesting rules the text format needs:
 
 - **No quoting or escaping games.** Menu text, URLs, and shell arguments that contain spaces, `|`, or quotes are just JSON strings. There is no `| title="two words"` dance and no `\"` escaping.
 - **Typed items.** Booleans are real booleans (`"separator": true`, `"terminal": false`), sizes are numbers, and there is no ambiguity between a value and a parameter name.
 - **Clean nesting.** Submenus are arrays nested inside an item (`"submenu": [ … ]`) rather than depth-prefixed with `--` dashes, so deep menus stay readable and are trivial to build from a data structure.
 
-If you are emitting a menu from structured data (an API response, a config object), JSON is usually the shorter path. For quick one-liners the text protocol is still the easy default.
+The text protocol remains fully supported as the **xbar/SwiftBar-compatibility format** — it's what lets every existing xbar/SwiftBar plugin run on Vee unchanged, and it's still a fine choice for a quick one-liner or a plugin you want to keep portable to those tools. But if you're starting a plugin from scratch and don't need it to run outside Vee, reach for JSON first — especially one emitted from structured data (an API response, a config object).
+
+The showcase plugin [`kitchen-sink.1m.sh`](https://raw.githubusercontent.com/navbytes/vee/main/plugins/showcase/kitchen-sink.1m.sh) is one file that exercises every field below — download and run it to see the whole format at once:
+
+```sh
+curl -o ~/Library/Application\ Support/Vee/plugins/kitchen-sink.1m.sh \
+  https://raw.githubusercontent.com/navbytes/vee/main/plugins/showcase/kitchen-sink.1m.sh
+chmod +x ~/Library/Application\ Support/Vee/plugins/kitchen-sink.1m.sh
+```
 
 ## Opting in
 

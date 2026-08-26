@@ -40,7 +40,19 @@ https://vee.navbytes.io/guide/plugin-authoring.md     ← the source a model rea
 
 For most plugin work, [plugin-authoring.md](plugin-authoring.md) alone is enough
 context. Add [widgets.md](widgets.md) if the plugin renders a widget, and
-[json-output.md](json-output.md) if it emits JSON.
+[json-output.md](json-output.md) for the JSON output format — **recommended for
+a new plugin**, since a model has fewer ways to get typed, unescaped JSON wrong
+than hand-quoted `| key=value` text.
+
+For a worked example to hand the model alongside the docs,
+[`plugins/showcase/kitchen-sink.1m.sh`](https://raw.githubusercontent.com/navbytes/vee/main/plugins/showcase/kitchen-sink.1m.sh)
+is one file exercising every field of the JSON format — download it with:
+
+```sh
+curl -o ~/Library/Application\ Support/Vee/plugins/kitchen-sink.1m.sh \
+  https://raw.githubusercontent.com/navbytes/vee/main/plugins/showcase/kitchen-sink.1m.sh
+chmod +x ~/Library/Application\ Support/Vee/plugins/kitchen-sink.1m.sh
+```
 
 ## Give it the schemas, not a description of them
 

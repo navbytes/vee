@@ -169,7 +169,15 @@ Point Vee at your existing plugins folder (Plugin Manager → **Choose Folder**)
 
 ## Writing plugins
 
-A plugin is any executable that prints the xbar/SwiftBar format to stdout — bash, Python, Ruby, a compiled binary, anything. See the **[plugin authoring reference](docs/_content/plugin-authoring.md)** for the full format, and [`plugins/showcase/`](plugins/showcase/) for ready-to-run showcase plugins.
+A plugin is any executable that prints text to stdout — bash, Python, Ruby, a compiled binary, anything. For a **new** plugin, printing Vee's **[structured-JSON format](docs/_content/json-output.md)** (`{"vee":1,…}`) is the recommended way to start: typed booleans and numbers, no `|`-param quoting, and clean nesting for submenus. The xbar/SwiftBar text protocol is still fully supported — it's how every existing xbar/SwiftBar plugin keeps working unchanged — and is documented in full in the **[plugin authoring reference](docs/_content/plugin-authoring.md)**. See [`plugins/showcase/`](plugins/showcase/) for ready-to-run examples of both, including [`kitchen-sink.1m.sh`](plugins/showcase/kitchen-sink.1m.sh), one file exercising every JSON field.
+
+Download and run that one file to see everything — every JSON field in one plugin:
+
+```sh
+curl -o ~/Library/Application\ Support/Vee/plugins/kitchen-sink.1m.sh \
+  https://raw.githubusercontent.com/navbytes/vee/main/plugins/showcase/kitchen-sink.1m.sh
+chmod +x ~/Library/Application\ Support/Vee/plugins/kitchen-sink.1m.sh
+```
 
 For the edit loop, keep `vee dev` in a split terminal beside your editor — it re-runs the file and repaints the menu on every save:
 

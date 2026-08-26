@@ -14,7 +14,9 @@ head:
   - tag: title
     content: "Plugin SDKs — Vee docs"
 ---
-Vee ships tiny, zero-dependency SDKs for writing plugins with typed builders instead of hand-formatting the xbar/SwiftBar text protocol. There are three, one per language — **TypeScript**, **Python**, and **Go** — and they mirror each other exactly: the same builder shape, option names, encoding order, and quoting, so a plugin reads the same in any language and all three produce **byte-identical** output for the same menu.
+Vee ships tiny, zero-dependency SDKs for writing plugins with typed builders instead of hand-formatting output. There are three, one per language — **TypeScript**, **Python**, and **Go** — and they mirror each other exactly: the same builder shape, option names, encoding order, and quoting, so a plugin reads the same in any language and all three produce **byte-identical** output for the same menu.
+
+Each SDK has two top-level builders: `Menu`, which emits the xbar/SwiftBar text protocol, and `JSONMenu`, which emits Vee's [structured-JSON format](json-output.md). For a **new** plugin, prefer `JSONMenu` — typed values and no escaping to reason about. Reach for `Menu` when the plugin needs to keep running unchanged on xbar/SwiftBar, or when you're maintaining one that already emits text.
 
 The SDKs live in the [`plugins/`](https://github.com/navbytes/vee/tree/main/plugins) directory of the repository:
 
@@ -209,9 +211,10 @@ instead of the text protocol. It mirrors `Menu` method for method — `title`,
 `print` — so choosing a wire format no longer means choosing a different way to
 work.
 
-Prefer it when a plugin's values contain characters the text protocol has to
-escape (pipes, quotes, newlines), since the JSON encoder handles them without
-the escaping rules the text format needs.
+Prefer it for a new plugin: the JSON encoder handles characters the text
+protocol has to escape (pipes, quotes, newlines) without any escaping rules to
+remember, and every value is typed rather than a formatted string. Reach for
+`Menu` instead when the plugin needs to stay a plain xbar/SwiftBar plugin too.
 
 ### Options
 
@@ -499,7 +502,7 @@ If you change an SDK's output, regenerate the fixtures and run the tests — and
 - [Writing plugins with an LLM](writing-plugins-with-an-llm.md) — the SDKs make several of the format's easiest mistakes impossible.
 
 - [Plugin authoring reference](plugin-authoring.md) — the underlying text format the SDKs emit, including the rich params.
-- [JSON output format](json-output.md) — the optional structured-JSON alternative to the text protocol.
+- [JSON output format](json-output.md) — the structured-JSON format `JSONMenu` emits, recommended for new plugins.
 - [Getting started](getting-started.md) — where the plugins folder is.
 - Python SDK README — [`plugins/python/README.md`](https://github.com/navbytes/vee/tree/main/plugins/python/README.md).
 - Go SDK README — [`plugins/go/README.md`](https://github.com/navbytes/vee/tree/main/plugins/go/README.md).

@@ -17,6 +17,20 @@ each one is heavily commented and self-contained.
 | `disk-usage.30m.sh`           | 30m      | Reading system state via `df`, color-coding, an SF Symbol, and a `<vee.exec>` declaration. |
 | `github-notifications.5m.sh`  | 5m       | Network access, a secret token via `<xbar.var>` + the Keychain, links, and honest `<vee.network>` / `<vee.secrets>` declarations. Degrades gracefully with no token. |
 | `dev-dashboard.5m.sh`         | 5m       | The searchable filter panel (`<vee.filter>`) and a global search hotkey (`<vee.shortcut>`) over a large multi-section menu — the showcase used by `vee search`. |
+| `kitchen-sink.1m.sh`          | 1m       | Every field of the [JSON output format](../../docs/_content/json-output.md) (`{"vee":1,…}`) — titles, rich controls, nested submenus, an alternate — in one file, no dependencies. |
+
+Prefer JSON for a new plugin — see `kitchen-sink.1m.sh` above and the
+[JSON output format](../../docs/_content/json-output.md) docs. The other three
+examples print the xbar/SwiftBar text protocol, which stays fully supported for
+compatibility with existing xbar/SwiftBar plugins.
+
+Download and run just the kitchen sink:
+
+```sh
+curl -o ~/Library/Application\ Support/Vee/plugins/kitchen-sink.1m.sh \
+  https://raw.githubusercontent.com/navbytes/vee/main/plugins/showcase/kitchen-sink.1m.sh
+chmod +x ~/Library/Application\ Support/Vee/plugins/kitchen-sink.1m.sh
+```
 
 ## Running an example
 

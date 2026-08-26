@@ -48,3 +48,9 @@ interval (`cpu.5s.ts`, `disk.30m.sh`), exactly as with xbar/SwiftBar.
 See the [SDK guide](../docs/_content/sdk.md) for the full format, each SDK's
 README for its API, and [`showcase/`](showcase/) for commented, runnable
 examples of the format and the `<vee.*>` trust model.
+
+For a **new** plugin, prefer each SDK's `JSONMenu` builder (or hand-printing
+Vee's [structured-JSON format](../docs/_content/json-output.md) directly) over
+the text-emitting `Menu` — see `examples/json-demo.*` in each SDK folder, and
+[`showcase/kitchen-sink.1m.sh`](showcase/kitchen-sink.1m.sh) for one file
+exercising every JSON field.

@@ -14,9 +14,9 @@ head:
   - tag: title
     content: "Plugin authoring reference — Vee docs"
 ---
-A Vee plugin is any executable that prints text to standard output in the xbar/SwiftBar format. This page is the full reference: filenames, menu structure, the parameter table, metadata headers, and the richer features (SF Symbols, ANSI, Markdown, streaming, cron).
+A Vee plugin is any executable that prints text to standard output in the xbar/SwiftBar format. This page is the full reference: filenames, menu structure, the parameter table, metadata headers, and the richer features (SF Symbols, ANSI, Markdown, streaming, cron). It is also, unchanged, how every xbar/SwiftBar plugin keeps running on Vee — this text protocol is the compatibility format, and it stays fully supported.
 
-If you would rather build menus with typed code than format text by hand, see the [Plugin SDKs](sdk.md) (TypeScript, Python, and Go). For a structured alternative to the text protocol, see the [JSON output format](json-output.md).
+For a **new** plugin, consider the [JSON output format](json-output.md) instead: typed booleans and numbers, no `|`-param quoting or escaping, and clean nesting for submenus. [`plugins/showcase/kitchen-sink.1m.sh`](https://raw.githubusercontent.com/navbytes/vee/main/plugins/showcase/kitchen-sink.1m.sh) is one runnable file that exercises the whole JSON format. If you would rather build menus with typed code than format text by hand, see the [Plugin SDKs](sdk.md) (TypeScript, Python, and Go), both of which have a JSON builder.
 
 ## The authoring loop
 
