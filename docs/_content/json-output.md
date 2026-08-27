@@ -97,6 +97,8 @@ An entry in `items` (or in a `submenu`). Every field is optional; the shape of t
 | `disabled` | boolean | When `true`, the item is shown greyed-out and not clickable. |
 | `checked` | boolean | When `true`, the item shows a checkmark. |
 | `tooltip` | string | Hover tooltip text. |
+| `visibleOn` | array of string | The surfaces this item exists on — any of `"menu"`, `"search"`, `"window"`, `"cli"`. Absent means all of them; a surface not listed omits the item and its whole subtree. There is no `"widget"` value. See [Targeting surfaces](plugin-authoring.md#targeting-surfaces). |
+| `searchable` | boolean | When `false`, no filter query ever matches this item, though it stays visible and clickable while the listing is idle. |
 | `submenu` | array of JSONItem | Child items, forming a nested submenu. |
 | `alternate` | JSONItem | An alternate item shown when Option is held (mirrors the text protocol's `alternate=true`). |
 
@@ -141,7 +143,9 @@ A dropdown with a clickable link, a divider, a nested submenu, and an Option-key
 
 ### A shell-action item with params
 
-An item that runs a command when clicked, passing arguments via `params`.
+An item that runs a command when clicked, passing arguments via `params`. It is
+`"searchable": false` so a query plus Return can never land on it — you have to
+browse to it deliberately.
 
 ```json
 {
@@ -153,7 +157,8 @@ An item that runs a command when clicked, passing arguments via `params`.
       "shell": "/usr/bin/sudo",
       "params": ["systemctl", "restart", "nginx"],
       "terminal": true,
-      "tooltip": "Runs in Terminal so you can watch it"
+      "tooltip": "Runs in Terminal so you can watch it",
+      "searchable": false
     },
     { "text": "Refresh", "refresh": true }
   ]

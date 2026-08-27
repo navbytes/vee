@@ -53,11 +53,13 @@ cat <<'EOF'
       "shell": "/usr/bin/say",
       "params": ["hello from the kitchen sink"],
       "terminal": false,
-      "tooltip": "Runs in Terminal so you can watch it"
+      "tooltip": "Runs in Terminal so you can watch it",
+      "searchable": false
     },
     { "text": "Refresh", "refresh": true },
     { "text": "Disabled row", "disabled": true },
     { "text": "Checked row", "checked": true },
+    { "text": "Menu and window only", "visibleOn": ["menu", "window"], "tooltip": "Absent from the search panel and vee search" },
 
     { "separator": true },
     { "header": true, "text": "Nesting and alternates" },

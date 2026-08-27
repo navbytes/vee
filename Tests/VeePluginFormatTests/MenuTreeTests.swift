@@ -15,12 +15,18 @@ final class MenuTreeTests: XCTestCase {
         return MenuItem(text: text, params: params)
     }
 
+    /// Resolved for one surface. `.menu` — the dropdown — is what these
+    /// assertions were written against; the targeting tests name their own.
+    private func build(_ nodes: [MenuNode], on surface: MenuSurface = .menu) -> [MenuTreeNode] {
+        MenuTree.build(nodes, surface: surface)
+    }
+
     private func rows(_ nodes: [MenuTreeNode]) -> [MenuRowSpec] {
         nodes.compactMap { if case .row(let r) = $0 { return r } else { return nil } }
     }
 
     private func onlyRow(_ item: MenuItem) -> MenuRowSpec {
-        let built = rows(MenuTree.build([.item(item)]))
+        let built = rows(build([.item(item)]))
         precondition(built.count == 1, "expected exactly one row, got \(built.count)")
         return built[0]
     }
@@ -31,21 +37,23 @@ final class MenuTreeTests: XCTestCase {
     // MARK: - Which nodes become rows
 
     func testSeparatorsSurviveWhereTheyWereAuthored() {
-        let built = MenuTree.build([.item(item("a")), .separator, .item(item("b"))])
+        let built = build([.item(item("a")), .separator, .item(item("b"))])
         XCTAssertEqual(built.count, 3)
         guard case .separator = built[1] else { return XCTFail("the separator must stay between the two rows") }
     }
 
     /// Nothing is collapsed, trimmed, or repaired — a surface shows exactly what
     /// the plugin authored. The flat projection used to normalise runs of
-    /// separators away; the tree has no damage to repair.
+    /// separators away; the tree has no damage to repair. (Targeting is the one
+    /// thing that can make damage, and it repairs only what it made — see the
+    /// surface-targeting tests below.)
     func testRunsOfSeparatorsAreNotCollapsed() {
-        let built = MenuTree.build([.separator, .separator, .item(item("a"))])
+        let built = build([.separator, .separator, .item(item("a"))])
         XCTAssertEqual(built.count, 3)
     }
 
     func testDropdownFalseRowsAreExcluded() {
-        let built = MenuTree.build([
+        let built = build([
             .item(item("visible")),
             .item(item("menu-bar only") { $0.dropdown = false })
         ])
@@ -57,7 +65,7 @@ final class MenuTreeTests: XCTestCase {
     func testAHiddenRowTakesItsAlternateWithIt() {
         var hidden = item("hidden") { $0.dropdown = false }
         hidden.alternate = item("hidden alt")
-        XCTAssertTrue(rows(MenuTree.build([.item(hidden)])).isEmpty)
+        XCTAssertTrue(rows(build([.item(hidden)])).isEmpty)
     }
 
     // MARK: - Alternates
@@ -65,7 +73,7 @@ final class MenuTreeTests: XCTestCase {
     func testAnAlternateIsASiblingImmediatelyAfterItsRow() {
         var main = item("Refresh") { $0.refresh = true }
         main.alternate = item("Force Refresh") { $0.refresh = true }
-        let built = rows(MenuTree.build([.item(main)]))
+        let built = rows(build([.item(main)]))
         XCTAssertEqual(built.map(\.text), ["Refresh", "Force Refresh"])
         XCTAssertFalse(built[0].isAlternate)
         XCTAssertTrue(built[1].isAlternate)
@@ -81,7 +89,7 @@ final class MenuTreeTests: XCTestCase {
             $0.key = "r"
         }
         main.alternate = item("Force Refresh") { $0.refresh = true }
-        let built = rows(MenuTree.build([.item(main)]))
+        let built = rows(build([.item(main)]))
         XCTAssertEqual(built[0].keyEquivalent, "r")
         XCTAssertEqual(built[1].keyEquivalent, "r", "the alternate carries the primary's key, not its own absence of one")
     }
@@ -97,13 +105,13 @@ final class MenuTreeTests: XCTestCase {
             $0.refresh = true
             $0.key = "f"
         }
-        XCTAssertEqual(rows(MenuTree.build([.item(main)]))[1].keyEquivalent, "r")
+        XCTAssertEqual(rows(build([.item(main)]))[1].keyEquivalent, "r")
     }
 
     func testAnAlternateOfAKeylessPrimaryCarriesNoKey() {
         var main = item("Reveal") { $0.href = self.link }
         main.alternate = item("Reveal alternate") { $0.href = self.link }
-        let built = rows(MenuTree.build([.item(main)]))
+        let built = rows(build([.item(main)]))
         XCTAssertNil(built[0].keyEquivalent)
         XCTAssertNil(built[1].keyEquivalent)
     }
@@ -264,5 +272,167 @@ final class MenuTreeTests: XCTestCase {
         let leaf = rows(mid[0].children)
         XCTAssertEqual(leaf.map(\.text), ["leaf"])
         XCTAssertTrue(leaf[0].isActionable)
+    }
+
+    // MARK: - Surface membership
+
+    func testARowExistsOnlyOnTheSurfacesItNames() {
+        let nodes: [MenuNode] = [
+            .item(item("everywhere")),
+            .item(item("targeted") { $0.swiftbar.visibleOn = [.menu, .window] })
+        ]
+        XCTAssertEqual(rows(build(nodes, on: .menu)).map(\.text), ["everywhere", "targeted"])
+        XCTAssertEqual(rows(build(nodes, on: .window)).map(\.text), ["everywhere", "targeted"])
+        XCTAssertEqual(rows(build(nodes, on: .search)).map(\.text), ["everywhere"])
+        XCTAssertEqual(rows(build(nodes, on: .cli)).map(\.text), ["everywhere"])
+    }
+
+    func testAHiddenRowTakesItsWholeSubtreeWithIt() {
+        var parent = item("Parent") { $0.swiftbar.visibleOn = [.menu] }
+        parent.submenu = [.item(item("child") { $0.href = self.link })]
+        XCTAssertEqual(rows(build([.item(parent)], on: .menu)).map(\.text), ["Parent"])
+        XCTAssertTrue(build([.item(parent)], on: .window).isEmpty, "neither the row nor anything under it")
+    }
+
+    /// Narrowing only. A child naming a surface its parent is hidden from is
+    /// asking to outlive its parent, which is never granted.
+    func testAChildCannotResurrectItselfWhereItsParentIsHidden() {
+        var parent = item("Parent") { $0.swiftbar.visibleOn = [.menu] }
+        parent.submenu = [.item(item("child") { $0.swiftbar.visibleOn = [.menu, .window] })]
+        XCTAssertTrue(build([.item(parent)], on: .window).isEmpty)
+    }
+
+    func testAnAlternateIsHiddenWithItsPrimary() {
+        var main = item("Copy") { $0.swiftbar.visibleOn = [.menu] }
+        main.alternate = item("Copy Path")
+        XCTAssertEqual(rows(build([.item(main)], on: .menu)).map(\.text), ["Copy", "Copy Path"])
+        XCTAssertTrue(build([.item(main)], on: .search).isEmpty, "the pair goes together")
+    }
+
+    /// The other direction of the same inheritance: an alternate may leave a
+    /// surface its primary stays on, and the primary is unaffected.
+    func testAnAlternateCanNarrowFurtherThanItsPrimary() {
+        var main = item("Copy")
+        main.alternate = item("Copy Path") { $0.swiftbar.visibleOn = [.menu] }
+        XCTAssertEqual(rows(build([.item(main)], on: .menu)).map(\.text), ["Copy", "Copy Path"])
+        XCTAssertEqual(rows(build([.item(main)], on: .search)).map(\.text), ["Copy"])
+    }
+
+    // MARK: - Searchability
+
+    func testSearchabilityIsOwnIntersectedWithEveryAncestor() {
+        var parent = item("Parent") { $0.swiftbar.searchable = false }
+        parent.submenu = [.item(item("child") { $0.swiftbar.searchable = true })]
+        let parentRow = onlyRow(parent)
+        XCTAssertFalse(parentRow.isSearchable)
+        XCTAssertFalse(rows(parentRow.children)[0].isSearchable, "a child cannot search its way back in")
+    }
+
+    func testAnUnsearchableRowIsOtherwiseAnOrdinaryRow() {
+        let row = onlyRow(item("Delete Everything") {
+            $0.href = self.link
+            $0.swiftbar.searchable = false
+        })
+        XCTAssertFalse(row.isSearchable)
+        XCTAssertTrue(row.isEnabled)
+        XCTAssertTrue(row.isActionable, "browsing to it and activating it still works")
+    }
+
+    func testAnAlternateInheritsSearchabilityFromItsPrimaryAndMayNarrowIt() {
+        var main = item("Copy") { $0.href = self.link }
+        main.alternate = item("Copy Path") { $0.swiftbar.searchable = false }
+        let pair = rows(build([.item(main)]))
+        XCTAssertEqual(pair.map(\.isSearchable), [true, false])
+
+        var quiet = item("Copy") { $0.swiftbar.searchable = false }
+        quiet.alternate = item("Copy Path") { $0.swiftbar.searchable = true }
+        XCTAssertEqual(rows(build([.item(quiet)])).map(\.isSearchable), [false, false])
+    }
+
+    // MARK: - Structure repair
+
+    func testSeparatorsCollapseAroundHiddenRows() {
+        let built = build([
+            .item(item("keep")),
+            .separator,
+            .item(item("gone") { $0.swiftbar.visibleOn = [.menu] }),
+            .separator,
+            .item(item("also keep"))
+        ], on: .window)
+        XCTAssertEqual(built.count, 3, "one separator between the two survivors, not two")
+        XCTAssertEqual(rows(built).map(\.text), ["keep", "also keep"])
+    }
+
+    func testHidingTheFirstAndLastRowsLeavesNoDanglingSeparators() {
+        let built = build([
+            .item(item("gone") { $0.swiftbar.visibleOn = [.menu] }),
+            .separator,
+            .item(item("keep")),
+            .separator,
+            .item(item("also gone") { $0.swiftbar.visibleOn = [.menu] })
+        ], on: .window)
+        XCTAssertEqual(built, [.row(onlyRow(item("keep")))])
+    }
+
+    func testAnEmptiedSectionHeaderIsDropped() {
+        let built = build([
+            .item(item("Section") { $0.swiftbar.header = true }),
+            .item(item("only member") { $0.swiftbar.visibleOn = [.menu] }),
+            .separator,
+            .item(item("elsewhere"))
+        ], on: .window)
+        XCTAssertEqual(rows(built).map(\.text), ["elsewhere"], "the title over nothing goes too")
+    }
+
+    func testAHeaderSurvivesWhileAnyOfItsSectionDoes() {
+        let built = build([
+            .item(item("Section") { $0.swiftbar.header = true }),
+            .item(item("gone") { $0.swiftbar.visibleOn = [.menu] }),
+            .item(item("survivor"))
+        ], on: .window)
+        XCTAssertEqual(rows(built).map(\.text), ["Section", "survivor"])
+    }
+
+    /// The repair pass exists to clean up after hiding and must never touch a
+    /// menu that declared none — doubled separators and an authored-empty
+    /// section are the plugin's business, and every surface still agrees.
+    func testADeclarationFreeMenuResolvesIdenticallyOnEverySurface() {
+        let nodes: [MenuNode] = [
+            .separator,
+            .item(item("Empty Section") { $0.swiftbar.header = true }),
+            .separator,
+            .separator,
+            .item(item("a")),
+            .separator
+        ]
+        let menu = build(nodes, on: .menu)
+        XCTAssertEqual(menu.count, nodes.count, "nothing collapsed, nothing trimmed")
+        for surface in MenuSurface.allCases {
+            XCTAssertEqual(build(nodes, on: surface), menu, "\(surface) resolves the same tree")
+        }
+    }
+
+    // MARK: - The dropdown= alias
+
+    /// `dropdown=false` is targeting written the old way: on every surface, the
+    /// row and its subtree resolve exactly as if the plugin had not emitted it.
+    func testDropdownFalseResolvesAsIfTheRowWereNeverEmitted() {
+        var hidden = item("menu-bar only") { $0.dropdown = false }
+        hidden.submenu = [.item(item("buried") { $0.href = self.link })]
+        let withHidden: [MenuNode] = [.item(item("before")), .item(hidden), .item(item("after"))]
+        let without: [MenuNode] = [.item(item("before")), .item(item("after"))]
+
+        for surface in MenuSurface.allCases {
+            XCTAssertEqual(build(withHidden, on: surface), build(without, on: surface), "\(surface)")
+        }
+    }
+
+    func testVisibleOnOverridesDropdownOnTheRowItTargets() {
+        let node: [MenuNode] = [.item(item("row") {
+            $0.dropdown = false
+            $0.swiftbar.visibleOn = [.search]
+        })]
+        XCTAssertEqual(rows(build(node, on: .search)).map(\.text), ["row"])
+        XCTAssertTrue(build(node, on: .menu).isEmpty)
     }
 }

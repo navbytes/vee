@@ -85,11 +85,76 @@ final class MenuFlattenerTests: XCTestCase {
         XCTAssertEqual(rows.map(\.item.text), ["Kept"])
     }
 
-    func testDropdownFalseStillDescends() {
+    /// Behavior change, deliberate: this used to hide the row and keep
+    /// descending, so `vee search` alone could activate a child of a row the
+    /// plugin had removed from every other surface. `dropdown=false` now means
+    /// here what it has always meant in `MenuTree` — the subtree goes too.
+    func testDropdownFalseTakesItsSubtreeWithIt() {
         let rows = MenuFlattener.flatten([
             menuBarOnly("Hidden", submenu: [href("Buried")])
         ])
-        XCTAssertEqual(rows.map(\.item.text), ["Buried"])
+        XCTAssertTrue(rows.isEmpty)
+    }
+
+    // MARK: - Surface targeting
+
+    private func targeted(_ text: String, _ surfaces: Set<MenuSurface>, submenu: [MenuNode] = []) -> MenuNode {
+        var p = LineParams()
+        p.href = URL(string: "https://example.com")
+        p.swiftbar.visibleOn = surfaces
+        return .item(MenuItem(text: text, params: p, submenu: submenu))
+    }
+
+    private func unsearchable(_ text: String, submenu: [MenuNode] = []) -> MenuNode {
+        var p = LineParams()
+        p.href = URL(string: "https://example.com")
+        p.swiftbar.searchable = false
+        return .item(MenuItem(text: text, params: p, submenu: submenu))
+    }
+
+    /// This projection is the terminal's, so `cli` is the surface it resolves.
+    func testARowTargetedAwayFromTheTerminalIsAbsentWithItsSubtree() {
+        let rows = MenuFlattener.flatten([
+            targeted("Menu only", [.menu], submenu: [href("Buried")]), href("Kept")
+        ])
+        XCTAssertEqual(rows.map(\.item.text), ["Kept"])
+    }
+
+    func testARowTargetedAtTheTerminalIsKept() {
+        let rows = MenuFlattener.flatten([targeted("Terminal only", [.cli])])
+        XCTAssertEqual(rows.map(\.item.text), ["Terminal only"])
+    }
+
+    /// A ranked list of query matches is the only thing this produces, so a row
+    /// no query may reach has nothing to be in it for — and neither has
+    /// anything under it, which inherits the flag.
+    func testUnsearchableRowsAndTheirSubtreesAreNeverListed() {
+        let rows = MenuFlattener.flatten([
+            unsearchable("Delete Everything"),
+            unsearchable("Danger", submenu: [href("Buried")]),
+            href("Kept")
+        ])
+        XCTAssertEqual(rows.map(\.item.text), ["Kept"])
+    }
+
+    /// A section header is a breadcrumb device, not an ancestor: the rows it
+    /// scopes are its siblings, and its own flags are not theirs.
+    func testAnUnsearchableHeaderStillScopesItsSection() {
+        var p = LineParams()
+        p.swiftbar.header = true
+        p.swiftbar.searchable = false
+        let rows = MenuFlattener.flatten([.item(MenuItem(text: "Recent", params: p)), href("Fix retry")])
+        XCTAssertEqual(row("Fix retry", in: rows)?.breadcrumb, "Recent")
+    }
+
+    func testAnAlternateCanBeKeptOutOfReachWithoutItsPrimary() {
+        var p = LineParams()
+        p.refresh = true
+        var quiet = p
+        quiet.swiftbar.searchable = false
+        var main = MenuItem(text: "Refresh", params: p)
+        main.alternate = MenuItem(text: "Force Refresh", params: quiet)
+        XCTAssertEqual(MenuFlattener.flatten([.item(main)]).map(\.item.text), ["Refresh"])
     }
 
     func testEmptyTextGroupContributesNoBreadcrumbSegment() {

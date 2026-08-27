@@ -36,7 +36,7 @@ public enum LineParameterKeys {
         // parsed and still recognised so existing plugins keep working, but
         // deprecated and no longer emitted by the SDKs.
         "progresstrackcolor", "trackcolor",
-        "header", "accessory",
+        "header", "accessory", "visibleon", "searchable",
         // One pair sizes whichever accessory a row carries. The six per-family
         // spellings below are superseded by it and stay recognised so published
         // plugins keep working, the same way `trackcolor` does.

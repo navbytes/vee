@@ -16,7 +16,13 @@ export function build(): string {
   menu.title("JSON ✓", { color: "green", sfimage: "curlybraces" });
 
   const d = menu.dropdown;
-  d.item("Structured item", { href: "https://example.com" });
+  // Surface targeting, in its JSON spelling: the same two axes the text
+  // protocol writes as `visibleon=`/`searchable=` (see the surfaces example).
+  d.item("Structured item", {
+    href: "https://example.com",
+    visibleOn: ["menu", "window"],
+    searchable: false,
+  });
   d.separator();
   d.submenu("Submenu").item("Child", { color: "blue" });
   // Characters the three languages' JSON encoders disagree about by default:

@@ -54,6 +54,45 @@ final class FixtureRoundTripTests: XCTestCase {
         }
         XCTAssertEqual(items.last?.text, "R&D <beta> ✓")
         XCTAssertEqual(items.last?.params.swiftbar.tooltip, "a & b")
+
+        // Surface targeting has a JSON spelling too, and all three SDKs emit it
+        // in the same place in the key order.
+        XCTAssertEqual(items.first?.params.swiftbar.visibleOn, [.menu, .window])
+        XCTAssertEqual(items.first?.params.swiftbar.searchable, false)
+    }
+
+    /// Closes the SDK→parser loop for surface targeting: the TS/Python/Go SDKs
+    /// emit surfaces.txt byte-identically, and the Swift parser must recover
+    /// both axes — the comma list of surfaces, `searchable=false`, and the
+    /// targeted submenu whose children ride along with it.
+    func testSurfacesFixtureParams() throws {
+        let url = fixturesDirectory().appendingPathComponent("surfaces.txt")
+        let source = try String(contentsOf: url, encoding: .utf8)
+        let output = OutputParser.parse(source)
+        let items = output.body.compactMap { node -> MenuItem? in
+            if case .item(let i) = node { return i } else { return nil }
+        }
+        XCTAssertEqual(items.map(\.text), ["Open dashboard", "Copy build ID", "Roll back", "Logs"])
+
+        // Undeclared: every surface, as before this param existed.
+        XCTAssertNil(items[0].params.swiftbar.visibleOn)
+        XCTAssertNil(items[0].params.swiftbar.searchable)
+
+        XCTAssertEqual(items[1].params.swiftbar.visibleOn, [.menu, .window])
+
+        // `searchable=false` on the primary; the ⌥ alternate declares nothing
+        // and inherits it, which is `MenuTree`'s job rather than the parser's.
+        XCTAssertEqual(items[2].params.swiftbar.searchable, false)
+        XCTAssertEqual(items[2].alternate?.text, "Roll back (force)")
+        XCTAssertNil(items[2].alternate?.params.swiftbar.searchable)
+
+        // Hiding takes the subtree, so the children carry no declaration of
+        // their own — the parent's is what decides them.
+        XCTAssertEqual(items[3].params.swiftbar.visibleOn, [.window, .cli])
+        XCTAssertEqual(items[3].submenu.count, 2)
+
+        // A clean fixture trips no diagnostic: every value here is one Vee knows.
+        XCTAssertEqual(output.diagnostics.filter { $0.severity == .warning }, [])
     }
 
     func testRichFixtureParams() throws {

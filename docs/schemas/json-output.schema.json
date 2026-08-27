@@ -205,6 +205,23 @@
           "default": "trailing",
           "description": "Which edge the row's accessory anchors to."
         },
+        "visibleOn": {
+          "type": "array",
+          "items": {
+            "enum": [
+              "menu",
+              "search",
+              "window",
+              "cli"
+            ]
+          },
+          "description": "The surfaces this row exists on: the menu-bar dropdown, the search panel, a detached window, terminal listings. Absent means all of them. A surface not listed omits the row entirely, along with its whole subtree. There is no \"widget\" value — menu rows never reach the widget, which a plugin targets whole with <vee.surface>. An unrecognised value is ignored with a warning."
+        },
+        "searchable": {
+          "type": "boolean",
+          "default": true,
+          "description": "When false, no filter query ever matches this row — in the search panel, a window's filter field, or `vee search` — though it stays visible and clickable while the listing is idle."
+        },
         "chart": {
           "type": "object",
           "required": [

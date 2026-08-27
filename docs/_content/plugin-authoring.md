@@ -145,6 +145,46 @@ Every chart parameter above belongs to one specific chart. For the whole set
 side by side — which charts exist, how each is spelled on the text, JSON, and
 widget surfaces, and which options apply to which — see [Charts](charts.md).
 
+## Targeting surfaces
+
+The same menu is drawn on four surfaces — the menu-bar dropdown, the
+[search panel](#searchable-filter-panel), a
+[detached window](#leaving-a-plugin-open-in-a-window), and terminal listings
+(`vee search`). By default a row appears on all of them. Two parameters subtract
+from that, along different axes:
+
+```
+Copy build ID | visibleOn=menu,window shell=/usr/bin/pbcopy param1=4210
+Roll back     | searchable=false shell=/usr/local/bin/deploy param1=rollback
+```
+
+- **`visibleOn=`** — *where the row exists*. A comma list drawn from `menu`,
+  `search`, `window`, and `cli`; a surface not listed omits the row **and
+  everything nested under it**, so hiding a submenu parent hides its children
+  too. A child can narrow further but cannot bring itself back where a parent is
+  hidden, and an `alternate=true` row inherits from its primary the same way.
+- **`searchable=false`** — *whether a query can reach it*. The row is never
+  returned by a filter query anywhere, but stays visible and clickable while the
+  listing is idle. This is the one to reach for on a destructive action: typing
+  plus Return can never land on it, and you can still browse to it deliberately.
+  (`vee search` is a query surface from end to end — it has no idle listing to
+  browse — so an unsearchable row never appears there at all.)
+
+Removing rows never leaves a hole: separators left adjacent, leading, or
+trailing are collapsed, and a `header=true` row whose whole section is hidden
+goes with it.
+
+There is deliberately **no `widget` value**: menu rows never reach the widget
+surface, which a plugin targets whole with `<vee.surface>` (see
+[Widgets](widgets.md)). An unrecognised value is ignored with a warning in
+[Debug](debugging.md), and a list Vee can make nothing of leaves the row visible
+everywhere rather than deleting it.
+
+`dropdown=false` is the older, all-or-nothing spelling of the same idea and
+still works: on a dropdown row it means "on no surface at all", subtree
+included. Declaring both is a conflict — `visibleOn=` wins, and the clash is
+reported in Debug.
+
 ## Rich inline charts (Liquid Glass popovers)
 
 Attach `sparkline=` to a dropdown item to render a compact chart **inline in the

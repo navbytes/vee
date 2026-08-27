@@ -85,17 +85,26 @@ public struct MenuRowSpec: Equatable, Sendable {
     /// surface with no menu tracking may present it as an ordinary row instead.
     public var isAlternate: Bool
 
-    /// This row's own nested rows, after `dropdown=false` children are dropped.
-    /// What a surface renders beneath the row.
+    /// Whether a filter query may surface this row: `searchable=false` on the
+    /// row or on any ancestor turns it off (see `MenuTree.build`).
+    ///
+    /// The *decided* answer, so the matchers (`MenuTreeFilter`, and the flat
+    /// projection behind `MenuSearch`) never re-derive inheritance from params.
+    /// An unsearchable row is still a perfectly ordinary row when nothing is
+    /// typed — this narrows query reach, not existence.
+    public var isSearchable: Bool
+
+    /// This row's own nested rows, after the ones this surface hides are
+    /// dropped. What a surface renders beneath the row.
     public var children: [MenuTreeNode]
 
     /// Whether the item declared *any* children before filtering.
     ///
     /// Distinct from `children.isEmpty` on purpose: a row whose children are all
-    /// `dropdown=false` declares a submenu that renders empty. Both renderers
-    /// have always keyed the submenu-wins-over-action rule off the unfiltered
-    /// declaration, so that row is inert with an empty submenu rather than
-    /// becoming clickable. Preserved here rather than quietly corrected.
+    /// hidden on this surface declares a submenu that renders empty. Both
+    /// renderers have always keyed the submenu-wins-over-action rule off the
+    /// unfiltered declaration, so that row is inert with an empty submenu rather
+    /// than becoming clickable. Preserved here rather than quietly corrected.
     public var hasSubmenu: Bool
 
     public init(
@@ -111,6 +120,7 @@ public struct MenuRowSpec: Equatable, Sendable {
         accessoryLeading: Bool = false,
         keyEquivalent: String? = nil,
         isAlternate: Bool = false,
+        isSearchable: Bool = true,
         children: [MenuTreeNode] = [],
         hasSubmenu: Bool = false
     ) {
@@ -126,6 +136,7 @@ public struct MenuRowSpec: Equatable, Sendable {
         self.accessoryLeading = accessoryLeading
         self.keyEquivalent = keyEquivalent
         self.isAlternate = isAlternate
+        self.isSearchable = isSearchable
         self.children = children
         self.hasSubmenu = hasSubmenu
     }
@@ -147,24 +158,48 @@ public indirect enum MenuTreeNode: Equatable, Sendable {
 /// renders (`[MenuTreeNode]`).
 ///
 /// Every question a renderer used to answer for itself is answered exactly once
-/// here: which nodes become rows at all, whether a row acts, which display
-/// graphic it carries, and where an `alternate=` sibling sits. Pure, so all of
-/// it is unit-testable without an `NSMenu` or a running app.
+/// here: which nodes become rows at all *on the surface asking*, whether a row
+/// acts, whether a query may reach it, which display graphic it carries, and
+/// where an `alternate=` sibling sits. Pure, so all of it is unit-testable
+/// without an `NSMenu` or a running app.
 public enum MenuTree {
-    /// Resolves `nodes` into rows, preserving the plugin's authored order and
-    /// structure. Nothing is collapsed, inserted, or repaired — a surface shows
-    /// separators and headers exactly where the plugin put them.
-    public static func build(_ nodes: [MenuNode]) -> [MenuTreeNode] {
+    /// Resolves `nodes` into the rows `surface` shows, preserving the plugin's
+    /// authored order and structure. Nothing is collapsed, inserted, or
+    /// repaired — a surface shows separators and headers exactly where the
+    /// plugin put them — unless targeting actually hid a row here, the one case
+    /// that leaves debris behind (see `repaired`).
+    ///
+    /// `surface` has no default on purpose. Which rows exist is now a
+    /// per-surface fact, and a caller that forgot to say which surface it is
+    /// would silently render the dropdown's answer in a window or a panel — the
+    /// exact divergence this parameter exists to prevent.
+    public static func build(_ nodes: [MenuNode], surface: MenuSurface) -> [MenuTreeNode] {
+        build(nodes, surface: surface, inheritedSearchable: true)
+    }
+
+    /// The walk proper. `inheritedSearchable` is every ancestor's verdict so
+    /// far: a descendant can narrow query reach further but never widen it, so
+    /// the intersection travels down rather than being recomputed per row.
+    ///
+    /// Visibility needs no such carrier — a row hidden on `surface` is never
+    /// descended into, which *is* "the subtree goes with it".
+    private static func build(_ nodes: [MenuNode], surface: MenuSurface, inheritedSearchable: Bool) -> [MenuTreeNode] {
         var result: [MenuTreeNode] = []
+        var hidSomething = false
         for node in nodes {
             switch node {
             case .separator:
                 result.append(.separator)
             case .item(let item):
-                // `dropdown=false` marks a menu-bar-only line: it is not part of
-                // any dropdown surface, and its alternate goes with it.
-                guard item.params.dropdown != false else { continue }
-                result.append(.row(row(for: item)))
+                // The one membership filter: `visibleOn=` (or its `dropdown=`
+                // alias) targeting this row away from this surface takes the
+                // row and everything under it.
+                guard surface.shows(item.params) else {
+                    hidSomething = true
+                    continue
+                }
+                let primary = row(for: item, surface: surface, inheritedSearchable: inheritedSearchable)
+                result.append(.row(primary))
                 // `alternate=true` is a *sibling* of the row it replaces, added
                 // immediately after it at the same level — not a child. AppKit
                 // shows it in place of its predecessor while ⌥ is held.
@@ -175,11 +210,53 @@ public enum MenuTree {
                 // primary declared one) and the pair simply renders as two
                 // ordinary rows with ⌥ doing nothing. An alternate's own `key=`
                 // cannot be honoured for the same reason, so the primary's wins.
-                if let alternate = item.alternate {
-                    result.append(.row(row(for: alternate, isAlternate: true, inheritedKey: item.params.key)))
+                //
+                // Targeting inherits down the same edge: the pair is gone
+                // wherever the primary is (we never get here), and the alternate
+                // may narrow further on its own — `primary.isSearchable` is the
+                // ancestor verdict it starts from.
+                guard let alternate = item.alternate else { continue }
+                guard surface.shows(alternate.params) else {
+                    hidSomething = true
+                    continue
                 }
+                result.append(.row(row(
+                    for: alternate, surface: surface, isAlternate: true,
+                    inheritedKey: item.params.key, inheritedSearchable: primary.isSearchable
+                )))
             }
         }
+        return hidSomething ? repaired(result) : result
+    }
+
+    /// Clears the debris hiding leaves: runs of separators collapse to one,
+    /// leading and trailing separators go, and a header whose whole section was
+    /// hidden goes with it.
+    ///
+    /// Only ever called when a row was actually hidden at this level. A menu
+    /// that declares no targeting is therefore byte-identical to what it has
+    /// always resolved to — including its authored empty sections and its
+    /// doubled separators, which are the plugin's business, not ours.
+    private static func repaired(_ nodes: [MenuTreeNode]) -> [MenuTreeNode] {
+        var result: [MenuTreeNode] = []
+        for (index, node) in nodes.enumerated() {
+            switch node {
+            case .separator:
+                // A separator divides rows. One with no row before it divides
+                // nothing, and a second in a row divides the same nothing again.
+                if case .row = result.last { result.append(node) }
+            case .row(let spec) where spec.isHeader:
+                // A section runs from its header to the next header or
+                // separator, so the header has titled something iff an ordinary
+                // row still follows it.
+                let next = index + 1 < nodes.count ? nodes[index + 1] : nil
+                guard case .row(let following) = next, !following.isHeader else { continue }
+                result.append(node)
+            case .row:
+                result.append(node)
+            }
+        }
+        if case .separator = result.last { result.removeLast() }
         return result
     }
 
@@ -191,14 +268,22 @@ public enum MenuTree {
     /// walked here.
     public static func row(
         for item: MenuItem,
+        surface: MenuSurface,
         isAlternate: Bool = false,
-        inheritedKey: String? = nil
+        inheritedKey: String? = nil,
+        inheritedSearchable: Bool = true
     ) -> MenuRowSpec {
+        // Own ∩ ancestors': a row can put itself out of a query's reach, and
+        // can never pull itself back into one an ancestor is out of.
+        let searchable = inheritedSearchable && (item.params.swiftbar.searchable ?? true)
         if item.params.swiftbar.header == true {
-            return MenuRowSpec(item: item, isHeader: true, isEnabled: false, isAlternate: isAlternate)
+            return MenuRowSpec(
+                item: item, isHeader: true, isEnabled: false,
+                isAlternate: isAlternate, isSearchable: searchable
+            )
         }
 
-        let children = build(item.submenu)
+        let children = build(item.submenu, surface: surface, inheritedSearchable: searchable)
         let hasSubmenu = !item.submenu.isEmpty
         let enabled = !(item.params.disabled ?? false)
         return MenuRowSpec(
@@ -218,6 +303,7 @@ public enum MenuTree {
             accessoryLeading: item.params.swiftbar.accessory == .leading,
             keyEquivalent: isAlternate ? inheritedKey : item.params.key,
             isAlternate: isAlternate,
+            isSearchable: searchable,
             children: children,
             hasSubmenu: hasSubmenu
         )

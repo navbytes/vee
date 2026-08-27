@@ -18,7 +18,10 @@ def build() -> str:
     menu.title("JSON ✓", color="green", sfimage="curlybraces")
 
     d = menu.dropdown
-    d.item("Structured item", href="https://example.com")
+    # Surface targeting, in its JSON spelling: the same two axes the text
+    # protocol writes as `visibleon=`/`searchable=` (see the surfaces example).
+    d.item("Structured item", href="https://example.com",
+           visible_on=["menu", "window"], searchable=False)
     d.separator()
     d.submenu("Submenu").item("Child", color="blue")
     # See the TypeScript example: characters the three JSON encoders disagree

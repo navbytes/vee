@@ -26,7 +26,8 @@ final class MenuSearchViewModelTests: XCTestCase {
         return .item(MenuItem(text: text, params: p))
     }
 
-    private func tree(_ nodes: [MenuNode]) -> [MenuTreeNode] { MenuTree.build(nodes) }
+    /// Built for the panel — the surface this view model drives.
+    private func tree(_ nodes: [MenuNode]) -> [MenuTreeNode] { MenuTree.build(nodes, surface: .search) }
 
     private func titles(_ model: MenuSearchViewModel) -> [String] {
         model.visible.compactMap { $0.row?.spec.item.text }
