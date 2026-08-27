@@ -283,7 +283,7 @@ final class DetachedPluginWindows {
         handler: MenuActionHandling,
         controls: PluginWindowControls = PluginWindowControls()
     ) {
-        let nodes = MenuTree.build(body)
+        let nodes = MenuTree.build(body, surface: .window)
 
         if let existing = models[pluginName] {
             existing.update(nodes: nodes)
@@ -405,7 +405,7 @@ final class DetachedPluginWindows {
     /// UI, and therefore the one place a window can be kept live.
     func update(pluginName: String, body: [MenuNode]) {
         guard let model = models[pluginName] else { return }
-        model.update(nodes: MenuTree.build(body))
+        model.update(nodes: MenuTree.build(body, surface: .window))
     }
 
     /// Marks a plugin's window stale — its plugin is failing, disabled, or gone.

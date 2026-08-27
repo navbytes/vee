@@ -32,6 +32,16 @@ enum EmbeddedSDK {
 
 export type Color = string;
 
+/**
+ * One presentation of a plugin's menu, in the vocabulary `visibleOn` takes:
+ * the menu-bar dropdown, the transient search panel, a detached window, and
+ * terminal listings (`vee search`).
+ *
+ * There is deliberately no `"widget"`: menu rows never reach the widget, which
+ * a plugin targets whole with `<vee.surface>`.
+ */
+export type Surface = "menu" | "search" | "window" | "cli";
+
 export interface ItemOptions {
   color?: Color;
   size?: number;
@@ -49,7 +59,11 @@ export interface ItemOptions {
   params?: string[];
   terminal?: boolean;
   refresh?: boolean;
-  /** Show this line in the dropdown only, never in the menu bar. */
+  /**
+   * Show this line in the dropdown only, never in the menu bar. On a dropdown
+   * row `dropdown: false` is the older spelling of "on no surface at all";
+   * `visibleOn` says the same thing precisely, and wins when both are set.
+   */
   dropdown?: boolean;
   alternate?: boolean;
   disabled?: boolean;
@@ -97,6 +111,19 @@ export interface ItemOptions {
    * share the same in-row geometry. Omitted, the accessory sits trailing.
    */
   accessory?: "leading" | "trailing";
+  /**
+   * The surfaces this row exists on → `visibleon=menu,window`. Omitted, the row
+   * exists on all of them — targeting only ever subtracts, and it takes the
+   * row's whole subtree with it.
+   */
+  visibleOn?: Surface[];
+  /**
+   * `false` keeps the row out of every filter query's reach — the search panel,
+   * a window's filter field, and `vee search` — while leaving it visible and
+   * clickable in an idle listing. A separate axis from `visibleOn`: where a row
+   * exists and whether a query can reach it are different questions.
+   */
+  searchable?: boolean;
   /** Inline data series → `sparkline=1,2,3`. */
   sparkline?: number[];
   /**
@@ -250,6 +277,8 @@ function encode(options?: ItemOptions): string {
   push("shortcut", options.shortcut);
   push("header", options.header);
   push("accessory", options.accessory);
+  if (options.visibleOn !== undefined) push("visibleon", options.visibleOn.join(","));
+  push("searchable", options.searchable);
   if (options.sparkline !== undefined) push("sparkline", options.sparkline.map(String).join(","));
   push("sparklinecolor", options.sparklineColor);
   if (options.toggle !== undefined) push("toggle", options.toggle ? "on" : "off");
@@ -633,6 +662,10 @@ export interface JSONItemOptions {
   tooltip?: string;
   header?: boolean;
   accessory?: "leading" | "trailing";
+  /** The surfaces this item exists on; absent = all of them. */
+  visibleOn?: Surface[];
+  /** `false` keeps the item out of every filter query, but still browsable. */
+  searchable?: boolean;
   sparkline?: number[];
   /** Sparkline width in points; `"full"` stretches it to the row's width. */
   /** @deprecated Use `accessoryWidth`. */
@@ -674,6 +707,7 @@ export interface JSONItem extends JSONItemOptions {
 const JSON_ITEM_KEYS: Array<keyof JSONItem> = [
   "text", "separator", "color", "size", "href", "shell", "params", "terminal",
   "refresh", "sfimage", "disabled", "checked", "tooltip", "header", "accessory",
+  "visibleOn", "searchable",
   "sparkline", "sparklineWidth", "sparklineHeight", "sparklineColor",
   "accessoryWidth", "accessoryHeight",
   "toggle", "slider", "progress", "progressTrackColor", "progressWidth",
@@ -818,6 +852,9 @@ _TRAILING_KEYS: list[tuple[str, str]] = [
     ("shortcut", "shortcut"),
     ("header", "header"),
     ("accessory", "accessory"),
+    # visible_on is emitted here too -- see the branch in _encode; it is a list
+    # of surfaces, so it cannot ride this plain key table.
+    ("searchable", "searchable"),
 ]
 
 
@@ -940,7 +977,7 @@ _OPTION_NAMES = frozenset(
     [name for name, _ in _SCALAR_KEYS]
     + [name for name, _ in _TRAILING_KEYS]
     + [
-        "shell", "params", "sf_color",
+        "shell", "params", "sf_color", "visible_on",
         "sparkline", "sparkline_w", "sparkline_h", "sparkline_color",
         "accessory_w", "accessory_h",
         "toggle", "slider",
@@ -1030,6 +1067,12 @@ def _encode(options: dict[str, Any] | None) -> str:
             if sf_color is not None:
                 push("sfcolor", ",".join(str(c) for c in sf_color)
                      if isinstance(sf_color, (list, tuple)) else sf_color)
+        elif key == "searchable":
+            # `visibleon` sits just before it, and is a comma list of surfaces
+            # ("menu", "search", "window", "cli"), so it needs its own branch.
+            visible_on = options.get("visible_on")
+            if visible_on is not None:
+                push("visibleon", ",".join(str(s) for s in visible_on))
         push(key, options.get(name))
 
     # Vee-native rich params, emitted last in a fixed order shared across SDKs:
@@ -1447,6 +1490,7 @@ class Node:
 _JSON_ITEM_KEYS = [
     "text", "separator", "color", "size", "href", "shell", "params", "terminal",
     "refresh", "sfimage", "disabled", "checked", "tooltip", "header", "accessory",
+    "visible_on", "searchable",
     "sparkline", "sparkline_width", "sparkline_height", "sparkline_color",
     "accessory_width", "accessory_height",
     "toggle", "slider", "progress", "progress_track_color", "progress_width",
@@ -1456,6 +1500,7 @@ _JSON_ITEM_KEYS = [
 # snake_case option -> the JSON key it emits. The wire format is camelCase; the
 # SDK keeps Python's spelling, matching how the text-protocol options work.
 _JSON_KEY_NAMES = {
+    "visible_on": "visibleOn",
     "accessory_width": "accessoryWidth",
     "accessory_height": "accessoryHeight",
     "sparkline_width": "sparklineWidth",

@@ -81,6 +81,27 @@ final class DispatchTests: XCTestCase {
         XCTAssertFalse(out.contains("Info line"), out)
     }
 
+    /// `vee search` is the `cli` surface: a row targeted away from it is gone
+    /// with its subtree, and a `searchable=false` row is never in a ranked list
+    /// at all.
+    func testSearchHonoursSurfaceTargeting() async {
+        let fake = FakeRunner(stdout: """
+        Title
+        ---
+        Menu Only | href=https://x visibleOn=menu
+        --Buried | href=https://y
+        Quiet | href=https://z searchable=false
+        Listed | href=https://w
+        """)
+        var out = "", err = ""
+        let code = await VeeCLI.run(["search", "/tmp/p.sh"], runner: fake, out: &out, err: &err)
+        XCTAssertEqual(code, 0)
+        XCTAssertTrue(out.contains("1 activatable item(s)"), out)
+        XCTAssertTrue(out.contains("Listed"), out)
+        XCTAssertFalse(out.contains("Buried"), out)
+        XCTAssertFalse(out.contains("Quiet"), out)
+    }
+
     func testSearchNoMatchExitsOne() async {
         let fake = FakeRunner(stdout: "Title\n---\nGo | href=https://x\n")
         var out = "", err = ""

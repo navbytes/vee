@@ -249,7 +249,7 @@ public final class StatusItemController {
 
     private func presentSearch() {
         MenuSearchPanel.shared.present(
-            nodes: MenuTree.build(lastBody),
+            nodes: MenuTree.build(lastBody, surface: .search),
             pluginName: pluginName,
             keepOpen: { [weak self] in self?.openDetachedWindow() },
             activate: { [weak self] row in self?.handler.perform(row.item) }

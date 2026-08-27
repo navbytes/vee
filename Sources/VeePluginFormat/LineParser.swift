@@ -316,6 +316,19 @@ enum LineParser {
                 // row. Stored on `p.swiftbar` — see the doc comment on
                 // `LineParams.swiftbar` for why it lives there.
                 p.swiftbar.header = bool(value)
+            case "visibleon":
+                // Vee-native: which surfaces this row exists on. A comma list,
+                // resolved by `MenuSurface` so the JSON spelling of the same
+                // declaration cannot drift from this one. Stored on
+                // `p.swiftbar` — see the doc comment on `LineParams.swiftbar`.
+                p.swiftbar.visibleOn = MenuSurface.parseList(
+                    value.split(separator: ",").map(String.init), diagnostics: &diagnostics
+                )
+            case "searchable":
+                // Vee-native: keep the row out of every filter query's reach
+                // while leaving it browsable. Stored on `p.swiftbar` — see the
+                // doc comment on `LineParams.swiftbar`.
+                p.swiftbar.searchable = bool(value)
             case "accessory":
                 // Vee-native: which edge a progress=/sparkline= accessory
                 // anchors to. Default (absent/unrecognised) stays trailing —
@@ -426,6 +439,16 @@ enum LineParser {
             params: p,
             diagnostics: &diagnostics
         )
+
+        // Both keys answer "which surfaces show this row", and `visibleOn=` is
+        // the one that can say it precisely, so it wins. Reported here, where
+        // both are still in view — `MenuTree` sees only the resolved answer.
+        if p.swiftbar.visibleOn != nil, p.dropdown != nil {
+            diagnostics.append(.init(
+                severity: .warning,
+                message: "dropdown= and visibleOn= both target this row; visibleOn= wins"
+            ))
+        }
 
         return (p, diagnostics)
     }

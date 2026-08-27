@@ -47,9 +47,9 @@ def cell(text):
 def key_label(param):
     """How a parameter is written in the first column.
 
-    ``displayKey`` exists for the two keys whose documented spelling is not the
+    ``displayKey`` exists for the keys whose documented spelling is not the
     lowercase one the parser dispatches on: the open-ended ``param0, param1, …``
-    family, and ``templateImage``.
+    family, ``templateImage``, and ``visibleOn``.
     """
     names = [param.get("displayKey", param["key"])] + list(param.get("aliases", []))
     return " / ".join("`%s`" % n for n in names)

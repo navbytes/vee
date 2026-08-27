@@ -21,7 +21,8 @@ final class MenuTreeFilterTests: XCTestCase {
         return .item(MenuItem(text: text, params: p))
     }
 
-    private func tree(_ nodes: [MenuNode]) -> [MenuTreeNode] { MenuTree.build(nodes) }
+    /// Built for the panel, the surface this filter belongs to.
+    private func tree(_ nodes: [MenuNode]) -> [MenuTreeNode] { MenuTree.build(nodes, surface: .search) }
 
     /// Every row in the filtered tree, depth-first, regardless of expansion.
     private func allTitles(_ nodes: [MenuTreeNode]) -> [String] {
@@ -145,7 +146,7 @@ final class MenuTreeFilterTests: XCTestCase {
         let parent = MenuItem(text: "Parent", params: LineParams(), submenu: [
             .item(MenuItem(text: "hidden", params: hidden))
         ])
-        let visible = MenuTreeDisplay.visibleNodes(MenuTree.build([.item(parent)]), expanded: [])
+        let visible = MenuTreeDisplay.visibleNodes(MenuTree.build([.item(parent)], surface: .search), expanded: [])
         XCTAssertEqual(visible.first?.row?.canExpand, false)
     }
 
@@ -221,12 +222,69 @@ final class MenuTreeFilterTests: XCTestCase {
         var p = LineParams()
         p.href = URL(string: "https://example.com")
         let lone: [MenuTreeNode] = [
-            .row(MenuTree.row(for: MenuItem(text: "Copy Path", params: p), isAlternate: true))
+            .row(MenuTree.row(for: MenuItem(text: "Copy Path", params: p), surface: .search, isAlternate: true))
         ]
         XCTAssertEqual(titles(MenuTreeDisplay.visibleNodes(lone, expanded: [])), ["Copy Path"])
         XCTAssertEqual(
             titles(MenuTreeDisplay.visibleNodes(lone, expanded: [], alternatesActive: true)),
             ["Copy Path"]
+        )
+    }
+
+    // MARK: - Searchability
+
+    /// A row whose ⌥-alternate is `alt`, with `searchable=false` on the half
+    /// the plugin wants kept out of a query's way.
+    private func withUnsearchableAlternate(_ text: String, alt: String) -> MenuNode {
+        var p = LineParams()
+        p.href = URL(string: "https://example.com")
+        var quiet = p
+        quiet.swiftbar.searchable = false
+        return .item(MenuItem(text: text, params: p, alternate: MenuItem(text: alt, params: quiet)))
+    }
+
+    private func unsearchable(_ text: String, submenu: [MenuNode] = []) -> MenuNode {
+        var p = LineParams()
+        p.href = URL(string: "https://example.com")
+        p.swiftbar.searchable = false
+        return .item(MenuItem(text: text, params: p, submenu: submenu))
+    }
+
+    /// The point of the flag: typing the row's own name plus Return can never
+    /// land on it.
+    func testAnUnsearchableRowNeverEarnsAMatch() {
+        let filtered = MenuTreeFilter.filter(
+            tree([unsearchable("Delete Everything"), href("Delete One")]),
+            query: "delete"
+        )
+        XCTAssertEqual(allTitles(filtered), ["Delete One"])
+    }
+
+    func testAnUnsearchableRowIsUntouchedWhileTheTreeIsIdle() {
+        let nodes = tree([unsearchable("Delete Everything")])
+        XCTAssertEqual(MenuTreeFilter.filter(nodes, query: ""), nodes)
+    }
+
+    /// The "a hit keeps everything under it" rule is unchanged: an unsearchable
+    /// row cannot be *found*, but it is still there when its group is.
+    func testAnUnsearchableRowRidesAlongInsideAMatchingAncestor() {
+        let filtered = MenuTreeFilter.filter(
+            tree([group("Disks", unsearchable("Erase"))]),
+            query: "disks"
+        )
+        XCTAssertEqual(allTitles(filtered), ["Disks", "Erase"])
+    }
+
+    /// The alternate half is out of reach; the modifier swap that reveals it is
+    /// a deliberate act, and stays exactly as it was.
+    func testFilteringSurfacesOnlyTheSearchableHalfOfAPair() {
+        let nodes = tree([withUnsearchableAlternate("Copy", alt: "Copy Path")])
+        XCTAssertEqual(allTitles(MenuTreeFilter.filter(nodes, query: "copy")), ["Copy"])
+        XCTAssertEqual(titles(MenuTreeDisplay.visibleNodes(nodes, expanded: [])), ["Copy"])
+        XCTAssertEqual(
+            titles(MenuTreeDisplay.visibleNodes(nodes, expanded: [], alternatesActive: true)),
+            ["Copy Path"],
+            "⌥ still swaps in the alternate when nothing is typed"
         )
     }
 

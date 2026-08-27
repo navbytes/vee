@@ -31,9 +31,10 @@ public struct SwiftBarParams: Equatable, Sendable {
     public var webviewHeight: Double?
     public var shortcut: String?
 
-    // NOTE: `header`/`accessory`/`chart` below are Vee-native, not SwiftBar
-    // params — they live in this struct as a workaround, not for provenance.
-    // See the comment on `LineParams.swiftbar` for why.
+    // NOTE: `header`/`accessory`/`chart`/`visibleOn`/`searchable` below are
+    // Vee-native, not SwiftBar params — they live in this struct as a
+    // workaround, not for provenance. See the comment on `LineParams.swiftbar`
+    // for why.
 
     /// A first-class, non-interactive section-header row (`header=true`),
     /// rendered with AppKit's native `NSMenuItem.sectionHeader(title:)` — not a
@@ -54,6 +55,20 @@ public struct SwiftBarParams: Equatable, Sendable {
     /// the row draws the chart inline and opens a richer Swift Charts popover on
     /// click. Stored here — see the comment on `LineParams.swiftbar` for why.
     public var chart: ChartParams?
+
+    /// `visibleOn=menu,window`: the surfaces this row exists on. `nil` (absent,
+    /// or a declaration naming nothing recognisable) means every surface —
+    /// targeting only ever subtracts. Read through `MenuSurface.shows(_:)`,
+    /// which also folds in the `dropdown=` alias. Stored here — see the comment
+    /// on `LineParams.swiftbar` for why.
+    public var visibleOn: Set<MenuSurface>?
+
+    /// `searchable=false`: no filter query ever surfaces this row, on any
+    /// surface, though it stays visible and activatable in an idle listing.
+    /// A separate axis from `visibleOn`: where a row *exists* and whether a
+    /// query can *reach* it are different questions. Stored here — see the
+    /// comment on `LineParams.swiftbar` for why.
+    public var searchable: Bool?
 
     public init() {}
 }
@@ -180,6 +195,9 @@ public struct LineParams: Equatable, Sendable {
     public var href: URL?
     public var shell: ShellCommand?
     public var refresh: Bool?
+    /// `dropdown=false`: the compatibility alias for "this row exists on no
+    /// surface at all". Read through `MenuSurface.shows(_:)`, which an explicit
+    /// `visibleOn=` outranks.
     public var dropdown: Bool?
     public var alternate: Bool?
     public var disabled: Bool?

@@ -41,6 +41,8 @@ type Options struct {
 	Terminal *bool
 	Refresh  *bool
 	// Dropdown shows this line in the dropdown only, never in the menu bar.
+	// On a dropdown row it is the older spelling of "on no surface at all";
+	// VisibleOn says the same thing precisely, and wins when both are set.
 	Dropdown  *bool
 	Alternate *bool
 	Disabled  *bool
@@ -77,6 +79,16 @@ type Options struct {
 	// "leading" or "trailing". It applies uniformly to Sparkline, Progress
 	// and Chart, which share the same in-row geometry. Nil sits trailing.
 	Accessory *string
+	// VisibleOn lists the surfaces this row exists on -- "menu", "search",
+	// "window", "cli" (`visibleon=`). Nil means all of them: targeting only
+	// ever subtracts, and it takes the row's whole subtree with it.
+	VisibleOn []string
+	// Searchable set to false keeps the row out of every filter query's reach
+	// -- the search panel, a window's filter field, and `vee search` -- while
+	// leaving it visible and clickable in an idle listing. A separate axis
+	// from VisibleOn: where a row exists and whether a query can reach it are
+	// different questions.
+	Searchable *bool
 
 	// Vee-native rich params, emitted last in a fixed order shared across SDKs.
 	Sparkline []float64
@@ -370,6 +382,10 @@ func encode(o *Options) string {
 	if o.Accessory != nil {
 		push("accessory", *o.Accessory)
 	}
+	if o.VisibleOn != nil {
+		push("visibleon", strings.Join(o.VisibleOn, ","))
+	}
+	pushBool("searchable", o.Searchable)
 
 	if o.Sparkline != nil {
 		nums := make([]string, len(o.Sparkline))
@@ -910,8 +926,13 @@ type JSONOptions struct {
 	Tooltip  *string  `json:"tooltip,omitempty"`
 	Header   *bool    `json:"header,omitempty"`
 	// Accessory is "leading" or "trailing".
-	Accessory *string   `json:"accessory,omitempty"`
-	Sparkline []float64 `json:"sparkline,omitempty"`
+	Accessory *string `json:"accessory,omitempty"`
+	// VisibleOn lists the surfaces this item exists on; nil means all of them.
+	VisibleOn []string `json:"visibleOn,omitempty"`
+	// Searchable set to false keeps the item out of every filter query, but
+	// still browsable.
+	Searchable *bool     `json:"searchable,omitempty"`
+	Sparkline  []float64 `json:"sparkline,omitempty"`
 	// SparklineWidth is a number of points, or the string "full".
 	AccessoryWidth  any      `json:"accessoryWidth,omitempty"`
 	AccessoryHeight any      `json:"accessoryHeight,omitempty"`

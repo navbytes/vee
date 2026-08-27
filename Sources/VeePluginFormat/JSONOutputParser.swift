@@ -58,6 +58,14 @@ public enum JSONOutputParser {
         p.swiftbar.header = item.header
         p.swiftbar.checked = item.checked
         p.swiftbar.tooltip = item.tooltip
+        // Surface targeting, resolved through the same `MenuSurface` helper the
+        // line format goes through — including the unknown-value degradation, so
+        // the two spellings cannot come to mean different things. There is no
+        // JSON spelling of `dropdown=`, so this format has no conflict to report.
+        if let declared = item.visibleOn {
+            p.swiftbar.visibleOn = MenuSurface.parseList(declared, diagnostics: &diagnostics)
+        }
+        p.swiftbar.searchable = item.searchable
         applyRichParams(from: item, to: &p, diagnostics: &diagnostics)
         return p
     }
@@ -220,6 +228,10 @@ private final class JSONItem: Decodable {
     let checked: Bool?
     let tooltip: String?
     let header: Bool?
+    /// The JSON spelling of `visibleOn=`/`searchable=`: which surfaces show the
+    /// row, and whether a query can reach it.
+    let visibleOn: [String]?
+    let searchable: Bool?
     // Rich params (Vee-native inline controls), mirroring the text protocol.
     let sparkline: [Double]?
     let sparklineWidth: JSONWidth?

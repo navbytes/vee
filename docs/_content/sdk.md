@@ -225,7 +225,7 @@ Options map onto the line parameters in the [authoring reference](plugin-authori
 - **Images** — `image`, `templateImage` (Python `template_image`, Go `TemplateImage`)
 - **SF Symbols** — `sfimage`, `sfColor`, `sfSize`, `sfConfig`, `symbolize`
 - **SwiftBar extras** — `md`, `badge`, `webview`, `webviewW`, `webviewH`, `shortcut`
-- **Vee-native rows** — `header`, `accessory`
+- **Vee-native rows** — `header`, `accessory`, `visibleOn`, `searchable` (see [Targeting surfaces](plugin-authoring.md#targeting-surfaces))
 
 Naming follows each language's idiom, not one shared spelling: TypeScript is
 camelCase (`templateImage`), Python is snake_case (`template_image`), Go is

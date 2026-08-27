@@ -128,6 +128,24 @@ final class DetachedPluginWindowsTests: XCTestCase {
         )
     }
 
+    /// A window asks for the `window` surface's tree, on the first open and on
+    /// every live update alike — so a row the plugin targeted at the dropdown
+    /// alone never reaches one.
+    func testWindowsResolveTheirOwnSurface() {
+        func targeted() -> [MenuNode] {
+            var menuOnly = LineParams()
+            menuOnly.href = URL(string: "https://example.com")
+            menuOnly.swiftbar.visibleOn = [.menu]
+            return body(["Everywhere"]) + [.item(MenuItem(text: "Menu only", params: menuOnly))]
+        }
+        let windows = manager()
+        windows.show(pluginName: "sysmon", body: targeted(), handler: SpyHandler())
+        XCTAssertEqual(windows.visibleRowTitles(pluginName: "sysmon"), ["Everywhere"])
+
+        windows.update(pluginName: "sysmon", body: targeted())
+        XCTAssertEqual(windows.visibleRowTitles(pluginName: "sysmon"), ["Everywhere"], "and again on refresh")
+    }
+
     func testUpdateForAPluginWithNoWindowIsHarmless() {
         let windows = manager()
         windows.update(pluginName: "not-open", body: body(["x"]))

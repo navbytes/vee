@@ -1,0 +1,10 @@
+Deploy ✓ | color=green
+---
+Open dashboard | href=https://deploy.example.com
+Copy build ID | shell=/usr/bin/pbcopy param1=4210 visibleon=menu,window
+Roll back | shell=/usr/local/bin/deploy param1=rollback searchable=false
+Roll back (force) | shell=/usr/local/bin/deploy param1=rollback param2=--force alternate=true
+---
+Logs | visibleon=window,cli
+--Build log | href=https://deploy.example.com/4210/log
+--Test log | href=https://deploy.example.com/4210/tests

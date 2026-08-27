@@ -217,6 +217,24 @@
       "section": "accessory-placement-accessory"
     },
     {
+      "key": "visibleon",
+      "displayKey": "visibleOn",
+      "group": "layout",
+      "type": "string-list",
+      "grammar": "menu | search | window | cli (comma-separated)",
+      "default": "every surface",
+      "summary": "The surfaces this row exists on. A surface not listed omits the row entirely, along with its whole subtree. Supersedes `dropdown=`, which it outranks when both are set.",
+      "section": "targeting-surfaces"
+    },
+    {
+      "key": "searchable",
+      "group": "layout",
+      "type": "boolean",
+      "default": "true",
+      "summary": "`false` — no filter query ever matches this row, though it stays visible and clickable while the listing is idle.",
+      "section": "targeting-surfaces"
+    },
+    {
       "key": "image",
       "group": "images",
       "type": "string",

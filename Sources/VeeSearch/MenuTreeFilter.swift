@@ -63,7 +63,13 @@ public enum MenuTreeFilter {
     /// same semantics the flat search applies, minus the breadcrumb fallback,
     /// which a tree does not need: an ancestor match is expressed by keeping
     /// that ancestor's subtree rather than by scoring its descendants.
+    ///
+    /// A `searchable=false` row can never earn a hit of its own, which is the
+    /// whole of what that flag means here: it still rides along in a matching
+    /// ancestor's kept subtree, and an idle tree is untouched, so the row stays
+    /// browsable — just never one keystroke and a Return away.
     static func matches(_ row: MenuRowSpec, tokens: [String]) -> Bool {
+        guard row.isSearchable else { return false }
         let text = SearchText.fold(row.item.text)
         return tokens.allSatisfy { FuzzyScorer.score(query: $0, in: text) != nil }
     }

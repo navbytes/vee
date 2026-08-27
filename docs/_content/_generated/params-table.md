@@ -43,6 +43,8 @@ Where the line appears, and where its accessory sits.
 | `dropdown` | boolean | — | any line | `false` — show the line only in the menu bar, not the dropdown. [More](#title-vs-dropdown) |
 | `header` | boolean | — | any line | Render this line as a real, non-interactive section header instead of a normal item. [More](#section-headers) |
 | `accessory` | leading \| trailing | trailing | progress, sparkline, pie, donut, stackedbar | Which edge of the row the inline accessory anchors to. [More](#accessory-placement-accessory) |
+| `visibleOn` | menu \| search \| window \| cli (comma-separated) | every surface | any line | The surfaces this row exists on. A surface not listed omits the row entirely, along with its whole subtree. Supersedes `dropdown=`, which it outranks when both are set. [More](#targeting-surfaces) |
+| `searchable` | boolean | true | any line | `false` — no filter query ever matches this row, though it stays visible and clickable while the listing is idle. [More](#targeting-surfaces) |
 
 ### Images
 

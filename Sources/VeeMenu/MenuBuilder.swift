@@ -15,7 +15,9 @@ import VeePluginFormat
 @MainActor
 public enum MenuBuilder {
     public static func build(_ nodes: [MenuNode], target: MenuActionTarget) -> NSMenu {
-        emit(MenuTree.build(nodes), target: target)
+        // This file *is* the menu-bar dropdown, so `.menu` is its surface by
+        // construction — there is no caller that could mean another one.
+        emit(MenuTree.build(nodes, surface: .menu), target: target)
     }
 
     /// Builds a menu from already-resolved rows.
