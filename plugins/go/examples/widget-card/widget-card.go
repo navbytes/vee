@@ -26,9 +26,13 @@ func Build() string {
 		Status:   vee.StatusOK,
 		Progress: vee.Float(0.72),
 		Trend:    []float64{12.1, 13.4, 12.9, 15.0, 18.2},
+		// The two tap targets a row can carry: a URL the system opens, and a
+		// Shortcut Vee runs. A row declaring neither stays inert.
 		Items: []vee.WidgetCardItem{
-			{Label: "Orders", Value: vee.Str("214"), Symbol: vee.Str("bag"), Tint: vee.Str("blue")},
-			{Label: "Refunds", Value: vee.Str("3"), Symbol: vee.Str("arrow.uturn.left"), Tint: vee.Str("red")},
+			{Label: "Orders", Value: vee.Str("214"), Symbol: vee.Str("bag"), Tint: vee.Str("blue"),
+				URL: vee.Str("https://dash.example.com/orders")},
+			{Label: "Refunds", Value: vee.Str("3"), Symbol: vee.Str("arrow.uturn.left"), Tint: vee.Str("red"),
+				Shortcut: vee.Str("Review Refunds")},
 		},
 		Actions: []vee.WidgetCardAction{
 			{Kind: vee.ActionRefresh, Label: "Refresh"},

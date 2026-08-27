@@ -1,8 +1,10 @@
 // Example Vee plugin using the widget-card layout tree: the composable escape
 // hatch alongside the five preset templates (see the design doc §"Layout tree").
 // Builds a CPU tile as a tree — a header row, a big monospaced value that scales
-// to fit, and a circular gauge. Doubles as a golden fixture, byte-identical to
-// the TypeScript/Python widget-layout examples.
+// to fit, a circular gauge, and a share chart of where the time goes (with a
+// colors list deliberately shorter than its values, so the third segment takes
+// its palette slot, and subtracted from the small family). Doubles as a golden
+// fixture, byte-identical to the TypeScript/Python widget-layout examples.
 //
 // Using this outside the repository: go get github.com/navbytes/vee/plugins/go
 package main
@@ -32,6 +34,11 @@ func Build() string {
 				MinScale:        vee.Float(0.6),
 			})),
 			vee.Node.Gauge(0.38, vee.GaugeStyle("circular"), vee.Style(vee.WidgetNodeStyle{Tint: vee.Str("green")})),
+			vee.Node.Chart("stackedbar", []float64{62, 21, 17},
+				vee.Labels("User", "System", "Idle"),
+				vee.Colors("blue", "orange"),
+				vee.Families("medium", "large"),
+			),
 		},
 		vee.Align("leading"), vee.Spacing(6),
 	)

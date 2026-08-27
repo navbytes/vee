@@ -47,6 +47,7 @@ public enum WidgetCardParser {
 
         let progress = clampProgress(raw.progress, diagnostics: &diagnostics)
         let trend = finiteTrend(raw.trend, diagnostics: &diagnostics)
+        let items = sanitizedItems(raw.items, diagnostics: &diagnostics)
         let actions = sanitizedActions(raw.actions, diagnostics: &diagnostics)
         let layout = sanitizedLayout(raw.layout, diagnostics: &diagnostics)
 
@@ -61,7 +62,7 @@ public enum WidgetCardParser {
             status: status,
             progress: progress,
             trend: trend,
-            items: raw.items,
+            items: items,
             actions: actions,
             refreshAfter: raw.refreshAfter,
             staleAfter: raw.staleAfter,
@@ -119,12 +120,54 @@ public enum WidgetCardParser {
         guard let raw else { return nil }
         return raw.compactMap { action in
             guard action.kind == .href else { return action }
-            guard let urlString = action.url, let url = URL(string: urlString), URLScheme.isSafeToOpen(url) else {
+            guard let urlString = action.url, opensSafely(urlString) else {
                 diagnostics.append(.init(severity: .warning, message: "href action \"\(action.label)\" has a missing or unsafe url; dropped"))
                 return nil
             }
             return action
         }
+    }
+
+    /// Resolves each `list`/`board` row, enforcing the two rules a row's tap
+    /// target carries: its `url` passes the same scheme filter an `href`
+    /// action's does, and a `shortcut` names something. A failing declaration
+    /// is dropped but the row is kept — an item with no tap target is an
+    /// ordinary inert row, so the card keeps the data it came for.
+    ///
+    /// A `shell` key is *reported* rather than silently ignored. It can never
+    /// run (`WidgetCardItem` has no such field — that absence is how the widget
+    /// action contract's §6 exclusion is enforced), but a plugin author who
+    /// tries one deserves to be told why the row does nothing.
+    private static func sanitizedItems(_ raw: [RawWidgetCardItem]?, diagnostics: inout [ParseDiagnostic]) -> [WidgetCardItem]? {
+        guard let raw else { return nil }
+        return raw.map { item in
+            var url = item.url
+            if let declared = url, !opensSafely(declared) {
+                diagnostics.append(.init(severity: .warning, message: "item \"\(item.label)\" has an unsafe or unparseable url; dropped"))
+                url = nil
+            }
+            var shortcut = item.shortcut
+            if let name = shortcut, name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                diagnostics.append(.init(severity: .warning, message: "item \"\(item.label)\" names an empty shortcut; dropped"))
+                shortcut = nil
+            }
+            if item.shell != nil {
+                diagnostics.append(.init(severity: .warning, message: "item \"\(item.label)\" declares shell, which a widget row cannot run; ignored"))
+            }
+            return WidgetCardItem(
+                label: item.label, value: item.value, symbol: item.symbol, tint: item.tint,
+                url: url, shortcut: shortcut
+            )
+        }
+    }
+
+    /// Whether a plugin-supplied string is a URL a tap may open: parseable, and
+    /// past the `href=` scheme filter. One definition for both places a widget
+    /// carries a URL (action buttons and item rows), so a row and a button can
+    /// never disagree about what is openable.
+    private static func opensSafely(_ string: String) -> Bool {
+        guard let url = URL(string: string) else { return false }
+        return URLScheme.isSafeToOpen(url)
     }
 }
 
@@ -143,7 +186,7 @@ private struct RawWidgetCard: Decodable {
     let status: String?
     let progress: Double?
     let trend: [Double]?
-    let items: [WidgetCardItem]?
+    let items: [RawWidgetCardItem]?
     let actions: [WidgetCardAction]?
     let refreshAfter: TimeInterval?
     let staleAfter: TimeInterval?
@@ -154,6 +197,21 @@ private struct RawWidgetCard: Decodable {
         case refreshAfter = "refresh_after"
         case staleAfter = "stale_after"
     }
+}
+
+/// The wire shape of one `list`/`board` row: `WidgetCardItem`'s fields plus the
+/// one a widget row deliberately does *not* have. Decoding `shell` here is what
+/// lets `sanitizedItems` say so out loud; it is never carried into the card.
+/// Spelled `String?` like `JSONOutputParser`'s own raw item, so the key means
+/// the same thing it does in JSON menu output.
+private struct RawWidgetCardItem: Decodable {
+    let label: String
+    let value: String?
+    let symbol: String?
+    let tint: SnapshotColor?
+    let url: String?
+    let shortcut: String?
+    let shell: String?
 }
 
 /// Walks a decoded `WidgetNode` tree once, enforcing the layout guardrails and
@@ -169,9 +227,10 @@ private final class LayoutSanitizer {
     static let maxNodes = 64
     static let maxTextLength = 512
     static let maxSparklineValues = 256
+    static let chartType = "chart"
     static let knownTypes: Set<String> = [
         "vstack", "hstack", "zstack", "grid",
-        "text", "image", "gauge", "sparkline", "spacer", "divider"
+        "text", "image", "gauge", "sparkline", chartType, "spacer", "divider"
     ]
 
     private(set) var diagnostics: [ParseDiagnostic] = []
@@ -220,7 +279,12 @@ private final class LayoutSanitizer {
             }
         }
 
-        if let values = out.values {
+        if node.type == Self.chartType {
+            // A chart the renderer can't name is no chart at all, so the leaf
+            // goes — the card around it still renders, the same tolerance an
+            // unknown `template`/`status` gets.
+            guard sanitizeChart(&out) else { return nil }
+        } else if let values = out.values {
             var finite = values.filter(\.isFinite)
             if finite.count != values.count {
                 warn("layout sparkline contained non-finite values; dropped")
@@ -253,6 +317,49 @@ private final class LayoutSanitizer {
         }
 
         return out
+    }
+
+    /// Applies the `chart` leaf's own rules in place, or returns `false` to drop
+    /// the leaf.
+    ///
+    /// Deliberately the *menu's* rules, reached for by name rather than
+    /// restated: a widget `chart` leaf and a `pie=`/`donut=`/`stackedbar=` row
+    /// draw the same series, so they share `ChartKind`'s spellings and
+    /// `ChartParams.maxSegments` — eight, the categorical palette's length, past
+    /// which two slices would have to share a hue, which is the one ambiguity a
+    /// share chart must not have. Non-finite *and negative* values go for the
+    /// same reason `ChartParams.make` refuses them: these are shares of a whole.
+    ///
+    /// An over-long series is **folded**, not truncated — dropping the tail
+    /// would silently re-scale every slice that survived, while summing it keeps
+    /// the plugin's total honest.
+    private func sanitizeChart(_ node: inout WidgetNode) -> Bool {
+        guard let kind = node.kind, ChartKind(rawValue: kind) != nil else {
+            warn("layout chart kind \"\(node.kind ?? "")\" is not pie/donut/stackedbar; chart dropped")
+            return false
+        }
+
+        let declared = node.values ?? []
+        var values = declared.filter { $0.isFinite && $0 >= 0 }
+        if values.count != declared.count {
+            warn("layout chart contained non-finite or negative values; dropped")
+        }
+        if values.count > ChartParams.maxSegments {
+            let kept = ChartParams.maxSegments - 1
+            warn("layout chart has \(values.count) segments; the last \(values.count - kept) were folded into '\(ChartParams.otherLabel)'")
+            values = Array(values.prefix(kept)) + [values[kept...].reduce(0, +)]
+            // Labels and colors are positional, so only the kept prefix still
+            // lines up. The aggregate is named only when the plugin labelled
+            // every segment before it — otherwise "Other" would land on the
+            // wrong slice.
+            if let labels = node.labels {
+                let keptLabels = Array(labels.prefix(kept))
+                node.labels = keptLabels.count == kept ? keptLabels + [ChartParams.otherLabel] : keptLabels
+            }
+            node.colors = node.colors.map { Array($0.prefix(kept)) }
+        }
+        node.values = values
+        return true
     }
 
     private func sanitizeStyle(_ style: WidgetNodeStyle?) -> WidgetNodeStyle? {

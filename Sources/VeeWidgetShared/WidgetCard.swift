@@ -30,18 +30,41 @@ public enum WidgetActionKind: String, Codable, Equatable, Sendable {
     case shortcut
 }
 
-/// One row in a `list`/`board` template.
+/// One row in a `list`/`board` template. A row that declares `url` or
+/// `shortcut` is a tap target; one that declares neither renders inert, as
+/// every row did before those existed.
+///
+/// The tap vocabulary is `WidgetActionKind`'s minus `refresh` (a whole-tile
+/// concern, not a row's) — and, like it, deliberately without `shell`: the
+/// field simply does not exist, so no widget row can express one.
 public struct WidgetCardItem: Codable, Equatable, Sendable {
     public var label: String
     public var value: String?
     public var symbol: String?
     public var tint: SnapshotColor?
+    /// The URL tapping this row opens, scheme-filtered by `WidgetCardParser`
+    /// exactly like an `href` action's. Mirrors `WidgetCardAction.url`.
+    public var url: String?
+    /// The macOS Shortcut name tapping this row runs. Mirrors
+    /// `WidgetCardAction.name` for `kind == .shortcut`. A row declaring both
+    /// opens its `url` — same href-before-shortcut precedence the menu
+    /// dispatcher applies.
+    public var shortcut: String?
 
-    public init(label: String, value: String? = nil, symbol: String? = nil, tint: SnapshotColor? = nil) {
+    public init(
+        label: String,
+        value: String? = nil,
+        symbol: String? = nil,
+        tint: SnapshotColor? = nil,
+        url: String? = nil,
+        shortcut: String? = nil
+    ) {
         self.label = label
         self.value = value
         self.symbol = symbol
         self.tint = tint
+        self.url = url
+        self.shortcut = shortcut
     }
 }
 

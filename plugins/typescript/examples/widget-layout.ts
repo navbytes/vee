@@ -2,9 +2,12 @@
 // Example using the widget-card layout tree: the composable escape hatch
 // alongside the five preset templates, for layouts the presets can't express.
 // This builds a CPU tile as a tree — a header row (glyph + title + spacer), a
-// big monospaced value that scales to fit, and a circular gauge — to exercise
-// stacks, the two pressure-test modifiers (monospaced_digit, min_scale), and
-// the circular gauge. See docs/design/widget-surface-contract.md §"Layout tree".
+// big monospaced value that scales to fit, a circular gauge, and a share chart
+// of where the time goes — to exercise stacks, the two pressure-test modifiers
+// (monospaced_digit, min_scale), the circular gauge, and a chart leaf whose
+// colors list is deliberately shorter than its values (the third segment takes
+// its palette slot) and which subtracts itself from the small family.
+// See docs/design/widget-surface-contract.md §"Layout tree".
 //
 // Using this outside the repository: run `vee sdk ts` to write vee.ts beside
 // your copy, then change the import below to "./vee.ts".
@@ -24,6 +27,11 @@ export function build(): string {
           style: { font: { size: "title", design: "rounded" }, tint: "green", monospacedDigit: true, minScale: 0.6 },
         }),
         Node.Gauge(0.38, { gaugeStyle: "circular", style: { tint: "green" } }),
+        Node.Chart("stackedbar", [62, 21, 17], {
+          labels: ["User", "System", "Idle"],
+          colors: ["blue", "orange"],
+          families: ["medium", "large"],
+        }),
       ],
       { align: "leading", spacing: 6 },
     ),

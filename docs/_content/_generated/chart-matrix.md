@@ -6,9 +6,9 @@
 | ----- | ------------- | ---------------- | ----------- |
 | **Sparkline** — A line/area series over time. | `sparkline=1,2,3` | `"sparkline": [1,2,3]` | `node type "sparkline" with "values", or the "trend" template's "trend"` |
 | **Progress bar** — One capsule bar filled to a fraction. | `progress=0.72 or progress=23.65,100` | `"progress": 0.72` | `"progress" on the card, the "gauge" template's fill` |
-| **Pie** — A filled circle divided into sectors. | `pie=45,30,25` | `"chart": {"kind": "pie", "values": […]}` | — |
-| **Donut** — A pie with the middle punched out; the hole carries the total. | `donut=512,256,128` | `"chart": {"kind": "donut", "values": […]}` | — |
-| **Stacked bar** — One horizontal bar whose segments lie end to end. | `stackedbar=60,25,15` | `"chart": {"kind": "stackedbar", "values": […]}` | — |
+| **Pie** — A filled circle divided into sectors. | `pie=45,30,25` | `"chart": {"kind": "pie", "values": […]}` | `node type "chart" with "kind": "pie" and "values"` |
+| **Donut** — A pie with the middle punched out; the hole carries the total. | `donut=512,256,128` | `"chart": {"kind": "donut", "values": […]}` | `node type "chart" with "kind": "donut" and "values"` |
+| **Stacked bar** — One horizontal bar whose segments lie end to end. | `stackedbar=60,25,15` | `"chart": {"kind": "stackedbar", "values": […]}` | `node type "chart" with "kind": "stackedbar" and "values"` |
 | **Widget gauge** — A native WidgetKit gauge. | — | — | `node type "gauge" with "value", or the "gauge" template` |
 
 **What each chart takes.** One pair sizes any of them: `accessoryw=` and `accessoryh=`, whichever accessory the row carries. The per-chart names (`sparklinew=`, `chartw=`, `progressw=` and their heights) still parse but are deprecated, and do nothing when aimed at a chart the row does not draw.

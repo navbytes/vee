@@ -212,6 +212,57 @@ final class WidgetCardParserTests: XCTestCase {
         XCTAssertEqual(diagnostics, [])
     }
 
+    // MARK: - Item tap targets (list/board rows)
+
+    func testItemTapTargetsRoundTrip() {
+        let json = """
+        {"template":"list","items":[
+          {"label":"Orders","value":"214","url":"https://dash.example.com/orders"},
+          {"label":"Deploy","shortcut":"Deploy Prod"},
+          {"label":"Refunds","value":"3"}
+        ]}
+        """
+        let (card, diagnostics) = WidgetCardParser.parse(json)
+        XCTAssertEqual(diagnostics, [])
+        XCTAssertEqual(card?.items, [
+            WidgetCardItem(label: "Orders", value: "214", url: "https://dash.example.com/orders"),
+            WidgetCardItem(label: "Deploy", shortcut: "Deploy Prod"),
+            WidgetCardItem(label: "Refunds", value: "3")
+        ])
+    }
+
+    /// The row keeps its data and simply goes inert — the same scheme filter an
+    /// `href` action gets, so a row and a button can't disagree about a URL.
+    func testItemWithUnsafeOrUnparseableURLKeepsTheRowAndDropsTheTap() {
+        for hostile in ["file:///etc/passwd", "javascript:alert(1)", ""] {
+            let (card, diagnostics) = WidgetCardParser.parse(
+                #"{"template":"list","items":[{"label":"Orders","value":"214","url":"\#(hostile)"}]}"#
+            )
+            XCTAssertEqual(card?.items, [WidgetCardItem(label: "Orders", value: "214")], hostile)
+            XCTAssertEqual(diagnostics.count, 1, hostile)
+        }
+    }
+
+    func testItemWithEmptyShortcutDropsTheTap() {
+        let (card, diagnostics) = WidgetCardParser.parse(
+            #"{"template":"board","items":[{"label":"Deploy","shortcut":"   "}]}"#
+        )
+        XCTAssertEqual(card?.items, [WidgetCardItem(label: "Deploy")])
+        XCTAssertEqual(diagnostics.count, 1)
+    }
+
+    /// A widget row has no `shell` field at all — that absence is the widget
+    /// action contract's §6 exclusion — but the attempt is reported rather than
+    /// swallowed, so the author learns why the row does nothing.
+    func testItemShellDeclarationIsRejectedWithDiagnostic() {
+        let (card, diagnostics) = WidgetCardParser.parse(
+            #"{"template":"list","items":[{"label":"Wipe","shell":"rm -rf /"}]}"#
+        )
+        XCTAssertEqual(card?.items, [WidgetCardItem(label: "Wipe")])
+        XCTAssertEqual(diagnostics.count, 1)
+        XCTAssertTrue(diagnostics.first?.message.contains("shell") ?? false)
+    }
+
     func testRefreshAndStaleAfterDecodeFromSnakeCase() {
         let (card, _) = WidgetCardParser.parse(#"{"template":"stat","refresh_after":900,"stale_after":3600}"#)
         XCTAssertEqual(card?.refreshAfter, 900)

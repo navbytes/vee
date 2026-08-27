@@ -4,8 +4,8 @@ import Foundation
 /// button, so the app (a separate, un-sandboxed process) can service it — the
 /// extension cannot exec a plugin or run a Shortcut itself. This generalizes
 /// `VeeWidgetSharing.refreshRequestNotification` (which only ever means
-/// "refresh everything") to carry a specific plugin id and, for `.run`, which
-/// of that plugin's card actions was tapped.
+/// "refresh everything") to carry a specific plugin id and, for `.run`/
+/// `.runItem`, which of that plugin's card elements was tapped.
 public struct WidgetActionRequest: Codable, Equatable, Sendable {
     /// What to do.
     ///
@@ -19,9 +19,18 @@ public struct WidgetActionRequest: Codable, Equatable, Sendable {
     ///   opened directly by the extension (`widgetURL`/`Link`, no app
     ///   round-trip needed), and `.refresh`-kind actions use `.refresh`
     ///   above directly.
+    /// - `runItem`: run the Shortcut a tappable `list`/`board` row declares
+    ///   (`WidgetCardItem.shortcut`), resolved by `actionIndex` against that
+    ///   same card's `items`. A separate case rather than a flag on `.run`
+    ///   because the index counts a *different* list: `items[0]` and
+    ///   `actions[0]` are both position zero and mean different things, so the
+    ///   app has to be told which one it is reading. A row's `url`, like an
+    ///   `.href` action's, never comes through here — the extension opens it
+    ///   with `Link`, no app round-trip.
     public enum Action: String, Codable, Equatable, Sendable {
         case refresh
         case run
+        case runItem
     }
 
     public var action: Action

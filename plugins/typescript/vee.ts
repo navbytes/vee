@@ -346,6 +346,19 @@ export interface WidgetCardItem {
   value?: string;
   symbol?: string;
   tint?: Color;
+  /**
+   * Makes this `list`/`board` row a tap target that opens a URL.
+   * Scheme-filtered by Vee on parse, exactly like an `href` action's; a blocked
+   * URL drops the tap and leaves the row inert, keeping its data.
+   */
+  url?: string;
+  /**
+   * Makes this row a tap target that runs a named macOS Shortcut. A row
+   * declaring both opens its `url` — the same href-before-shortcut precedence
+   * the menu applies. There is deliberately no `shell`: a widget row must not
+   * run an arbitrary command without the menu's context.
+   */
+  shortcut?: string;
 }
 
 export interface WidgetCardAction {
@@ -423,7 +436,10 @@ export interface NodeStyle {
 
 export type NodeType =
   | "vstack" | "hstack" | "zstack" | "grid"
-  | "text" | "image" | "gauge" | "sparkline" | "spacer" | "divider";
+  | "text" | "image" | "gauge" | "sparkline" | "chart" | "spacer" | "divider";
+
+/** The three share-chart shapes, spelled as they are on a menu row. */
+export type ChartNodeKind = "pie" | "donut" | "stackedbar";
 
 export interface WidgetNode {
   type: NodeType;
@@ -432,10 +448,16 @@ export interface WidgetNode {
   symbol?: string;
   /** `0…1` fill, for a `gauge` node. */
   value?: number;
-  /** Series, for a `sparkline` node. */
+  /** Series, for a `sparkline` node, or segment magnitudes for a `chart` one. */
   values?: number[];
   /** `"linear"` (default) or `"circular"`, for a `gauge` node. */
   gaugeStyle?: "linear" | "circular";
+  /** The shape, for a `chart` node. Unknown kinds drop the leaf. */
+  kind?: ChartNodeKind;
+  /** Per-segment names, for a `chart` node. May be shorter than `values`. */
+  labels?: string[];
+  /** Per-segment colors, for a `chart` node. Recolors a prefix; unset segments take the palette. */
+  colors?: Color[];
   /** Cross-axis alignment, for a container. */
   align?: string;
   /** Inter-child spacing, for a container. */
@@ -510,6 +532,9 @@ function orderNode(n: WidgetNode): Record<string, unknown> {
   put("value", n.value);
   put("values", n.values);
   put("gauge_style", n.gaugeStyle);
+  put("kind", n.kind);
+  put("labels", n.labels);
+  put("colors", n.colors);
   put("align", n.align);
   put("spacing", n.spacing);
   put("columns", n.columns);
@@ -570,6 +595,15 @@ export const Node = {
   Gauge: (value: number, opts: { gaugeStyle?: "linear" | "circular" } & LeafOpts = {}): WidgetNode => ({ type: "gauge", value, ...opts }),
   /** A dependency-free line chart from `values`. */
   Sparkline: (values: number[], opts: LeafOpts = {}): WidgetNode => ({ type: "sparkline", values, ...opts }),
+  /**
+   * A share chart — the same `pie`/`donut`/`stackedbar` a menu row draws, from
+   * one series of non-negative values read as shares of a whole. `labels` and
+   * `colors` are positional against `values` and may be shorter; an unset
+   * segment takes its slot in Vee's eight-color categorical palette. A series
+   * longer than eight is folded (not truncated) into a trailing `Other`.
+   */
+  Chart: (kind: ChartNodeKind, values: number[], opts: { labels?: string[]; colors?: Color[] } & LeafOpts = {}): WidgetNode =>
+    ({ type: "chart", kind, values, ...opts }),
   /** Flexible empty space. */
   Spacer: (opts: { minLength?: number; families?: WidgetNode["families"] } = {}): WidgetNode => ({ type: "spacer", ...opts }),
   /** A hairline divider. */

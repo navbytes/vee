@@ -53,6 +53,11 @@ enum LayoutNodeRenderer {
             return wrap(gaugeView(node), node)
         case "sparkline":
             return wrap(sparklineView(node), node)
+        case "chart":
+            // Its own view, not a `…View(node)` helper like the leaves above:
+            // segment color is appearance-dependent, so it needs
+            // `@Environment(\.colorScheme)`, which a static function can't read.
+            return wrap(WidgetChartView(node: node, family: family), node)
         case "spacer":
             return AnyView(Spacer(minLength: node.minLength.map { CGFloat($0) }))
         case "divider":

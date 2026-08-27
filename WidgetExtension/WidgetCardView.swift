@@ -174,6 +174,52 @@ private struct CardActionButton: View {
     }
 }
 
+/// Makes one `list`/`board` row a tap target when it declares one, and leaves
+/// it exactly as it was when it doesn't — an item with neither `url` nor
+/// `shortcut` renders inert, as every row did before those existed.
+///
+/// `url` before `shortcut`, the same href-before-shortcut precedence the menu
+/// dispatcher applies to a row declaring both. A URL is opened by the system
+/// straight from the `Link`; a Shortcut goes through the same App-Intent path
+/// the card's action buttons use (`RunPluginActionIntent`), flagged as an item
+/// so the app resolves `index` against `items` rather than `actions`. There is
+/// no third branch: `WidgetCardItem` has no `shell` field at all, which is how
+/// the widget surface contract's §6 exclusion is enforced — by absence, not by
+/// a check that could be forgotten.
+///
+/// `index` is the row's position in the card's full `items`, which is also its
+/// position here: both templates render a `prefix`, so truncation never shifts
+/// a row off the index the app will look it up by.
+///
+/// Only reachable on `medium`/`large`: neither template renders rows on
+/// `small`, which collapses to the headline value — so the family that wants a
+/// single whole-tile tap target gets one without a rule of its own.
+private struct CardItemTapTarget<Content: View>: View {
+    let pluginID: String
+    let item: WidgetCardItem
+    let index: Int
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        // `url` is already scheme-filtered by `WidgetCardParser`, so this
+        // trusts it — the same way `CardActionButton` trusts an href action's.
+        if let urlString = item.url, let url = URL(string: urlString) {
+            Link(destination: url) { content() }
+        } else if let shortcut = item.shortcut, !shortcut.isEmpty {
+            if #available(macOS 26.0, *) {
+                Button(intent: RunPluginActionIntent(pluginID: pluginID, actionIndex: index, isItem: true)) {
+                    content()
+                }
+                .buttonStyle(.plain)
+            } else {
+                content()
+            }
+        } else {
+            content()
+        }
+    }
+}
+
 // MARK: - stat
 
 /// Glyph, big `value` in `tint`, `title`/`caption`. The default template.
@@ -280,8 +326,10 @@ struct ListCardView: View {
                 CardValueText(card: card)
             } else {
                 let items = card.items ?? []
-                ForEach(Array(items.prefix(limit).enumerated()), id: \.offset) { _, item in
-                    CardItemRow(item: item)
+                ForEach(Array(items.prefix(limit).enumerated()), id: \.offset) { index, item in
+                    CardItemTapTarget(pluginID: pluginID, item: item, index: index) {
+                        CardItemRow(item: item)
+                    }
                 }
                 if items.count > limit {
                     Text("+\(items.count - limit) more").font(.caption2).foregroundStyle(.tertiary)
@@ -345,8 +393,10 @@ struct BoardCardView: View {
             } else {
                 let cells = Array((card.items ?? []).prefix(limit))
                 LazyVGrid(columns: columns, alignment: .leading, spacing: 6) {
-                    ForEach(Array(cells.enumerated()), id: \.offset) { _, item in
-                        BoardCell(item: item)
+                    ForEach(Array(cells.enumerated()), id: \.offset) { index, item in
+                        CardItemTapTarget(pluginID: pluginID, item: item, index: index) {
+                            BoardCell(item: item)
+                        }
                     }
                 }
             }

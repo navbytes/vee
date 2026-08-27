@@ -27,6 +27,17 @@ final class WidgetActionRequestTests: XCTestCase {
         XCTAssertEqual(decoded.actionIndex, 1)
     }
 
+    /// A tapped `list`/`board` row. `.runItem` is a distinct case rather than a
+    /// flag because `actionIndex` counts `items`, not `actions` — position 0
+    /// exists in both — so the raw value crossing the process boundary has to
+    /// survive verbatim.
+    func testEncodeDecodeRoundTripsRunItemWithItemIndex() throws {
+        let request = WidgetActionRequest(action: .runItem, pluginID: "deploy.15m.sh", actionIndex: 2)
+        let data = try JSONEncoder().encode(request)
+        XCTAssertTrue(String(decoding: data, as: UTF8.self).contains("\"runItem\""))
+        XCTAssertEqual(try JSONDecoder().decode(WidgetActionRequest.self, from: data), request)
+    }
+
     func testWriteThenReadAndClearReturnsRequestOnce() {
         let (store, dir) = makeTempStore()
         defer { try? FileManager.default.removeItem(at: dir) }

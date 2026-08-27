@@ -2,8 +2,10 @@
 # Example Vee plugin using the widget-card layout tree: the composable escape
 # hatch alongside the five preset templates (see the design doc §"Layout tree").
 # Builds a CPU tile as a tree — a header row, a big monospaced value that scales
-# to fit, and a circular gauge. Doubles as a golden fixture, byte-identical to
-# the TypeScript/Go widget-layout examples.
+# to fit, a circular gauge, and a share chart of where the time goes (with a
+# colors list deliberately shorter than its values, so the third segment takes
+# its palette slot, and subtracted from the small family). Doubles as a golden
+# fixture, byte-identical to the TypeScript/Go widget-layout examples.
 #
 # Using this outside the repository: run `vee sdk py` to write vee.py beside
 # your copy. No edit needed -- Python already searches the script's own
@@ -33,6 +35,13 @@ def build() -> str:
                     style={"font": {"size": "title", "design": "rounded"}, "tint": "green", "monospaced_digit": True, "min_scale": 0.6},
                 ),
                 Node.Gauge(0.38, gauge_style="circular", style={"tint": "green"}),
+                Node.Chart(
+                    "stackedbar",
+                    [62, 21, 17],
+                    labels=["User", "System", "Idle"],
+                    colors=["blue", "orange"],
+                    families=["medium", "large"],
+                ),
             ],
             align="leading",
             spacing=6,

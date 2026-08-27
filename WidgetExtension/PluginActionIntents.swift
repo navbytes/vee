@@ -37,11 +37,20 @@ struct RefreshPluginWidgetIntent: AppIntent {
     }
 }
 
-/// Runs one of a card's `shortcut`-kind actions (up to two — see
-/// `WidgetCard.actions`). `href` actions are deliberately not routed through
-/// an `AppIntent` at all: the template renders them as `Link`/`widgetURL`,
-/// which the system opens directly with no app round-trip. `shell` actions
-/// are never offered to widgets in the first place (see the design doc §6).
+/// Runs a `shortcut` the card names at `actionIndex` — one of its up-to-two
+/// action buttons (`WidgetCard.actions`), or, when `isItem` is set, one of the
+/// tappable `list`/`board` rows (`WidgetCard.items`).
+///
+/// One intent for both because they are the same path, not two: the sandboxed
+/// extension knows only the tapped element's *position*, writes that as a
+/// `WidgetActionRequest`, and the app resolves the Shortcut's name from the
+/// snapshot it published itself. Keeping the name out of the request is the
+/// point — the extension cannot name a Shortcut the plugin didn't.
+///
+/// `href` targets are deliberately not routed through an `AppIntent` at all:
+/// the templates render them as `Link`/`widgetURL`, which the system opens
+/// directly with no app round-trip. `shell` is never offered to a widget in the
+/// first place (see the design doc §6).
 @available(macOS 26.0, *)
 struct RunPluginActionIntent: AppIntent {
     static let title: LocalizedStringResource = "Run Plugin Action"
@@ -52,16 +61,24 @@ struct RunPluginActionIntent: AppIntent {
     var pluginID: String
     @Parameter(title: "Action Index")
     var actionIndex: Int
+    /// Whether `actionIndex` counts the card's `items` rather than its
+    /// `actions`. Defaulted so existing call sites (and any already-installed
+    /// tile whose stored intent predates this parameter) keep meaning "an
+    /// action button".
+    @Parameter(title: "Is Item Row", default: false)
+    var isItem: Bool
 
     init() {}
 
-    init(pluginID: String, actionIndex: Int) {
+    init(pluginID: String, actionIndex: Int, isItem: Bool = false) {
         self.pluginID = pluginID
         self.actionIndex = actionIndex
+        self.isItem = isItem
     }
 
     func perform() async throws -> some IntentResult {
-        VeeWidgetSharing.actionRequestStore.write(WidgetActionRequest(action: .run, pluginID: pluginID, actionIndex: actionIndex))
+        VeeWidgetSharing.actionRequestStore.write(
+            WidgetActionRequest(action: isItem ? .runItem : .run, pluginID: pluginID, actionIndex: actionIndex))
         WidgetActionSignal.post()
         return .result()
     }

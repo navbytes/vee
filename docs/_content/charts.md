@@ -70,6 +70,22 @@ wide. Vee refuses it there and says so in a diagnostic rather than guessing.
   numbers and differ only in shape, so switching between them needs no change
   to the values, labels, or colors.
 
+All three share charts draw on a widget too, as a `chart` leaf in the
+[layout tree](widgets.md#the-layout-tree) — the same three spellings, the same
+series:
+
+```json
+{ "type": "chart", "kind": "donut", "values": [45, 30, 25],
+  "labels": ["Documents", "Photos", "Apps"], "colors": ["blue", "teal"] }
+```
+
+`kind` is `pie`, `donut`, or `stackedbar`; anything else drops the leaf with a
+diagnostic and leaves the rest of the card alone. `labels` and `colors` are
+positional against `values` and may be shorter, exactly as `chartlabels=` and
+`chartcolors=` are on a menu row. A widget chart takes no size knobs — a tile
+sizes it per widget family — and its legend appears only where the family has
+room for one (never on `small`).
+
 Share charts carry at most eight segments, because the categorical palette has
 eight slots and a ninth would have to reuse a hue — exactly the ambiguity a
 share chart must not have. A longer series is **folded, not truncated**: the
@@ -97,7 +113,7 @@ who cannot see the difference.
 
 - [Plugin authoring](plugin-authoring.md#rich-inline-charts-liquid-glass-popovers)
   — the menu-bar charts in full, with worked examples.
-- [Widgets](widgets.md) — the gauge and sparkline layout nodes, and the `trend`
-  and `gauge` templates.
+- [Widgets](widgets.md) — the gauge, sparkline and chart layout nodes, and the
+  `trend` and `gauge` templates.
 - [JSON output](json-output.md) — the structured spelling of every chart.
 - [Plugin SDKs](sdk.md) — emitting charts from TypeScript, Python, or Go.

@@ -83,8 +83,10 @@ that text — graceful degradation, never a crash.
   "trend": [12.1, 13.4, 12.9, 15.0, 18.2],
 
   "items": [
-    { "label": "Orders",  "value": "214", "symbol": "bag",           "tint": "blue" },
-    { "label": "Refunds", "value": "3",   "symbol": "arrow.uturn.left", "tint": "red" }
+    { "label": "Orders",  "value": "214", "symbol": "bag",           "tint": "blue",
+      "url": "https://dash.example.com/orders" },
+    { "label": "Refunds", "value": "3",   "symbol": "arrow.uturn.left", "tint": "red",
+      "shortcut": "Review Refunds" }
   ],
 
   "actions": [
@@ -110,7 +112,7 @@ that text — graceful degradation, never a crash.
 | `status` | enum? | `ok` \| `warning` \| `error` — drives styling and the health roll-up. |
 | `progress` | double? | `0…1`, clamped; the `gauge` template's fill. |
 | `trend` | [double]? | The `trend` template's series. |
-| `items` | [Item]? | Rows for `list`/`board`: `{label, value?, symbol?, tint?}`. |
+| `items` | [Item]? | Rows for `list`/`board`: `{label, value?, symbol?, tint?, url?, shortcut?}` — see [Tappable rows](#tappable-rows). |
 | `actions` | [Action]? | Up to two rendered as buttons — see below. |
 | `refresh_after` | int? | Seconds; a hint for the next widget reload. |
 | `stale_after` | int? | Seconds; when the tile should show a stale treatment (else the interval-derived default). |
@@ -136,6 +138,36 @@ widget families — describe your data, Vee draws it:
 
 If none of the five fits your data, skip `template` and send a
 [layout tree](#the-layout-tree) instead.
+
+## Tappable rows
+
+A `list` or `board` item can be a **tap target**. Add `url` to open a link, or
+`shortcut` to run a named macOS Shortcut:
+
+```json
+"items": [
+  { "label": "Orders",  "value": "214", "url": "https://dash.example.com/orders" },
+  { "label": "Refunds", "value": "3",   "shortcut": "Review Refunds" },
+  { "label": "Pending", "value": "12" }
+]
+```
+
+- `url` — scheme-filtered exactly like an `href` action (`http`/`https`/custom
+  app deep links; never `file`/`javascript`/…). A blocked or unparseable URL
+  drops the tap with a diagnostic and leaves the row inert, keeping its data.
+- `shortcut` — the Shortcut's name, like menu `shortcut=`.
+- A row declaring **both** opens its `url` — the same href-before-shortcut
+  precedence the menu applies.
+- A row declaring **neither** renders inert, exactly as every row did before
+  these existed.
+
+There is deliberately **no `shell`** on an item, for the same reason there is no
+`shell` action: a widget row must not run an arbitrary command without the
+menu's context. The field simply does not exist — declaring one runs nothing and
+produces a diagnostic explaining why.
+
+Rows only exist on the medium and large tiles (`small` collapses to the headline
+`value`), so tap targets appear there too.
 
 ## The layout tree
 
@@ -168,7 +200,10 @@ is not consulted at all.
       { "type": "text", "text": "38%",
         "style": { "font": { "size": "title", "design": "rounded" }, "tint": "green",
                    "monospaced_digit": true, "min_scale": 0.6 } },
-      { "type": "gauge", "value": 0.38, "gauge_style": "circular", "style": { "tint": "green" } }
+      { "type": "gauge", "value": 0.38, "gauge_style": "circular", "style": { "tint": "green" } },
+      { "type": "chart", "kind": "stackedbar", "values": [62, 21, 17],
+        "labels": ["User", "System", "Idle"], "colors": ["blue", "orange"],
+        "families": ["medium", "large"] }
     ]
   }
 }
@@ -193,6 +228,7 @@ Every node has a `type`. Containers hold `children`; leaves do not.
 | `image` | leaf | `symbol` | An SF Symbol glyph (v1 renders SF Symbols only) |
 | `gauge` | leaf | `value`, `gauge_style` | A native gauge |
 | `sparkline` | leaf | `values` | A sparkline |
+| `chart` | leaf | `kind`, `values`, `labels`, `colors` | A [share chart](charts.md) — pie, donut, or stacked bar |
 | `spacer` | leaf | `min_length` | Flexible space |
 | `divider` | leaf | — | A hairline rule |
 
@@ -207,8 +243,11 @@ failing the card.
 | `text` | string? | `text` | The string to draw. Truncated at **512** characters. |
 | `symbol` | string? | `image` | SF Symbol name. |
 | `value` | double? | `gauge` | Fill, clamped to `0…1`. |
-| `values` | [double]? | `sparkline` | The series. Non-finite entries are dropped; capped at **256** points. |
+| `values` | [double]? | `sparkline`, `chart` | A sparkline's series (non-finite entries dropped, capped at **256** points), or a chart's segment magnitudes (non-finite *and negative* entries dropped, folded past **8** segments). |
 | `gauge_style` | string? | `gauge` | `linear` (default) or `circular`. |
+| `kind` | string? | `chart` | `pie`, `donut`, or `stackedbar`. **Required** — an unrecognised kind drops the leaf with a diagnostic, and the rest of the card still renders. |
+| `labels` | [string]? | `chart` | Per-segment names, positional against `values` and allowed to be shorter. Drawn as a legend where the family has room. |
+| `colors` | [color]? | `chart` | Per-segment colors, positional and allowed to be shorter — a segment past the end takes its palette slot, so `["blue", "orange"]` recolors only the first two. |
 | `align` | string? | containers | Cross-axis alignment — see below. |
 | `spacing` | double? | containers | Inter-child spacing in points, clamped `0…64`. |
 | `columns` | int? | `grid` | Column count. Default `2`, clamped `1…4`. |
@@ -280,6 +319,7 @@ the card:
 | Maximum nodes per tree | 64 (extra nodes dropped) |
 | Maximum `text` length | 512 characters (truncated) |
 | Maximum `sparkline` points | 256 (truncated) |
+| Maximum `chart` segments | 8 — the tail is **folded**, not truncated, into a trailing `Other`, so the shares still add up to your own total |
 
 Unknown keys are ignored, so a tree stays forward-compatible.
 
@@ -287,8 +327,8 @@ Unknown keys are ignored, so a tree stays forward-compatible.
 
 All three SDKs expose the same namespaced builders — `Node.VStack`,
 `Node.HStack`, `Node.ZStack`, `Grid`, `Text`, `Image`, `Gauge`, `Sparkline`,
-`Spacer`, `Divider` — and emit byte-identical JSON. Each of these produces
-exactly the payload shown at the top of this section:
+`Chart`, `Spacer`, `Divider` — and emit byte-identical JSON. Each of these
+produces exactly the payload shown at the top of this section:
 
 **TypeScript**
 
@@ -307,6 +347,11 @@ widgetCard({
         style: { font: { size: "title", design: "rounded" }, tint: "green", monospacedDigit: true, minScale: 0.6 },
       }),
       Node.Gauge(0.38, { gaugeStyle: "circular", style: { tint: "green" } }),
+      Node.Chart("stackedbar", [62, 21, 17], {
+        labels: ["User", "System", "Idle"],
+        colors: ["blue", "orange"],
+        families: ["medium", "large"],
+      }),
     ],
     { align: "leading", spacing: 6 },
   ),
@@ -335,6 +380,13 @@ widget_card(
                        "monospaced_digit": True, "min_scale": 0.6},
             ),
             Node.Gauge(0.38, gauge_style="circular", style={"tint": "green"}),
+            Node.Chart(
+                "stackedbar",
+                [62, 21, 17],
+                labels=["User", "System", "Idle"],
+                colors=["blue", "orange"],
+                families=["medium", "large"],
+            ),
         ],
         align="leading",
         spacing=6,
@@ -362,6 +414,11 @@ layout := vee.Node.VStack(
 			MinScale:        vee.Float(0.6),
 		})),
 		vee.Node.Gauge(0.38, vee.GaugeStyle("circular"), vee.Style(vee.WidgetNodeStyle{Tint: vee.Str("green")})),
+		vee.Node.Chart("stackedbar", []float64{62, 21, 17},
+			vee.Labels("User", "System", "Idle"),
+			vee.Colors("blue", "orange"),
+			vee.Families("medium", "large"),
+		),
 	},
 	vee.Align("leading"), vee.Spacing(6),
 )
@@ -383,7 +440,13 @@ Up to two `actions` render as buttons:
 - `shortcut` — runs a named macOS Shortcut (`name`), like menu `shortcut=`.
 
 There is deliberately **no `shell` action** — a widget button must not run an
-arbitrary command without the menu's context.
+arbitrary command without the menu's context. The same exclusion applies to
+[tappable rows](#tappable-rows), which carry `url`/`shortcut` and nothing else.
+
+The widget's vocabulary is allowed to lag the menu's, but never silently: every
+menu display graphic and action kind has a recorded widget disposition —
+supported, or excluded with a reason — in the [surface parity
+ledger](https://github.com/navbytes/vee/blob/main/docs/design/surface-parity.md).
 
 ## Building the card with the SDK
 
