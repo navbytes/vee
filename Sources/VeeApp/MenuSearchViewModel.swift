@@ -30,6 +30,20 @@ final class MenuSearchViewModel: ObservableObject {
     /// The lines currently drawn, in order.
     @Published private(set) var visible: [VisibleNode] = []
 
+    /// Live ⌥ state, fed by the presenting surface's modifier observer. Idle,
+    /// it decides which half of an `alternate=` pair is on screen; while
+    /// filtering it is inert (the projection shows both halves). The swap is
+    /// 1:1 in place, so the selection index needs no correction — the
+    /// highlight simply lands on the swapped-in row, which is the NSMenu feel.
+    @Published var optionHeld: Bool = false {
+        didSet {
+            // `flagsChanged` fires for every modifier; only a real ⌥ change
+            // re-projects.
+            guard optionHeld != oldValue else { return }
+            recompute(resetSelection: false)
+        }
+    }
+
     /// Index into `visible` of the keyboard-highlighted line. Headers and
     /// separators are not selectable, so this always sits on a row — `-1` when
     /// there are none.
@@ -53,7 +67,9 @@ final class MenuSearchViewModel: ObservableObject {
 
     private func recompute(resetSelection: Bool) {
         filtered = MenuTreeFilter.filter(allNodes, query: query)
-        visible = MenuTreeDisplay.visibleNodes(filtered, expanded: expanded, revealAll: isFiltering)
+        visible = MenuTreeDisplay.visibleNodes(
+            filtered, expanded: expanded, revealAll: isFiltering, alternatesActive: optionHeld
+        )
         if resetSelection {
             selection = Self.firstSelectable(in: visible)
         }

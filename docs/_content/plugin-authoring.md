@@ -442,16 +442,23 @@ minutes. It works for **any** plugin, with no `<vee.*>` declaration required.
 - **Pin or unpin** with the button in the title bar. A pinned window floats above
   other apps, follows you across Spaces, and stays visible over a full-screen
   app; an unpinned one behaves like an ordinary window. New windows are pinned,
-  and Vee remembers your choice per plugin until it quits.
+  and Vee remembers your choice per plugin.
+- **Where you put it is remembered.** Each plugin's window reopens with the
+  position, size, and pinned state it last had — after you close it, and after
+  you quit Vee. Only a plugin whose window you have never opened is placed by
+  Vee, stepped away from the others so several opened at once do not stack.
 - **Find them again** under **Detached Windows** in Vee's own menu, which lists
   every open window and brings one to the front. (Vee has no Dock icon, so this
   and the plugin's hotkey are the reliable ways back to a window you have
-  unpinned and covered.)
+  unpinned and covered.) The same submenu's **Bring All to Front** retrieves the
+  whole set in one go, and can be given a global shortcut of its own in
+  [Preferences → General](preferences.md#vees-own-settings).
 - **When a plugin stops reporting** — disabled, removed, or erroring — its window
   keeps the last output on screen and says it is stale, rather than quietly
   freezing on a number that looks current.
 
-Windows are per-session: they do not reopen after you quit Vee.
+Windows are per-session: they do not reopen by themselves after you quit Vee —
+only their place is kept, for when you open one again.
 
 Everything the dropdown renders appears in the window — nested submenus,
 separators, section headers, colors and ANSI, icons, and the full rich-row family
@@ -477,11 +484,14 @@ and Debug — sit in the window's footer, so you can act on what you are watchin
 without going back to the menu bar. `⌘R` refreshes, `⌘F` returns to the filter
 field. They are chrome, not menu content: the filter never matches them.
 
-Two things are deliberately not reproduced, because they only mean anything
-inside an open menu. An `⌥` alternate is shown as an ordinary row of its own
-rather than something you hold a modifier to reveal — so it is visible and
-clickable, which is more than the dropdown offers. Per-row `key=` equivalents are
-not bound.
+An `⌥` alternate behaves exactly as it does in the dropdown: the row shows its
+primary until you hold `⌥`, which swaps the alternate in — in place, so the
+keyboard highlight rides through the swap. Filtering is different on purpose:
+while a query is active both halves are ordinary match candidates, so typing
+the alternate's title finds it with no modifier held.
+
+One thing is deliberately not reproduced, because it only means anything inside
+an open menu: per-row `key=` equivalents are not bound.
 
 ## Widgets
 

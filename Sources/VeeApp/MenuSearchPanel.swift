@@ -30,6 +30,9 @@ final class MenuSearchPanel: NSObject {
     private var onActivateRow: ((MenuRowSpec) -> Void)?
     private var keyMonitor: Any?
     private var clickMonitor: Any?
+    /// Live ⌥ for `alternate=` pairs; attached with the other monitors and
+    /// detached on every dismissal path with them.
+    private let optionObserver = OptionKeyObserver()
     /// Restored on dismiss so row actions (e.g. a clipboard plugin's simulated
     /// ⌘V) land in the app the user invoked the panel from, not in Vee itself.
     private var frontmostRestorer = FrontmostAppRestorer()
@@ -111,6 +114,7 @@ final class MenuSearchPanel: NSObject {
         if let clickMonitor { NSEvent.removeMonitor(clickMonitor) }
         keyMonitor = nil
         clickMonitor = nil
+        optionObserver.detach()
         panel?.orderOut(nil)
         panel = nil
         model = nil
@@ -125,6 +129,7 @@ final class MenuSearchPanel: NSObject {
     // MARK: - Keyboard & outside-click
 
     private func installMonitors() {
+        if let model { optionObserver.attach(to: model) }
         // Keyboard nav while the panel is key: arrows move the highlight, Return
         // activates, Esc closes. Everything else passes through to the text field.
         keyMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown]) { [weak self] event in

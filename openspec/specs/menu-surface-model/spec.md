@@ -118,6 +118,17 @@ A presentation MAY differ from another in how it unfolds nesting, in its chrome,
 and in the keyboard mechanics available to it. It SHALL NOT differ in row
 identity, ordering, actionability, or effect.
 
+Alternates are no longer optional mechanics: every presentation with live
+access to modifier state — the menu-bar dropdown, the transient panel, and a
+detached window — SHALL show only the primary of an alternate pair until the ⌥
+modifier is held, and SHALL show the alternate in its place while it is held.
+The swap is in place: row order does not change, and a keyboard selection
+sitting on the row stays on it through the swap. A presentation without live
+modifier state (a terminal) SHALL present the alternate as an ordinary row
+after its primary instead, so it remains discoverable and activatable. While a
+filter query is active, the modifier SHALL be inert and each half of the pair
+SHALL be an independent match candidate.
+
 #### Scenario: Nesting may unfold differently
 
 - **WHEN** the menu bar presents nested children as a submenu and a window
@@ -134,13 +145,34 @@ identity, ordering, actionability, or effect.
 
 #### Scenario: An alternate replaces its row under the modifier
 
-- **WHEN** a plugin declares a row with an alternate, in a presentation that
-  supports modifier-held alternates
-- **THEN** only the primary row is shown until the modifier is held
-- **AND** holding the modifier shows the alternate in its place
+- **WHEN** a plugin declares a row with an alternate and the row is shown in
+  the menu-bar dropdown, the transient panel, or a detached window with no
+  filter query active
+- **THEN** only the primary row is shown until ⌥ is held
+- **AND** holding ⌥ shows the alternate in its place
+- **AND** releasing ⌥ restores the primary
 
 #### Scenario: An alternate of a row that declares a key equivalent
 
 - **WHEN** the row carrying the alternate also declares a key equivalent
 - **THEN** the alternate still replaces it under the modifier
 - **AND** the two are never shown at the same time
+
+#### Scenario: Selection survives the swap
+
+- **WHEN** the keyboard selection sits on a row with an alternate and ⌥ is
+  pressed or released
+- **THEN** the selection remains on that row's position through the swap
+
+#### Scenario: Filtering surfaces both halves
+
+- **WHEN** a filter query is active in a presentation showing a row that
+  declares an alternate
+- **THEN** the primary and the alternate each appear exactly when they match
+  the query
+- **AND** holding or releasing ⌥ does not change the result list
+
+#### Scenario: A terminal shows the alternate as a row
+
+- **WHEN** a plugin's menu is presented where no live modifier state exists
+- **THEN** the alternate appears as an ordinary row after its primary

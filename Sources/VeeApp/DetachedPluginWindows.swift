@@ -2,6 +2,7 @@ import AppKit
 import SwiftUI
 import VeeMenu
 import VeePluginFormat
+import VeePreferences
 import VeeSearch
 import VeeUI
 
@@ -198,18 +199,24 @@ final class DetachedPluginWindows {
     private var windows: [String: NSWindow] = [:]
     private var models: [String: DetachedPluginWindowModel] = [:]
     private var observerTokens: [String: NSObjectProtocol] = [:]
+    /// Live ⌥ per open window, for `alternate=` pairs. Created only alongside a
+    /// real window — an event monitor is an effect, and the windowless test
+    /// path asserts bookkeeping, not effects.
+    private var optionObservers: [String: OptionKeyObserver] = [:]
     private var controlsByPlugin: [String: PluginWindowControls] = [:]
-    /// Pin state per plugin, remembered for the session. A window that reopens
-    /// unpinned when the user last left it unpinned is the difference between a
-    /// preference and a chore.
-    private var pinPreference: [String: Bool] = [:]
+    /// Where the per-plugin pin state lives: persisted, not session memory. A
+    /// window that reopens unpinned when the user last left it unpinned is the
+    /// difference between a preference and a chore, and quitting Vee is not a
+    /// change of mind.
+    private let prefs: AppPreferences
     /// Running cascade origin, so each new window steps down-right of the last.
     /// `.zero` makes the first `cascadeTopLeft(from:)` a no-op, which is the
     /// documented way to seed it.
     private var cascadePoint: NSPoint = .zero
 
-    init(attachesWindows: Bool = true) {
+    init(attachesWindows: Bool = true, prefs: AppPreferences = .shared) {
         self.attachesWindows = attachesWindows
+        self.prefs = prefs
     }
 
     /// Plugins with an open window, in a stable order for the menu listing.
@@ -219,7 +226,7 @@ final class DetachedPluginWindows {
 
     /// Whether `pluginName`'s window currently floats above other apps.
     func isPinned(pluginName: String) -> Bool {
-        models[pluginName]?.isPinned ?? pinPreference[pluginName] ?? true
+        models[pluginName]?.isPinned ?? prefs.isDetachedWindowPinned(pluginName)
     }
 
     /// The level/behavior pair `pluginName`'s window is currently set to —
@@ -232,7 +239,7 @@ final class DetachedPluginWindows {
     /// the title bar routes here, so the two paths cannot diverge.
     func setPinned(_ pinned: Bool, pluginName: String) {
         models[pluginName]?.isPinned = pinned
-        pinPreference[pluginName] = pinned
+        prefs.setDetachedWindowPinned(pinned, id: pluginName)
         guard let window = windows[pluginName] else { return }
         DetachedWindowPinning.apply(pinned, to: window)
     }
@@ -284,7 +291,7 @@ final class DetachedPluginWindows {
             return
         }
 
-        let pinned = pinPreference[pluginName] ?? true
+        let pinned = prefs.isDetachedWindowPinned(pluginName)
         let model = DetachedPluginWindowModel(pluginName: pluginName, nodes: nodes, isPinned: pinned)
         let root = DetachedPluginWindowView(
             model: model,
@@ -297,24 +304,42 @@ final class DetachedPluginWindows {
         controlsByPlugin[pluginName] = controls
         guard attachesWindows else { return }
 
+        let optionObserver = OptionKeyObserver()
+        optionObserver.attach(to: model.search)
+        optionObservers[pluginName] = optionObserver
+
         let window = NSWindow(contentViewController: NSHostingController(rootView: root))
         window.title = pluginName
         window.styleMask = [.titled, .closable, .resizable, .miniaturizable]
         window.isReleasedWhenClosed = false
+        // One independent window per plugin, never a macOS window tab: under
+        // "prefer tabs: always" the tab machinery would merge these into one
+        // tabbed window, and it intercepts the programmatic placement below
+        // with a "WINDOW TAB FAILURE" complaint on the console either way.
+        window.tabbingMode = .disallowed
         // An explicit size rather than the hosting controller's fitting size:
         // the content fills its window (so resizing is useful), which makes
         // "fits" ambiguous.
         window.setContentSize(Self.initialSize)
-        // No frame autosave and no restoration: these windows are session-scoped
-        // by design, like every other window Vee opens.
         DetachedWindowPinning.apply(pinned, to: window)
         addPinButton(to: window, model: model, pluginName: pluginName)
 
-        // Cascade rather than stack: opening three of these to watch side by
-        // side is the point, and three windows centred on top of each other
-        // would look like one.
-        window.center()
-        cascadePoint = window.cascadeTopLeft(from: cascadePoint)
+        // Vee places a window only when the platform has no frame saved for
+        // this plugin — a first-ever open. Cascade rather than stack there:
+        // opening three of these to watch side by side is the point, and three
+        // windows centred on top of each other would look like one.
+        let frameName = Self.frameName(pluginName: pluginName)
+        if !window.setFrameUsingName(frameName) {
+            window.center()
+            cascadePoint = window.cascadeTopLeft(from: cascadePoint)
+        }
+        // Named only *after* placement: the autosave name saves the frame as
+        // soon as it is set, so naming first would have the first-open centring
+        // overwrite the very frame just restored. Windows still never reopen by
+        // themselves at launch — only the place of one the user reopens is
+        // remembered, and a frame whose screen is gone is the platform's to
+        // clamp back on screen.
+        window.setFrameAutosaveName(frameName)
 
         windows[pluginName] = window
 
@@ -339,12 +364,39 @@ final class DetachedPluginWindows {
         focus(window)
     }
 
+    /// Brings **every** open window to the front, one of them made key — the
+    /// gesture for a user running several windows as a dashboard.
+    /// `focus(pluginName:)` retrieves one at a time, and an accessory app has
+    /// no Dock icon or App Exposé to do the rest.
+    ///
+    /// With nothing open it does nothing at all — not even activating Vee —
+    /// keeping the promise `focus(pluginName:)` makes: a retrieval gesture never
+    /// conjures a window, and never yanks the user out of the app they are in to
+    /// show them nothing.
+    func focusAll() {
+        let open = openPlugins
+        // The key window is ordered last so it lands in front of the rest, and
+        // `focus` activates Vee — which is what lifts the whole set above other
+        // applications rather than just reshuffling them among themselves.
+        for pluginName in open.dropFirst() { windows[pluginName]?.orderFront(nil) }
+        guard let first = open.first else { return }
+        focus(pluginName: first)
+    }
+
     private func focus(_ window: NSWindow) {
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
     }
 
     static let initialSize = NSSize(width: 440, height: 520)
+
+    /// The name AppKit saves a window's frame under, one per plugin so each
+    /// window remembers its own place. Keyed by the plugin's name, so renaming
+    /// its file simply leaves one stale entry behind and the window is placed
+    /// afresh — the same trade every other per-plugin preference makes.
+    private static func frameName(pluginName: String) -> NSWindow.FrameAutosaveName {
+        "DetachedPluginWindow \(pluginName)"
+    }
 
     // MARK: - Liveness
 
@@ -404,12 +456,13 @@ final class DetachedPluginWindows {
 
     /// Evicts the closed window and unregisters its close observer — a leftover
     /// registration (and the model its block retains) would otherwise accumulate
-    /// once per window ever opened. The pin preference deliberately outlives the
-    /// window, for the session.
+    /// once per window ever opened. The pin preference and the saved frame
+    /// deliberately outlive the window: they are what the next open restores.
     private func windowWillClose(_ pluginName: String) {
         windows[pluginName] = nil
         models[pluginName] = nil
         controlsByPlugin[pluginName] = nil
+        optionObservers.removeValue(forKey: pluginName)?.detach()
         if let token = observerTokens.removeValue(forKey: pluginName) {
             NotificationCenter.default.removeObserver(token)
         }

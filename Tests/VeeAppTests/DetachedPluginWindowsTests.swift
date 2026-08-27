@@ -2,6 +2,7 @@ import XCTest
 @testable import VeeApp
 import VeeMenu
 import VeePluginFormat
+import VeePreferences
 import VeeSearch
 
 /// Bookkeeping for detached plugin windows, exercised through the
@@ -18,7 +19,15 @@ final class DetachedPluginWindowsTests: XCTestCase {
         func commitControl(_ item: MenuItem, value: Double) { commits.append((item, value)) }
     }
 
-    private func manager() -> DetachedPluginWindows { DetachedPluginWindows(attachesWindows: false) }
+    /// Pin state is persisted now, so each manager gets its own defaults suite:
+    /// a test must neither read the developer's real pin choices nor write into
+    /// them.
+    private func manager() -> DetachedPluginWindows {
+        DetachedPluginWindows(
+            attachesWindows: false,
+            prefs: AppPreferences(defaults: UserDefaults(suiteName: "vee-test-" + UUID().uuidString)!)
+        )
+    }
 
     private func body(_ titles: [String]) -> [MenuNode] {
         titles.map { title in
@@ -85,6 +94,23 @@ final class DetachedPluginWindowsTests: XCTestCase {
         let windows = manager()
         windows.focus(pluginName: "never-opened")
         XCTAssertTrue(windows.isEmpty, "a hotkey bound to a plugin with no window must not conjure one")
+    }
+
+    /// `focusAll` is pure effect — ordering real windows — so the seam has
+    /// nothing to observe beyond it leaving the tracking alone. What it must not
+    /// do is open anything: the bring-all hotkey retrieves windows, it never
+    /// conjures them, and a press with nothing open must stay silent.
+    func testBringingAllToTheFrontOpensNothing() {
+        let windows = manager()
+        windows.focusAll()
+        XCTAssertTrue(windows.isEmpty)
+
+        windows.show(pluginName: "sysmon", body: body(["CPU"]), handler: SpyHandler())
+        windows.show(pluginName: "caffeinate", body: body(["Awake"]), handler: SpyHandler())
+
+        windows.focusAll()
+
+        XCTAssertEqual(windows.openPlugins, ["caffeinate", "sysmon"], "retrieval never changes what is open")
     }
 
     // MARK: - Liveness
@@ -204,6 +230,23 @@ final class DetachedPluginWindowsTests: XCTestCase {
         windows.show(pluginName: "sysmon", body: body(["CPU"]), handler: SpyHandler())
 
         XCTAssertFalse(windows.isPinned(pluginName: "sysmon"), "reopens the way it was left")
+    }
+
+    /// The pin outlives the session, not just the window: a manager built over
+    /// the same defaults — the shape a relaunch has — opens the plugin the way
+    /// the user last left it, with no session dictionary carried over.
+    func testPinStateSurvivesARelaunch() {
+        let defaults = UserDefaults(suiteName: "vee-test-" + UUID().uuidString)!
+        let firstLaunch = DetachedPluginWindows(attachesWindows: false, prefs: AppPreferences(defaults: defaults))
+        firstLaunch.show(pluginName: "sysmon", body: body(["CPU"]), handler: SpyHandler())
+        firstLaunch.setPinned(false, pluginName: "sysmon")
+        firstLaunch.close(pluginName: "sysmon")
+
+        let relaunched = DetachedPluginWindows(attachesWindows: false, prefs: AppPreferences(defaults: defaults))
+        relaunched.show(pluginName: "sysmon", body: body(["CPU"]), handler: SpyHandler())
+
+        XCTAssertFalse(relaunched.isPinned(pluginName: "sysmon"))
+        XCTAssertEqual(relaunched.pinning(pluginName: "sysmon").level, .normal)
     }
 
     func testPinPreferenceIsPerPlugin() {
