@@ -684,22 +684,36 @@ public final class AppController: NSObject, NSApplicationDelegate {
             // widget-mode run, and the menu-mode refresh publishes nothing for a
             // `.both`/`.widget` plugin (see `PluginCoordinator.forceRefreshWidget`).
             coordinators[request.pluginID]?.forceRefreshWidget()
-        case .run:
+        case .run, .runItem:
             runCardAction(for: request)
         }
     }
 
-    /// Resolves a `.run` request's `actionIndex` against the plugin's
-    /// currently-published card and runs it. Only a `.shortcut`-kind action
-    /// is ever posted as `.run` (see `WidgetActionRequest.Action`); anything
-    /// else here is ignored defensively.
+    /// Resolves a `.run`/`.runItem` request's `actionIndex` against the
+    /// plugin's currently-published card and runs the Shortcut it names — a
+    /// card action button for `.run`, a tappable `list`/`board` row for
+    /// `.runItem`. The two index *different* lists, which is why the request
+    /// carries which one it means rather than a bare position.
+    ///
+    /// Only a Shortcut is ever posted this way (see `WidgetActionRequest`):
+    /// a URL is opened by the extension itself. Anything else here — a stale
+    /// index, a row that no longer declares a Shortcut — is ignored
+    /// defensively; the card is re-read from the snapshot, so it may have moved
+    /// on since the tap.
     private func runCardAction(for request: WidgetActionRequest) {
         guard let index = request.actionIndex,
-              let card = VeeWidgetSharing.shared.read()?.plugins.first(where: { $0.id == request.pluginID })?.card,
-              let actions = card.actions, actions.indices.contains(index),
-              actions[index].kind == .shortcut,
-              let name = actions[index].name, !name.isEmpty
+              let card = VeeWidgetSharing.shared.read()?.plugins.first(where: { $0.id == request.pluginID })?.card
         else { return }
+
+        let name: String?
+        if request.action == .runItem {
+            let items = card.items ?? []
+            name = items.indices.contains(index) ? items[index].shortcut : nil
+        } else {
+            let actions = card.actions ?? []
+            name = actions.indices.contains(index) && actions[index].kind == .shortcut ? actions[index].name : nil
+        }
+        guard let name, !name.isEmpty else { return }
         runShortcut(named: name)
     }
 

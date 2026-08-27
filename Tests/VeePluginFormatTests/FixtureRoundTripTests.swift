@@ -185,8 +185,12 @@ final class FixtureRoundTripTests: XCTestCase {
             progress: 0.72,
             trend: [12.1, 13.4, 12.9, 15.0, 18.2],
             items: [
-                WidgetCardItem(label: "Orders", value: "214", symbol: "bag", tint: .named("blue")),
-                WidgetCardItem(label: "Refunds", value: "3", symbol: "arrow.uturn.left", tint: .named("red"))
+                // Both row tap targets survive the round trip: a URL past the
+                // scheme filter, and a Shortcut name.
+                WidgetCardItem(label: "Orders", value: "214", symbol: "bag", tint: .named("blue"),
+                               url: "https://dash.example.com/orders"),
+                WidgetCardItem(label: "Refunds", value: "3", symbol: "arrow.uturn.left", tint: .named("red"),
+                               shortcut: "Review Refunds")
             ],
             actions: [
                 WidgetCardAction(kind: .refresh, label: "Refresh"),
@@ -202,7 +206,8 @@ final class FixtureRoundTripTests: XCTestCase {
     /// example (byte-identical across the TS/Python/Go SDKs) emits
     /// widget-layout.txt, and `WidgetCardParser` must recover the exact tree —
     /// the same node vocabulary, the two pressure-test modifiers
-    /// (`monospaced_digit`/`min_scale`), and the circular gauge — with no
+    /// (`monospaced_digit`/`min_scale`), the circular gauge, and a `chart` leaf
+    /// whose `colors` list is deliberately shorter than its `values` — with no
     /// diagnostics (a clean tree trips no guardrail).
     func testWidgetLayoutFixtureParses() throws {
         let url = fixturesDirectory().appendingPathComponent("widget-layout.txt")
@@ -220,7 +225,11 @@ final class FixtureRoundTripTests: XCTestCase {
             WidgetNode(type: "text", text: "38%", style: WidgetNodeStyle(
                 font: WidgetNodeFont(size: "title", design: "rounded"),
                 tint: .named("green"), monospacedDigit: true, minScale: 0.6)),
-            WidgetNode(type: "gauge", value: 0.38, gaugeStyle: "circular", style: WidgetNodeStyle(tint: .named("green")))
+            WidgetNode(type: "gauge", value: 0.38, gaugeStyle: "circular", style: WidgetNodeStyle(tint: .named("green"))),
+            WidgetNode(type: "chart", values: [62, 21, 17], kind: "stackedbar",
+                       labels: ["User", "System", "Idle"],
+                       colors: [.named("blue"), .named("orange")],
+                       families: ["medium", "large"])
         ])
         XCTAssertEqual(card?.layout, expected)
         // A pure-layout card still gets the default template.

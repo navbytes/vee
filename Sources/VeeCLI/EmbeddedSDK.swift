@@ -375,6 +375,19 @@ export interface WidgetCardItem {
   value?: string;
   symbol?: string;
   tint?: Color;
+  /**
+   * Makes this `list`/`board` row a tap target that opens a URL.
+   * Scheme-filtered by Vee on parse, exactly like an `href` action's; a blocked
+   * URL drops the tap and leaves the row inert, keeping its data.
+   */
+  url?: string;
+  /**
+   * Makes this row a tap target that runs a named macOS Shortcut. A row
+   * declaring both opens its `url` — the same href-before-shortcut precedence
+   * the menu applies. There is deliberately no `shell`: a widget row must not
+   * run an arbitrary command without the menu's context.
+   */
+  shortcut?: string;
 }
 
 export interface WidgetCardAction {
@@ -452,7 +465,10 @@ export interface NodeStyle {
 
 export type NodeType =
   | "vstack" | "hstack" | "zstack" | "grid"
-  | "text" | "image" | "gauge" | "sparkline" | "spacer" | "divider";
+  | "text" | "image" | "gauge" | "sparkline" | "chart" | "spacer" | "divider";
+
+/** The three share-chart shapes, spelled as they are on a menu row. */
+export type ChartNodeKind = "pie" | "donut" | "stackedbar";
 
 export interface WidgetNode {
   type: NodeType;
@@ -461,10 +477,16 @@ export interface WidgetNode {
   symbol?: string;
   /** `0…1` fill, for a `gauge` node. */
   value?: number;
-  /** Series, for a `sparkline` node. */
+  /** Series, for a `sparkline` node, or segment magnitudes for a `chart` one. */
   values?: number[];
   /** `"linear"` (default) or `"circular"`, for a `gauge` node. */
   gaugeStyle?: "linear" | "circular";
+  /** The shape, for a `chart` node. Unknown kinds drop the leaf. */
+  kind?: ChartNodeKind;
+  /** Per-segment names, for a `chart` node. May be shorter than `values`. */
+  labels?: string[];
+  /** Per-segment colors, for a `chart` node. Recolors a prefix; unset segments take the palette. */
+  colors?: Color[];
   /** Cross-axis alignment, for a container. */
   align?: string;
   /** Inter-child spacing, for a container. */
@@ -539,6 +561,9 @@ function orderNode(n: WidgetNode): Record<string, unknown> {
   put("value", n.value);
   put("values", n.values);
   put("gauge_style", n.gaugeStyle);
+  put("kind", n.kind);
+  put("labels", n.labels);
+  put("colors", n.colors);
   put("align", n.align);
   put("spacing", n.spacing);
   put("columns", n.columns);
@@ -599,6 +624,15 @@ export const Node = {
   Gauge: (value: number, opts: { gaugeStyle?: "linear" | "circular" } & LeafOpts = {}): WidgetNode => ({ type: "gauge", value, ...opts }),
   /** A dependency-free line chart from `values`. */
   Sparkline: (values: number[], opts: LeafOpts = {}): WidgetNode => ({ type: "sparkline", values, ...opts }),
+  /**
+   * A share chart — the same `pie`/`donut`/`stackedbar` a menu row draws, from
+   * one series of non-negative values read as shares of a whole. `labels` and
+   * `colors` are positional against `values` and may be shorter; an unset
+   * segment takes its slot in Vee's eight-color categorical palette. A series
+   * longer than eight is folded (not truncated) into a trailing `Other`.
+   */
+  Chart: (kind: ChartNodeKind, values: number[], opts: { labels?: string[]; colors?: Color[] } & LeafOpts = {}): WidgetNode =>
+    ({ type: "chart", kind, values, ...opts }),
   /** Flexible empty space. */
   Spacer: (opts: { minLength?: number; families?: WidgetNode["families"] } = {}): WidgetNode => ({ type: "spacer", ...opts }),
   /** A hairline divider. */
@@ -1261,7 +1295,11 @@ class WidgetCard:
 
     ``items``/``actions`` are plain dicts, e.g.
     ``{"label": "Orders", "value": "214", "symbol": "bag", "tint": "blue"}``
-    — field order in the dict literal is preserved in the JSON output.
+    — field order in the dict literal is preserved in the JSON output. An item
+    may add ``"url"`` or ``"shortcut"`` to make its ``list``/``board`` row a tap
+    target (``url`` wins when both are given); a row with neither stays inert.
+    There is deliberately no ``"shell"``: a widget row must not run an arbitrary
+    command without the menu's context.
     """
 
     def __init__(self, **options: Any) -> None:
@@ -1349,6 +1387,7 @@ _NODE_OPTS = {
     "image": _COMMON_NODE_OPTS,
     "sparkline": _COMMON_NODE_OPTS,
     "gauge": _COMMON_NODE_OPTS | {"gauge_style"},
+    "chart": _COMMON_NODE_OPTS | {"labels", "colors"},
     "spacer": {"families", "min_length"},
     "divider": {"families"},
 }
@@ -1374,6 +1413,9 @@ def _node(
     value: float | None = None,
     values: list[float] | None = None,
     gauge_style: str | None = None,
+    kind: str | None = None,
+    labels: list[str] | None = None,
+    colors: list[str] | None = None,
     align: str | None = None,
     spacing: float | None = None,
     columns: int | None = None,
@@ -1383,11 +1425,12 @@ def _node(
     children: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Builds a node dict with keys inserted in the shared canonical order."""
-    # `text`/`symbol`/`value`/`values`/`children` are positional payload set by
-    # the builders themselves, not caller-supplied options, so only the option
-    # arguments are checked.
+    # `text`/`symbol`/`value`/`values`/`kind`/`children` are positional payload
+    # set by the builders themselves, not caller-supplied options, so only the
+    # option arguments are checked.
     _check_node_opts(type, {
-        "gauge_style": gauge_style, "align": align, "spacing": spacing,
+        "gauge_style": gauge_style, "labels": labels, "colors": colors,
+        "align": align, "spacing": spacing,
         "columns": columns, "min_length": min_length, "families": families,
         "style": style,
     })
@@ -1402,6 +1445,12 @@ def _node(
         node["values"] = values
     if gauge_style is not None:
         node["gauge_style"] = gauge_style
+    if kind is not None:
+        node["kind"] = kind
+    if labels is not None:
+        node["labels"] = labels
+    if colors is not None:
+        node["colors"] = colors
     if align is not None:
         node["align"] = align
     if spacing is not None:
@@ -1464,6 +1513,18 @@ class Node:
     def Sparkline(values: list[float], **opts: Any) -> dict[str, Any]:
         """A dependency-free line chart from ``values``."""
         return _node("sparkline", values=values, **opts)
+
+    @staticmethod
+    def Chart(kind: str, values: list[float], **opts: Any) -> dict[str, Any]:
+        """A share chart -- the same ``pie``/``donut``/``stackedbar`` a menu row
+        draws, from one series of non-negative values read as shares of a whole.
+
+        ``labels`` and ``colors`` are positional against ``values`` and may be
+        shorter; an unset segment takes its slot in Vee's eight-color
+        categorical palette. A series longer than eight is folded (not
+        truncated) into a trailing ``Other``.
+        """
+        return _node("chart", values=values, kind=kind, **opts)
 
     @staticmethod
     def Spacer(**opts: Any) -> dict[str, Any]:

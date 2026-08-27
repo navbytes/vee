@@ -22,7 +22,8 @@ import Foundation
 /// links this module and must pull in almost nothing.
 public struct WidgetNode: Codable, Equatable, Sendable {
     /// The node kind: `vstack` / `hstack` / `zstack` / `grid` (containers) or
-    /// `text` / `image` / `gauge` / `sparkline` / `spacer` / `divider` (leaves).
+    /// `text` / `image` / `gauge` / `sparkline` / `chart` / `spacer` /
+    /// `divider` (leaves).
     /// Properties and `init` follow the canonical wire order the SDKs emit
     /// (leaf fields, then container layout, then `children` last) so authoring
     /// a tree by hand reads top-down.
@@ -35,10 +36,30 @@ public struct WidgetNode: Codable, Equatable, Sendable {
     public var symbol: String?
     /// The `0…1` fill for a `gauge` node (clamped by the parser).
     public var value: Double?
-    /// The series for a `sparkline` node (non-finite dropped, capped by the parser).
+    /// The series for a `sparkline` node, or the segment magnitudes for a
+    /// `chart` node — one series field, because a node is only ever one leaf.
+    /// Non-finite entries are dropped and the count capped by the parser, per
+    /// kind (a trend takes hundreds of points, a share chart eight segments).
     public var values: [Double]?
     /// `linear` (default) or `circular`, for a `gauge` node.
     public var gaugeStyle: String?
+    /// The shape of a `chart` node: `pie` / `donut` / `stackedbar` — the same
+    /// three spellings `pie=`/`donut=`/`stackedbar=` take on a menu row, so one
+    /// series means the same thing on both surfaces. An unrecognized kind drops
+    /// the leaf (with a diagnostic) in `WidgetCardParser`.
+    ///
+    /// Spelled bare rather than `chart_kind`: bare leaf-field names are this
+    /// file's convention (`text`, `symbol`, `value`, `values`) and `type:
+    /// "chart"` already scopes it — `gauge_style` carries a prefix only because
+    /// `style` is taken by the modifier object.
+    public var kind: String?
+    /// Per-segment names for a `chart` node. Advisory and positional: it may be
+    /// shorter than `values`, exactly like `ChartParams.labels` on the menu.
+    public var labels: [String]?
+    /// Per-segment color overrides for a `chart` node (the `chartcolors=` twin),
+    /// positional against `values` and likewise allowed to be shorter — a
+    /// segment with no entry takes the renderer's palette slot for its position.
+    public var colors: [SnapshotColor]?
 
     // Containers.
     /// Cross-axis alignment for a stack (`leading`/`center`/`trailing` on
@@ -69,6 +90,9 @@ public struct WidgetNode: Codable, Equatable, Sendable {
         value: Double? = nil,
         values: [Double]? = nil,
         gaugeStyle: String? = nil,
+        kind: String? = nil,
+        labels: [String]? = nil,
+        colors: [SnapshotColor]? = nil,
         align: String? = nil,
         spacing: Double? = nil,
         columns: Int? = nil,
@@ -83,6 +107,9 @@ public struct WidgetNode: Codable, Equatable, Sendable {
         self.value = value
         self.values = values
         self.gaugeStyle = gaugeStyle
+        self.kind = kind
+        self.labels = labels
+        self.colors = colors
         self.align = align
         self.spacing = spacing
         self.columns = columns
@@ -93,7 +120,7 @@ public struct WidgetNode: Codable, Equatable, Sendable {
     }
 
     enum CodingKeys: String, CodingKey {
-        case type, text, symbol, value, values, align, spacing, columns, families, style, children
+        case type, text, symbol, value, values, kind, labels, colors, align, spacing, columns, families, style, children
         case gaugeStyle = "gauge_style"
         case minLength = "min_length"
     }

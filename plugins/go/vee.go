@@ -564,12 +564,22 @@ const (
 	ActionShortcut WidgetActionKind = "shortcut"
 )
 
-// WidgetCardItem is one row for the list/board templates.
+// WidgetCardItem is one row for the list/board templates. A row declaring URL
+// or Shortcut is a tap target; one declaring neither renders inert.
 type WidgetCardItem struct {
 	Label  string  `json:"label"`
 	Value  *string `json:"value,omitempty"`
 	Symbol *string `json:"symbol,omitempty"`
 	Tint   *string `json:"tint,omitempty"`
+	// URL is opened when the row is tapped. Scheme-filtered by Vee on parse,
+	// exactly like an href action's; a blocked URL drops the tap and leaves the
+	// row inert, keeping its data.
+	URL *string `json:"url,omitempty"`
+	// Shortcut is the macOS Shortcut the row runs when tapped. A row declaring
+	// both opens its URL — the same href-before-shortcut precedence the menu
+	// applies. There is deliberately no Shell: a widget row must not run an
+	// arbitrary command without the menu's context.
+	Shortcut *string `json:"shortcut,omitempty"`
 }
 
 // WidgetCardAction is one button; up to two are rendered.
@@ -649,20 +659,28 @@ type WidgetNodeStyle struct {
 // on parse (depth 8, ≤64 nodes, text ≤512, sparkline ≤256, numeric clamps).
 type WidgetNode struct {
 	// Type is vstack/hstack/zstack/grid (containers) or
-	// text/image/gauge/sparkline/spacer/divider (leaves).
-	Type       string           `json:"type"`
-	Text       *string          `json:"text,omitempty"`
-	Symbol     *string          `json:"symbol,omitempty"`
-	Value      *float64         `json:"value,omitempty"`
-	Values     []float64        `json:"values,omitempty"`
-	GaugeStyle *string          `json:"gauge_style,omitempty"`
-	Align      *string          `json:"align,omitempty"`
-	Spacing    *float64         `json:"spacing,omitempty"`
-	Columns    *int             `json:"columns,omitempty"`
-	MinLength  *float64         `json:"min_length,omitempty"`
-	Families   []string         `json:"families,omitempty"`
-	Style      *WidgetNodeStyle `json:"style,omitempty"`
-	Children   []WidgetNode     `json:"children,omitempty"`
+	// text/image/gauge/sparkline/chart/spacer/divider (leaves).
+	Type   string   `json:"type"`
+	Text   *string  `json:"text,omitempty"`
+	Symbol *string  `json:"symbol,omitempty"`
+	Value  *float64 `json:"value,omitempty"`
+	// Values is the series for a sparkline node, or the segment magnitudes for
+	// a chart node.
+	Values     []float64 `json:"values,omitempty"`
+	GaugeStyle *string   `json:"gauge_style,omitempty"`
+	// Kind is a chart node's shape: "pie", "donut" or "stackedbar".
+	Kind *string `json:"kind,omitempty"`
+	// Labels and Colors are a chart node's per-segment names and color
+	// overrides, positional against Values and allowed to be shorter.
+	Labels    []string         `json:"labels,omitempty"`
+	Colors    []string         `json:"colors,omitempty"`
+	Align     *string          `json:"align,omitempty"`
+	Spacing   *float64         `json:"spacing,omitempty"`
+	Columns   *int             `json:"columns,omitempty"`
+	MinLength *float64         `json:"min_length,omitempty"`
+	Families  []string         `json:"families,omitempty"`
+	Style     *WidgetNodeStyle `json:"style,omitempty"`
+	Children  []WidgetNode     `json:"children,omitempty"`
 }
 
 // Node option kinds. A builder accepts only the options that mean something
@@ -679,6 +697,8 @@ type (
 	LeafOpt interface{ applyLeaf(*WidgetNode) }
 	// GaugeOpt is accepted by Gauge: every LeafOpt, plus GaugeStyle.
 	GaugeOpt interface{ applyGauge(*WidgetNode) }
+	// ChartOpt is accepted by Chart: every LeafOpt, plus Labels and Colors.
+	ChartOpt interface{ applyChart(*WidgetNode) }
 	// SpacerOpt is accepted by Spacer: Families, plus MinLen.
 	SpacerOpt interface{ applySpacer(*WidgetNode) }
 	// DividerOpt is accepted by Divider: Families only.
@@ -692,6 +712,7 @@ type (
 	stackOpt     func(*WidgetNode) // containers and Grid
 	gridOnlyOpt  func(*WidgetNode) // Grid
 	gaugeOnlyOpt func(*WidgetNode) // Gauge
+	chartOnlyOpt func(*WidgetNode) // Chart
 	spacerOnly   func(*WidgetNode) // Spacer
 )
 
@@ -699,6 +720,7 @@ func (f anyOpt) applyContainer(n *WidgetNode) { f(n) }
 func (f anyOpt) applyGrid(n *WidgetNode)      { f(n) }
 func (f anyOpt) applyLeaf(n *WidgetNode)      { f(n) }
 func (f anyOpt) applyGauge(n *WidgetNode)     { f(n) }
+func (f anyOpt) applyChart(n *WidgetNode)     { f(n) }
 func (f anyOpt) applySpacer(n *WidgetNode)    { f(n) }
 func (f anyOpt) applyDivider(n *WidgetNode)   { f(n) }
 
@@ -706,6 +728,7 @@ func (f styleOpt) applyContainer(n *WidgetNode) { f(n) }
 func (f styleOpt) applyGrid(n *WidgetNode)      { f(n) }
 func (f styleOpt) applyLeaf(n *WidgetNode)      { f(n) }
 func (f styleOpt) applyGauge(n *WidgetNode)     { f(n) }
+func (f styleOpt) applyChart(n *WidgetNode)     { f(n) }
 
 func (f stackOpt) applyContainer(n *WidgetNode) { f(n) }
 func (f stackOpt) applyGrid(n *WidgetNode)      { f(n) }
@@ -713,6 +736,8 @@ func (f stackOpt) applyGrid(n *WidgetNode)      { f(n) }
 func (f gridOnlyOpt) applyGrid(n *WidgetNode) { f(n) }
 
 func (f gaugeOnlyOpt) applyGauge(n *WidgetNode) { f(n) }
+
+func (f chartOnlyOpt) applyChart(n *WidgetNode) { f(n) }
 
 func (f spacerOnly) applySpacer(n *WidgetNode) { f(n) }
 
@@ -730,6 +755,15 @@ func MinLen(f float64) spacerOnly { return func(n *WidgetNode) { n.MinLength = &
 
 // GaugeStyle selects a gauge's style: "linear" (default) or "circular".
 func GaugeStyle(s string) gaugeOnlyOpt { return func(n *WidgetNode) { n.GaugeStyle = &s } }
+
+// Labels names a chart's segments, positionally against its values. May be
+// shorter than the series; an unnamed segment simply has no legend entry.
+func Labels(s ...string) chartOnlyOpt { return func(n *WidgetNode) { n.Labels = s } }
+
+// Colors overrides a chart's segment colors, positionally against its values.
+// May be shorter than the series; an unset segment takes its slot in Vee's
+// eight-color categorical palette.
+func Colors(s ...string) chartOnlyOpt { return func(n *WidgetNode) { n.Colors = s } }
 
 // Families restricts a node to the given widget families (small/medium/large).
 func Families(f ...string) anyOpt { return func(n *WidgetNode) { n.Families = f } }
@@ -812,6 +846,18 @@ func (nodeBuilders) Sparkline(values []float64, opts ...LeafOpt) WidgetNode {
 	n := WidgetNode{Type: "sparkline", Values: values}
 	for _, o := range opts {
 		o.applyLeaf(&n)
+	}
+	return n
+}
+
+// Chart builds a share chart — the same "pie"/"donut"/"stackedbar" a menu row
+// draws, from one series of non-negative values read as shares of a whole. A
+// series longer than eight segments is folded (not truncated) into a trailing
+// "Other".
+func (nodeBuilders) Chart(kind string, values []float64, opts ...ChartOpt) WidgetNode {
+	n := WidgetNode{Type: "chart", Values: values, Kind: &kind}
+	for _, o := range opts {
+		o.applyChart(&n)
 	}
 	return n
 }

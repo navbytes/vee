@@ -20,9 +20,11 @@ export function build(): string {
     status: "ok",
     progress: 0.72,
     trend: [12.1, 13.4, 12.9, 15.0, 18.2],
+    // The two tap targets a row can carry: a URL the system opens, and a
+    // Shortcut Vee runs. A row declaring neither stays inert.
     items: [
-      { label: "Orders", value: "214", symbol: "bag", tint: "blue" },
-      { label: "Refunds", value: "3", symbol: "arrow.uturn.left", tint: "red" },
+      { label: "Orders", value: "214", symbol: "bag", tint: "blue", url: "https://dash.example.com/orders" },
+      { label: "Refunds", value: "3", symbol: "arrow.uturn.left", tint: "red", shortcut: "Review Refunds" },
     ],
     actions: [
       { kind: "refresh", label: "Refresh" },

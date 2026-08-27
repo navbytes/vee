@@ -185,7 +185,7 @@ crash.
 | `status` | enum? | `ok` \| `warning` \| `error` — drives styling + the health roll-up |
 | `progress` | double? | `0…1`, clamped; the `gauge` template's fill |
 | `trend` | [double]? | the `trend` template's series |
-| `items` | [Item]? | rows for `list`/`board`; `{label, value?, symbol?, tint?}` |
+| `items` | [Item]? | rows for `list`/`board`; `{label, value?, symbol?, tint?, url?, shortcut?}` — a row declaring `url` or `shortcut` is a tap target (§6), one declaring neither is inert |
 | `actions` | [Action]? | up to 2 rendered as buttons (§6) |
 | `refresh_after` | int? | seconds; a hint for the next widget reload (like `refreshAfterDate`) |
 | `stale_after` | int? | seconds; when the tile should show a stale treatment (else the interval-derived default) |
@@ -224,6 +224,13 @@ Up to two `actions` render as buttons (macOS 26 interactive widgets). Kinds:
 - `shortcut` — runs a named macOS Shortcut, like menu `shortcut=`.
 - Deliberately **no `shell`** from a widget — a widget button must not run an
   arbitrary command without the menu's context; keep the attack surface small.
+
+A `list`/`board` **row** can be a tap target too, carrying the same vocabulary
+minus `refresh` (a whole-tile concern, not a row's): `url` renders the row
+inside a `Link`, `shortcut` inside the same `AppIntent` button the action
+buttons use, and `url` wins when a row declares both. `shell` is excluded the
+strongest way available — `WidgetCardItem` has no such field, so no row can
+express one; a plugin that tries gets a diagnostic saying why nothing happened.
 
 ### Progressive-enhancement ladder (summary)
 
@@ -326,7 +333,8 @@ freeform: a small vocabulary that each map 1:1 to a SwiftUI primitive.
   `hstack` is the load-bearing addition — side-by-side regions the presets
   can't do (two columns, a date rail, a row of cells, inline per-row gauges).
 - **Leaves:** `text`, `image` (SF Symbol only in v1), `gauge` (`linear` |
-  `circular`), `sparkline`, `spacer`, `divider`.
+  `circular`), `sparkline`, `chart` (`pie` | `donut` | `stackedbar`, with
+  positional `labels`/`colors`), `spacer`, `divider`.
 - **Per-element `style`:** `font` (`size` token or bounded `point_size`,
   `weight`, `design`), `tint`, `align`, `padding`, `line_limit`,
   `monospaced_digit`, `min_scale`, `fill`. The last two exist so the presets'
@@ -347,9 +355,10 @@ chrome appended around any tree, so the interactive/trust surface is unchanged.
 **Safety — caps live at parse time.** The snapshot the sandboxed extension
 re-reads on every timeline build must already be bounded, so `WidgetCardParser`
 (app-side) sanitizes the tree on decode, not the walker: depth ≤ 8, ≤ 64 total
-nodes, text ≤ 512 chars, sparkline ≤ 256 points, `gauge`/style numerics
-clamped, non-finite values dropped, and an unknown node `type` degraded to a
-diagnostic. A hostile payload degrades to a bounded tree plus diagnostics —
+nodes, text ≤ 512 chars, sparkline ≤ 256 points, `chart` ≤ 8 segments (the tail
+folded into `Other`, never truncated, so the shares still add up), `gauge`/style
+numerics clamped, non-finite values dropped, and an unknown node `type` — or an
+unknown chart `kind` — degraded to a diagnostic. A hostile payload degrades to a bounded tree plus diagnostics —
 never a throw (Foundation's own ~512-level decode limit is the backstop for a
 pure-depth bomb, and the existing 8 MB stdout drain bounds total payload size).
 

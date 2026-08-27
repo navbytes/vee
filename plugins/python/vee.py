@@ -478,7 +478,11 @@ class WidgetCard:
 
     ``items``/``actions`` are plain dicts, e.g.
     ``{"label": "Orders", "value": "214", "symbol": "bag", "tint": "blue"}``
-    — field order in the dict literal is preserved in the JSON output.
+    — field order in the dict literal is preserved in the JSON output. An item
+    may add ``"url"`` or ``"shortcut"`` to make its ``list``/``board`` row a tap
+    target (``url`` wins when both are given); a row with neither stays inert.
+    There is deliberately no ``"shell"``: a widget row must not run an arbitrary
+    command without the menu's context.
     """
 
     def __init__(self, **options: Any) -> None:
@@ -566,6 +570,7 @@ _NODE_OPTS = {
     "image": _COMMON_NODE_OPTS,
     "sparkline": _COMMON_NODE_OPTS,
     "gauge": _COMMON_NODE_OPTS | {"gauge_style"},
+    "chart": _COMMON_NODE_OPTS | {"labels", "colors"},
     "spacer": {"families", "min_length"},
     "divider": {"families"},
 }
@@ -591,6 +596,9 @@ def _node(
     value: float | None = None,
     values: list[float] | None = None,
     gauge_style: str | None = None,
+    kind: str | None = None,
+    labels: list[str] | None = None,
+    colors: list[str] | None = None,
     align: str | None = None,
     spacing: float | None = None,
     columns: int | None = None,
@@ -600,11 +608,12 @@ def _node(
     children: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Builds a node dict with keys inserted in the shared canonical order."""
-    # `text`/`symbol`/`value`/`values`/`children` are positional payload set by
-    # the builders themselves, not caller-supplied options, so only the option
-    # arguments are checked.
+    # `text`/`symbol`/`value`/`values`/`kind`/`children` are positional payload
+    # set by the builders themselves, not caller-supplied options, so only the
+    # option arguments are checked.
     _check_node_opts(type, {
-        "gauge_style": gauge_style, "align": align, "spacing": spacing,
+        "gauge_style": gauge_style, "labels": labels, "colors": colors,
+        "align": align, "spacing": spacing,
         "columns": columns, "min_length": min_length, "families": families,
         "style": style,
     })
@@ -619,6 +628,12 @@ def _node(
         node["values"] = values
     if gauge_style is not None:
         node["gauge_style"] = gauge_style
+    if kind is not None:
+        node["kind"] = kind
+    if labels is not None:
+        node["labels"] = labels
+    if colors is not None:
+        node["colors"] = colors
     if align is not None:
         node["align"] = align
     if spacing is not None:
@@ -681,6 +696,18 @@ class Node:
     def Sparkline(values: list[float], **opts: Any) -> dict[str, Any]:
         """A dependency-free line chart from ``values``."""
         return _node("sparkline", values=values, **opts)
+
+    @staticmethod
+    def Chart(kind: str, values: list[float], **opts: Any) -> dict[str, Any]:
+        """A share chart -- the same ``pie``/``donut``/``stackedbar`` a menu row
+        draws, from one series of non-negative values read as shares of a whole.
+
+        ``labels`` and ``colors`` are positional against ``values`` and may be
+        shorter; an unset segment takes its slot in Vee's eight-color
+        categorical palette. A series longer than eight is folded (not
+        truncated) into a trailing ``Other``.
+        """
+        return _node("chart", values=values, kind=kind, **opts)
 
     @staticmethod
     def Spacer(**opts: Any) -> dict[str, Any]:

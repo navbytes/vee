@@ -641,7 +641,7 @@
       "surfaces": {
         "text": "pie=45,30,25",
         "json": "\"chart\": {\"kind\": \"pie\", \"values\": […]}",
-        "widget": "—"
+        "widget": "node type \"chart\" with \"kind\": \"pie\" and \"values\""
       },
       "knobs": [
         "chartw",
@@ -663,7 +663,7 @@
       "surfaces": {
         "text": "donut=512,256,128",
         "json": "\"chart\": {\"kind\": \"donut\", \"values\": […]}",
-        "widget": "—"
+        "widget": "node type \"chart\" with \"kind\": \"donut\" and \"values\""
       },
       "knobs": [
         "chartw",
@@ -685,7 +685,7 @@
       "surfaces": {
         "text": "stackedbar=60,25,15",
         "json": "\"chart\": {\"kind\": \"stackedbar\", \"values\": […]}",
-        "widget": "—"
+        "widget": "node type \"chart\" with \"kind\": \"stackedbar\" and \"values\""
       },
       "knobs": [
         "chartw",

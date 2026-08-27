@@ -69,7 +69,7 @@
       }
     },
     "items": {
-      "description": "Rows for the `list` and `board` templates.",
+      "description": "Rows for the `list` and `board` templates. A row declaring `url` or `shortcut` is a tap target; one declaring neither renders inert. There is deliberately no `shell`: a widget row must not run an arbitrary command without the menu's context.",
       "type": "array",
       "items": {
         "type": "object",
@@ -90,6 +90,14 @@
           },
           "tint": {
             "$ref": "#/$defs/color"
+          },
+          "url": {
+            "type": "string",
+            "description": "Tapping the row opens this URL. Scheme-filtered exactly like an `href` action's — http/https and app deep links only, never file: or javascript:. A blocked or unparseable URL drops the tap with a diagnostic and leaves the row inert, keeping its data."
+          },
+          "shortcut": {
+            "type": "string",
+            "description": "Tapping the row runs this macOS Shortcut. A row declaring both opens its `url` — the same href-before-shortcut precedence the menu applies."
           }
         }
       }
@@ -350,6 +358,37 @@
         {
           "type": "object",
           "required": [
+            "type",
+            "kind"
+          ],
+          "properties": {
+            "type": {
+              "const": "chart"
+            },
+            "kind": {
+              "$ref": "#/$defs/nodeProperties/kind"
+            },
+            "values": {
+              "$ref": "#/$defs/nodeProperties/values"
+            },
+            "labels": {
+              "$ref": "#/$defs/nodeProperties/labels"
+            },
+            "colors": {
+              "$ref": "#/$defs/nodeProperties/colors"
+            },
+            "families": {
+              "$ref": "#/$defs/nodeProperties/families"
+            },
+            "style": {
+              "$ref": "#/$defs/nodeProperties/style"
+            }
+          },
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "required": [
             "type"
           ],
           "properties": {
@@ -489,7 +528,7 @@
         "items": {
           "type": "number"
         },
-        "description": "For `sparkline` nodes. Non-finite entries dropped; truncated at 256 points."
+        "description": "For `sparkline` nodes, the series: non-finite entries dropped, truncated at 256 points. For `chart` nodes, the segment magnitudes read as shares of a whole: non-finite and negative entries dropped, and past 8 segments the tail is folded (not truncated) into a trailing 'Other'."
       },
       "gauge_style": {
         "enum": [
@@ -497,6 +536,28 @@
           "circular"
         ],
         "default": "linear"
+      },
+      "kind": {
+        "description": "For `chart` nodes — the same three shapes a menu row's `pie=`/`donut=`/`stackedbar=` take. An unrecognised kind drops the leaf with a diagnostic; the card still renders.",
+        "enum": [
+          "pie",
+          "donut",
+          "stackedbar"
+        ]
+      },
+      "labels": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "For `chart` nodes — per-segment names, positional against `values` and allowed to be shorter. Shown as a legend where the widget family has room."
+      },
+      "colors": {
+        "type": "array",
+        "items": {
+          "$ref": "#/$defs/color"
+        },
+        "description": "For `chart` nodes — per-segment color overrides, positional against `values` and allowed to be shorter. A segment past the end takes its slot in Vee's eight-color categorical palette."
       },
       "align": {
         "type": "string",
