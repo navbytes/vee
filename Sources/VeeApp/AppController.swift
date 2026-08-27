@@ -59,6 +59,13 @@ public final class AppController: NSObject, NSApplicationDelegate {
     /// `applicationWillTerminate` for symmetry with the app's other observers.
     private var compactModeObserverToken: NSObjectProtocol?
 
+    /// The app-level "bring every detached window to the front" hotkey: the
+    /// `GlobalHotKeys` token while one is bound, and what binding it did — the
+    /// status General settings shows. Unbound by default, so most launches
+    /// register nothing and both stay at their empty state.
+    private var focusWindowsHotKeyID: UInt32?
+    private var focusWindowsHotkeyStatus: HotkeyStatus = .none
+
     private var directory: String = PluginsDirectory.resolve()
 
     /// Widget-snapshot publishing state/policy (coalesced writes, metered
@@ -121,6 +128,7 @@ public final class AppController: NSObject, NSApplicationDelegate {
         ) { [weak self] _ in
             MainActor.assumeIsolated { self?.applyCompactMode(self?.prefs.compactMenuBar ?? false) }
         }
+        registerFocusWindowsHotKey()
         // Register the notification delegate + action categories now, but defer
         // the permission prompt until a plugin actually posts an alert, so the
         // system dialog appears in context rather than at a cold launch.
@@ -212,6 +220,50 @@ public final class AppController: NSObject, NSApplicationDelegate {
         } else {
             CompactMenuBarController.shared.removeFooter()
         }
+    }
+
+    // MARK: - App-level "bring every window to the front" hotkey
+
+    /// (Re)binds the app-level bring-all-windows hotkey from the stored
+    /// combination, recording what actually happened for the General settings
+    /// row to show. Deliberately shaped like the per-plugin
+    /// `PluginCoordinator.registerHotKey()` — unregister first, so a rebind can
+    /// never leave the old combination live, and `nil` from `register` means
+    /// another app already owns it.
+    ///
+    /// Lives here rather than on `DetachedPluginWindows` because the binding is
+    /// app-level: it belongs to no plugin, and outlives every window it acts on.
+    private func registerFocusWindowsHotKey() {
+        if let focusWindowsHotKeyID {
+            GlobalHotKeys.shared.unregister(focusWindowsHotKeyID)
+            self.focusWindowsHotKeyID = nil
+        }
+        guard let combo = prefs.focusWindowsHotkey, !combo.isEmpty else {
+            focusWindowsHotkeyStatus = .none
+            return
+        }
+        guard let spec = HotKeySpec.parse(combo) else {
+            focusWindowsHotkeyStatus = .invalid
+            return
+        }
+        focusWindowsHotKeyID = GlobalHotKeys.shared.register(spec) {
+            DetachedPluginWindows.shared.focusAll()
+        }
+        focusWindowsHotkeyStatus = focusWindowsHotKeyID != nil ? .active(spec.display) : .unavailable(spec.display)
+        if focusWindowsHotKeyID == nil {
+            log.error("hotkey \(spec.display, privacy: .public) unavailable for bring all windows to front (already in use)")
+        }
+    }
+
+    /// Persists a combination typed in General settings, rebinds live, and hands
+    /// back the resulting status. A hotkey is a live system resource, so it
+    /// commits on edit rather than on a Save the Preferences window does not
+    /// have; an empty field gives the combination back to the system.
+    private func applyFocusWindowsHotkey(_ combo: String) -> HotkeyStatus {
+        let trimmed = combo.trimmingCharacters(in: .whitespaces)
+        prefs.focusWindowsHotkey = trimmed.isEmpty ? nil : trimmed
+        registerFocusWindowsHotKey()
+        return focusWindowsHotkeyStatus
     }
 
     // MARK: - URL scheme (vee:// and swiftbar://)
@@ -740,6 +792,9 @@ public final class AppController: NSObject, NSApplicationDelegate {
             onChooseFolder: { [weak self] in self?.chooseFolderFromPreferences() },
             onOpenFolder: { [weak self] in self?.openFolder() },
             onRefreshAll: { [weak self] in self?.refreshAll() },
+            focusWindowsHotkey: prefs.focusWindowsHotkey ?? "",
+            focusWindowsHotkeyStatus: focusWindowsHotkeyStatus,
+            onApplyFocusWindowsHotkey: { [weak self] combo in self?.applyFocusWindowsHotkey(combo) ?? .none },
         )
         generalSettingsModel = general
 

@@ -90,6 +90,12 @@ You do not declare "this is a secret" explicitly — naming the variable appropr
 # <vee.secrets>API_TOKEN</vee.secrets>
 ```
 
+## Vee's own settings
+
+Vee itself has little to configure — the app-level settings live in **Preferences → General**, and one of them is a shortcut:
+
+- **Bring windows to front.** A global shortcut that brings every open [plugin window](plugin-authoring.md#leaving-a-plugin-open-in-a-window) in front of whatever you are working in, with one of them focused. Vee has no Dock icon, so this is the fastest way back to a window you have unpinned and covered up. Type a combination in the same format a plugin declares (`cmd+shift+w`, `⌘⇧W`); it applies when you press Return or leave the field, and reports itself as active, already in use, or invalid. It ships unbound, and leaving the field empty gives the combination back to the system. With no windows open, pressing it does nothing — it retrieves windows, it never opens them.
+
 ## See also
 
 - [Plugin authoring reference](plugin-authoring.md) — the full plugin format.

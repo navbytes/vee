@@ -17,6 +17,8 @@ public final class AppPreferences: @unchecked Sendable {
     private let compactMenuBarKey = "vee.compactMenuBar"
     private let secretPluginIDsKey = "vee.pluginsWithSecrets"
     private let seenPluginIDsKey = "vee.seenPluginIDs"
+    private let detachedWindowPinnedKey = "vee.detachedWindowPinned"
+    private let focusWindowsHotkeyKey = "vee.focusWindowsHotkey"
 
     public init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
@@ -193,6 +195,32 @@ public final class AppPreferences: @unchecked Sendable {
         let merged = known.union(ids)
         guard merged != known else { return }
         defaults.set(Array(merged), forKey: seenPluginIDsKey)
+    }
+
+    // MARK: - Detached-window pinning
+
+    /// Whether this plugin's detached window floats above other applications.
+    /// Absent means pinned — the state every new window opens in — so only a
+    /// user who unpinned one ever has an entry here, and the map stays empty
+    /// for everyone else.
+    public func isDetachedWindowPinned(_ id: String) -> Bool {
+        (defaults.dictionary(forKey: detachedWindowPinnedKey) as? [String: Bool])?[id] ?? true
+    }
+
+    public func setDetachedWindowPinned(_ pinned: Bool, id: String) {
+        var map = (defaults.dictionary(forKey: detachedWindowPinnedKey) as? [String: Bool]) ?? [:]
+        if pinned { map.removeValue(forKey: id) } else { map[id] = false }
+        defaults.set(map, forKey: detachedWindowPinnedKey)
+    }
+
+    /// The app-level combination that brings every open detached window to the
+    /// front, or `nil` for unbound. One string rather than the per-plugin
+    /// binding map: there is exactly one of this hotkey, and it is app-level
+    /// rather than any plugin's. Absent is the shipped state — a global
+    /// combination is contested space, so Vee claims none until asked to.
+    public var focusWindowsHotkey: String? {
+        get { defaults.string(forKey: focusWindowsHotkeyKey) }
+        set { defaults.set(newValue, forKey: focusWindowsHotkeyKey) }
     }
 
 }

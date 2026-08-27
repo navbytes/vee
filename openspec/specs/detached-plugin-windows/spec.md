@@ -14,6 +14,11 @@ Vee SHALL offer, in each plugin's dropdown, an action that opens that plugin's
 entire menu tree as a resizable window. The action MUST be available for every
 plugin, with no declaration or opt-in required of the plugin itself.
 
+Each plugin's window SHALL remember its frame — position and size — and reopen
+with it, both within a session and across relaunches. Vee places a window
+itself only when that plugin has no remembered frame. A remembered frame whose
+screen is no longer present SHALL open fully visible on a screen that is.
+
 #### Scenario: Opening a plugin's window
 
 - **WHEN** the user invokes "Open in Window" from a plugin's dropdown
@@ -52,6 +57,30 @@ plugin, with no declaration or opt-in required of the plugin itself.
 - **WHEN** the user quits Vee with one or more windows open, and launches it
   again
 - **THEN** no windows are restored
+
+#### Scenario: Reopening restores the window's place
+
+- **WHEN** the user moves or resizes a plugin's window, closes it, and opens
+  that plugin's window again in the same session
+- **THEN** it opens with the frame it last had
+
+#### Scenario: The frame survives a relaunch
+
+- **WHEN** the user quits Vee and, in a later launch, opens a plugin's window
+  that had been placed before
+- **THEN** it opens with the frame it last had in the earlier session
+
+#### Scenario: A first-ever window is placed by Vee
+
+- **WHEN** the user opens a window for a plugin that has never had one
+- **THEN** Vee places it itself, stepped away from other detached windows so
+  several opened together do not stack into one
+
+#### Scenario: A remembered screen is gone
+
+- **WHEN** a window's remembered frame lies on a screen that is no longer
+  connected
+- **THEN** the window opens fully visible on a screen that is present
 
 ### Requirement: Windows stay live
 
@@ -106,7 +135,8 @@ the window exists.
 
 Each window SHALL offer a control that switches it between floating above other
 applications and behaving as an ordinary window. New windows SHALL default to
-floating.
+floating, and a plugin whose window the user unpinned SHALL stay unpinned —
+within the session and across relaunches alike.
 
 A floating window MUST remain visible when the user switches Spaces and when
 another application is full-screen — the case the floating mode exists to serve
@@ -137,6 +167,12 @@ full-screen.
   plugin's window again in the same session
 - **THEN** the window opens unpinned
 
+#### Scenario: Floating state survives a relaunch
+
+- **WHEN** the user unpins a plugin's window, quits Vee, and opens that
+  plugin's window in a later launch
+- **THEN** the window opens unpinned
+
 ### Requirement: Open windows are listed and retrievable
 
 Vee SHALL provide, from its menu-bar item, a list of every open detached window,
@@ -144,6 +180,15 @@ and selecting an entry SHALL bring that window to the front. This list is the
 guaranteed retrieval path: Vee runs as an accessory application, so a
 non-floating window that is covered has no Dock icon and no App Exposé route
 back to it.
+
+Beyond one-at-a-time retrieval, Vee SHALL offer a single action that brings
+**every** open detached window to the front at once, one of them made key.
+The action SHALL be available as a row in the detached-windows list, and as an
+app-level global hotkey that is unbound by default. The hotkey's combination is
+configured in Vee's preferences with the same combination format, immediate
+apply, and validity and collision reporting that per-plugin hotkeys have. With
+no windows open, the action SHALL do nothing — it retrieves windows, it never
+opens them.
 
 #### Scenario: Listing open windows
 
@@ -168,6 +213,35 @@ back to it.
 - **THEN** it is removed from the list
 - **AND** invoking "Open in Window" for that plugin afterwards opens a new
   window rather than focusing the closed one
+
+#### Scenario: One gesture retrieves every window
+
+- **WHEN** several detached windows are open, some covered by other
+  applications' windows, and the user presses the configured hotkey or picks
+  the bring-all row from the detached-windows list
+- **THEN** every open detached window is brought in front of other
+  applications' windows
+- **AND** one of them is made key
+
+#### Scenario: The hotkey with nothing open
+
+- **WHEN** the user presses the configured hotkey while no detached window is
+  open
+- **THEN** nothing happens — no window opens and no app activates
+
+#### Scenario: Configuring the hotkey
+
+- **WHEN** the user sets, changes, or clears the combination in Vee's
+  preferences
+- **THEN** the change applies immediately, without relaunching
+- **AND** an invalid or already-claimed combination is reported the same way a
+  per-plugin hotkey reports it
+
+#### Scenario: Unbound by default
+
+- **WHEN** the user has never configured the combination
+- **THEN** no app-level hotkey is registered
+- **AND** the bring-all row in the detached-windows list still works
 
 ### Requirement: A plugin's hotkey can open either presentation
 

@@ -163,4 +163,80 @@ final class MenuTreeFilterTests: XCTestCase {
         ]))
         XCTAssertEqual(keys, [["Disks"], ["Disks", "Volumes"]], "leaves carry no branch key")
     }
+
+    // MARK: - Alternates
+
+    /// A row whose ⌥-alternate is `alt`, both activatable.
+    private func withAlternate(_ text: String, alt: String, altSubmenu: [MenuNode] = []) -> MenuNode {
+        var p = LineParams()
+        p.href = URL(string: "https://example.com")
+        return .item(MenuItem(
+            text: text, params: p,
+            alternate: MenuItem(text: alt, params: p, submenu: altSubmenu)
+        ))
+    }
+
+    private func titles(_ visible: [VisibleNode]) -> [String] {
+        visible.compactMap { $0.row?.spec.item.text }
+    }
+
+    func testIdleShowsOnlyThePrimary() {
+        let visible = MenuTreeDisplay.visibleNodes(
+            tree([withAlternate("Copy", alt: "Copy Path")]), expanded: []
+        )
+        XCTAssertEqual(titles(visible), ["Copy"])
+    }
+
+    func testHoldingOptionSwapsInTheAlternate() {
+        let visible = MenuTreeDisplay.visibleNodes(
+            tree([withAlternate("Copy", alt: "Copy Path")]), expanded: [], alternatesActive: true
+        )
+        XCTAssertEqual(titles(visible), ["Copy Path"])
+    }
+
+    /// The swap is 1:1 in place: same length, same neighbors at the same
+    /// indices, so an index-based selection rides through a ⌥ toggle untouched.
+    func testTheSwapPreservesListLengthAndIndices() {
+        let nodes = tree([href("Before"), withAlternate("Copy", alt: "Copy Path"), href("After")])
+        let idle = MenuTreeDisplay.visibleNodes(nodes, expanded: [])
+        let held = MenuTreeDisplay.visibleNodes(nodes, expanded: [], alternatesActive: true)
+        XCTAssertEqual(idle.count, held.count)
+        XCTAssertEqual(titles(idle), ["Before", "Copy", "After"])
+        XCTAssertEqual(titles(held), ["Before", "Copy Path", "After"])
+    }
+
+    /// A query has already narrowed the menu to matches; the filtered
+    /// projection shows both halves and ⌥ changes nothing.
+    func testFilteringEmitsBothHalvesRegardlessOfOption() {
+        let nodes = tree([withAlternate("Copy", alt: "Copy Path")])
+        let idle = MenuTreeDisplay.visibleNodes(nodes, expanded: [], revealAll: true)
+        let held = MenuTreeDisplay.visibleNodes(nodes, expanded: [], revealAll: true, alternatesActive: true)
+        XCTAssertEqual(titles(idle), ["Copy", "Copy Path"])
+        XCTAssertEqual(idle, held, "the modifier is inert while filtering")
+    }
+
+    /// An alternate whose primary is absent — a filter pruned it, or the tree
+    /// was built by hand — is an ordinary row in both states, never lost.
+    func testALoneAlternateRendersAsAnOrdinaryRow() {
+        var p = LineParams()
+        p.href = URL(string: "https://example.com")
+        let lone: [MenuTreeNode] = [
+            .row(MenuTree.row(for: MenuItem(text: "Copy Path", params: p), isAlternate: true))
+        ]
+        XCTAssertEqual(titles(MenuTreeDisplay.visibleNodes(lone, expanded: [])), ["Copy Path"])
+        XCTAssertEqual(
+            titles(MenuTreeDisplay.visibleNodes(lone, expanded: [], alternatesActive: true)),
+            ["Copy Path"]
+        )
+    }
+
+    /// A swapped-in alternate opens its own children under its own key.
+    func testASwappedAlternateExpandsItsOwnChildren() {
+        let nodes = tree([withAlternate("Copy", alt: "Copy Path", altSubmenu: [href("As Tilde")])])
+        let visible = MenuTreeDisplay.visibleNodes(
+            nodes, expanded: [["Copy Path"]], alternatesActive: true
+        )
+        XCTAssertEqual(titles(visible), ["Copy Path", "As Tilde"])
+        XCTAssertEqual(visible.first?.row?.canExpand, true)
+    }
 }

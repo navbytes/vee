@@ -281,4 +281,39 @@ final class MenuSearchViewModelTests: XCTestCase {
         XCTAssertEqual(model.selection, -1)
         XCTAssertNil(model.selectedRow())
     }
+
+    // MARK: - Alternates
+
+    private func withAlternate(_ text: String, alt: String) -> MenuNode {
+        var p = LineParams()
+        p.href = URL(string: "https://example.com")
+        return .item(MenuItem(text: text, params: p, alternate: MenuItem(text: alt, params: p)))
+    }
+
+    func testOptionSwapsThePairUnderTheSelection() {
+        let model = MenuSearchViewModel(nodes: tree([
+            href("Alpha"), withAlternate("Copy", alt: "Copy Path"), href("Beta")
+        ]))
+        model.moveDown()
+        XCTAssertEqual(model.selectedRow()?.item.text, "Copy")
+        model.optionHeld = true
+        XCTAssertEqual(titles(model), ["Alpha", "Copy Path", "Beta"])
+        XCTAssertEqual(model.selectedRow()?.item.text, "Copy Path", "selection stays put; the row swaps under it")
+        model.optionHeld = false
+        XCTAssertEqual(model.selectedRow()?.item.text, "Copy")
+    }
+
+    func testFilteringShowsBothHalvesAndIgnoresOption() {
+        let model = MenuSearchViewModel(nodes: tree([withAlternate("Copy", alt: "Copy Path")]))
+        model.query = "copy"
+        XCTAssertEqual(titles(model), ["Copy", "Copy Path"])
+        model.optionHeld = true
+        XCTAssertEqual(titles(model), ["Copy", "Copy Path"], "the modifier is inert while filtering")
+    }
+
+    func testAQueryReachesTheAlternateWithoutTheModifier() {
+        let model = MenuSearchViewModel(nodes: tree([withAlternate("Copy", alt: "Copy Path")]))
+        model.query = "path"
+        XCTAssertEqual(titles(model), ["Copy Path"], "explicit intent beats the modifier gate")
+    }
 }

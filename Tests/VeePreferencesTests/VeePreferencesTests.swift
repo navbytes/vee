@@ -200,6 +200,44 @@ final class AppPreferencesTests: XCTestCase {
         prefs.setHasSecret(false, id: "p1")
         XCTAssertEqual(prefs.secretPluginIDs(), ["p2"])
     }
+
+    /// The detached window's floating state, persisted so it survives a
+    /// relaunch rather than dying with the session. A fresh install has no
+    /// entry, and that must read as pinned — the state a new window opens in.
+    func testDetachedWindowPinDefaultsToPinnedThenRoundTrips() {
+        let defaults = UserDefaults(suiteName: "vee-test-" + UUID().uuidString)!
+        let prefs = AppPreferences(defaults: defaults)
+        XCTAssertTrue(prefs.isDetachedWindowPinned("sysmon"))
+
+        prefs.setDetachedWindowPinned(false, id: "sysmon")
+
+        XCTAssertFalse(prefs.isDetachedWindowPinned("sysmon"))
+        XCTAssertTrue(prefs.isDetachedWindowPinned("caffeinate"), "one plugin's choice never leaks to another")
+        // A later launch reads the same defaults through a new instance — the
+        // shape a relaunch has, with nothing cached in between.
+        XCTAssertFalse(AppPreferences(defaults: defaults).isDetachedWindowPinned("sysmon"))
+
+        prefs.setDetachedWindowPinned(true, id: "sysmon")
+        XCTAssertTrue(prefs.isDetachedWindowPinned("sysmon"))
+    }
+
+    /// The app-level bring-all-windows combination. Absent must read as unbound
+    /// — a global combination Vee claimed on a fresh install would be one the
+    /// user never agreed to give up.
+    func testFocusWindowsHotkeyDefaultsUnboundThenRoundTrips() {
+        let defaults = UserDefaults(suiteName: "vee-test-" + UUID().uuidString)!
+        let prefs = AppPreferences(defaults: defaults)
+        XCTAssertNil(prefs.focusWindowsHotkey)
+
+        prefs.focusWindowsHotkey = "cmd+shift+w"
+
+        XCTAssertEqual(prefs.focusWindowsHotkey, "cmd+shift+w")
+        // A later launch reads the same defaults through a new instance.
+        XCTAssertEqual(AppPreferences(defaults: defaults).focusWindowsHotkey, "cmd+shift+w")
+
+        prefs.focusWindowsHotkey = nil
+        XCTAssertNil(prefs.focusWindowsHotkey, "clearing the field gives the combination back to the system")
+    }
 }
 
 final class VariableAggregatorTests: XCTestCase {

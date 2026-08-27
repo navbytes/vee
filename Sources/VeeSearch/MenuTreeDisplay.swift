@@ -59,13 +59,25 @@ public enum MenuTreeDisplay {
     /// opens everything, which is what a filtered tree does: a query has already
     /// narrowed the menu to matches, so hiding them behind closed parents would
     /// make the user open their way to results they explicitly asked for.
+    ///
+    /// `alternatesActive` is the live ⌥ state. Idle, an `alternate=` pair
+    /// resolves to **one** line — the primary, or the alternate while ⌥ is
+    /// held — swapped in place so the list's length and indices never change
+    /// and an index-based selection rides through the swap. The filtered
+    /// projection (`revealAll`) ignores the flag and emits both halves as
+    /// ordinary rows: a query is explicit intent, and hiding an exact match
+    /// behind a modifier would be hostile — the same call `vee search` makes.
     public static func visibleNodes(
         _ nodes: [MenuTreeNode],
         expanded: Set<MenuPath>,
-        revealAll: Bool = false
+        revealAll: Bool = false,
+        alternatesActive: Bool = false
     ) -> [VisibleNode] {
         var result: [VisibleNode] = []
-        walk(nodes, path: [], depth: 0, expanded: expanded, revealAll: revealAll, into: &result)
+        walk(
+            nodes, path: [], depth: 0, expanded: expanded,
+            revealAll: revealAll, alternatesActive: alternatesActive, into: &result
+        )
         return result
     }
 
@@ -84,9 +96,13 @@ public enum MenuTreeDisplay {
         depth: Int,
         expanded: Set<MenuPath>,
         revealAll: Bool,
+        alternatesActive: Bool,
         into result: inout [VisibleNode]
     ) {
-        for node in nodes {
+        var index = 0
+        while index < nodes.count {
+            let node = nodes[index]
+            index += 1
             switch node {
             case .separator:
                 result.append(.separator(depth: depth))
@@ -95,14 +111,30 @@ public enum MenuTreeDisplay {
                     result.append(.header(spec.item.text, depth: depth))
                     continue
                 }
-                let key = path + [spec.item.text]
-                let canExpand = !spec.children.isEmpty
+                // A pair is a primary immediately followed by its alternate —
+                // the adjacency `MenuTree.build` guarantees. Idle, the pair
+                // draws as one line; which half is `alternatesActive`'s call.
+                // An alternate with no primary neighbor (a hand-built tree, or
+                // one whose primary a filter pruned) renders as an ordinary
+                // row in both states rather than vanishing — the same fallback
+                // AppKit applies to an unpaired `isAlternate` item.
+                var chosen = spec
+                if !revealAll, !spec.isAlternate, index < nodes.count,
+                   case .row(let alternate) = nodes[index], alternate.isAlternate, !alternate.isHeader {
+                    if alternatesActive { chosen = alternate }
+                    index += 1
+                }
+                let key = path + [chosen.item.text]
+                let canExpand = !chosen.children.isEmpty
                 let isExpanded = canExpand && (revealAll || expanded.contains(key))
                 result.append(.row(VisibleRow(
-                    spec: spec, depth: depth, key: key, canExpand: canExpand, isExpanded: isExpanded
+                    spec: chosen, depth: depth, key: key, canExpand: canExpand, isExpanded: isExpanded
                 )))
                 if isExpanded {
-                    walk(spec.children, path: key, depth: depth + 1, expanded: expanded, revealAll: revealAll, into: &result)
+                    walk(
+                        chosen.children, path: key, depth: depth + 1, expanded: expanded,
+                        revealAll: revealAll, alternatesActive: alternatesActive, into: &result
+                    )
                 }
             }
         }

@@ -54,6 +54,17 @@ final class DetachedWindowsMenu: NSObject, NSMenuDelegate {
     func menuNeedsUpdate(_ menu: NSMenu) {
         menu.removeAllItems()
         let open = windows.openPlugins
+        // Nothing open means no rows at all — and the parent already hid this
+        // whole row via `refreshVisibility`, so the bring-all action below needs
+        // no empty-state guard of its own.
+        guard !open.isEmpty else { return }
+        // Top of the submenu, where macOS's own Window menu puts it: the
+        // mouse-reachable twin of the app-level hotkey, and the only retrieval
+        // that is one gesture rather than one per window.
+        let bringAll = NSMenuItem(title: "Bring All to Front", action: #selector(focusAll), keyEquivalent: "")
+        bringAll.target = self
+        menu.addItem(bringAll)
+        menu.addItem(.separator())
         for pluginName in open {
             // A stale window is still worth listing — it is showing the last
             // thing its plugin said, and finding it is exactly how the user
@@ -64,7 +75,6 @@ final class DetachedWindowsMenu: NSObject, NSMenuDelegate {
             item.representedObject = pluginName
             menu.addItem(item)
         }
-        guard !open.isEmpty else { return }
         menu.addItem(.separator())
         let closeAll = NSMenuItem(title: "Close All", action: #selector(closeAll), keyEquivalent: "")
         closeAll.target = self
@@ -74,6 +84,10 @@ final class DetachedWindowsMenu: NSObject, NSMenuDelegate {
     @objc private func focus(_ sender: NSMenuItem) {
         guard let pluginName = sender.representedObject as? String else { return }
         windows.focus(pluginName: pluginName)
+    }
+
+    @objc private func focusAll() {
+        windows.focusAll()
     }
 
     @objc private func closeAll() {

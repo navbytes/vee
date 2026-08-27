@@ -204,13 +204,19 @@ public struct PluginSettingsFormContent: View {
                  ? "A panel that closes when you click away."
                  : "A window you can leave open on the desktop. Press again to bring it back to the front.")
                 .font(.caption).foregroundStyle(.secondary)
-            hotkeyStatusLabel
+            HotkeyStatusLabel(status: model.hotkeyStatus)
         }
     }
+}
 
-    @ViewBuilder
-    private var hotkeyStatusLabel: some View {
-        switch model.hotkeyStatus {
+/// What registering a combination actually did. Shared by every surface that
+/// configures a hotkey — a plugin's Settings and Vee's own General settings —
+/// so a claimed or mistyped combination is reported one way, not two.
+struct HotkeyStatusLabel: View {
+    let status: HotkeyStatus
+
+    var body: some View {
+        switch status {
         case .active(let display):
             Label("Active — \(display)", systemImage: "checkmark.circle.fill")
                 .font(.caption).foregroundStyle(.green)
