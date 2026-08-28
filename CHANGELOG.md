@@ -6,6 +6,38 @@ All notable changes to Vee are documented here. The format is based on
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-08-29
+
+Two menu-bar fixes found by using the plugins rather than reading them: a
+clicked action now runs in the plugin's own environment, and a row carrying a
+gauge lines up with the rows around it.
+
+### Fixed
+- **A clicked menu action ran in a different environment than the plugin's own
+  render.** Renders go through `PluginExecutor`, which merges the `SWIFTBAR_*`
+  and `VEE_*` context over the inherited environment; a clicked action ran with
+  the bare inherited environment, so none of it was set. Any plugin that writes
+  state from a click and reads it back at render — the ordinary xbar pattern —
+  therefore addressed two different directories:
+  `$SWIFTBAR_PLUGIN_DATA_PATH` resolved to Vee's per-plugin directory during a
+  render and, being unset, fell through to `$TMPDIR` during a click. Caffeine
+  showed it plainly: starting a session from the menu spawned `caffeinate` and
+  wrote its state to `$TMPDIR`, then the next render looked in the data
+  directory, found nothing, reported "Sleep allowed", and listed its own child
+  process as an untracked stray. Pomodoro had the same shape. The dispatcher now
+  takes an environment *provider* and the coordinator hands it the same merged
+  context a render gets — a provider rather than a snapshot, because a
+  dispatcher is built once per plugin while `<xbar.var>` settings and dark mode
+  keep changing underneath it.
+- **A row carrying a `progress=`, `sparkline=` or `chart=` graphic drew its
+  label 4pt right of every plain row.** Those rows are custom views that supply
+  their own label and inherit none of the menu's text layout, so a single
+  constant is all that keeps them in step with AppKit's own menu-title inset —
+  and it was 4pt too wide, which read as a stray indent on the one row in a menu
+  that has a gauge. Measured against the plain rows beside it and corrected; all
+  three accessory kinds share the layout, so bars, sparklines and charts moved
+  together.
+
 ## [0.6.0] - 2026-08-28
 
 Plugin screenshots in Discover, a documentation pass that corrected the guide
@@ -945,7 +977,8 @@ lost. Comparison link below is `v0.1.1...v0.2.0` for the same reason.
 - Zero-dependency TypeScript SDK with a golden-fixture drift guard.
 - Developer-ID-signed, notarized distribution outside the Mac App Store.
 
-[Unreleased]: https://github.com/navbytes/vee/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/navbytes/vee/compare/v0.6.1...HEAD
+[0.6.1]: https://github.com/navbytes/vee/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/navbytes/vee/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/navbytes/vee/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/navbytes/vee/compare/v0.3.0...v0.4.0
