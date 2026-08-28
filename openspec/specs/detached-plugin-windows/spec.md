@@ -10,9 +10,12 @@ search panel, not a separate surface.
 
 ### Requirement: Opening a plugin in a window
 
-Vee SHALL offer, in each plugin's dropdown, an action that opens that plugin's
-entire menu tree as a resizable window. The action MUST be available for every
-plugin, with no declaration or opt-in required of the plugin itself.
+Vee SHALL offer an action that opens a plugin's entire menu tree as a resizable
+window. The action MUST be available for every plugin, with no declaration or
+opt-in required of the plugin itself, and MUST remain available for a plugin
+that has no menu-bar item of its own — a plugin's dropdown is one route to it,
+not the guarantee. Where a plugin has a dropdown, the action SHALL appear there
+as before.
 
 Each plugin's window SHALL remember its frame — position and size — and reopen
 with it, both within a session and across relaunches. Vee places a window
@@ -23,7 +26,13 @@ screen is no longer present SHALL open fully visible on a screen that is.
 
 - **WHEN** the user invokes "Open in Window" from a plugin's dropdown
 - **THEN** a window opens showing that plugin's current menu content
-- **AND** the plugin's menu-bar item remains present and functional
+- **AND** the plugin's menu-bar presence, if it has one, is unchanged
+
+#### Scenario: Opening a window for a plugin with no menu-bar item
+
+- **WHEN** the user opens a window for a plugin hidden from the menu bar
+- **THEN** the window opens showing that plugin's current menu content
+- **AND** the plugin is not given a menu-bar item in order to reach it
 
 #### Scenario: Promoting the transient panel
 

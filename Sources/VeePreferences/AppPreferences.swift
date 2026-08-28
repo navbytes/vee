@@ -15,6 +15,8 @@ public final class AppPreferences: @unchecked Sendable {
     private let hotkeyPresentationKey = "vee.hotkeyPresentations"
     private let firstRunDoneKey = "vee.hasCompletedFirstRun"
     private let compactMenuBarKey = "vee.compactMenuBar"
+    private let defaultPlacementKey = "vee.defaultBarPlacement"
+    private let placementKey = "vee.barPlacements"
     private let secretPluginIDsKey = "vee.pluginsWithSecrets"
     private let seenPluginIDsKey = "vee.seenPluginIDs"
     private let pluginHomeKey = "vee.pluginHomeDirectories"
@@ -25,24 +27,91 @@ public final class AppPreferences: @unchecked Sendable {
         self.defaults = defaults
     }
 
-    /// Opt-in "compact menu bar" (issue #45 — menu-bar crowding): collapses
-    /// every plugin's status item into a submenu of one shared Vee status
-    /// item, instead of one item per plugin. Default off — zero behavior
-    /// change until a user opts in.
+    /// The pre-placement "compact menu bar" setting (issue #45): one boolean
+    /// that folded *every* plugin into a single shared Vee item.
+    ///
+    /// Superseded by `defaultPlacement` and per-plugin `placement(_:)`. Kept
+    /// because it is still the migration source for an install that predates
+    /// them — `defaultPlacement` reads it whenever no default has been stored —
+    /// and because a downgrade, a restored backup, or a synced preferences
+    /// domain can still carry it. Vee no longer writes it as part of normal
+    /// use; the setter remains so a test (and any last caller) behaves.
     public var compactMenuBar: Bool {
         get { defaults.bool(forKey: compactMenuBarKey) }
         set {
             defaults.set(newValue, forKey: compactMenuBarKey)
-            // Lets every already-running `StatusItemController` switch
-            // presentation live — see `StatusItemController.reconcileMode()`.
-            NotificationCenter.default.post(name: Self.compactMenuBarDidChangeNotification, object: nil)
+            NotificationCenter.default.post(name: Self.barPlacementDidChangeNotification, object: nil)
         }
     }
 
-    /// Posted whenever `compactMenuBar` changes, from any `AppPreferences`
-    /// instance. Carries no payload — observers re-read the (possibly
-    /// injected) instance they already hold to decide what changed.
-    public static let compactMenuBarDidChangeNotification = Notification.Name("vee.compactMenuBarDidChange")
+    /// Posted whenever any placement changes — the app-wide default or one
+    /// plugin's override — from any `AppPreferences` instance. Carries no
+    /// payload: observers re-read the (possibly injected) instance they already
+    /// hold and decide for themselves what changed, which is what lets a
+    /// per-plugin change reach exactly the controller it concerns.
+    public static let barPlacementDidChangeNotification = Notification.Name("vee.barPlacementDidChange")
+
+    // MARK: - Menu-bar placement
+
+    /// The placement applied to every plugin with no override of its own.
+    ///
+    /// Falls back to the legacy `compactMenuBar` boolean while nothing has been
+    /// stored, so an install upgrading into placements keeps every plugin
+    /// exactly where it was: combine-all on means the default is folded, off
+    /// means each plugin keeps its own item. Writing a default stores the new
+    /// key and never the old one.
+    public var defaultPlacement: BarPlacement {
+        get {
+            if let stored = defaults.string(forKey: defaultPlacementKey),
+               let placement = BarPlacement(encoded: stored) {
+                return placement
+            }
+            return compactMenuBar ? .foldedDefault : .own
+        }
+        set {
+            defaults.set(newValue.encoded, forKey: defaultPlacementKey)
+            NotificationCenter.default.post(name: Self.barPlacementDidChangeNotification, object: nil)
+        }
+    }
+
+    /// This plugin's own placement, or `nil` when it follows the default.
+    /// The UI reads this to tell "explicitly pinned" from "pinned because the
+    /// default is"; everything else wants `placement(_:)`.
+    public func placementOverride(_ id: String) -> BarPlacement? {
+        (defaults.dictionary(forKey: placementKey) as? [String: String])?[id]
+            .flatMap(BarPlacement.init(encoded:))
+    }
+
+    /// Where this plugin belongs in the menu bar: its own choice if it has one,
+    /// otherwise the app-wide default.
+    public func placement(_ id: String) -> BarPlacement {
+        placementOverride(id) ?? defaultPlacement
+    }
+
+    /// Sets this plugin's placement, or with `nil` clears it so the plugin
+    /// follows the default again. Only plugins the user has placed by hand get
+    /// an entry, so the map stays empty for the overwhelming majority and
+    /// `clearAllState` has less to undo — the same shape `setHotkeyPresentation`
+    /// already uses.
+    ///
+    /// A placement that happens to equal the current default is still stored:
+    /// "pinned because I said so" and "pinned because the default is" differ
+    /// the moment the default changes, and collapsing them would silently move
+    /// a plugin the user had placed deliberately.
+    public func setPlacement(_ placement: BarPlacement?, id: String) {
+        var map = (defaults.dictionary(forKey: placementKey) as? [String: String]) ?? [:]
+        if let placement { map[id] = placement.encoded } else { map.removeValue(forKey: id) }
+        defaults.set(map, forKey: placementKey)
+        NotificationCenter.default.post(name: Self.barPlacementDidChangeNotification, object: nil)
+    }
+
+    /// Every plugin id carrying a placement override — the enumerable
+    /// companion to `placementOverride(_:)`, for disk reconciliation
+    /// (`AppController.reconcileDiskState`) the same way `hotkeyBindingIDs()`
+    /// is used. Production code only ever needs the per-id read above.
+    public func placementIDs() -> Set<String> {
+        Set((defaults.dictionary(forKey: placementKey) as? [String: String] ?? [:]).keys)
+    }
 
     /// Whether the app has completed its first-run onboarding. Used to open
     /// Discover once for a brand-new user with an empty plugins folder.
@@ -129,8 +198,8 @@ public final class AppPreferences: @unchecked Sendable {
     }
 
     /// Clears every stored preference for `id` — disabled flag, hotkey-off
-    /// flag, custom hotkey binding, hotkey presentation, and the has-a-secret
-    /// marker — leaving
+    /// flag, custom hotkey binding, hotkey presentation, menu-bar placement,
+    /// and the has-a-secret marker — leaving
     /// every other plugin's prefs untouched. Used when disk reconciliation
     /// confirms `id`'s file no longer exists (a manual delete, or an in-app
     /// delete); reuses the existing per-field mutators rather than touching
@@ -140,6 +209,7 @@ public final class AppPreferences: @unchecked Sendable {
         setHotkeyDisabled(false, id: id)
         setHotkeyBinding(nil, id: id)
         setHotkeyPresentation(.default, id: id)
+        setPlacement(nil, id: id)
         setHasSecret(false, id: id)
     }
 

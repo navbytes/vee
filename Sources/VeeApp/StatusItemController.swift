@@ -50,16 +50,17 @@ private final class ControlsTarget: NSObject, NSMenuDelegate {
 @MainActor
 public final class StatusItemController {
     /// Non-nil only in standalone mode (one `NSStatusItem` per plugin, the
-    /// default). `nil` while compact mode is active — see `compactEntry`.
+    /// default). `nil` for a `.folded` plugin (see `compactEntry`) and for a
+    /// `.hidden` one, which holds neither surface.
     private var statusItem: NSStatusItem?
-    /// Non-nil only in compact mode: this plugin's row inside the shared Vee
+    /// Non-nil only while `.folded`: this plugin's row inside Vee's home
     /// menu (`CompactMenuBarController`). Mutated directly (title/image/
     /// submenu) the same way `statusItem`'s button/menu are in standalone mode.
     private var compactEntry: NSMenuItem?
     /// The compact row's title with no refresh-dim tint applied — cached so
     /// `applyAlpha` can restore it verbatim, or re-derive the dimmed variant
     /// on every title update (e.g. a cycling frame) while a refresh is still
-    /// in flight. `nil` outside compact mode.
+    /// in flight. `nil` unless this plugin is currently folded.
     private var compactBaseTitle: NSAttributedString?
     /// Whether the compact row is currently tinted to signal an in-flight
     /// refresh — the row analog of the standalone item's `alphaValue` dim;
@@ -67,9 +68,23 @@ public final class StatusItemController {
     private var isCompactDimmed = false
     /// Which surface this controller is currently rendering into. Kept
     /// alongside `statusItem`/`compactEntry` (rather than derived from them)
-    /// so `reconcileMode()` has something to compare the live preference
-    /// against.
-    private var isCompact: Bool
+    /// so `reconcilePlacement()` has something to compare the live preference
+    /// against — and because `.hidden` has no surface object to derive it from.
+    private var placement: BarPlacement
+    /// Whether this plugin's dropdown is currently nested inside Vee's home
+    /// menu rather than hanging off an item of its own. Drives the key
+    /// equivalents in `buildMenu`: a key equivalent on a nested row fires on
+    /// whichever matching row AppKit finds first in the shared tree, which is
+    /// not necessarily this plugin's.
+    private var isFolded: Bool {
+        if case .folded = placement { return true }
+        return false
+    }
+
+    /// The plugin this controller renders, for reading its placement.
+    /// `nil` for an ephemeral deep-link item, which has no file, no stored
+    /// preferences, and therefore always follows the app-wide default.
+    private let pluginID: String?
     private let compactController: CompactMenuBarController
     private let prefs: AppPreferences
     /// `nonisolated(unsafe)`: read only from `deinit`, which strict concurrency
@@ -77,9 +92,10 @@ public final class StatusItemController {
     /// exclusive access to the instance (nothing else can be running
     /// concurrently once it starts), so this is safe — the same carve-out
     /// `SymbolImageFactory` uses for its thread-safe `NSCache`.
-    private nonisolated(unsafe) var modeObserverToken: NSObjectProtocol?
+    private nonisolated(unsafe) var placementObserverToken: NSObjectProtocol?
     /// Re-applied whenever a standalone item is (re)created — at `init` and
-    /// when switching back out of compact mode.
+    /// on every switch back to `.own`, so a plugin that moves away and returns
+    /// lands in the slot the user ⌘-dragged it to rather than at the end.
     private let autosaveName: String?
     private let pluginName: String
     private let actionTarget: MenuActionTarget
@@ -114,7 +130,7 @@ public final class StatusItemController {
     private var lastRendered: ParsedOutput?
     /// The last error surfaced (mirrors `lastRendered` for the error path) —
     /// `nil` whenever the plugin is in a good state. Lets a mode switch
-    /// (`reconcileMode()`) repaint the right thing on the new surface.
+    /// (`reconcilePlacement()`) repaint the right thing on the new surface.
     private var lastErrorMessage: String?
     private var lastErrorDetail: String?
     /// Action behind the error menu's "Restart Plugin" row, while one is shown.
@@ -135,7 +151,7 @@ public final class StatusItemController {
         return f
     }()
 
-    public init(pluginName: String, handler: MenuActionHandling, hasSettings: Bool = false, trustSummary: TrustSummary? = nil, refreshOnOpen: Bool = false, hideLastUpdated: Bool = false, filterEnabled: Bool = false, features: PluginFeatures = PluginFeatures(), autosaveName: String? = nil, aboutText: String? = nil, aboutURL: URL? = nil, onRefresh: @escaping () -> Void, onSettings: @escaping () -> Void = {}, onReveal: @escaping () -> Void = {}, onEdit: @escaping () -> Void = {}, onDebug: @escaping () -> Void = {}, prefs: AppPreferences = .shared, compactController: CompactMenuBarController = .shared) {
+    public init(pluginName: String, pluginID: String? = nil, handler: MenuActionHandling, hasSettings: Bool = false, trustSummary: TrustSummary? = nil, refreshOnOpen: Bool = false, hideLastUpdated: Bool = false, filterEnabled: Bool = false, features: PluginFeatures = PluginFeatures(), autosaveName: String? = nil, aboutText: String? = nil, aboutURL: URL? = nil, onRefresh: @escaping () -> Void, onSettings: @escaping () -> Void = {}, onReveal: @escaping () -> Void = {}, onEdit: @escaping () -> Void = {}, onDebug: @escaping () -> Void = {}, prefs: AppPreferences = .shared, compactController: CompactMenuBarController = .shared) {
         // D6: sanitize once, right here, rather than at each of the several
         // title/label/menu-text call sites below that read `pluginName` —
         // this is its single entry point (a `let`, never reassigned after
@@ -155,23 +171,32 @@ public final class StatusItemController {
         self.aboutURL = aboutURL
         self.hideLastUpdated = hideLastUpdated
         self.autosaveName = autosaveName
+        self.pluginID = pluginID
         self.prefs = prefs
         self.compactController = compactController
 
-        // Compact mode (issue #45): collapse into ONE shared "Vee" status
-        // item's dropdown instead of a standalone item, opt-in via Settings.
-        // Decided once here and kept live afterward by `reconcileMode()`.
-        let compact = prefs.compactMenuBar
-        self.isCompact = compact
-        if compact {
-            self.statusItem = nil
-            self.compactEntry = compactController.addEntry()
-        } else {
+        // Where this plugin sits in the menu bar: its own item, a row folded
+        // under Vee's home item, or nowhere at all. Resolved once here and kept
+        // live afterward by `reconcilePlacement()`.
+        let placement = pluginID.map(prefs.placement) ?? prefs.defaultPlacement
+        self.placement = placement
+        switch placement {
+        case .own:
             let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
             // A stable autosave name lets macOS remember where the user ⌘-dragged
             // this item, so plugin order/position survives relaunch.
             if let autosaveName { item.autosaveName = autosaveName }
             self.statusItem = item
+            self.compactEntry = nil
+        case .folded:
+            self.statusItem = nil
+            self.compactEntry = compactController.addEntry()
+        case .hidden:
+            // No menu-bar surface at all. Everything else this controller
+            // drives — the detached window, the search panel, the widget
+            // scrape, the freshness marking — is untouched; see
+            // `BarPlacement.hidden`.
+            self.statusItem = nil
             self.compactEntry = nil
         }
 
@@ -198,19 +223,22 @@ public final class StatusItemController {
         searchPresenter = { [weak self] in self?.presentSearch() }
         windowPresenter = { [weak self] in self?.openDetachedWindow() }
 
-        // Live mode toggle: react to Settings' "Combine all plugins into one
-        // menu bar item" switch without a relaunch, for every plugin already
-        // running.
-        modeObserverToken = NotificationCenter.default.addObserver(
-            forName: AppPreferences.compactMenuBarDidChangeNotification, object: nil, queue: .main
+        // Live placement changes: react to the default being changed in
+        // Settings, or to this plugin being placed in the Plugin Manager,
+        // without a relaunch. The notification carries no payload, so each
+        // controller re-reads its OWN plugin's placement and no-ops when it did
+        // not change — which is what keeps one plugin's move from repainting
+        // (or closing the open submenu of) any other.
+        placementObserverToken = NotificationCenter.default.addObserver(
+            forName: AppPreferences.barPlacementDidChangeNotification, object: nil, queue: .main
         ) { [weak self] _ in
-            MainActor.assumeIsolated { self?.reconcileMode() }
+            MainActor.assumeIsolated { self?.reconcilePlacement() }
         }
     }
 
     deinit {
-        if let modeObserverToken {
-            NotificationCenter.default.removeObserver(modeObserverToken)
+        if let placementObserverToken {
+            NotificationCenter.default.removeObserver(placementObserverToken)
         }
     }
 
@@ -414,15 +442,53 @@ public final class StatusItemController {
     }
 
     /// Tears down whichever surface is active — the standalone item, or this
-    /// plugin's row in the shared compact menu — and stops observing the
-    /// compact-mode preference. Safe to call more than once.
+    /// plugin's row in Vee's home menu — and stops observing placement
+    /// changes. Safe to call more than once.
     public func remove() {
         cycleTimer?.invalidate()
         dimWorkItem?.cancel()
-        if let modeObserverToken {
-            NotificationCenter.default.removeObserver(modeObserverToken)
-            self.modeObserverToken = nil
+        if let placementObserverToken {
+            NotificationCenter.default.removeObserver(placementObserverToken)
+            self.placementObserverToken = nil
         }
+        detachBarSurface()
+    }
+
+    // MARK: - Menu-bar placement
+
+    /// Re-reads this plugin's placement and moves it if it changed — so a
+    /// change in Settings or the Plugin Manager takes effect immediately, for a
+    /// plugin already running, with no relaunch.
+    ///
+    /// Every transition goes detach-then-attach through the two helpers below,
+    /// so the nine ordered pairs need no case analysis of their own and no
+    /// pair can leak a status item or a row.
+    private func reconcilePlacement() {
+        let wanted = pluginID.map(prefs.placement) ?? prefs.defaultPlacement
+        guard wanted != placement else { return }
+        placement = wanted
+        detachBarSurface()
+        switch wanted {
+        case .own:
+            let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+            // The same autosave name the item had before it moved away, so a
+            // round trip returns it to the user's slot.
+            if let autosaveName { item.autosaveName = autosaveName }
+            statusItem = item
+        case .folded:
+            compactEntry = compactController.addEntry()
+        case .hidden:
+            break
+        }
+        repaintCurrentSurface()
+    }
+
+    /// Releases whichever menu-bar surface this controller currently holds,
+    /// leaving it with none. The shared item's error roll-up is cleared with
+    /// the row it belonged to, so a plugin folded while erroring cannot leave
+    /// the home item's warning glyph stuck on after it moves or stops
+    /// (`CompactMenuBarController.removeEntry` clears its membership).
+    private func detachBarSurface() {
         if let statusItem {
             NSStatusBar.system.removeStatusItem(statusItem)
             self.statusItem = nil
@@ -431,40 +497,27 @@ public final class StatusItemController {
             compactController.removeEntry(compactEntry)
             self.compactEntry = nil
         }
-    }
-
-    // MARK: - Compact mode (issue #45)
-
-    /// Re-checks the live "collapse into one Vee menu" preference against the
-    /// surface this controller is currently rendering into, and switches when
-    /// it changed — so toggling Settings takes effect immediately, for every
-    /// plugin already running, with no relaunch.
-    private func reconcileMode() {
-        let wantsCompact = prefs.compactMenuBar
-        guard wantsCompact != isCompact else { return }
-        isCompact = wantsCompact
-        if wantsCompact {
-            if let statusItem { NSStatusBar.system.removeStatusItem(statusItem) }
-            statusItem = nil
-            compactEntry = compactController.addEntry()
-        } else {
-            if let compactEntry { compactController.removeEntry(compactEntry) }
-            compactEntry = nil
-            let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-            if let autosaveName { item.autosaveName = autosaveName }
-            statusItem = item
-        }
-        repaintCurrentSurface()
+        // The row is gone, so its cached presentation is meaningless; a fresh
+        // row starts from `repaintCurrentSurface()` like any other render.
+        compactBaseTitle = nil
+        isCompactDimmed = false
     }
 
     /// Re-renders the last known state (a success or an error) into whichever
-    /// surface `reconcileMode()` just switched to, so it isn't left blank
-    /// until the plugin's next scheduled refresh.
+    /// surface `reconcilePlacement()` just switched to, so it isn't left blank
+    /// until the plugin's next scheduled refresh. With `.hidden` there is no
+    /// surface to paint and the stored state simply waits for the plugin to be
+    /// shown again.
     private func repaintCurrentSurface() {
         if let lastErrorMessage {
             renderError(lastErrorMessage, detail: lastErrorDetail)
         } else if let lastRendered {
             apply(image: TitleRenderer.presentation(for: lastRendered.titleLines).image)
+            // A plugin arriving from `.hidden` has no cycle timer running (see
+            // `startCyclingIfNeeded`), so restart it here rather than leaving a
+            // multi-frame title frozen on its first frame until the next
+            // refresh. Idempotent for every other transition.
+            startCyclingIfNeeded()
             applyMenu(buildMenu(body: lastRendered.body))
         }
     }
@@ -538,11 +591,14 @@ public final class StatusItemController {
         updateAccessibilityLabel(currentText: frames.first?.string ?? "")
     }
 
-    /// Applies a title + image to whichever surface is active. `imagePosition`
-    /// only means anything for a real status-bar button (icon-only vs.
-    /// icon-leading-text); a compact-mode row is an `NSMenuItem`, which always
-    /// shows its image beside its title, so that argument is simply ignored
-    /// there.
+    /// Applies a title + image to whichever surface is active, and to neither
+    /// when the plugin is `.hidden` — the stored state is still what
+    /// `repaintCurrentSurface()` paints when it is shown again.
+    ///
+    /// `imagePosition` only means anything for a real status-bar button
+    /// (icon-only vs. icon-leading-text); a folded row is an `NSMenuItem`,
+    /// which always shows its image beside its title, so that argument is
+    /// simply ignored there.
     private func applyPresentation(title: NSAttributedString, image: NSImage?, imagePosition: NSControl.ImagePosition) {
         if let button = statusItem?.button {
             button.image = image
@@ -588,7 +644,7 @@ public final class StatusItemController {
     }
 
     /// Assigns a freshly built dropdown to whichever surface is active. In
-    /// compact mode this only ever replaces THIS plugin's row, never the
+    /// While folded this only ever replaces THIS plugin's row, never the
     /// shared top-level menu itself, so a sibling plugin's open submenu is
     /// never disturbed by this one refreshing.
     private func applyMenu(_ menu: NSMenu) {
@@ -599,7 +655,7 @@ public final class StatusItemController {
         }
     }
 
-    /// Dims the status-bar button while a refresh is in flight. A compact-mode
+    /// Dims the status-bar button while a refresh is in flight. A folded
     /// row has no `alphaValue` of its own, so the same cue is carried by
     /// tinting its title text instead — on top of the "Refreshing…" stamp its
     /// own submenu already carries (see `stampItem`), which stays two levels
@@ -628,7 +684,11 @@ public final class StatusItemController {
     private func startCyclingIfNeeded() {
         cycleTimer?.invalidate()
         cycleTimer = nil
-        guard frames.count > 1 else { return }
+        // Nothing to cycle through with no menu-bar surface: a hidden plugin's
+        // title is drawn nowhere, so a repeating timer per hidden plugin would
+        // be pure cost. `repaintCurrentSurface()` restarts it if the plugin is
+        // shown again.
+        guard placement.hasBarPresence, frames.count > 1 else { return }
         let timer = Timer(timeInterval: 3.0, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.advanceFrame() }
         }
@@ -650,10 +710,10 @@ public final class StatusItemController {
         // submenus — without disturbing the native menu, its trust row, or the
         // controls footer.
         if filterEnabled {
-            // Compact mode nests every plugin's menu in one tree, where a key
+            // Folding nests every plugin's menu in one tree, where a key
             // equivalent set here would ambiguously fire on whichever
             // plugin's item AppKit finds first — strip it there.
-            let search = NSMenuItem(title: "Search…", action: #selector(ControlsTarget.search), keyEquivalent: isCompact ? "" : "f")
+            let search = NSMenuItem(title: "Search…", action: #selector(ControlsTarget.search), keyEquivalent: isFolded ? "" : "f")
             search.target = controls
             let glass = NSImage(systemSymbolName: "magnifyingglass", accessibilityDescription: "Search")
             glass?.isTemplate = true
@@ -786,14 +846,14 @@ public final class StatusItemController {
         }
 
         // Same first-match-wins hazard as the Search row above: no key
-        // equivalent on a per-plugin control item once it's nested in
-        // compact mode's shared tree.
-        let refresh = NSMenuItem(title: "Refresh", action: #selector(ControlsTarget.refresh), keyEquivalent: isCompact ? "" : "r")
+        // equivalent on a per-plugin control item once it's nested in the home
+        // item's shared tree.
+        let refresh = NSMenuItem(title: "Refresh", action: #selector(ControlsTarget.refresh), keyEquivalent: isFolded ? "" : "r")
         refresh.target = controls
         menu.addItem(refresh)
 
         if hasSettings {
-            let settings = NSMenuItem(title: "Settings…", action: #selector(ControlsTarget.settings), keyEquivalent: isCompact ? "" : ",")
+            let settings = NSMenuItem(title: "Settings…", action: #selector(ControlsTarget.settings), keyEquivalent: isFolded ? "" : ",")
             settings.target = controls
             menu.addItem(settings)
         }
@@ -825,7 +885,7 @@ public final class StatusItemController {
 
         menu.addItem(.separator())
 
-        let quit = NSMenuItem(title: "Quit Vee", action: #selector(ControlsTarget.quit), keyEquivalent: isCompact ? "" : "q")
+        let quit = NSMenuItem(title: "Quit Vee", action: #selector(ControlsTarget.quit), keyEquivalent: isFolded ? "" : "q")
         quit.target = controls
         menu.addItem(quit)
         return menu

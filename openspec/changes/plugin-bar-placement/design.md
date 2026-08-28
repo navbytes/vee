@@ -73,11 +73,19 @@ store and forecloses that.
 
 ### 3. `hidden` keeps the controller and the run; only the bar surface goes
 
-Both `statusItem` and `compactEntry` are nil — a third branch in
-`applyPresentation` (`:546`), `applyMenu` (`:594`) and `applyAlpha` (`:607`),
-all of which already branch on which surface exists. `render(_:)` still stores
-`lastRendered`, still updates detached windows, still publishes the widget
-scrape.
+Both `statusItem` and `compactEntry` are nil. **This needed no new branches at
+all**: `applyPresentation` (`:546`), `applyMenu` (`:594`), `applyTitleText` and
+`applyAlpha` (`:607`) each already reach their surface through
+`if let … else if let …` or optional chaining, so with neither surface present
+they store state and paint nothing. `render(_:)` still stores `lastRendered`,
+still updates detached windows, still publishes the widget scrape.
+
+The one place that did need a guard is `startCyclingIfNeeded`: a multi-frame
+title would otherwise run a 3s repeating timer per hidden plugin, drawing
+nowhere. It now guards on `placement.hasBarPresence`, and
+`repaintCurrentSurface()` restarts it when the plugin is shown again — otherwise
+un-hiding would leave a cycling title frozen on its first frame until the next
+refresh.
 
 Explicitly **not** the `<vee.surface>widget` path, which nils the controller
 (`PluginCoordinator.swift:111`) and skips the menu-mode run and schedule
@@ -93,10 +101,18 @@ present, with the app-controls footer always installed;
 and `@objc` target for those rows (`buildAppItems` is already the single seam).
 `AppController.applyCompactMode` and `MainMenuController.setVisible` go away.
 
-Rename `CompactMenuBarController` → `VeeHomeItemController` (and its test file);
-the old name describes a mode that no longer exists. `installFooter`/
-`removeFooter` collapse into unconditional setup, and `deactivate()` is deleted
-— the item never goes away.
+`installFooter` becomes unconditional setup called once at launch, and
+`removeFooter` is deleted — nothing turns the footer off any more.
+`deactivate()` survives only because `removeEntry` still guards on it, which in
+the running app can no longer fire (the footer outlives every row); a test that
+exercises row bookkeeping with no footer still reaches it.
+
+**The type keeps its `CompactMenuBarController` name for now.** The name
+describes a mode that no longer exists and should become `VeeHomeItemController`,
+but a cross-file rename is the one edit that is trivially safe *with* a compiler
+and error-prone without one, and this change was implemented in an environment
+with no Swift toolchain. Left as the first task for whoever builds it (task
+3.1).
 
 With zero folded plugins the item shows exactly what `MainMenuController` shows
 today, so a user who never opens the new control sees no change.

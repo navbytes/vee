@@ -1,19 +1,17 @@
 import AppKit
 import VeeCore
 
-/// The always-present "Vee" status item hosting global controls (plugin manager,
-/// refresh all, launch at login, quit). Per-plugin status items sit alongside it
-/// in standalone mode.
+/// Vee's global controls (plugin manager, refresh all, launch at login, quit)
+/// and the `@objc` target behind them.
 ///
-/// Issue #71 follow-up ("one icon total" in compact mode): while
-/// `AppPreferences.compactMenuBar` is on, this controller's own item is hidden
-/// (`setVisible(false)`, driven by `AppController`'s mode-change wiring) and its
-/// rows fold into `CompactMenuBarController`'s shared icon as a footer instead
-/// (`buildAppItems`, below) — the one seam both surfaces build their app-control
-/// rows from, so the two can never drift apart on titles/keys/callbacks.
+/// It owns no status item of its own. There is exactly one Vee icon, always
+/// present — `CompactMenuBarController.shared` — and it hosts these rows as a
+/// footer beneath whatever plugins are folded into it. `buildAppItems` is the
+/// one seam those rows are built from, so this controller's own `menu` (built
+/// for tests, and for any surface that wants the rows standalone) can never
+/// drift from what the menu bar actually shows.
 @MainActor
 final class MainMenuController: NSObject, NSMenuDelegate {
-    private var statusItem: NSStatusItem?
     private let onManager: () -> Void
     private let onDiscover: () -> Void
     private let onPreferences: () -> Void
@@ -21,45 +19,22 @@ final class MainMenuController: NSObject, NSMenuDelegate {
     private let onOpenFolder: () -> Void
     private var loginItem: NSMenuItem!
 
-    /// This controller's own standalone menu — built unconditionally (even
-    /// under `attachesStatusItem: false`) so a test can inspect its content and
-    /// fire its callbacks without ever constructing a real status item.
+    /// This controller's own copy of the rows — built unconditionally so a test
+    /// can inspect their content and fire their callbacks without any status
+    /// item existing.
     private(set) var menu = NSMenu()
 
-    /// Skips ever touching `NSStatusBar` — the same hazard/seam
-    /// `CompactMenuBarController.attachesStatusItem` guards against:
-    /// constructing a real `NSStatusItem` needs a live `NSApplication`, unsafe
-    /// to trigger from a unit test.
-    private let attachesStatusItem: Bool
-
-    /// Plain, directly testable mirror of `statusItem?.isVisible` (a test never
-    /// has a real status item to read it off) — hidden while compact mode folds
-    /// this controller's rows under the shared compact icon instead. Defaults
-    /// to visible, matching the app always showing its icon prior to #71.
-    private(set) var isVisible = true
-
-    init(onManager: @escaping () -> Void, onDiscover: @escaping () -> Void, onPreferences: @escaping () -> Void, onRefreshAll: @escaping () -> Void, onOpenFolder: @escaping () -> Void, attachesStatusItem: Bool = true) {
+    init(onManager: @escaping () -> Void, onDiscover: @escaping () -> Void, onPreferences: @escaping () -> Void, onRefreshAll: @escaping () -> Void, onOpenFolder: @escaping () -> Void, attachesStatusItem _: Bool = true) {
         self.onManager = onManager
         self.onDiscover = onDiscover
         self.onPreferences = onPreferences
         self.onRefreshAll = onRefreshAll
         self.onOpenFolder = onOpenFolder
-        self.attachesStatusItem = attachesStatusItem
         super.init()
 
         menu.delegate = self
         menu.autoenablesItems = false
         loginItem = Self.buildAppItems(in: menu, target: self)
-
-        guard attachesStatusItem else { return }
-        let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        if let button = item.button {
-            let image = NSImage(systemSymbolName: "v.circle.fill", accessibilityDescription: "Vee")
-            image?.isTemplate = true
-            button.image = image
-        }
-        item.menu = menu
-        statusItem = item
     }
 
     private func item(_ title: String, _ action: Selector, key: String) -> NSMenuItem {
@@ -84,8 +59,8 @@ final class MainMenuController: NSObject, NSMenuDelegate {
         menu.addItem(target.item("Discover Plugins…", #selector(discover), key: "d"))
         menu.addItem(target.item("Refresh All Plugins", #selector(refreshAll), key: "r"))
         // Every open detached window, and a way back to each. Added here rather
-        // than in either caller so the standalone item and compact mode's footer
-        // get it from the same seam, like every other row.
+        // than in either caller so this controller's own menu and the home
+        // item's footer get it from the same seam, like every other row.
         menu.addItem(DetachedWindowsMenu.shared.makeItem())
         menu.addItem(.separator())
         let loginItem = target.item("Launch Vee at Login", #selector(toggleLogin), key: "")
@@ -109,20 +84,4 @@ final class MainMenuController: NSObject, NSMenuDelegate {
     @objc private func toggleLogin() { LoginItemManager.setEnabled(!LoginItemManager.isEnabled) }
     @objc private func quit() { NSApp.terminate(nil) }
 
-    /// Shows/hides this controller's own status item — hidden while compact
-    /// mode folds its rows into the shared compact icon's footer instead
-    /// (`AppController`'s mode-change wiring), shown again when compact mode
-    /// turns off. `isVisible` always tracks the request, even under
-    /// `attachesStatusItem: false` (tests), so the intent is directly
-    /// assertable with no real status item involved.
-    func setVisible(_ visible: Bool) {
-        isVisible = visible
-        statusItem?.isVisible = visible
-    }
-
-    func remove() {
-        guard let statusItem else { return }
-        NSStatusBar.system.removeStatusItem(statusItem)
-        self.statusItem = nil
-    }
 }

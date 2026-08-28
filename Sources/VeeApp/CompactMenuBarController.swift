@@ -1,23 +1,26 @@
 import AppKit
 
-/// Compact mode (issue #45 — menu-bar crowding): when the user opts in
-/// (`AppPreferences.compactMenuBar`), every plugin's `StatusItemController`
-/// renders into a row of this ONE shared "Vee" status item instead of
-/// getting its own `NSStatusItem`. Each row's title/image mirror what a
-/// standalone item would show; its submenu is that plugin's own dropdown,
-/// unchanged — `StatusItemController.buildMenu(body:)` is still the single
-/// place that's built, reused verbatim for either surface.
+/// Vee's home item: the ONE status item Vee shows for itself, always present.
 ///
-/// Issue #71 follow-up ("one icon total"): while compact mode is on, this is
-/// the ONLY status item — `MainMenuController`'s own item is hidden
-/// (`AppController`'s mode-change wiring) and its app-controls rows fold in
-/// here as a footer instead (`installFooter`/`removeFooter`), built from the
-/// exact same seam (`MainMenuController.buildAppItems`) so the two can never
-/// drift out of sync.
+/// It hosts two things. Every plugin whose `BarPlacement` is `.folded` renders
+/// into a row here instead of getting its own `NSStatusItem` (issue #45 —
+/// menu-bar crowding); each row's title/image mirror what a standalone item
+/// would show, and its submenu is that plugin's own dropdown, unchanged —
+/// `StatusItemController.buildMenu(body:)` is still the single place that is
+/// built, reused verbatim for either surface. Beneath the rows sits
+/// `MainMenuController`'s app-controls footer (`installFooter`), built from the
+/// exact same seam (`MainMenuController.buildAppItems`) so the rows can never
+/// drift out of sync with what that controller believes it offers.
+///
+/// Issue #71 ("one icon total") used to hold only while an opt-in compact mode
+/// was on, with `MainMenuController` owning a second icon the rest of the time.
+/// It now holds unconditionally: this is the only Vee icon there is, whatever
+/// each plugin's placement, so there is no mode to reconcile and no window in
+/// which two Vee icons can appear side by side.
 ///
 /// A singleton so any `StatusItemController` (a real plugin or an ephemeral
-/// deep-link item) can join or leave without `AppController`/
-/// `PluginCoordinator` needing to know compact mode exists at all.
+/// deep-link item) can join or leave as its placement changes, without
+/// `AppController`/`PluginCoordinator` needing to know placement exists at all.
 @MainActor
 public final class CompactMenuBarController: NSObject, NSMenuDelegate {
     // `public`: referenced as a default argument value in `StatusItemController`'s
@@ -38,10 +41,9 @@ public final class CompactMenuBarController: NSObject, NSMenuDelegate {
     /// effects.
     private let attachesStatusItem: Bool
 
-    /// The shared item's default glyph. Issue #71: while compact mode is on
-    /// this is the ONLY Vee icon in the menu bar (`MainMenuController`'s own
-    /// item is hidden), so it now uses the same primary glyph that item always
-    /// showed — the two are the same icon, not two sitting side by side.
+    /// The item's default glyph — the same primary glyph `MainMenuController`
+    /// used to show on its own item, because this is now that icon rather than
+    /// a second one beside it.
     static let normalSymbolName = "v.circle.fill"
     /// Swapped in once ≥1 row is in an error state — the same symbol
     /// `StatusItemController.renderError` uses for a standalone item's own
@@ -49,10 +51,11 @@ public final class CompactMenuBarController: NSObject, NSMenuDelegate {
     /// cue at either level.
     static let errorSymbolName = "exclamationmark.triangle.fill"
 
-    /// Rows currently reporting an error (by identity), so the shared item's
-    /// glyph can roll up "≥1 plugin is erroring" without ever inspecting any
-    /// row's own submenu. `removeEntry` clears a row's membership too, so a
-    /// plugin that's stopped/disabled mid-error can't leave the badge stuck.
+    /// Rows currently reporting an error (by identity), so the item's glyph can
+    /// roll up "≥1 folded plugin is erroring" without ever inspecting any row's
+    /// own submenu. `removeEntry` clears a row's membership too, so a plugin
+    /// that stopped, was disabled, or was re-placed mid-error can't leave the
+    /// badge stuck.
     private var erroredEntries: Set<ObjectIdentifier> = []
 
     /// The symbol name currently applied to the shared item's button. Kept as
@@ -70,9 +73,9 @@ public final class CompactMenuBarController: NSObject, NSMenuDelegate {
     private var rowItems: [NSMenuItem] = []
 
     /// The footer's items (a separator + `MainMenuController.buildAppItems`'s
-    /// rows), or empty when not installed. Tracked so `installFooter`/
-    /// `removeFooter` are idempotent — a repeated live toggle must never
-    /// duplicate or double-remove them.
+    /// rows), or empty before it is installed. Tracked so `installFooter` is
+    /// idempotent — a second call must never duplicate the rows — and so
+    /// `addEntry` knows how many trailing items it must insert above.
     private var footerItems: [NSMenuItem] = []
     /// The footer's own "Launch Vee at Login" row, kept so `menuNeedsUpdate`
     /// can refresh its checkmark each time the shared menu is about to open —
@@ -102,11 +105,12 @@ public final class CompactMenuBarController: NSObject, NSMenuDelegate {
         return item
     }
 
-    /// Removes a previously-added row — its plugin stopped, or its controller
-    /// switched back to standalone mode. Tears down the shared status item
-    /// once the last row is gone AND no footer is installed — the footer
-    /// alone (compact mode on, zero plugins) still keeps it alive so
-    /// Preferences/Quit/etc. stay reachable.
+    /// Removes a previously-added row — its plugin stopped, or its placement
+    /// moved it to its own item or out of the menu bar entirely. Tears down the
+    /// status item once the last row is gone AND no footer is installed, which
+    /// in the running app never happens: the footer is installed for the app's
+    /// lifetime, so this item outlives every row. The condition remains for a
+    /// test that exercises row bookkeeping with no footer installed.
     func removeEntry(_ item: NSMenuItem) {
         menu.removeItem(item)
         rowItems.removeAll { $0 === item }
@@ -128,16 +132,15 @@ public final class CompactMenuBarController: NSObject, NSMenuDelegate {
         updateGlyph()
     }
 
-    /// Folds `MainMenuController`'s own app-controls menu under this shared
-    /// item (issue #71 — one icon total while compact mode is on, not two
-    /// side by side): a separator, then the identical rows `target`'s own
-    /// standalone menu shows, built from the same seam
-    /// (`MainMenuController.buildAppItems`) so the two can never drift apart.
-    /// Idempotent — installing while already installed is a no-op, so a
-    /// notification storm (`AppController`'s mode-change observer) can never
-    /// duplicate the footer. Keeps the shared status item alive even with
-    /// zero plugin rows, since it's now the ONLY status item while compact
-    /// mode is on.
+    /// Installs `MainMenuController`'s app-controls rows as this item's
+    /// footer: a separator, then the identical rows `target`'s own menu shows,
+    /// built from the same seam (`MainMenuController.buildAppItems`) so the two
+    /// can never drift apart. Called once, unconditionally, at launch.
+    ///
+    /// Idempotent — installing while already installed is a no-op — and it
+    /// brings the status item up, so Preferences/Quit stay reachable with zero
+    /// plugins folded (or zero plugins at all). There is no uninstall: the
+    /// footer is what makes this item permanent.
     func installFooter(target: MainMenuController) {
         guard footerItems.isEmpty else { return }
         var installed: [NSMenuItem] = [.separator()]
@@ -147,17 +150,6 @@ public final class CompactMenuBarController: NSObject, NSMenuDelegate {
         installed.append(contentsOf: menu.items[before...])
         footerItems = installed
         activateIfNeeded()
-    }
-
-    /// Reverses `installFooter` — compact mode switched back off. Safe to
-    /// call when no footer is installed (no-op), so repeated toggles never
-    /// double-remove.
-    func removeFooter() {
-        guard !footerItems.isEmpty else { return }
-        footerItems.forEach { menu.removeItem($0) }
-        footerItems = []
-        footerLoginItem = nil
-        if rowItems.isEmpty { deactivate() }
     }
 
     /// Keeps the footer's "Launch Vee at Login" checkmark fresh each time the

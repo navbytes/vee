@@ -351,16 +351,26 @@ and triaged against what already ships. Ordered roughly by value.
 - ✅ **Catalog update notifications** — coalesced "N updates available" nudge
   after Discover refresh, per-version de-duped, opens Discover (never auto-installs).
 - ✅ **Compact menu-bar mode** — opt-in General setting collapses plugins into
-  one "Vee" status item (issue #45), with submenus unchanged.
+  one "Vee" status item (issue #45), with submenus unchanged. Superseded by
+  per-plugin placement (`openspec/changes/plugin-bar-placement`): the setting
+  became the app-wide *default* placement, each plugin can override it, and a
+  third value hides a plugin from the menu bar entirely for the case where it
+  is read on the widget, in a detached window, or through its hotkey panel.
+  Vee's two status items (the app item and the shared compact item) merged into
+  one always-present home item.
 - ✅ **Per-plugin timeout override** — `<vee.timeout>` header (1s–1h, default 30s;
   supports ms/s/m/h/d tokens or plain seconds).
 
 ### Still open
 
 - **Focus filters** (`SetFocusFilterIntent`) — per-Focus show/hide of plugin
-  groups. Needs a plugin-grouping model (new `<vee.group>`-style tag or a
-  preferences mapping), a lightweight status-item hide (today only full
-  teardown exists), and a plugin `AppEntity` picker.
+  groups. Two of its three blockers are delivered by `plugin-bar-placement`:
+  the plugin-grouping model (`BarPlacement.folded(group:)` — one reserved group
+  today, shaped so named groups are a new value rather than a second migration)
+  and the lightweight status-item hide (`BarPlacement.hidden`, which drops the
+  bar surface while leaving the plugin's runs, window, panel and widget scrape
+  alone). Still needed: the plugin `AppEntity` picker, and a UI for naming
+  groups.
 - **Column / table layout** — an auto-aligned `columns=`/table-row primitive so
   authors stop hand-padding `label · bar · amount` with monospace.
 - **Multi-color inline spans without ANSI** — a lightweight span markup (or

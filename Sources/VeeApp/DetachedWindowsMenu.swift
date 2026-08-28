@@ -12,7 +12,7 @@ import AppKit
 /// this row always is too.
 ///
 /// Built once and shared by both surfaces that render Vee's app controls — its
-/// own status item and compact mode's folded footer — through
+/// own menu and the home item's footer — through
 /// `MainMenuController.buildAppItems`, the single seam those two agree on.
 /// The submenu fills itself on open (`menuNeedsUpdate`) so it never shows a
 /// stale list, and the row hides entirely when nothing is open.

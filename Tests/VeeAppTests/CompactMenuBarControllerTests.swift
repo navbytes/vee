@@ -5,9 +5,9 @@ import VeeMenu
 import VeePluginFormat
 import VeePreferences
 
-/// Compact mode (issue #45 — menu-bar crowding): an opt-in preference that
-/// collapses every enabled plugin's status item into a submenu of ONE shared
-/// "Vee" status item.
+/// Vee's home item: the one status item Vee shows for itself, hosting a row
+/// per `.folded` plugin (issue #45 — menu-bar crowding) above
+/// `MainMenuController`'s app-controls footer.
 ///
 /// These tests deliberately never construct a real `NSStatusItem` (and so
 /// never touch `NSApplication.shared`, even indirectly): doing so from a unit
@@ -15,9 +15,9 @@ import VeePreferences
 /// under CI load — see `WidgetActionRefreshTests`'s note on the same hazard.
 /// `CompactMenuBarController(attachesStatusItem: false)` short-circuits before
 /// ever reaching `NSStatusBar`, and every `StatusItemController` below is
-/// constructed with compact mode already forced on via injected
-/// `AppPreferences`, so its `NSStatusBar.system.statusItem(...)` branch (the
-/// pre-existing, unchanged standalone path) never runs either.
+/// constructed with a folded default placement via injected `AppPreferences`,
+/// so its `NSStatusBar.system.statusItem(...)` branch (the unchanged standalone
+/// path) never runs either.
 @MainActor
 final class CompactMenuBarControllerTests: XCTestCase {
     private final class DummyHandler: MenuActionHandling {
@@ -25,11 +25,11 @@ final class CompactMenuBarControllerTests: XCTestCase {
     }
 
     /// An `AppPreferences` backed by an ephemeral, uniquely-named suite (never
-    /// the real `UserDefaults.standard`) with compact mode already on.
+    /// the real `UserDefaults.standard`) whose default placement is folded.
     private func makeCompactPrefs() -> AppPreferences {
         let defaults = UserDefaults(suiteName: "vee-app-tests-\(UUID().uuidString)")!
         let prefs = AppPreferences(defaults: defaults)
-        prefs.compactMenuBar = true
+        prefs.defaultPlacement = .foldedDefault
         return prefs
     }
 
@@ -186,13 +186,13 @@ final class CompactMenuBarControllerTests: XCTestCase {
 
     // MARK: - Mode-switch notification churn
 
-    /// A "notification storm" where `compactMenuBarDidChangeNotification` fires
-    /// repeatedly without the preference actually changing (e.g. redundant sets
-    /// from rapid, no-op UI churn) must be a no-op every time: `reconcileMode()`
-    /// guards on the live value actually differing from its current surface.
-    /// Only this direction (already-compact, notified again while still compact)
-    /// is safely unit-testable — the actual compact⇄standalone flip always
-    /// creates/removes a real `NSStatusItem` (see the file-level note above).
+    /// A "notification storm" where `barPlacementDidChangeNotification` fires
+    /// repeatedly without any placement actually changing (e.g. redundant sets
+    /// from rapid, no-op UI churn) must be a no-op every time:
+    /// `reconcilePlacement()` guards on the live value actually differing from
+    /// the surface it currently holds. Only this direction (already folded,
+    /// notified again while still folded) is safely unit-testable — a flip to
+    /// `.own` always creates a real `NSStatusItem` (see the file-level note).
     func testRedundantModeChangeNotificationIsIdempotent() {
         let prefs = makeCompactPrefs()
         let compact = CompactMenuBarController(attachesStatusItem: false)
@@ -200,13 +200,13 @@ final class CompactMenuBarControllerTests: XCTestCase {
         let rowBefore = compact.menu.items[0]
 
         for _ in 0..<5 {
-            NotificationCenter.default.post(name: AppPreferences.compactMenuBarDidChangeNotification, object: nil)
+            NotificationCenter.default.post(name: AppPreferences.barPlacementDidChangeNotification, object: nil)
         }
 
         // Notification observers registered with `queue: .main` are dispatched
         // onto the main (serial) queue rather than run synchronously inside
         // `post()`; enqueue a marker after the storm and wait for it so every
-        // `reconcileMode()` call above has actually run before asserting.
+        // `reconcilePlacement()` call above has actually run before asserting.
         let drained = expectation(description: "main queue drained past the notification storm")
         DispatchQueue.main.async { drained.fulfill() }
         wait(for: [drained], timeout: 2)
@@ -218,10 +218,9 @@ final class CompactMenuBarControllerTests: XCTestCase {
 
     // MARK: - Shared-item error roll-up (D11 — a child's ⚠️ was invisible from the menu bar)
 
-    /// Issue #71 ("one icon total"): the shared item is now the ONLY Vee icon
-    /// while compact mode is on, so its normal glyph is the same primary "V"
-    /// circle `MainMenuController`'s own item always showed — not a distinct
-    /// symbol sitting beside it.
+    /// Issue #71 ("one icon total"): this is the ONLY Vee icon, so its normal
+    /// glyph is the same primary "V" circle `MainMenuController`'s own item
+    /// used to show — not a distinct symbol sitting beside it.
     func testSharedGlyphDefaultsToThePrimaryAppGlyph() {
         let compact = CompactMenuBarController(attachesStatusItem: false)
         XCTAssertEqual(compact.currentSymbolName, CompactMenuBarController.normalSymbolName)
@@ -367,32 +366,20 @@ final class CompactMenuBarControllerTests: XCTestCase {
         compact.removeEntry(entry)
     }
 
-    /// A live toggle firing the mode-change notification repeatedly (or the
-    /// user flipping Settings back and forth) must never duplicate the footer.
-    func testFooterPresentExactlyOnceAfterMultipleInstallRemoveToggles() {
+    /// The footer is installed once at launch and never removed, so the only
+    /// way it can go wrong is being installed twice — which must not duplicate
+    /// the app-control rows.
+    func testRepeatedInstallLeavesExactlyOneFooter() {
         let compact = CompactMenuBarController(attachesStatusItem: false)
         let target = makeMainMenuTarget()
 
         compact.installFooter(target: target)
         let countAfterFirstInstall = compact.menu.items.count
         compact.installFooter(target: target) // redundant install: no-op
-        compact.removeFooter()
-        compact.removeFooter() // redundant remove: no-op
         compact.installFooter(target: target)
-        compact.installFooter(target: target) // redundant install again: no-op
 
-        XCTAssertEqual(compact.menu.items.count, countAfterFirstInstall, "repeated toggles must leave exactly one footer, never zero or two")
+        XCTAssertEqual(compact.menu.items.count, countAfterFirstInstall, "repeated installs must leave exactly one footer, never two")
         XCTAssertEqual(compact.menu.items.dropFirst().map(\.title), target.menu.items.map(\.title), "still exactly one copy of the app-control rows, not a duplicated set")
-    }
-
-    func testRemoveFooterTearsDownTheSharedItemWhenNoRowsRemain() {
-        let compact = CompactMenuBarController(attachesStatusItem: false)
-        let target = makeMainMenuTarget()
-        compact.installFooter(target: target)
-
-        compact.removeFooter()
-
-        XCTAssertTrue(compact.menu.items.isEmpty, "removing the footer with zero plugin rows must leave nothing in the shared menu")
     }
 
     /// The core anchoring guarantee: rows insert ABOVE the footer regardless
@@ -433,20 +420,100 @@ final class CompactMenuBarControllerTests: XCTestCase {
         withExtendedLifetime((b, c)) {}
     }
 
-    /// The shared item must never tear down while plugin rows are still
-    /// attached, even if the footer is removed first (compact mode turning
-    /// off doesn't necessarily race ahead of every plugin's own reconcile).
-    func testRemoveFooterLeavesTheSharedItemUpWhilePluginRowsRemain() {
+    // MARK: - Hidden placement (no menu-bar surface at all)
+
+    /// `.hidden` must take a plugin out of the menu bar without taking anything
+    /// else with it: no row here, no status item, and — the part that separates
+    /// it from `<vee.surface>widget` — a controller that still renders, so the
+    /// detached window, the search panel, and the widget scrape carry on.
+    func testHiddenPlacementAddsNoRow() {
+        let prefs = makeCompactPrefs()
+        prefs.setPlacement(BarPlacement.hidden, id: "hidden.sh")
+        let compact = CompactMenuBarController(attachesStatusItem: false)
+
+        let controller = StatusItemController(
+            pluginName: "Hidden", pluginID: "hidden.sh", handler: DummyHandler(),
+            onRefresh: {}, prefs: prefs, compactController: compact
+        )
+        controller.render(output(title: "42%"))
+
+        XCTAssertEqual(compact.menu.items.count, 0, "a hidden plugin must occupy no row in the home item")
+        withExtendedLifetime(controller) {}
+    }
+
+    /// Rendering while hidden must not throw away the render: the moment the
+    /// plugin is folded again it shows its current content rather than waiting
+    /// for the next refresh.
+    func testUnhidingPaintsTheStoredRenderImmediately() {
+        let prefs = makeCompactPrefs()
+        prefs.setPlacement(BarPlacement.hidden, id: "hidden.sh")
+        let compact = CompactMenuBarController(attachesStatusItem: false)
+        let controller = StatusItemController(
+            pluginName: "Hidden", pluginID: "hidden.sh", handler: DummyHandler(),
+            onRefresh: {}, prefs: prefs, compactController: compact
+        )
+        controller.render(output(title: "42%", itemTitle: "Detail"))
+
+        prefs.setPlacement(BarPlacement.foldedDefault, id: "hidden.sh")
+        let drained = expectation(description: "placement notification delivered")
+        DispatchQueue.main.async { drained.fulfill() }
+        wait(for: [drained], timeout: 2)
+
+        XCTAssertEqual(compact.menu.items.count, 1, "un-hiding must add the plugin's row")
+        XCTAssertEqual(compact.menu.items[0].attributedTitle?.string, "42%", "the row must show the render that arrived while it was hidden, not wait for the next refresh")
+        XCTAssertEqual(compact.menu.items[0].submenu?.items.first?.title, "Detail")
+        withExtendedLifetime(controller) {}
+    }
+
+    /// A plugin erroring while folded and then hidden must not leave the home
+    /// item's warning glyph stuck on: its row is gone, so its share of the
+    /// roll-up must go with it.
+    func testHidingAnErroredPluginClearsItsShareOfTheGlyph() {
         let prefs = makeCompactPrefs()
         let compact = CompactMenuBarController(attachesStatusItem: false)
-        let target = makeMainMenuTarget()
-        let a = makeController(prefs: prefs, compact: compact, name: "A")
+        let controller = StatusItemController(
+            pluginName: "Flaky", pluginID: "flaky.sh", handler: DummyHandler(),
+            onRefresh: {}, prefs: prefs, compactController: compact
+        )
+        controller.renderError("boom")
+        XCTAssertEqual(compact.currentSymbolName, CompactMenuBarController.errorSymbolName)
+
+        prefs.setPlacement(BarPlacement.hidden, id: "flaky.sh")
+        let drained = expectation(description: "placement notification delivered")
+        DispatchQueue.main.async { drained.fulfill() }
+        wait(for: [drained], timeout: 2)
+
+        XCTAssertEqual(compact.menu.items.count, 0)
+        XCTAssertEqual(compact.currentSymbolName, CompactMenuBarController.normalSymbolName, "hiding an errored plugin must not leave the home item's badge stuck on")
+        withExtendedLifetime(controller) {}
+    }
+
+    /// A per-plugin override must move only its own plugin: the notification is
+    /// payload-free and every controller re-reads, so a sibling must neither
+    /// move nor have its row rebuilt (which would close it if open).
+    func testPlacingOnePluginLeavesASiblingsRowUntouched() {
+        let prefs = makeCompactPrefs()
+        let compact = CompactMenuBarController(attachesStatusItem: false)
+        let a = StatusItemController(
+            pluginName: "A", pluginID: "a.sh", handler: DummyHandler(),
+            onRefresh: {}, prefs: prefs, compactController: compact
+        )
+        let b = StatusItemController(
+            pluginName: "B", pluginID: "b.sh", handler: DummyHandler(),
+            onRefresh: {}, prefs: prefs, compactController: compact
+        )
         a.render(output(title: "A-title"))
-        compact.installFooter(target: target)
+        b.render(output(title: "B-title"))
+        let bRowBefore = compact.menu.items[1]
 
-        compact.removeFooter()
+        prefs.setPlacement(BarPlacement.hidden, id: "a.sh")
+        let drained = expectation(description: "placement notification delivered")
+        DispatchQueue.main.async { drained.fulfill() }
+        wait(for: [drained], timeout: 2)
 
-        XCTAssertEqual(compact.menu.items.map { $0.attributedTitle?.string }, ["A-title"], "the row must survive footer removal untouched")
-        withExtendedLifetime(a) {}
+        XCTAssertEqual(compact.menu.items.count, 1, "only A moves out")
+        XCTAssertIdentical(compact.menu.items[0], bRowBefore, "B's row must be the same instance, not rebuilt")
+        XCTAssertEqual(compact.menu.items[0].attributedTitle?.string, "B-title")
+        withExtendedLifetime((a, b)) {}
     }
 }

@@ -2,21 +2,20 @@ import XCTest
 import AppKit
 @testable import VeeApp
 
-/// `MainMenuController` — the always-present "Vee" app-controls item.
+/// `MainMenuController` — Vee's app-controls rows and the `@objc` target
+/// behind them.
 ///
-/// Issue #71 follow-up ("one icon total" in compact mode): while
-/// `AppPreferences.compactMenuBar` is on, this controller's own item is
-/// hidden and its rows fold into `CompactMenuBarController`'s shared icon as
-/// a footer instead (`AppController.applyCompactMode`,
-/// `CompactMenuBarController.installFooter`) — see
-/// `CompactMenuBarControllerTests`'s "App-controls footer" section for that
-/// side.
+/// It owns no status item: there is exactly one Vee icon, always present, and
+/// `CompactMenuBarController` owns it and hosts these rows as its footer
+/// (`installFooter`) — see `CompactMenuBarControllerTests`'s "App-controls
+/// footer" section for that side. What these tests pin down is the row content
+/// and the callbacks, which both surfaces share through `buildAppItems`.
 ///
-/// These tests exercise this controller at the model level via
-/// `attachesStatusItem: false` — the same seam `CompactMenuBarControllerTests`
-/// uses to never touch `NSApplication.shared`/`NSStatusBar` (unsafe from a
-/// unit test: it rebinds the MainActor executor process-wide and starves
-/// other suites under CI load).
+/// `attachesStatusItem: false` is retained on the initializer for source
+/// compatibility and is now inert — this controller never touches
+/// `NSApplication.shared`/`NSStatusBar` under any value (unsafe from a unit
+/// test: it rebinds the MainActor executor process-wide and starves other
+/// suites under CI load).
 @MainActor
 final class MainMenuControllerTests: XCTestCase {
     private struct Recorder {
@@ -48,22 +47,6 @@ final class MainMenuControllerTests: XCTestCase {
             return
         }
         _ = target.perform(action, with: item)
-    }
-
-    // MARK: - Visibility (hidden while compact mode folds this under the shared icon)
-
-    func testDefaultsVisible() {
-        XCTAssertTrue(makeController().isVisible, "the app item must be visible by default — zero behavior change until compact mode is on")
-    }
-
-    func testSetVisibleTracksTheRequestWithNoRealStatusItem() {
-        let controller = makeController()
-
-        controller.setVisible(false)
-        XCTAssertFalse(controller.isVisible)
-
-        controller.setVisible(true)
-        XCTAssertTrue(controller.isVisible)
     }
 
     // MARK: - buildAppItems (the seam CompactMenuBarController's footer reuses)

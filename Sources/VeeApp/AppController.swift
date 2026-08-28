@@ -54,11 +54,6 @@ public final class AppController: NSObject, NSApplicationDelegate {
     /// unreliable/prompts (there's no entitlement/signing for it there).
     private let secretStoreFactory: (PluginID) -> SecretStoring
 
-    /// Live "combine everything into one menu bar item" toggle (issue #71 —
-    /// one icon total in compact mode, not two side by side). Removed at
-    /// `applicationWillTerminate` for symmetry with the app's other observers.
-    private var compactModeObserverToken: NSObjectProtocol?
-
     /// The app-level "bring every detached window to the front" hotkey: the
     /// `GlobalHotKeys` token while one is bound, and what binding it did — the
     /// status General settings shows. Unbound by default, so most launches
@@ -147,14 +142,12 @@ public final class AppController: NSObject, NSApplicationDelegate {
             onRefreshAll: { [weak self] in self?.refreshAll() },
             onOpenFolder: { [weak self] in self?.openFolder() }
         )
-        // Issue #71 ("one icon total"): fold the app item's own controls under
-        // the compact item's shared icon when compact mode is already on at
-        // launch, and keep reconciling live afterward — see `applyCompactMode`.
-        applyCompactMode(prefs.compactMenuBar)
-        compactModeObserverToken = NotificationCenter.default.addObserver(
-            forName: AppPreferences.compactMenuBarDidChangeNotification, object: nil, queue: .main
-        ) { [weak self] _ in
-            MainActor.assumeIsolated { self?.applyCompactMode(self?.prefs.compactMenuBar ?? false) }
+        // One Vee icon, always: `CompactMenuBarController.shared` owns it and
+        // hosts both the folded plugins' rows and `mainMenu`'s app controls.
+        // Installed once, unconditionally — there is no longer a mode in which
+        // the two Vee items swap places, so nothing to reconcile afterward.
+        if let mainMenu {
+            CompactMenuBarController.shared.installFooter(target: mainMenu)
         }
         registerFocusWindowsHotKey()
         // Register the notification delegate + action categories now, but defer
@@ -230,24 +223,6 @@ public final class AppController: NSObject, NSApplicationDelegate {
             Task { @MainActor in self?.reload() }
         }
         watcher?.start()
-    }
-
-    /// Reconciles the app item's visibility and the compact item's
-    /// app-controls footer against the live "combine everything into one menu
-    /// bar item" preference (issue #71 — one icon total, not two side by
-    /// side): compact on folds `mainMenu`'s own controls under
-    /// `CompactMenuBarController.shared`'s footer and hides its standalone
-    /// item; compact off reverses both. Both directions are idempotent — the
-    /// underlying calls all no-op on a repeated same-state call — so a
-    /// redundant notification can never leak an item or duplicate the footer.
-    private func applyCompactMode(_ compact: Bool) {
-        mainMenu?.setVisible(!compact)
-        guard let mainMenu else { return }
-        if compact {
-            CompactMenuBarController.shared.installFooter(target: mainMenu)
-        } else {
-            CompactMenuBarController.shared.removeFooter()
-        }
     }
 
     // MARK: - App-level "bring every window to the front" hotkey
@@ -332,7 +307,6 @@ public final class AppController: NSObject, NSApplicationDelegate {
         // exit (reparented to launchd, still running).
         coordinators.values.forEach { $0.stop() }
         ephemerals.values.forEach { $0.remove() }
-        if let compactModeObserverToken { NotificationCenter.default.removeObserver(compactModeObserverToken) }
         wakeMonitor?.stop()
         watcher?.stop()
         // Symmetry with registerControlRefreshObserver: drop the Darwin observer.
@@ -671,6 +645,7 @@ public final class AppController: NSObject, NSApplicationDelegate {
         var candidates = prefs.disabledIDs()
             .union(prefs.hotkeyDisabledIDs())
             .union(prefs.hotkeyBindingIDs())
+            .union(prefs.placementIDs())
             .union(prefs.secretPluginIDs())
             .union(provenanceStore.all().keys)
         // `.vars.json` sidecars live on disk next to their plugin but are
@@ -871,6 +846,14 @@ public final class AppController: NSObject, NSApplicationDelegate {
             onReveal: { [weak self] id in self?.reveal(id) },
             onSettings: { [weak self] id in self?.coordinators[id]?.showSettings() },
             onDebug: { [weak self] id in self?.coordinators[id]?.showDebugConsole() },
+            onRefresh: { [weak self] id in self?.coordinators[id]?.forceRefresh() },
+            onOpenWindow: { [weak self] id in self?.coordinators[id]?.openWindow() },
+            defaultPlacement: prefs.defaultPlacement,
+            // Writing the preference is the whole action: every running
+            // controller re-reads its own plugin's placement off the resulting
+            // notification (`StatusItemController.reconcilePlacement`), so this
+            // needs no per-plugin plumbing of its own.
+            onSetPlacement: { [weak self] id, placement in self?.prefs.setPlacement(placement, id: id) },
             onDelete: { [weak self] id in self?.deletePlugin(id) },
             onDiscover: { [weak self] in self?.openBrowser() },
             onLaunchAtLogin: { enabled in LoginItemManager.setEnabled(enabled) },
@@ -1145,6 +1128,9 @@ public final class AppController: NSObject, NSApplicationDelegate {
         let isHotkeyDisabled: Bool
         let hotkeyBinding: String?
         let lastError: String?
+        /// The user's placement override, or `nil` when this plugin follows the
+        /// app-wide default — read on the main actor with the other prefs.
+        let placement: BarPlacement?
     }
 
     /// Gathers the row inputs on the main actor (cheap: directory listing +
@@ -1161,7 +1147,8 @@ public final class AppController: NSObject, NSApplicationDelegate {
                 isDisabled: prefs.isDisabled(id),
                 isHotkeyDisabled: prefs.isHotkeyDisabled(id),
                 hotkeyBinding: prefs.hotkeyBinding(id),
-                lastError: coordinators[id]?.displayError
+                lastError: coordinators[id]?.displayError,
+                placement: prefs.placementOverride(id)
             )
         }
     }
@@ -1204,7 +1191,8 @@ public final class AppController: NSObject, NSApplicationDelegate {
                 hasSettings: !header.vars.isEmpty || !declaredFeatures.isEmpty,
                 features: PluginFeatures(searchPanel: header.filter, hotkey: effectiveHotkey),
                 lastError: input.lastError,
-                surface: header.surface
+                surface: header.surface,
+                placement: input.placement
             )
         }
     }

@@ -113,6 +113,9 @@ final class PluginCoordinator {
         } else {
             self.controller = StatusItemController(
                 pluginName: plugin.filename.name,
+                // Placement is stored per plugin ID; without it this controller
+                // could only ever follow the app-wide default.
+                pluginID: plugin.id.rawValue,
                 handler: AppActionDispatcher(runner: SystemProcessRunner(), baseEnvironment: baseEnvironment) { [weak self] in self?.refresh() },
                 hasSettings: !header.vars.isEmpty || !features.isEmpty,
                 trustSummary: trustSummary,
@@ -172,6 +175,13 @@ final class PluginCoordinator {
 
     /// Opens this plugin's debug console (wired to the notification "Open Log" action).
     func showDebugConsole() { showDebug() }
+
+    /// Opens this plugin's detached window. Reachable without the plugin's own
+    /// dropdown, which a `.hidden` plugin does not have — the Plugin Manager
+    /// row is that plugin's route to every per-plugin action.
+    /// A `<vee.surface>widget` plugin has no controller and so no menu tree to
+    /// show; this is a no-op for it, as every other per-plugin action already is.
+    func openWindow() { controller?.openDetachedWindow() }
 
     /// Whether the plugin has anything to configure — declared `<xbar.var>`s or
     /// Vee-native features (search panel / hotkey). Mirrors the `hasSettings`

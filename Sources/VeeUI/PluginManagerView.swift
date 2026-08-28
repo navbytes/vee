@@ -1,5 +1,6 @@
 import SwiftUI
 import VeePluginFormat
+import VeePreferences
 import VeeTrust
 
 /// One row in the plugin manager.
@@ -27,8 +28,13 @@ public struct PluginManagerRow: Identifiable, Sendable {
     /// widget-only plugin — which has no menu-bar item — is still visible and
     /// identifiable in the Manager.
     public var surface: HeaderMetadata.WidgetSurface
+    /// Where the user has placed this plugin in the menu bar, or `nil` when it
+    /// follows the app-wide default. The *override* rather than the resolved
+    /// placement, so the row can offer "Use Default" honestly and so a plugin
+    /// following the default moves with it.
+    public var placement: BarPlacement?
 
-    public init(id: String, name: String, interval: String, trust: String, trustLevel: TrustLevel = .undeclared, isEnabled: Bool, hasSettings: Bool, features: PluginFeatures = PluginFeatures(), lastError: String? = nil, surface: HeaderMetadata.WidgetSurface = .menu) {
+    public init(id: String, name: String, interval: String, trust: String, trustLevel: TrustLevel = .undeclared, isEnabled: Bool, hasSettings: Bool, features: PluginFeatures = PluginFeatures(), lastError: String? = nil, surface: HeaderMetadata.WidgetSurface = .menu, placement: BarPlacement? = nil) {
         self.id = id
         self.name = name
         self.interval = interval
@@ -39,6 +45,7 @@ public struct PluginManagerRow: Identifiable, Sendable {
         self.features = features
         self.lastError = lastError
         self.surface = surface
+        self.placement = placement
     }
 }
 
@@ -53,11 +60,23 @@ public final class PluginManagerModel: ObservableObject {
     @Published public var isLoaded: Bool = false
     @Published public var currentDirectory: String
     @Published public var launchAtLogin: Bool
+    /// The app-wide default placement, so a row following it can name what
+    /// "Use Default" actually means rather than saying it abstractly.
+    @Published public var defaultPlacement: BarPlacement
 
     public var onToggleEnabled: (String, Bool) -> Void
     public var onReveal: (String) -> Void
     public var onSettings: (String) -> Void
     public var onDebug: (String) -> Void
+    /// Re-runs one plugin. Reachable here because a plugin hidden from the menu
+    /// bar has no dropdown of its own to offer it.
+    public var onRefresh: (String) -> Void
+    /// Opens one plugin's detached window — the same reason as `onRefresh`, and
+    /// the guarantee `detached-plugin-windows` makes for *every* plugin.
+    public var onOpenWindow: (String) -> Void
+    /// Places one plugin in the menu bar, or with `nil` returns it to the
+    /// app-wide default.
+    public var onSetPlacement: (String, BarPlacement?) -> Void
     public var onDelete: (String) -> Void
     public var onDiscover: () -> Void
     public var onLaunchAtLogin: (Bool) -> Void
@@ -73,6 +92,10 @@ public final class PluginManagerModel: ObservableObject {
         onReveal: @escaping (String) -> Void,
         onSettings: @escaping (String) -> Void,
         onDebug: @escaping (String) -> Void = { _ in },
+        onRefresh: @escaping (String) -> Void = { _ in },
+        onOpenWindow: @escaping (String) -> Void = { _ in },
+        defaultPlacement: BarPlacement = .own,
+        onSetPlacement: @escaping (String, BarPlacement?) -> Void = { _, _ in },
         onDelete: @escaping (String) -> Void = { _ in },
         onDiscover: @escaping () -> Void = {},
         onLaunchAtLogin: @escaping (Bool) -> Void,
@@ -87,6 +110,10 @@ public final class PluginManagerModel: ObservableObject {
         self.onReveal = onReveal
         self.onSettings = onSettings
         self.onDebug = onDebug
+        self.onRefresh = onRefresh
+        self.onOpenWindow = onOpenWindow
+        self.defaultPlacement = defaultPlacement
+        self.onSetPlacement = onSetPlacement
         self.onDelete = onDelete
         self.onDiscover = onDiscover
         self.onLaunchAtLogin = onLaunchAtLogin
@@ -108,6 +135,15 @@ public final class PluginManagerModel: ObservableObject {
     public func setError(_ error: String?, id: String) {
         guard let idx = rows.firstIndex(where: { $0.id == id }), rows[idx].lastError != error else { return }
         rows[idx].lastError = error
+    }
+
+    /// Places one plugin, reflecting it in the row immediately for responsive
+    /// feedback before telling the app — the same shape `delete(_:)` uses.
+    func setPlacement(_ placement: BarPlacement?, id: String) {
+        if let idx = rows.firstIndex(where: { $0.id == id }) {
+            rows[idx].placement = placement
+        }
+        onSetPlacement(id, placement)
     }
 
     func enabledBinding(_ id: String) -> Binding<Bool> {
@@ -216,6 +252,51 @@ struct ManagerRow: View {
     @State private var hovering = false
     @State private var confirmingDelete = false
 
+    /// Where this plugin sits in the menu bar. The checkmark tracks the row's
+    /// *override* rather than its resolved placement, so "Use Default" reads
+    /// honestly: a plugin that follows the default is checked there, and moves
+    /// when the default moves.
+    private var placementMenu: some View {
+        Menu {
+            placementRow("Its Own Menu Bar Item", BarPlacement.own)
+            placementRow("Combined Under Vee", BarPlacement.foldedDefault)
+            placementRow("Hidden From Menu Bar", BarPlacement.hidden)
+            Divider()
+            placementRow(defaultPlacementLabel, nil)
+        } label: {
+            Label("Menu Bar", systemImage: placementSymbol)
+        }
+    }
+
+    private func placementRow(_ title: String, _ placement: BarPlacement?) -> some View {
+        let isCurrent = row.placement == placement
+        return Button {
+            model.setPlacement(placement, id: row.id)
+        } label: {
+            if isCurrent {
+                Label(title, systemImage: "checkmark")
+            } else {
+                Text(title)
+            }
+        }
+    }
+
+    private var defaultPlacementLabel: String {
+        switch model.defaultPlacement {
+        case .own: "Use Default (Its Own Item)"
+        case .folded: "Use Default (Combined)"
+        case .hidden: "Use Default (Hidden)"
+        }
+    }
+
+    private var placementSymbol: String {
+        switch row.placement ?? model.defaultPlacement {
+        case .own: "menubar.rectangle"
+        case .folded: "rectangle.stack"
+        case .hidden: "eye.slash"
+        }
+    }
+
     var body: some View {
         HStack(spacing: 11) {
             if navigatesToDetail {
@@ -226,11 +307,23 @@ struct ManagerRow: View {
             }
 
             Menu {
+                // Every per-plugin action lives here, not only the ones the
+                // dropdown lacks: a plugin hidden from the menu bar has no
+                // dropdown at all, and this row is its route to all of them.
+                Button { model.onRefresh(row.id) } label: { Label("Refresh", systemImage: "arrow.clockwise") }
+                Button { model.onOpenWindow(row.id) } label: { Label("Open in Window", systemImage: "macwindow") }
                 if row.hasSettings {
                     Button { model.onSettings(row.id) } label: { Label("Settings…", systemImage: "slider.horizontal.3") }
                 }
                 Button { model.onDebug(row.id) } label: { Label("Debug…", systemImage: "ladybug") }
                 Button { model.onReveal(row.id) } label: { Label("Reveal in Finder", systemImage: "folder") }
+                // A widget-only plugin has no menu-bar presence to place — its
+                // author declared it away, and that is not the user's to
+                // override here (see `BarPlacement`).
+                if row.surface != .widget {
+                    Divider()
+                    placementMenu
+                }
                 Divider()
                 Button(role: .destructive) { confirmingDelete = true } label: {
                     Label("Delete…", systemImage: "trash")
