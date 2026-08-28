@@ -15,9 +15,15 @@ For macOS power users and developers who live in the menu bar, **Vee** is a nati
 
 ## Taglines
 
-- **Primary (hero):** Every xbar plugin. None of the memory leaks.
+- **Primary (hero):** Any script. Live in your menu bar.
 - **Secondary (trust):** Run any script in your menu bar. See what it touches first.
-- **Cold audience (no xbar knowledge):** A native macOS app that turns any script into a live menu-bar widget.
+- **Comparison pages only:** Every xbar plugin. None of the memory leaks.
+
+The hero no longer leads with xbar. It read as a migration pitch to the only
+audience that already knew what xbar was, and said nothing to everyone else —
+so the leak claim moved to `/compare/`, where the reader has the context that
+makes it land. Compatibility stays in the sub-headline as a supporting fact,
+not the headline.
 
 ## Messaging pillars (in order)
 

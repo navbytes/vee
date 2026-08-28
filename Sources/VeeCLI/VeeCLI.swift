@@ -325,19 +325,30 @@ public enum VeeCLI {
 
         var findings: [ParseDiagnostic] = []
 
-        // The raw-line linter re-detects some issues the parser also flags (e.g.
-        // unknown params), but with accurate line numbers — whereas the parser's
-        // per-line mapping reports them line-less. So take the linter's findings
-        // first, then add only the parser diagnostics whose message the linter
-        // didn't already cover (deduping by message, since the same mistake
-        // reported by both would otherwise appear twice). Final order is by line.
-        let parsed = OutputParser.parse(raw)
-        let linterFindings = Linter.lint(rawOutput: raw)
-        findings += linterFindings
+        // Structured-JSON output (`{"vee":1,…}`) is a different protocol, and
+        // the text-format linter and parser would scan it as xbar lines — every
+        // literal `|` inside a JSON string value reads as a param separator, so
+        // well-formed JSON came back buried in bogus "unknown parameter" and
+        // "no value" findings. Take the JSON parser's own diagnostics instead.
+        // Every other CLI path already routes through `parseAuto` for exactly
+        // this reason; lint was the one that did not.
+        if let json = JSONOutputParser.parse(raw) {
+            findings = json.diagnostics
+        } else {
+            // The raw-line linter re-detects some issues the parser also flags (e.g.
+            // unknown params), but with accurate line numbers — whereas the parser's
+            // per-line mapping reports them line-less. So take the linter's findings
+            // first, then add only the parser diagnostics whose message the linter
+            // didn't already cover (deduping by message, since the same mistake
+            // reported by both would otherwise appear twice). Final order is by line.
+            let parsed = OutputParser.parse(raw)
+            let linterFindings = Linter.lint(rawOutput: raw)
+            findings += linterFindings
 
-        let linterMessages = Set(linterFindings.map(\.message))
-        for diagnostic in parsed.diagnostics where !linterMessages.contains(diagnostic.message) {
-            findings.append(diagnostic)
+            let linterMessages = Set(linterFindings.map(\.message))
+            for diagnostic in parsed.diagnostics where !linterMessages.contains(diagnostic.message) {
+                findings.append(diagnostic)
+            }
         }
 
         if findings.isEmpty {

@@ -1,118 +1,43 @@
 # Vee
 
-[![Release](https://img.shields.io/github/v/release/navbytes/vee?sort=semver)](https://github.com/navbytes/vee/releases) [![Platform](https://img.shields.io/badge/macOS-26%2B%20(Apple%20Silicon)-black?logo=apple)](#requirements) [![Swift](https://img.shields.io/badge/Swift-6.2-orange?logo=swift)](https://swift.org) [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+[![Release](https://img.shields.io/github/v/release/navbytes/vee?sort=semver)](https://github.com/navbytes/vee/releases) [![Platform](https://img.shields.io/badge/macOS-26%2B%20(Apple%20Silicon)-black?logo=apple)](https://vee.navbytes.io/guide/getting-started/) [![Swift](https://img.shields.io/badge/Swift-6.2-orange?logo=swift)](https://swift.org) [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
-**A native, leak-free macOS menu-bar script runner — the modern successor to [xbar](https://github.com/matryer/xbar) and [SwiftBar](https://github.com/swiftbar/SwiftBar).**
+**A native, leak-free macOS menu-bar script runner.**
 
-> **Every xbar plugin. None of the memory leaks.** Run any script in your menu bar — and see what it touches before you install it.
+Vee runs plugins — any executable, in any language — on a schedule and renders
+their stdout natively. One script can be a menu-bar item, a Notification Center
+widget, a searchable panel, and a window on your desktop; rows pick their own
+surfaces with `visibleOn=`. AppKit throughout, no WebView, no third-party
+dependencies, and a plain-language trust summary that shows what a plugin
+touches before you install it. Existing xbar and SwiftBar plugins run
+unchanged.
 
-Vee runs plugins — any executable, in any language — on a schedule and renders their standard output as menu-bar titles and dropdown menus. Your existing xbar/SwiftBar plugins run unchanged; Vee adds a native AppKit UI, a trust/transparency layer, a built-in plugin catalog, and typed SDKs (TypeScript, Python, Go).
+📖 **[Documentation](https://vee.navbytes.io/guide/getting-started/)** · 🌐 **[vee.navbytes.io](https://vee.navbytes.io)**
 
-<!-- Promo banner. -->
 ![Vee — native macOS menu-bar script runner](docs/assets/og-image.png)
-
-## Screenshots
-
-|  |  |
-|---|---|
-| ![Vee's Discover window showing a category sidebar and a grid of plugin cards, each with a trust chip and an Install button](docs/assets/screenshots/discover.png) | ![The install trust sheet titled "What this plugin can do", listing plain-language capability rows with severity-colored icons and an un-sandboxed footer](docs/assets/screenshots/trust.png) |
-| **Discover** — browse the catalog with trust chips and install in one click. | **Trust at install** — see a plugin's footprint in plain language before it runs. |
-| ![The Plugin Manager showing plugin rows with trust badges and trailing on/off switches, plus a General settings section](docs/assets/screenshots/manager.png) | ![An auto-generated plugin settings form built from declared preferences, including a masked secret field](docs/assets/screenshots/settings.png) |
-| **Plugin Manager** — enable, disable, and review every plugin's trust badges. | **Plugin settings** — typed forms from `<xbar.var>`; secrets masked in the Keychain. |
-| ![A Vee plugin's native Liquid Glass dropdown showing a Macintosh HD row with an inline progress capsule gauge, an Open Disk Utility action, and a submenu](docs/assets/screenshots/menu-dropdown.png) | ![Vee's menu-bar status items showing live disk usage and a clock, each with an SF Symbol](docs/assets/screenshots/menu-bar.png) |
-| **Native dropdown** — a Liquid Glass menu with an inline `progress=` gauge on live data. | **In the menu bar** — each plugin renders its own native status item. |
-
-<sup>The bottom row is a real capture of the shipped build running on macOS 26.</sup>
-
-## Why Vee
-
-- **Native and leak-free** — pure Swift 6.2 / SwiftUI + AppKit (`NSStatusItem`/`NSMenu`), Liquid Glass UI, zero third-party dependencies. No embedded WebView in the menu; subprocess output is drained incrementally and processes are timed out and killed, so long-running use doesn't leak memory.
-- **Runs the existing ecosystem** — the full xbar/SwiftBar plugin protocol (filename intervals, `---`/`--` menus, `|` params, `<xbar.*>`/`<swiftbar.*>` headers, SF Symbols, ANSI, Markdown, streaming, cron) works on day one.
-- **Transparency, not a sandbox** — plugins run un-sandboxed by design (the model requires it), but they can **declare** what they touch via `<vee.*>` tags, and Vee shows a plain-language trust summary before install plus trust badges in the Manager. Advisory, never enforced.
-- **Configuration belongs to the plugin** — `<xbar.var>` declarations become an auto-generated settings form; secret fields are masked and stored in the macOS Keychain. The app never hardcodes service names or credentials.
-- **Discover** — a built-in browser over the shared [`matryer/xbar-plugins`](https://github.com/matryer/xbar-plugins) catalog, with trust chips and one-click install through the trust gate.
-- **Optional typed SDK** — write plugins in TypeScript with `Menu`/`Section` builders; Node runs the `.ts` directly, no build step.
-
-## Requirements
-
-- macOS 26 or later
-- Apple Silicon (arm64) — there is no Intel build
 
 ## Install
 
-Vee is distributed Developer-ID-signed and **notarized**, outside the Mac App Store (the App Store sandbox is incompatible with arbitrary plugin execution).
-
-Vee ships as one binary that is both the menu-bar app and the `vee` CLI, so
-installing gets you both.
-
-**Homebrew (recommended):**
+macOS 26+ on Apple Silicon. Developer-ID-signed and notarized. One binary is
+both the menu-bar app and the `vee` CLI, so installing gets you both.
 
 ```sh
 brew install --cask navbytes/tap/vee
 ```
 
-Puts `Vee.app` in `/Applications` and `vee` on your PATH. `brew upgrade --cask vee`
-picks up new releases.
-
-**Or one line, without Homebrew:**
+Or without Homebrew:
 
 ```sh
 curl -fsSL https://vee.navbytes.io/install.sh | bash
 ```
 
-Same result — app in `/Applications`, `vee` linked into `~/.local/bin` (or
-`/usr/local/bin`). Re-run it to upgrade. Read it first if you would rather not
-pipe a script to a shell: [`scripts/install.sh`](scripts/install.sh).
+Other routes (direct download, `mise` for the CLI only) and the installer's
+options: **[Getting started](https://vee.navbytes.io/guide/getting-started/)**.
 
-The installer takes three options, so you are not stuck with its defaults. Pass
-them after `bash -s --`:
+## Your first plugin
 
-```sh
-# Install per-user instead of system-wide
-curl -fsSL https://vee.navbytes.io/install.sh | bash -s -- --app-dir ~/Applications
-
-# Put the CLI somewhere else on your PATH
-curl -fsSL https://vee.navbytes.io/install.sh | bash -s -- --bin-dir /opt/homebrew/bin
-
-# Pin a specific release rather than the latest
-curl -fsSL https://vee.navbytes.io/install.sh | bash -s -- --version v0.2.0
-```
-
-| Option | Environment | Default |
-| ------ | ----------- | ------- |
-| `--app-dir DIR` | `VEE_APP_DIR` | `/Applications` |
-| `--bin-dir DIR` | `VEE_BIN_DIR` | first writable of `~/.local/bin`, `/usr/local/bin` |
-| `--version TAG` | `VEE_VERSION` | the latest release |
-
-> **Not** `VEE_APP_DIR=… curl … | bash`. That sets the variable for `curl`, not
-> for the `bash` reading the script, so it is silently ignored. Use a flag, or
-> `export` the variable first.
-
-**Just the CLI, via [mise](https://mise.jdx.dev):**
-
-```sh
-mise use github:navbytes/vee
-```
-
-This is the CLI only — `vee render`, `vee lint`, `vee dev`, `vee new`. mise puts
-binaries on your PATH; it does not install the menu-bar app. Use it when you want
-the CLI pinned per-project, or on a machine that only needs the tooling.
-
-**Or download directly:**
-
-1. Download the latest `Vee.app` from [GitHub Releases](https://github.com/navbytes/vee/releases).
-2. Drag it into `/Applications`.
-3. Launch it. On first launch, if Gatekeeper prompts, right-click `Vee.app` → **Open** and confirm.
-
-## Quick start — your first plugin
-
-Plugins live in `~/Library/Application Support/Vee/plugins` by default (Vee creates this folder on first launch; change it in the Plugin Manager → **Choose Folder**). A plugin's filename encodes its refresh interval: `name.INTERVAL.ext`.
-
-Create the folder if you haven't launched Vee yet, then add `hello.5s.sh`:
-
-```sh
-mkdir -p ~/Library/Application\ Support/Vee/plugins
-```
+A plugin's filename encodes its refresh interval — `name.INTERVAL.ext`. Drop
+`hello.5s.sh` into `~/Library/Application Support/Vee/plugins`:
 
 ```sh
 #!/bin/bash
@@ -122,117 +47,45 @@ echo "It works!"
 echo "Refresh | refresh=true"
 ```
 
-Make it executable:
+`chmod +x` it. The line above `---` is the menu-bar title; everything below is
+the dropdown. Full reference: **[Plugin authoring](https://vee.navbytes.io/guide/plugin-authoring/)**.
 
-```sh
-chmod +x ~/Library/Application\ Support/Vee/plugins/hello.5s.sh
-```
-
-The `.5s` runs it every 5 seconds. The line before `---` is the menu-bar title; everything after is the dropdown. Full reference: **[Plugin authoring](docs/_content/plugin-authoring.md)**.
-
-## Migrating from SwiftBar / xbar
-
-Point Vee at your existing plugins folder (Plugin Manager → **Choose Folder**) — that's the whole migration. The entire xbar/SwiftBar protocol is supported, and Vee injects the same environment variables (`XBARDarkMode`, `SWIFTBAR_*`, `OS_*`), so plugins run unchanged. Caveats: macOS 26+ and Apple Silicon only. See **[Migrating from SwiftBar/xbar](docs/_content/migrating-from-swiftbar.md)**.
-
-## Features
-
-- xbar/SwiftBar-compatible plugin format (titles, submenus, `|` params, metadata headers)
-- Filename refresh intervals (`ms`/`s`/`m`/`h`/`d`) and `<swiftbar.schedule>` cron
-- SF Symbols, ANSI color, inline Markdown, emoji shortcodes
-- Streaming plugins (`~~~`) with restart/backoff
-- Rich menu rows: `progress=` gauges, `sparkline=` trends, `pie=`/`donut=`/`stackedbar=` share charts, and live `toggle=`/`slider=` controls — drawn with AppKit and Swift Charts, no WebView
-- Detached plugin windows: *Open in Window* leaves a plugin's whole menu open on the desktop, live on its own refresh interval
-- Searchable filter panel (opt-in `<vee.filter>`): fuzzy-search a plugin's whole nested menu from a Spotlight-like popover, with an optional global hotkey (`<vee.shortcut>`)
-- Declared typed preferences → auto-generated forms; secrets in the Keychain
-- `<vee.*>` trust declarations → plain-language trust summary + badges
-- Discover: catalog browser with one-click, trust-gated install — over the public catalog or your own [custom/enterprise store](docs/_content/enterprise-store.md) (a GitHub repo, GitHub Enterprise, static host, or air-gapped mirror)
-- Plugin Manager: enable/disable, per-plugin settings, reveal in Finder, choose folder, launch-at-login, refresh all
-- `vee://` and `swiftbar://` URL actions
-- Desktop **widgets** (Notification Center): a configurable per-plugin status tile with gauges/sparklines, a **Vee Health** roll-up, and a Control Center **Refresh Vee** control
-- Zero-dependency typed SDKs (TypeScript, Python, Go) with golden-fixture drift guards
-- `vee dev` save-driven authoring loop: watch a file, re-render on every save, optionally preview it as a real menu-bar item
+Already have xbar or SwiftBar plugins? Point Vee at your existing folder
+(Plugin Manager → **Choose Folder**) — that is the whole migration.
 
 ## Documentation
 
-- [Getting started](docs/_content/getting-started.md)
-- [Migrating from SwiftBar/xbar](docs/_content/migrating-from-swiftbar.md)
-- [Plugin authoring reference](docs/_content/plugin-authoring.md)
-- [Trust model](docs/_content/trust-model.md)
-- [Custom plugin stores (enterprise)](docs/_content/enterprise-store.md)
-- [Preferences](docs/_content/preferences.md)
-- [Plugin SDKs (TypeScript, Python, Go)](docs/_content/sdk.md)
-- [JSON output format](docs/_content/json-output.md)
-- [CLI and URL actions](docs/_content/cli-and-urls.md)
-- [Architecture (for contributors)](ARCHITECTURE.md)
-- [FAQ](docs/_content/faq.md)
-- [Troubleshooting](docs/_content/troubleshooting.md)
+| | |
+|---|---|
+| [Getting started](https://vee.navbytes.io/guide/getting-started/) | Install, first plugin, the basics. |
+| [Plugin authoring](https://vee.navbytes.io/guide/plugin-authoring/) | The full text protocol: params, submenus, headers, surface targeting (`visibleOn=`), streaming, cron. |
+| [JSON output](https://vee.navbytes.io/guide/json-output/) | The recommended format for new plugins — typed, no `\|`-quoting. |
+| [Plugin SDKs](https://vee.navbytes.io/guide/sdk/) | Zero-dependency TypeScript, Python, and Go builders. |
+| [Rich params & charts](https://vee.navbytes.io/guide/charts/) | `progress=`, `sparkline=`, pie/donut/stacked-bar, `toggle=`, `slider=`. |
+| [Widgets](https://vee.navbytes.io/guide/widgets/) | Notification Center tiles and the Vee Health roll-up. |
+| [Preferences](https://vee.navbytes.io/guide/preferences/) | `<xbar.var>` → typed settings forms; secrets in the Keychain. |
+| [Trust model](https://vee.navbytes.io/guide/trust-model/) | `<vee.*>` declarations and the install-time trust summary. |
+| [CLI & URL actions](https://vee.navbytes.io/guide/cli-and-urls/) | `vee render`, `vee lint`, `vee dev`, `vee new`, `vee://`. |
+| [Migrating from SwiftBar/xbar](https://vee.navbytes.io/guide/migrating-from-swiftbar/) | What carries over, and what does not. |
+| [Custom plugin stores](https://vee.navbytes.io/guide/enterprise-store/) | Run Discover against your own catalog, signed and pinned. |
+| [Troubleshooting](https://vee.navbytes.io/guide/troubleshooting/) · [FAQ](https://vee.navbytes.io/guide/faq/) | When something does not work. |
+| [Architecture](ARCHITECTURE.md) · [Contributing](CONTRIBUTING.md) | For contributors. |
 
-## Writing plugins
-
-A plugin is any executable that prints text to stdout — bash, Python, Ruby, a compiled binary, anything. For a **new** plugin, printing Vee's **[structured-JSON format](docs/_content/json-output.md)** (`{"vee":1,…}`) is the recommended way to start: typed booleans and numbers, no `|`-param quoting, and clean nesting for submenus. The xbar/SwiftBar text protocol is still fully supported — it's how every existing xbar/SwiftBar plugin keeps working unchanged — and is documented in full in the **[plugin authoring reference](docs/_content/plugin-authoring.md)**. See [`plugins/showcase/`](plugins/showcase/) for ready-to-run examples of both, including [`kitchen-sink.1m.sh`](plugins/showcase/kitchen-sink.1m.sh), one file exercising every JSON field.
-
-Download and run that one file to see everything — every JSON field in one plugin:
-
-```sh
-curl -o ~/Library/Application\ Support/Vee/plugins/kitchen-sink.1m.sh \
-  https://raw.githubusercontent.com/navbytes/vee/main/plugins/showcase/kitchen-sink.1m.sh
-chmod +x ~/Library/Application\ Support/Vee/plugins/kitchen-sink.1m.sh
-```
-
-For the edit loop, keep `vee dev` in a split terminal beside your editor — it re-runs the file and repaints the menu on every save:
-
-```sh
-vee dev ./cpu.10s.sh            # run it and re-render on save
-vee dev --text menu.txt         # preview protocol text, executing nothing
-vee dev --push ./cpu.10s.sh     # also show each save as a real status item
-vee lint --format compact FILE  # diagnostics your editor can place on a line
-```
-
-## Typed SDKs (TypeScript, Python, Go)
-
-Prefer typed builders to hand-formatting text? Vee ships zero-dependency SDKs in three languages, each with `Menu`/`Section` builders and typed builders for the rich params (`sparkline`/`toggle`/`slider`/`progress`/`chart`) so quoting and escaping are handled for you:
-
-- **[TypeScript](docs/_content/sdk.md)** ([`plugins/`](plugins/)) — Node 24+ runs the `.ts` directly, no build step.
-- **[TypeScript](plugins/typescript/README.md)** ([`plugins/typescript/`](plugins/typescript/)) — zero-dep, Node runs it directly.
-- **[Python](plugins/python/README.md)** ([`plugins/python/`](plugins/python/)) — standard library only.
-- **[Go](plugins/go/README.md)** ([`plugins/go/`](plugins/go/)) — standard library only.
-
-A golden-fixture drift guard shared byte-for-byte across all three keeps every SDK and the Swift parser in lockstep.
-
-## Trust model
-
-Vee runs plugins un-sandboxed with your privileges — a real sandbox would break the plugins people want to run, which is why apps in this category ship outside the App Store. Instead of pretending to isolate plugins, Vee makes them **transparent**: authors declare network domains, filesystem paths, secrets, and external binaries via `<vee.*>` tags, and Vee shows a plain-language summary before install and trust badges in the Manager. It's advisory, never enforced — read the source of anything you don't trust. Details: **[Trust model](docs/_content/trust-model.md)**.
+Ready-to-run examples live in [`plugins/showcase/`](plugins/showcase/) —
+including [`kitchen-sink.1m.sh`](plugins/showcase/kitchen-sink.1m.sh), one file
+exercising every JSON field.
 
 ## Build from source
 
 ```sh
-swift build          # build the libraries + dev executable
-swift test           # run the test suites
-swift run vee        # run the menu-bar app for development
-
-# Build the distributable app bundle:
-xcodegen generate
-xcodebuild -project Vee.xcodeproj -scheme Vee build
+swift build && swift test
+swift run vee                   # run the menu-bar app for development
 ```
 
-Repository layout:
-
-```
-Sources/
-├─ VeeCore/         # primitives: RefreshInterval, PluginFilename, clock, errors
-├─ VeePluginFormat/ # the xbar/SwiftBar output + header parser (pure)
-├─ VeeRuntime/      # discovery, execution (leak-free), scheduling, streaming
-├─ VeeMenu/         # ParsedOutput → NSMenu (colors, ANSI, SF Symbols, actions)
-├─ VeeSearch/       # pure flatten + fuzzy-filter/rank of a plugin's menu tree
-├─ VeePreferences/  # <xbar.var> stores + Keychain secrets
-├─ VeeTrust/        # <vee.*> capability declarations → trust summaries
-├─ VeeCatalog/      # xbar-plugins catalog client + installer
-├─ VeeUI/           # SwiftUI settings + plugin-manager windows
-├─ VeeApp/          # AppKit shell: status items, coordinators, app delegate
-└─ vee/             # executable entry point
-plugins/            # plugin SDKs (TypeScript/Python/Go), showcase plugins, shared fixtures
-```
+The distributable bundle is `xcodegen generate && xcodebuild -project Vee.xcodeproj -scheme Vee build`.
+Module layout and design notes: [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## Contributing & license
 
-Contributions are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md). Vee is open source under the [MIT License](LICENSE).
+Contributions are welcome — see [CONTRIBUTING.md](CONTRIBUTING.md). Vee is open
+source under the [MIT License](LICENSE).

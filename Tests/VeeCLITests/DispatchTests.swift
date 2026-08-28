@@ -51,6 +51,22 @@ final class DispatchTests: XCTestCase {
         XCTAssertEqual(occurrences, 1, "expected a single unknown-param finding, got:\n\(out)")
     }
 
+    /// Regression: JSON output is a different protocol, but lint scanned it
+    /// with the text linter — a literal `|` inside a JSON string value read as
+    /// a param separator, so well-formed JSON came back buried in bogus
+    /// findings. Lint must route JSON to the JSON parser like every other
+    /// command does.
+    func testLintDoesNotScanJSONOutputAsTextProtocol() async {
+        let json = #"""
+        {"vee":1,"title":[{"text":"a | b"}],"items":[{"text":"x | y","href":"https://example.com"}]}
+        """#
+        let fake = FakeRunner(stdout: json + "\n")
+        var out = "", err = ""
+        let code = await VeeCLI.run(["lint", "/tmp/plugin.sh"], runner: fake, out: &out, err: &err)
+        XCTAssertEqual(code, 0, out)
+        XCTAssertTrue(out.contains("No lint findings"), out)
+    }
+
     func testLintCleanOutputExitsZero() async {
         let fake = FakeRunner(stdout: "CPU | color=green\n---\nRefresh | refresh=true\n")
         var out = "", err = ""

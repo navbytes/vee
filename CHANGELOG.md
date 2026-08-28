@@ -6,6 +6,14 @@ All notable changes to Vee are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed
+- **`vee lint` scanned structured-JSON output with the text-protocol linter.**
+  It was the one CLI path still calling `OutputParser.parse` instead of
+  `parseAuto`, so a literal `|` inside a JSON string value was read as a
+  parameter separator and well-formed JSON came back buried in bogus "unknown
+  parameter" findings. Lint now routes JSON to the JSON parser and reports its
+  diagnostics.
+
 ## [0.5.0] - 2026-08-28
 
 Closes twelve findings from an adversarial review of the plugin, deep-link and
