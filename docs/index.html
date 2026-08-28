@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Vee — Native macOS Menu-Bar Script Runner (xbar &amp; SwiftBar compatible)</title>
-  <meta name="description" content="Turn any script into a live macOS menu-bar widget. Native, leak-free, and drop-in compatible with your xbar and SwiftBar plugins. Open source, notarized.">
+  <meta name="description" content="Turn any script into a live macOS menu-bar item, a Notification Center widget, or a window on your desktop. Native, leak-free, and drop-in compatible with your xbar and SwiftBar plugins. Open source, notarized.">
   <link rel="canonical" href="https://navbytes.github.io/vee/">
   <link rel="icon" type="image/svg+xml" href="./assets/favicon.svg">
   <link rel="icon" type="image/png" sizes="32x32" href="./assets/favicon-32.png">
@@ -19,12 +19,12 @@
   <meta property="og:type" content="website">
   <meta property="og:site_name" content="Vee">
   <meta property="og:title" content="Vee — Native macOS Menu-Bar Script Runner">
-  <meta property="og:description" content="Turn any script into a live macOS menu-bar widget. Native, leak-free, and drop-in compatible with your xbar and SwiftBar plugins. Open source, notarized.">
+  <meta property="og:description" content="Turn any script into a live macOS menu-bar item, a Notification Center widget, or a window on your desktop. Native, leak-free, and drop-in compatible with your xbar and SwiftBar plugins. Open source, notarized.">
   <meta property="og:url" content="https://navbytes.github.io/vee/">
   <meta property="og:image" content="https://navbytes.github.io/vee/assets/og-image.png">
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="Vee — Native macOS Menu-Bar Script Runner">
-  <meta name="twitter:description" content="Every xbar plugin. None of the memory leaks. Native, leak-free, and drop-in compatible with your xbar and SwiftBar plugins.">
+  <meta name="twitter:description" content="Turn any script into a live menu-bar item, a Notification Center widget, or a desktop window. Native, leak-free, and it shows what a plugin touches before you install it.">
   <meta name="twitter:image" content="https://navbytes.github.io/vee/assets/og-image.png">
 </head>
 <body>
@@ -60,8 +60,8 @@
     <div class="hero-grid">
       <div class="hero-copy">
         <p class="eyebrow">Native macOS menu-bar script runner</p>
-        <h1><span class="wipe">Every xbar plugin.</span><br><span class="wipe wipe--2 grad-text">None of the memory leaks.</span></h1>
-        <p class="sub">A native macOS app that turns any script into a live menu-bar widget — and tells you what each one touches before you install it.</p>
+        <h1><span class="wipe">Any script.</span><br><span class="wipe wipe--2 grad-text">Live in your menu&nbsp;bar.</span></h1>
+        <p class="sub">One script can be a menu-bar item, a Notification Center widget, and a window on your desktop. Native AppKit, no WebView, no leaks — and a plain-language summary of what a plugin touches before you install it.</p>
         <div class="hero-cta">
           <a class="btn btn-primary magnetic" href="https://github.com/navbytes/vee/releases" rel="noopener">
             <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 3a1 1 0 0 1 1 1v9.6l3.3-3.3a1 1 0 1 1 1.4 1.4l-5 5a1 1 0 0 1-1.4 0l-5-5a1 1 0 1 1 1.4-1.4L11 13.6V4a1 1 0 0 1 1-1Zm-7 15a1 1 0 0 1 1 1v1h12v-1a1 1 0 1 1 2 0v2a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-2a1 1 0 0 1 1-1Z"/></svg>
@@ -196,8 +196,8 @@
         </div>
         <div class="card feature">
           <div class="feature__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 6h16M7 12h10M10 18h4" stroke-linecap="round"/></svg></div>
-          <h3>Searchable filter panel</h3>
-          <p>Opt in with <code>&lt;vee.filter&gt;true&lt;/vee.filter&gt;</code> and a plugin&rsquo;s dropdown gains a Spotlight-like search (⌘F) that fuzzy-filters every item — even those nested in submenus — flattened into one ranked, breadcrumb-tagged list. Add <code>&lt;vee.shortcut&gt;</code> for a global hotkey from anywhere. Neither xbar nor SwiftBar does this.</p>
+          <h3>Unstick it from the dropdown</h3>
+          <p>Opt in with <code>&lt;vee.filter&gt;true&lt;/vee.filter&gt;</code> and a plugin gains a Spotlight-like search (⌘F) that fuzzy-filters every item — even those nested in submenus — into one ranked, breadcrumb-tagged list, with <code>&lt;vee.shortcut&gt;</code> for a global hotkey. <em>Open in Window</em> lifts the whole menu onto your desktop, still live on its refresh interval. Rows choose their own surfaces with <code>visibleOn=</code>, so a destructive action can be browsable but never reachable by a search query. Neither xbar nor SwiftBar does any of this.</p>
         </div>
         <div class="card feature">
           <div class="feature__icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 12V4a8 8 0 0 1 6.93 4L12 12Z" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
@@ -499,7 +499,7 @@ menu.<span class="tok-fn">print</span>();
           <img class="mark" src="./assets/favicon.svg" alt="" width="28" height="28">
           <span><b>Vee</b></span>
         </a>
-        <p class="footer-about">A native, leak-free macOS menu-bar script runner — the modern successor to xbar and SwiftBar, with trust at install.</p>
+        <p class="footer-about">A native, leak-free macOS menu-bar script runner — any script, live in your menu bar, with trust at install.</p>
       </div>
       <div>
         <h4>Documentation</h4>
