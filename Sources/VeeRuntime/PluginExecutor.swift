@@ -60,10 +60,19 @@ public struct PluginExecutor: Sendable {
         guard let handle = FileHandle(forReadingAtPath: path) else { return nil }
         defer { try? handle.close() }
         let data = (try? handle.read(upToCount: 256)) ?? Data()
+        // Splits on `isNewline`, not on the literal "\n": Swift treats CRLF as
+        // ONE Character (a grapheme cluster), which "\n" does not match — so a
+        // CRLF plugin's "first line" was the entire file, and it asked to exec
+        // an interpreter named after everything up to the first space. Every
+        // other line-oriented reader in Vee is CRLF-tolerant; this was the one
+        // that wasn't, and a plugin edited on Windows or fetched through a tool
+        // that rewrites line endings hits it.
         guard let firstLine = String(data: data, encoding: .utf8)?
-            .split(separator: "\n", maxSplits: 1, omittingEmptySubsequences: false).first,
+            .split(maxSplits: 1, omittingEmptySubsequences: false, whereSeparator: \.isNewline).first,
             firstLine.hasPrefix("#!") else { return nil }
-        let tokens = firstLine.dropFirst(2).split(separator: " ").map(String.init)
+        let tokens = firstLine.dropFirst(2)
+            .split(whereSeparator: { $0 == " " || $0 == "\t" })
+            .map(String.init)
         guard let interpreter = tokens.first else { return nil }
         return (interpreter, Array(tokens.dropFirst()))
     }

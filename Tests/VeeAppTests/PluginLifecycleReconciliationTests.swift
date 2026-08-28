@@ -20,6 +20,11 @@ import VeePreferences
 /// filename here is UUID-suffixed so tests can never collide with each other
 /// or with residue from a previous run; each test's own assertions are the
 /// cleanup (they prove the state is gone).
+///
+/// Every controller here is built with `deletionGracePeriod: 0`. These tests are
+/// about WHAT the GC collects, not about how long it waits first — the wait is
+/// covered on its own by `testTransientAbsenceDoesNotDestroyAnything`, which is
+/// the one place the delay is the subject.
 @MainActor
 final class PluginLifecycleReconciliationTests: XCTestCase {
     private func tempDir() -> String {
@@ -58,7 +63,7 @@ final class PluginLifecycleReconciliationTests: XCTestCase {
         let path = writePlugin(named: filename, in: dir)
 
         let secrets = InMemorySecretStore()
-        let controller = AppController(secretStoreFactory: { _ in secrets })
+        let controller = AppController(secretStoreFactory: { _ in secrets }, deletionGracePeriod: 0)
         defer { cleanup(controller) }
 
         controller.reload()
@@ -108,12 +113,66 @@ final class PluginLifecycleReconciliationTests: XCTestCase {
         AppPreferences.shared.setDisabled(true, id: filename)
         defer { AppPreferences.shared.setDisabled(false, id: filename) }
 
-        let controller = AppController(secretStoreFactory: { _ in InMemorySecretStore() })
+        let controller = AppController(secretStoreFactory: { _ in InMemorySecretStore() }, deletionGracePeriod: 0)
         defer { cleanup(controller) }
 
         controller.reload()
 
         XCTAssertTrue(AppPreferences.shared.isDisabled(filename), "a failed/unreadable directory listing must never GC state — it could be a transient failure, not genuine absence")
+    }
+
+    /// Switching plugins folders must not destroy the folder you switched away
+    /// from. Every satellite store is keyed by filename with no directory
+    /// component — the Keychain service is `com.vee.plugin.<filename>` — so a
+    /// GC pass run against folder B once saw every plugin of folder A as
+    /// deleted and wiped its credentials, irreversibly, for files still sitting
+    /// intact in A. `AppPreferences.pluginHome` is the missing scope.
+    func testSwitchingFoldersDoesNotGCTheOtherFoldersSecrets() {
+        let folderA = tempDir()
+        let folderB = tempDir()
+        defer {
+            try? FileManager.default.removeItem(atPath: folderA)
+            try? FileManager.default.removeItem(atPath: folderB)
+        }
+
+        let filename = "mail-\(UUID().uuidString).5s.sh"
+        writePlugin(named: filename, in: folderA)
+        // B is non-empty and shares no filenames with A — the reconciliation
+        // guard bails on an empty listing, so an empty B would prove nothing.
+        writePlugin(named: "other-\(UUID().uuidString).5s.sh", in: folderB)
+
+        let secrets = InMemorySecretStore()
+
+        setenv("VEE_PLUGINS_DIR", folderA, 1)
+        defer { unsetenv("VEE_PLUGINS_DIR") }
+        let inA = AppController(secretStoreFactory: { _ in secrets }, deletionGracePeriod: 0)
+        defer { cleanup(inA) }
+        inA.reload()
+        AppPreferences.shared.setDisabled(true, id: filename)
+        defer { AppPreferences.shared.setDisabled(false, id: filename) }
+        secrets.set("s3cret", for: "API_TOKEN")
+
+        // Now Vee is pointed at B — a fresh controller reconciling B is what a
+        // relaunch after a folder change does, and it is the pass that used to
+        // destroy A's state.
+        setenv("VEE_PLUGINS_DIR", folderB, 1)
+        let inB = AppController(secretStoreFactory: { _ in secrets }, deletionGracePeriod: 0)
+        defer { cleanup(inB) }
+        inB.reload()
+
+        XCTAssertEqual(secrets.get("API_TOKEN"), "s3cret", "the other folder's plugin is still on disk — its Keychain secret must survive")
+        XCTAssertTrue(AppPreferences.shared.isDisabled(filename), "the other folder's plugin state must survive too")
+
+        // And the scope must not disable the GC: delete it from the folder it
+        // actually lives in and it still gets collected.
+        setenv("VEE_PLUGINS_DIR", folderA, 1)
+        try? FileManager.default.removeItem(atPath: (folderA as NSString).appendingPathComponent(filename))
+        writePlugin(named: "keep-\(UUID().uuidString).5s.sh", in: folderA)
+        let backInA = AppController(secretStoreFactory: { _ in secrets }, deletionGracePeriod: 0)
+        defer { cleanup(backInA) }
+        backInA.reload()
+
+        XCTAssertNil(secrets.get("API_TOKEN"), "gone from its own folder is genuine deletion — GC must still fire")
     }
 
     // MARK: - Fix 2: reinstalling under the same filename doesn't inherit the old disabled flag
@@ -134,7 +193,7 @@ final class PluginLifecycleReconciliationTests: XCTestCase {
         let filename = "clock-\(UUID().uuidString).5s.sh"
         let path = (dir as NSString).appendingPathComponent(filename)
 
-        let controller = AppController(secretStoreFactory: { _ in InMemorySecretStore() })
+        let controller = AppController(secretStoreFactory: { _ in InMemorySecretStore() }, deletionGracePeriod: 0)
         defer { cleanup(controller) }
 
         writePlugin(named: filename, in: dir)
@@ -181,7 +240,7 @@ final class PluginLifecycleReconciliationTests: XCTestCase {
         let secrets = InMemorySecretStore()
         secrets.set("s3cret", for: "API_TOKEN")
 
-        let controller = AppController(secretStoreFactory: { _ in secrets })
+        let controller = AppController(secretStoreFactory: { _ in secrets }, deletionGracePeriod: 0)
         defer { cleanup(controller) }
 
         controller.reload()
@@ -202,7 +261,7 @@ final class PluginLifecycleReconciliationTests: XCTestCase {
         let path = writePlugin(named: filename, in: dir)
 
         let secrets = InMemorySecretStore()
-        let controller = AppController(secretStoreFactory: { _ in secrets })
+        let controller = AppController(secretStoreFactory: { _ in secrets }, deletionGracePeriod: 0)
         defer { cleanup(controller) }
         controller.reload()
 
@@ -245,7 +304,7 @@ final class PluginLifecycleReconciliationTests: XCTestCase {
         writePlugin(named: "sibling-\(UUID().uuidString).sh", in: dir)
 
         let secrets = InMemorySecretStore()
-        let controller = AppController(secretStoreFactory: { _ in secrets })
+        let controller = AppController(secretStoreFactory: { _ in secrets }, deletionGracePeriod: 0)
         defer { cleanup(controller) }
         controller.reload()
 
@@ -260,4 +319,49 @@ final class PluginLifecycleReconciliationTests: XCTestCase {
         XCTAssertNil(secrets.get("API_TOKEN"), "a secret-only plugin must still be GC'd once genuinely absent")
         XCTAssertFalse(AppPreferences.shared.secretPluginIDs().contains(filename), "the marker itself must be cleared too")
     }
+    /// The GC used to fire on the first listing that didn't contain the file,
+    /// and the directory watcher debounces at 0.3s — so any momentary absence
+    /// destroyed Keychain secrets irreversibly. A non-atomic editor save (write
+    /// temp, unlink, rename), a plugin dragged out to edit and dragged back, a
+    /// network volume between unmount and remount all present exactly that.
+    ///
+    /// The trade this accepts: while state lingers, a NEW plugin installed under
+    /// the same filename inside the window inherits the old one's settings and
+    /// secrets. That needs a same-name reinstall within minutes to happen at all.
+    func testTransientAbsenceDoesNotDestroyAnything() throws {
+        let dir = tempDir()
+        defer { try? FileManager.default.removeItem(atPath: dir) }
+        setenv("VEE_PLUGINS_DIR", dir, 1)
+        defer { unsetenv("VEE_PLUGINS_DIR") }
+
+        let filename = "editing-\(UUID().uuidString).5s.sh"
+        let path = writePlugin(named: filename, in: dir)
+        writePlugin(named: "sibling-\(UUID().uuidString).5s.sh", in: dir)
+
+        let secrets = InMemorySecretStore()
+        let controller = AppController(secretStoreFactory: { _ in secrets })
+        defer { cleanup(controller) }
+        controller.reload()
+
+        AppPreferences.shared.setDisabled(true, id: filename)
+        defer { AppPreferences.shared.setDisabled(false, id: filename) }
+        try VarStore(pluginPath: path).set("dark", for: "THEME")
+        secrets.set("s3cret", for: "API_TOKEN")
+
+        // The file blinks out of existence — an editor mid-save — and the
+        // watcher fires a reload right inside that window.
+        let saved = try Data(contentsOf: URL(fileURLWithPath: path))
+        try FileManager.default.removeItem(atPath: path)
+        controller.reload()
+
+        XCTAssertEqual(secrets.get("API_TOKEN"), "s3cret", "one missing listing must never destroy a Keychain secret")
+        XCTAssertTrue(AppPreferences.shared.isDisabled(filename), "nor the plugin's settings")
+
+        // The save completes and the file is back.
+        try saved.write(to: URL(fileURLWithPath: path))
+        controller.reload()
+        XCTAssertEqual(secrets.get("API_TOKEN"), "s3cret")
+        XCTAssertEqual(VarStore(pluginPath: path).load()["THEME"], "dark", "the .vars.json sidecar must have survived too")
+    }
+
 }

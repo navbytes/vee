@@ -8,7 +8,7 @@ How the row's own text is drawn.
 | --------- | ---- | ------- | ---------- | ----------- |
 | `color` | name \| #rrggbb | — | any line | Text color — a named color (`red`, `green`, …) or a hex value like `#00ff00`. |
 | `font` | string | — | any line | Font family name for the text. |
-| `size` | points | — | any line | Font point size. |
+| `size` | points | — | any line | Font point size. Clamped to 4–144 points: the value becomes a real font size on a menu row that grows to fit it. |
 | `length` | characters | — | any line | Truncate the displayed text to this many characters. |
 | `trim` | boolean | — | any line | Trim surrounding whitespace from the text. |
 | `ansi` | boolean | true | any line | Interpret ANSI color escape codes in the text. On by default; set `ansi=false` to disable. [More](#ansi-color) |
@@ -31,8 +31,8 @@ What happens when a reader activates the row.
 | `key` | Cmd+R \| shift+F2 \| cmd+space | — | any line | Keyboard shortcut for the item, active while the menu is open. |
 | `shortcut` | string | — | any line | Run a macOS Shortcut by name when the item is clicked (e.g. `shortcut="Start Meeting"`). |
 | `webview` | url | — | any line | Open a URL in a standalone WebView window, never inside the menu. |
-| `webvieww` | points | — | webview | Width of the `webview=` window. |
-| `webviewh` | points | — | webview | Height of the `webview=` window. |
+| `webvieww` | points | — | webview | Width of the `webview=` window. Bounded by the screen the window opens on — a window wider than the display would put its own close button out of reach. |
+| `webviewh` | points | — | webview | Height of the `webview=` window. Bounded by the screen the window opens on. |
 
 ### Placement
 
@@ -64,7 +64,7 @@ Apple's symbol set as a row icon, or inline in the text.
 | `symbolize` | boolean | — | any line | Render inline `:symbol.name:` tokens in the text as SF Symbols. [More](#sf-symbols) |
 | `sfimage` | string | — | any line | SF Symbol name to show as the item's icon (e.g. `sfimage=cpu`). [More](#sf-symbols) |
 | `sfcolor` | color[,color…] | — | sfimage | Color(s) for the SF Symbol; comma-separated for multicolor symbols. [More](#sf-symbols) |
-| `sfsize` | points | — | sfimage | Point size for the SF Symbol. [More](#sf-symbols) |
+| `sfsize` | points | — | sfimage | Point size for the SF Symbol. Clamped to 4–144 points, like `size=`. [More](#sf-symbols) |
 | `sfconfig` | {"scale":"small\|medium\|large","weight":"…"} | — | sfimage | SF Symbol configuration as JSON. Example: `sfconfig='{"scale":"large","weight":"bold"}'`. [More](#sf-symbols) |
 
 ### Annotations
@@ -84,14 +84,14 @@ The inline accessory slot: a sparkline, a progress bar, or a share chart. See th
 | Parameter | Type | Default | Applies to | Description |
 | --------- | ---- | ------- | ---------- | ----------- |
 | `sparkline` | n[,n…] | — | any line | A comma-separated list of numbers read as a series over time. Renders inline in the menu row; clicking opens a fuller Swift Charts popover. [More](#rich-inline-charts-liquid-glass-popovers) |
-| `accessoryw` | points \| full | the accessory's own default | progress, sparkline, pie, donut, stackedbar, slider | Width in points for whichever accessory the row carries, or `full` to stretch it to the row's own width. A row draws at most one accessory, so one parameter sizes any of them. Defaults differ per accessory — see the chart matrix. `full` is refused on `pie=`/`donut=`, which can only fill a width by growing the row. Replaces `progressw=`, `sparklinew=` and `chartw=`. |
-| `accessoryh` | points | the accessory's own default | progress, sparkline, pie, donut, stackedbar | Height in points for whichever accessory the row carries. Ignored for `toggle=`/`slider=`, whose height is its control size. Replaces `progressh=`, `sparklineh=` and `charth=`. |
-| `sparklinew` | points \| full | 90 | sparkline | **Deprecated** — use `accessoryw=` instead. Sparkline width in points, or `full` to stretch it to the row's own width. |
-| `sparklineh` | points | 20 | sparkline | **Deprecated** — use `accessoryh=` instead. Sparkline height in points. |
+| `accessoryw` | points \| full | the accessory's own default | progress, sparkline, pie, donut, stackedbar, slider | Width in points for whichever accessory the row carries, or `full` to stretch it to the row's own width. A row draws at most one accessory, so one parameter sizes any of them. Defaults differ per accessory — see the chart matrix. `full` is refused on `pie=`/`donut=`, which can only fill a width by growing the row. Replaces `progressw=`, `sparklinew=` and `chartw=`. Sizes are clamped: 8–200 points for a chart, 1–200 for a progress bar or sparkline (a bar's own default height is 6). |
+| `accessoryh` | points | the accessory's own default | progress, sparkline, pie, donut, stackedbar | Height in points for whichever accessory the row carries. Ignored for `toggle=`/`slider=`, whose height is its control size. Replaces `progressh=`, `sparklineh=` and `charth=`. Clamped like `accessoryw=`. |
+| `sparklinew` | points \| full | 90 | sparkline | **Deprecated** — use `accessoryw=` instead. Sparkline width in points, or `full` to stretch it to the row's own width. Clamped to 1–200 points. |
+| `sparklineh` | points | 20 | sparkline | **Deprecated** — use `accessoryh=` instead. Sparkline height in points. Clamped to 1–200 points. |
 | `sparklinecolor` | color | — | sparkline | Sparkline line color. Falls back to the row's `color=`, then to the control accent. |
 | `progress` | 0..1 \| value,max | — | any line | Draws a real capsule bar inline in the menu row (e.g. `progress=0.72` or `progress=23.65,100`). Fill uses `color=`. [More](#inline-progress-bars-progress) |
-| `progressw` | points \| full | 120 | progress | **Deprecated** — use `accessoryw=` instead. Bar width in points, or `full` to stretch it to the row's own width. |
-| `progressh` | points | 6 | progress | **Deprecated** — use `accessoryh=` instead. Bar height in points. |
+| `progressw` | points \| full | 120 | progress | **Deprecated** — use `accessoryw=` instead. Bar width in points, or `full` to stretch it to the row's own width. Clamped to 1–200 points. |
+| `progressh` | points | 6 | progress | **Deprecated** — use `accessoryh=` instead. Bar height in points. Clamped to 1–200 points. |
 | `progresstrackcolor` | color | — | progress | The color of the bar's groove, behind the fill. |
 | `trackcolor` | color | — | progress | **Deprecated** — use `progresstrackcolor=` instead. The pre-v2 spelling of `progresstrackcolor=`. Still parsed, so published plugins keep working, but the SDKs no longer emit it and `vee lint` warns on it. |
 | `pie` | n[,n…] | — | any line | Non-negative numbers read as shares of a whole (e.g. `pie=45,30,25`), drawn as a filled circle divided into sectors. [More](#share-charts-pie-donut-stackedbar) |

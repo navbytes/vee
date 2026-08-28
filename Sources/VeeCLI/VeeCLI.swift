@@ -593,6 +593,7 @@ public enum VeeCLI {
         var name: String?
         var trust: [String] = []
         var outDir: String?
+        var force = false
 
         var i = 0
         while i < args.count {
@@ -607,6 +608,7 @@ public enum VeeCLI {
             case "--interval": interval = nextValue()
             case "--name": name = nextValue()
             case "--out": outDir = nextValue()
+            case "--force": force = true
             case "--trust":
                 if let v = nextValue() {
                     trust += v.split(whereSeparator: { $0 == "," || $0 == " " }).map(String.init)
@@ -635,6 +637,17 @@ public enum VeeCLI {
         let resolvedInterval = interval ?? "10s"
         let resolvedName = name ?? "My Plugin"
 
+        // The interval is embedded in the filename, and a filename token Vee
+        // can't parse is not an error at load time — it just means `.manual`.
+        // So `--interval "5 minutes"` scaffolds a plugin that looks fine and
+        // never refreshes, with nothing anywhere saying why. Warn here, where
+        // the typo is still in the user's hands. Deliberately not fatal:
+        // `name.<anything>.sh` remains a legal, manually-refreshed plugin.
+        if RefreshInterval.parse(token: resolvedInterval) == nil {
+            err += "vee new: warning: '\(resolvedInterval)' is not a refresh interval "
+            err += "(expected e.g. 10s, 5m, 1h, 1d) — this plugin will only refresh on demand.\n"
+        }
+
         let (filename, contents) = Scaffold.render(
             lang: resolvedLang,
             interval: resolvedInterval,
@@ -643,6 +656,16 @@ public enum VeeCLI {
 
         if let dir = outDir {
             let path = (dir as NSString).appendingPathComponent(filename)
+            // Refuse to clobber an existing plugin. The SDK vendored a few
+            // lines below has always been protected this way ("Kept … already
+            // present"); the plugin itself — the file with the user's actual
+            // work in it — was the one being silently overwritten, and a
+            // scaffold is generated from flags, so what it destroys is never
+            // recoverable from what it writes.
+            if !force, FileManager.default.fileExists(atPath: path) {
+                err += "vee new: '\(path)' already exists — pass --force to overwrite it.\n"
+                return 1
+            }
             do {
                 try FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
                 try contents.write(toFile: path, atomically: true, encoding: .utf8)
@@ -758,6 +781,7 @@ enum Usage {
       --name NAME          Plugin name.
       --trust a,b,…        Declared capabilities (network,secrets,filesystem,exec,…).
       --out DIR            Write the plugin into DIR (otherwise printed to stdout).
+      --force              Overwrite an existing plugin of the same name.
 
     Other:
       --help, -h           Show this help.

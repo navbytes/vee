@@ -83,6 +83,26 @@ For secret fields:
 - The value is stored in the **macOS Keychain**, namespaced per plugin (one plugin cannot read another plugin's secrets), rather than in a plaintext settings file.
 - The value is still injected as an environment variable at run time, so your plugin reads it exactly like any other preference.
 
+### When secrets are deleted
+
+A plugin's settings and Keychain secrets are removed once its file is genuinely
+gone from the plugins folder. "Genuinely" does real work here: a file can be
+briefly absent for reasons that are not a deletion — an editor saving
+non-atomically, a plugin dragged out to edit and dragged back, a network volume
+between unmount and remount — so Vee waits for the absence to persist for several
+minutes before removing anything it cannot restore. Switching to a different
+plugins folder is never treated as a deletion; the folder you switched away from
+keeps its settings and secrets.
+
+The consequence worth knowing: for a few minutes after deleting a plugin, a *new*
+plugin installed under the same filename inherits the old one's settings and
+secrets. Deleting and immediately reinstalling under the same name is the one
+case where that matters.
+
+Deleting a plugin from the Plugin Manager moves the **script** to the Trash,
+where it can be restored. Its settings, saved secrets and install history are not
+recoverable — restoring the script gives you a plugin that needs setting up again.
+
 You do not declare "this is a secret" explicitly — naming the variable appropriately (e.g. `API_TOKEN`) is enough. If you also want the secret to appear in the plugin's [trust summary](trust-model.md), reference it in a `<vee.secrets>` tag:
 
 ```python

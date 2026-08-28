@@ -57,8 +57,15 @@ plugins](debugging.md). The remaining subcommands are documented below.
 
 Scaffolds a ready-to-run plugin. Flags: `--lang ts|py|sh`, `--interval` (e.g.
 `5s`, `10m`), `--name`, `--trust` (comma-separated capabilities, e.g.
-`network,secrets`), and `--out DIR`. When run in a terminal with flags omitted,
-it prompts.
+`network,secrets`), `--out DIR`, and `--force`. When run in a terminal with
+flags omitted, it prompts.
+
+`vee new` refuses to overwrite an existing plugin — a scaffold is generated from
+flags, so nothing of what it replaced survives. Pass `--force` when replacing one
+is what you meant. An `--interval` Vee can't parse is warned about rather than
+rejected (`name.<anything>.sh` is a legal, manually-refreshed plugin), but the
+warning is worth reading: a plugin with an unparseable interval token only ever
+refreshes on demand.
 
 ```sh
 $ vee new --lang sh --interval 30s --name weather --trust network --out ~/plugins
@@ -104,6 +111,22 @@ The **action is the URL host**, and parameters come from the query string. The p
 | `notify` | Post a system notification. | `vee://notify?title=Done&subtitle=Build&body=Succeeded&href=https://example.com` |
 
 The same URLs work with the `swiftbar://` scheme, e.g. `swiftbar://refreshplugin?name=cpu`.
+
+### The `setephemeralplugin` action
+
+`setephemeralplugin` renders menu content that never touches disk — what
+`vee dev --push` uses to show a work-in-progress plugin as a real status item.
+
+Because any web page can open a URL, and this action shows no confirmation, the
+content it injects is **defanged before it is rendered**: `shell=`/`bash=`,
+`shortcut=` and `webview=` are stripped from every row, title line, submenu and
+alternate. A row you never installed cannot run a command, run a Shortcut, or
+open a web view, however it was worded. Everything else — text, colors,
+accessories, `href=` — renders normally.
+
+This is why a `vee dev --push` preview shows a `shell=` row but clicking it does
+nothing: the preview is deliberately inert. Run the plugin from your plugins
+folder to exercise its actions.
 
 ### The `notify` action
 

@@ -162,10 +162,19 @@ public final class PluginBrowserModel: ObservableObject {
     var hasMultipleStores: Bool { stores.count > 1 }
 
     /// Fetches and parses an entry's header + trust once, for display in its card.
+    ///
+    /// The in-flight marker is cleared again if the fetch fails. It exists to
+    /// stop concurrent `.task`s fetching the same entry twice, but leaving it in
+    /// place on failure made `headers[entry.id] == nil` false forever, so this
+    /// method returned immediately from then on: one transient network blip and
+    /// that card stayed blank until the app was relaunched.
     func loadHeader(for entry: CatalogEntry) async {
         guard headers[entry.id] == nil else { return }
         headers[entry.id] = HeaderMetadata() // mark in-flight so we fetch once
-        guard let source = try? await client(for: entry)?.fetchSource(entry) else { return }
+        guard let source = try? await client(for: entry)?.fetchSource(entry) else {
+            headers[entry.id] = nil
+            return
+        }
         headers[entry.id] = HeaderParser.parse(source: source)
         trustLevels[entry.id] = TrustAnalyzer.analyze(TrustParser.parse(source: source)).level
     }
@@ -352,12 +361,7 @@ public final class PluginBrowserModel: ObservableObject {
         }
         if !search.isEmpty {
             let q = search.lowercased()
-            result = result.filter {
-                $0.filename.lowercased().contains(q)
-                    || $0.category.lowercased().contains(q)
-                    || (title(for: $0).lowercased().contains(q))
-                    || (summary(for: $0)?.lowercased().contains(q) ?? false)
-            }
+            result = result.filter { matchesSearch($0, query: q) }
         }
         return sorted(result)
     }
@@ -376,17 +380,53 @@ public final class PluginBrowserModel: ObservableObject {
     /// newest-first with `nil`-date entries pushed to the end, falling back to
     /// `.name` order within that "unknown date" group so it isn't left
     /// arbitrary/unstable.
+    /// Whether `entry` matches `query`, using only fields known for EVERY entry
+    /// the moment the catalog loads.
+    ///
+    /// The header title/summary are fetched lazily, per card, when that card
+    /// scrolls into view — so matching on them made search results depend on how
+    /// far the user had scrolled: the same query returned more plugins the
+    /// second time it was typed. Filename, category and any manifest-supplied
+    /// title/summary are present for every entry from the start, so the answer
+    /// is the same however much of the grid has been looked at.
+    ///
+    /// This narrows what search can find for stores whose manifest carries no
+    /// metadata — the real fix is manifest-supplied title/summary, tracked in
+    /// ROADMAP.md, since it also removes the per-card source download.
+    private func matchesSearch(_ entry: CatalogEntry, query: String) -> Bool {
+        if entry.filename.lowercased().contains(query) { return true }
+        if entry.category.lowercased().contains(query) { return true }
+        if entry.manifestTitle?.lowercased().contains(query) == true { return true }
+        if entry.manifestSummary?.lowercased().contains(query) == true { return true }
+        return false
+    }
+
+    /// The name an entry is SORTED by — manifest title if the catalog supplied
+    /// one, else the filename. Deliberately not `title(for:)`.
+    ///
+    /// `title(for:)` prefers the lazily-fetched header title, which arrives when
+    /// a card scrolls into view. Sorting on it meant the grid reordered itself
+    /// while the user was reading it: cards slid out from under the cursor as
+    /// each header landed, and a click could land on a different plugin than the
+    /// one aimed at. This key is known for every entry the moment the catalog
+    /// loads and never changes afterwards, so the order is settled before
+    /// anything is drawn.
+    private func sortKey(for entry: CatalogEntry) -> String {
+        let manifest = entry.manifestTitle
+        return (manifest?.isEmpty == false ? manifest : nil) ?? entry.filename
+    }
+
     private func sorted(_ entries: [CatalogEntry]) -> [CatalogEntry] {
         switch sortOrder {
         case .name:
-            return entries.sorted { title(for: $0).localizedCaseInsensitiveCompare(title(for: $1)) == .orderedAscending }
+            return entries.sorted { sortKey(for: $0).localizedCaseInsensitiveCompare(sortKey(for: $1)) == .orderedAscending }
         case .updated:
             return entries.sorted { a, b in
                 let dateA = lastUpdatedDate(for: a)
                 let dateB = lastUpdatedDate(for: b)
                 switch (dateA, dateB) {
                 case let (a?, b?): return a > b
-                case (nil, nil): return title(for: a).localizedCaseInsensitiveCompare(title(for: b)) == .orderedAscending
+                case (nil, nil): return sortKey(for: a).localizedCaseInsensitiveCompare(sortKey(for: b)) == .orderedAscending
                 case (nil, _): return false
                 case (_, nil): return true
                 }
@@ -411,7 +451,7 @@ public final class PluginBrowserModel: ObservableObject {
     func provenanceStatus(for entry: CatalogEntry) -> ProvenanceStatus {
         let record = provenanceStore.record(for: entry.filename)
         let path = (pluginsDirectory as NSString).appendingPathComponent(entry.filename)
-        let current = try? String(contentsOfFile: path, encoding: .utf8)
+        let current = PluginSource.read(atPath: path)
         return ProvenanceStatus.evaluate(record: record, currentSource: current, entrySourceURL: entry.rawURL)
     }
 
@@ -419,7 +459,7 @@ public final class PluginBrowserModel: ObservableObject {
     /// incoming update at the trust gate.
     private func installedSource(for entry: CatalogEntry) -> String? {
         let path = (pluginsDirectory as NSString).appendingPathComponent(entry.filename)
-        return try? String(contentsOfFile: path, encoding: .utf8)
+        return PluginSource.read(atPath: path)
     }
 
     /// Fetch the source, verify store integrity, and open the trust gate.
@@ -489,6 +529,7 @@ public final class PluginBrowserModel: ObservableObject {
         case .hashMismatch: return "source doesn't match the catalog's pinned hash"
         case .signatureInvalid: return "the signature didn't verify"
         case .signatureMissing: return "this store requires a signed plugin"
+        case .signatureUnpinned: return "this store requires a signed plugin, but no signing key is pinned — the manifest's own key can't vouch for it"
         }
     }
 }
@@ -737,7 +778,13 @@ public struct DiscoverContentView: View {
                 Label("No matching plugins", systemImage: "magnifyingglass")
             } description: {
                 if !model.search.isEmpty {
-                    Text("Nothing matches “\(model.search)”. Try a shorter or different term, or browse a category.")
+                    // Says what search actually covers. It matches a plugin's
+                    // name, category and catalog description — not the contents
+                    // of its script — so "nothing matches" means "no plugin is
+                    // named or described this way", which is worth being
+                    // explicit about before someone concludes the plugin isn't
+                    // in the catalog at all.
+                    Text("Nothing matches “\(model.search)” by name, category or description. Try a shorter or different term, or browse a category.")
                 } else {
                     Text("This category has no plugins yet.")
                 }

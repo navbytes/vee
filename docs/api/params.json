@@ -63,7 +63,7 @@
       "group": "rendering",
       "type": "number",
       "grammar": "points",
-      "summary": "Font point size."
+      "summary": "Font point size. Clamped to 4–144 points: the value becomes a real font size on a menu row that grows to fit it."
     },
     {
       "key": "length",
@@ -182,7 +182,7 @@
       "type": "number",
       "grammar": "points",
       "appliesTo": "webview",
-      "summary": "Width of the `webview=` window."
+      "summary": "Width of the `webview=` window. Bounded by the screen the window opens on — a window wider than the display would put its own close button out of reach."
     },
     {
       "key": "webviewh",
@@ -190,7 +190,7 @@
       "type": "number",
       "grammar": "points",
       "appliesTo": "webview",
-      "summary": "Height of the `webview=` window."
+      "summary": "Height of the `webview=` window. Bounded by the screen the window opens on."
     },
     {
       "key": "dropdown",
@@ -271,7 +271,7 @@
       "type": "number",
       "grammar": "points",
       "appliesTo": "sfimage",
-      "summary": "Point size for the SF Symbol.",
+      "summary": "Point size for the SF Symbol. Clamped to 4–144 points, like `size=`.",
       "section": "sf-symbols"
     },
     {
@@ -317,7 +317,7 @@
       "grammar": "points | full",
       "default": "the accessory's own default",
       "appliesTo": "progress, sparkline, pie, donut, stackedbar, slider",
-      "summary": "Width in points for whichever accessory the row carries, or `full` to stretch it to the row's own width. A row draws at most one accessory, so one parameter sizes any of them. Defaults differ per accessory — see the chart matrix. `full` is refused on `pie=`/`donut=`, which can only fill a width by growing the row. Replaces `progressw=`, `sparklinew=` and `chartw=`."
+      "summary": "Width in points for whichever accessory the row carries, or `full` to stretch it to the row's own width. A row draws at most one accessory, so one parameter sizes any of them. Defaults differ per accessory — see the chart matrix. `full` is refused on `pie=`/`donut=`, which can only fill a width by growing the row. Replaces `progressw=`, `sparklinew=` and `chartw=`. Sizes are clamped: 8–200 points for a chart, 1–200 for a progress bar or sparkline (a bar's own default height is 6)."
     },
     {
       "key": "accessoryh",
@@ -326,7 +326,7 @@
       "grammar": "points",
       "default": "the accessory's own default",
       "appliesTo": "progress, sparkline, pie, donut, stackedbar",
-      "summary": "Height in points for whichever accessory the row carries. Ignored for `toggle=`/`slider=`, whose height is its control size. Replaces `progressh=`, `sparklineh=` and `charth=`."
+      "summary": "Height in points for whichever accessory the row carries. Ignored for `toggle=`/`slider=`, whose height is its control size. Replaces `progressh=`, `sparklineh=` and `charth=`. Clamped like `accessoryw=`."
     },
     {
       "key": "sparklinew",
@@ -336,7 +336,7 @@
       "grammar": "points | full",
       "default": "90",
       "appliesTo": "sparkline",
-      "summary": "Sparkline width in points, or `full` to stretch it to the row's own width.",
+      "summary": "Sparkline width in points, or `full` to stretch it to the row's own width. Clamped to 1–200 points.",
       "constant": "sparkline.defaultWidth",
       "deprecated": true,
       "replacedBy": "accessoryw",
@@ -350,7 +350,7 @@
       "grammar": "points",
       "default": "20",
       "appliesTo": "sparkline",
-      "summary": "Sparkline height in points.",
+      "summary": "Sparkline height in points. Clamped to 1–200 points.",
       "constant": "sparkline.defaultHeight",
       "deprecated": true,
       "replacedBy": "accessoryh",
@@ -381,7 +381,7 @@
       "grammar": "points | full",
       "default": "120",
       "appliesTo": "progress",
-      "summary": "Bar width in points, or `full` to stretch it to the row's own width.",
+      "summary": "Bar width in points, or `full` to stretch it to the row's own width. Clamped to 1–200 points.",
       "constant": "progress.defaultWidth",
       "deprecated": true,
       "replacedBy": "accessoryw",
@@ -395,7 +395,7 @@
       "grammar": "points",
       "default": "6",
       "appliesTo": "progress",
-      "summary": "Bar height in points.",
+      "summary": "Bar height in points. Clamped to 1–200 points.",
       "constant": "progress.defaultHeight",
       "deprecated": true,
       "replacedBy": "accessoryh",
@@ -522,7 +522,7 @@
       "member": "lowerBound",
       "file": "Sources/VeePluginFormat/ChartParams.swift",
       "value": 8,
-      "statedAs": "the floor `accessoryw=`/`accessoryh=` are clamped to, in points"
+      "statedAs": "the floor `chartw=`/`charth=` are clamped to, in points"
     },
     {
       "id": "chart.sizeLimit.max",
@@ -530,7 +530,30 @@
       "member": "upperBound",
       "file": "Sources/VeePluginFormat/ChartParams.swift",
       "value": 200,
-      "statedAs": "the ceiling `accessoryw=`/`accessoryh=` are clamped to, in points"
+      "statedAs": "the ceiling every inline accessory's width/height is clamped to, in points"
+    },
+    {
+      "id": "accessory.minimumSize",
+      "symbol": "ChartParams.minimumSize",
+      "file": "Sources/VeePluginFormat/ChartParams.swift",
+      "value": 1,
+      "statedAs": "the floor `progressw=`/`progressh=`/`sparklinew=`/`sparklineh=` are clamped to, in points"
+    },
+    {
+      "id": "font.sizeLimit.min",
+      "symbol": "FontSizeLimit.range",
+      "member": "lowerBound",
+      "file": "Sources/VeePluginFormat/LineParams.swift",
+      "value": 4,
+      "statedAs": "the floor `size=`/`sfsize=` are clamped to, in points"
+    },
+    {
+      "id": "font.sizeLimit.max",
+      "symbol": "FontSizeLimit.range",
+      "member": "upperBound",
+      "file": "Sources/VeePluginFormat/LineParams.swift",
+      "value": 144,
+      "statedAs": "the ceiling `size=`/`sfsize=` are clamped to, in points"
     },
     {
       "id": "chart.defaultCircleSide",

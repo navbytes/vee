@@ -56,4 +56,24 @@ final class PluginDiscoveryVendoredSDKTests: XCTestCase {
         try write("notes.1h.sh")
         XCTAssertEqual(discovered(), ["notes.1h.sh"])
     }
+
+    /// `ignoredExtensions` can't reach a file with no extension, so a plugins
+    /// folder kept under version control — a habit the docs encourage — used to
+    /// run its own README and Makefile through `/bin/bash` and show them as
+    /// broken menu-bar rows.
+    func testExtensionlessDocumentationAndBuildFilesAreNotPlugins() throws {
+        try write("cpu.10s.sh", executable: true)
+        try write("README")
+        try write("LICENSE")
+        try write("Makefile")
+        try write("Dockerfile")
+        XCTAssertEqual(discovered(), ["cpu.10s.sh"])
+    }
+
+    func testAPluginNamedLikeADocumentButWithAnExtensionStillLoads() throws {
+        // The skip is by exact bare filename: `readme.10s.sh` is a plugin
+        // someone named after what it reports, not documentation.
+        try write("readme.10s.sh", executable: true)
+        XCTAssertEqual(discovered(), ["readme.10s.sh"])
+    }
 }

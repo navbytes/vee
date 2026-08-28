@@ -5,7 +5,13 @@ import Foundation
 public enum OutputParser {
     public static func parse(_ stdout: String) -> ParsedOutput {
         var diagnostics: [ParseDiagnostic] = []
-        let lines = splitLines(stdout)
+        var lines = splitLines(stdout)
+        if lines.count > maxLines {
+            lines = Array(lines.prefix(maxLines))
+            diagnostics.append(.init(
+                severity: .warning,
+                message: "output truncated at \(maxLines) lines; a menu this long can't be used"))
+        }
 
         // Section split on the first top-level `---` (a line that is exactly
         // three dashes). Title above, body below.
@@ -160,6 +166,21 @@ public enum OutputParser {
         let content = String(line.dropFirst(depth * 2))
         return (depth, false, content)
     }
+
+    /// Caps how many lines of plugin output become menu rows.
+    ///
+    /// Submenu *depth* has been capped at `maxDepth` since the recursion could
+    /// overflow the stack; breadth had no limit at all. The 8 MB capture cap in
+    /// `SystemProcessRunner` bounds it only at around 400,000 rows — every one
+    /// of which becomes a real `NSMenuItem` with a real view, so a plugin stuck
+    /// in a loop takes the UI down long before it runs out of output.
+    ///
+    /// 2000 is far past usable: an `NSMenu` is a scrolling column, and nobody
+    /// finds anything in the two-thousandth row of one. Set generously on
+    /// purpose — the point is to bound a runaway, not to second-guess an author
+    /// who legitimately lists a lot of things — and truncation is always
+    /// reported rather than silent.
+    private static let maxLines = 2000
 
     /// Guards the recursive `BuildEntry` → `MenuNode` conversion against
     /// pathologically deep submenu chains — a plugin emitting thousands of

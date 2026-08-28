@@ -101,7 +101,9 @@ Vee looks for plugins in a folder on disk. The default location is:
 ~/Library/Application Support/Vee/plugins
 ```
 
-To use a different folder (for example, an existing SwiftBar plugins directory), open the **Plugin Manager** and choose **Choose Folder**. See [Migrating from SwiftBar/xbar](migrating-from-swiftbar.md) if you already have a plugins folder.
+To use a different folder (for example, an existing SwiftBar plugins directory), open the **Plugin Manager** and choose **Choose Folder**. See [Migrating from SwiftBar/xbar](migrating-from-swiftbar.md) if you already have a plugins folder. Switching folders leaves the old folder's plugins — and their saved settings and Keychain secrets — untouched, so you can point Vee back at it later and find everything as you left it.
+
+Not everything in the folder is treated as a plugin. Vee skips hidden files, editor backups (`plugin.sh~`, `#plugin.sh#`), subdirectories (a `disabled/` folder is a common way to park plugins), the vendored SDK (`vee.ts`/`vee.py`), obvious document and data files by extension (`.md`, `.json`, `.png`, …), and extensionless project files by name (`README`, `LICENSE`, `Makefile`, `Dockerfile`, and similar) — so keeping the folder under version control doesn't put your README in the menu bar. A file with an extension is unaffected: a plugin genuinely named `readme.10s.sh` still loads.
 
 ## Write your first plugin
 

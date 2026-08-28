@@ -77,4 +77,30 @@ final class LinterTests: XCTestCase {
         let findings = Linter.lint(rawOutput: raw)
         XCTAssertTrue(findings.isEmpty, "\(findings)")
     }
+    /// The bundled SDKs escape `|` as `\|` when serializing user text, and
+    /// `LineParser.splitTextAndParams` unescapes it correctly. The linter used
+    /// to re-tokenize with its own rule that had no escape handling, so it
+    /// warned about a stray pipe in output Vee itself produces.
+    func testEscapedPipeInTitleTextIsNotAStrayPipe() {
+        let diags = Linter.lint(rawOutput: "Total: 5 \\| 3 | color=red\n")
+        XCTAssertTrue(diags.filter { $0.message.contains("stray") }.isEmpty,
+                      "an escaped pipe is display text, not a separator: \(diags.map(\.message))")
+    }
+
+    /// The warning must still fire for a genuinely unescaped second pipe —
+    /// the case it exists for.
+    func testUnescapedSecondPipeIsStillFlagged() {
+        let diags = Linter.lint(rawOutput: "Total: 5 | 3 | color=red\n")
+        XCTAssertFalse(diags.filter { $0.message.contains("stray") }.isEmpty,
+                       "a bare second pipe really is mis-parsed and must warn")
+    }
+
+    /// The escape also must not shift where params begin: everything after the
+    /// first UNESCAPED pipe is still the parameter half.
+    func testEscapedPipeDoesNotHideParameterDiagnostics() {
+        let diags = Linter.lint(rawOutput: "A \\| B | colour=red\n")
+        XCTAssertFalse(diags.filter { $0.message.contains("colour") }.isEmpty,
+                       "the unknown key after the real separator must still be found: \(diags.map(\.message))")
+    }
+
 }

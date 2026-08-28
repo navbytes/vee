@@ -88,6 +88,12 @@ public enum Linter {
                 if c == q { quote = nil }
             } else if c == "\"" || c == "'" {
                 quote = c
+            } else if c == "\\", i + 1 < chars.count, LineEscape.unescape(chars[i + 1]) != nil {
+                // An escaped `\|` is display text, not the separator — the same
+                // rule `LineParser.splitTextAndParams` applies, taken from the
+                // same definition so the two cannot drift.
+                i += 2
+                continue
             } else if c == "|" {
                 return (String(chars[0..<i]), String(chars[(i + 1)...]))
             }
@@ -96,21 +102,28 @@ public enum Linter {
         return (line, nil)
     }
 
-    /// Counts top-level `|` characters (not inside a quoted value).
+    /// Counts top-level `|` characters — not inside a quoted value, and not
+    /// escaped as `\|`. Escaped pipes are display text the parser handles
+    /// correctly, so counting them here is what produced a "stray '|'" warning
+    /// on output Vee's own bundled SDKs emit.
     private static func topLevelPipeCount(_ s: String) -> Int {
+        let chars = Array(s)
         var count = 0
         var quote: Character?
-        var i = s.startIndex
-        while i < s.endIndex {
-            let c = s[i]
+        var i = 0
+        while i < chars.count {
+            let c = chars[i]
             if let q = quote {
                 if c == q { quote = nil }
             } else if c == "\"" || c == "'" {
                 quote = c
+            } else if c == "\\", i + 1 < chars.count, LineEscape.unescape(chars[i + 1]) != nil {
+                i += 2
+                continue
             } else if c == "|" {
                 count += 1
             }
-            i = s.index(after: i)
+            i += 1
         }
         return count
     }

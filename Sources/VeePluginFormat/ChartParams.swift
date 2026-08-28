@@ -122,8 +122,29 @@ public struct ChartParams: Equatable, Sendable {
     /// `chartw=`/`charth=` are clamped to this range. A menu row grows to fit
     /// its accessory, so an unclamped value is a plugin that can push rows off
     /// the screen; the ceiling is generous enough for a chart that dominates a
-    /// row and still fits a dropdown.
+    /// row and still fits a dropdown. The floor of 8 is a chart's own
+    /// legibility minimum, not a safety bound — see `minimumSize`.
     public static let sizeLimit: ClosedRange<Double> = 8...200
+
+    /// The floor every inline accessory shares. `progress=` and `sparkline=`
+    /// have thinner natural geometry than a chart (a progress bar's default
+    /// height is 6), so they cannot take the chart's aesthetic floor of 8 —
+    /// but nothing may reach a renderer at zero or negative, which is a
+    /// negative-width `CGRect` on a live `NSMenuItem.view`.
+    public static let minimumSize: Double = 1
+
+    /// Applies the shared accessory bounds: `minimum...sizeLimit.upperBound`.
+    /// The one clamp `chartw=`, `progressw=`, `sparklinew=` and the
+    /// `accessoryw=`/`accessoryh=` that fan out to all three call, so the
+    /// ceiling cannot drift between them — an accessory big enough to push
+    /// rows off the screen is the same bug whichever accessory draws it.
+    ///
+    /// `nil` passes through: an undeclared size is not a value to clamp, it's
+    /// the renderer's default. NaN is already rejected upstream by
+    /// `LineParser.finite()`, which matters because NaN defeats `min`/`max`.
+    public static func clampSize(_ value: Double?, minimum: Double = sizeLimit.lowerBound) -> Double? {
+        value.map { Swift.min(Swift.max($0, minimum), sizeLimit.upperBound) }
+    }
 
     /// The sum of every segment. Guaranteed `> 0` for a parsed chart.
     public var total: Double { values.reduce(0, +) }
@@ -262,8 +283,8 @@ public struct ChartParams: Equatable, Sendable {
             labels: Array(outLabels.prefix(outValues.count)),
             colors: Array(outColors.prefix(outValues.count)),
             isFolded: folded,
-            width: width.map { Swift.min(Swift.max($0, sizeLimit.lowerBound), sizeLimit.upperBound) },
-            height: height.map { Swift.min(Swift.max($0, sizeLimit.lowerBound), sizeLimit.upperBound) },
+            width: clampSize(width),
+            height: clampSize(height),
             isFullWidth: fullWidth
         )
     }

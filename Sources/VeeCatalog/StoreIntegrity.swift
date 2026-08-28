@@ -16,6 +16,9 @@ public enum StoreIntegrity {
         case signatureInvalid
         /// The store requires a signature and none was provided.
         case signatureMissing
+        /// The store requires a signature, one was provided, but the only key
+        /// available to check it came from the same manifest as the signature.
+        case signatureUnpinned
 
         /// Whether the install should be allowed to proceed.
         public var passes: Bool { self == .ok }
@@ -29,14 +32,20 @@ public enum StoreIntegrity {
     ///   - declaredSHA256: The manifest-pinned lowercase-hex SHA-256, if any.
     ///   - signatureBase64: A base64 Ed25519 signature over the source's SHA-256
     ///     digest, if the entry is signed.
-    ///   - signingKeyBase64: The base64 Ed25519 public key (policy-pinned key, or
-    ///     the manifest's), if available.
+    ///   - pinnedKeyBase64: The base64 Ed25519 public key pinned by local policy.
+    ///     This is the only key that can establish *who* signed something.
+    ///   - manifestKeyBase64: The key the store's own manifest advertises. Used
+    ///     to catch corruption, never to establish provenance — it arrives from
+    ///     the same place as the signature, so whoever can change one can change
+    ///     the other. A "signature" checked only against it proves that a file
+    ///     matches a manifest, which the SHA-256 pin already proves.
     ///   - requireSignature: Whether the store mandates a valid signature.
     public static func verify(
         source: String,
         declaredSHA256: String?,
         signatureBase64: String?,
-        signingKeyBase64: String?,
+        pinnedKeyBase64: String?,
+        manifestKeyBase64: String? = nil,
         requireSignature: Bool
     ) -> Verdict {
         if let declared = declaredSHA256, !declared.isEmpty {
@@ -49,12 +58,22 @@ public enum StoreIntegrity {
         if requireSignature && !hasSignature {
             return .signatureMissing
         }
+        // A store that requires signatures is asking for proof of WHO produced
+        // the plugin, and only a locally-pinned key can answer that. Without
+        // one, the manifest supplies both the signature and the key used to
+        // check it, so a compromised store just signs with a key of its own
+        // choosing and the check passes while proving nothing. Fail rather than
+        // report a guarantee that isn't there.
+        if requireSignature && pinnedKeyBase64 == nil {
+            return .signatureUnpinned
+        }
         // A present signature is always validated — a wrong signature fails even
-        // when the store doesn't strictly require one.
-        if hasSignature {
+        // when the store doesn't strictly require one. The manifest key is
+        // allowed here, where the job is only detecting corruption: a store that
+        // advertises a signature and gets it wrong is broken either way.
+        if hasSignature, let key = pinnedKeyBase64 ?? manifestKeyBase64 {
             guard let signatureBase64,
-                  let signingKeyBase64,
-                  isValidSignature(source: source, signatureBase64: signatureBase64, keyBase64: signingKeyBase64)
+                  isValidSignature(source: source, signatureBase64: signatureBase64, keyBase64: key)
             else {
                 return .signatureInvalid
             }
@@ -62,14 +81,15 @@ public enum StoreIntegrity {
         return .ok
     }
 
-    /// Convenience over ``verify(source:declaredSHA256:signatureBase64:signingKeyBase64:requireSignature:)``
-    /// resolving the signing key as the store's pinned key or the manifest's.
+    /// Convenience over the primitive, keeping the store's pinned key and the
+    /// manifest's advertised key distinct — they are not interchangeable.
     public static func verify(source: String, entry: CatalogEntry, store: StoreConfig, manifestSigningKey: String? = nil) -> Verdict {
         verify(
             source: source,
             declaredSHA256: entry.declaredSHA256,
             signatureBase64: entry.signature,
-            signingKeyBase64: store.pinnedSigningKey ?? manifestSigningKey,
+            pinnedKeyBase64: store.pinnedSigningKey,
+            manifestKeyBase64: manifestSigningKey,
             requireSignature: store.requireSignature
         )
     }

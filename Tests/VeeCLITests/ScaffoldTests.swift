@@ -1,6 +1,15 @@
 import XCTest
 import VeePluginFormat
+import VeeRuntime
 @testable import VeeCLI
+
+/// `vee new` never spawns anything; the runner is only there to satisfy the
+/// shared `VeeCLI.run` signature.
+private struct UnusedRunner: ProcessRunning {
+    func run(_ invocation: ProcessInvocation) async throws -> ProcessOutcome {
+        ProcessOutcome(standardOutput: "", standardError: "", exitCode: 0, timedOut: false)
+    }
+}
 
 final class ScaffoldTests: XCTestCase {
     func testFilenameIsNameIntervalExt() {
@@ -41,4 +50,43 @@ final class ScaffoldTests: XCTestCase {
         let errors = parsed.diagnostics.filter { $0.severity == .error }
         XCTAssertTrue(errors.isEmpty, "\(lang): \(errors)")
     }
+    /// `vee new` vendors the SDK beside the plugin and skips it when present
+    /// ("Kept … already present"). The plugin file itself had no such guard, so
+    /// re-running the command destroyed whatever the author had written into it
+    /// — and a scaffold is generated from flags, so nothing of the original is
+    /// recoverable from what replaces it.
+    func testNewRefusesToOverwriteAnExistingPlugin() async throws {
+        let dir = NSTemporaryDirectory() + "vee-new-" + UUID().uuidString
+        defer { try? FileManager.default.removeItem(atPath: dir) }
+
+        var out = "", err = ""
+        var code = await VeeCLI.run(["new", "--lang", "sh", "--name", "Clock", "--interval", "10s", "--out", dir],
+                                    runner: UnusedRunner(), out: &out, err: &err)
+        XCTAssertEqual(code, 0, err)
+        let path = dir + "/clock.10s.sh"
+        try "# my real work\n".write(toFile: path, atomically: true, encoding: .utf8)
+
+        out = ""; err = ""
+        code = await VeeCLI.run(["new", "--lang", "sh", "--name", "Clock", "--interval", "10s", "--out", dir],
+                                runner: UnusedRunner(), out: &out, err: &err)
+        XCTAssertEqual(code, 1)
+        XCTAssertTrue(err.contains("already exists"), err)
+        XCTAssertEqual(try String(contentsOfFile: path, encoding: .utf8), "# my real work\n",
+                       "the author's file must be untouched")
+    }
+
+    func testNewForceOverwritesDeliberately() async throws {
+        let dir = NSTemporaryDirectory() + "vee-new-" + UUID().uuidString
+        defer { try? FileManager.default.removeItem(atPath: dir) }
+        let path = dir + "/clock.10s.sh"
+        try FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
+        try "# stale\n".write(toFile: path, atomically: true, encoding: .utf8)
+
+        var out = "", err = ""
+        let code = await VeeCLI.run(["new", "--lang", "sh", "--name", "Clock", "--interval", "10s", "--out", dir, "--force"],
+                                    runner: UnusedRunner(), out: &out, err: &err)
+        XCTAssertEqual(code, 0, err)
+        XCTAssertNotEqual(try String(contentsOfFile: path, encoding: .utf8), "# stale\n")
+    }
+
 }

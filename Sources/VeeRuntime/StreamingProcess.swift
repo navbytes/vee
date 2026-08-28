@@ -1,6 +1,34 @@
 import Foundation
 import VeeCore
 
+/// Why a streaming plugin's process ended, when it ended badly.
+///
+/// A streaming plugin that dies gets restarted with backoff, so without this the
+/// only trace of a plugin crash-looping on a typo was the restart message
+/// itself: stderr went to `/dev/null` and a non-zero exit ended the stream
+/// indistinguishably from a clean one. `stderr` is the tail of what the plugin
+/// wrote, capped — an interpreter's stack trace is the thing worth seeing.
+public struct StreamingPluginError: Error, Equatable, Sendable {
+    public let exitCode: Int32
+    public let standardError: String
+
+    public init(exitCode: Int32, standardError: String) {
+        self.exitCode = exitCode
+        self.standardError = standardError
+    }
+
+    /// A one-line summary for a menu row or a restart message.
+    public var summary: String {
+        let trimmed = standardError
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .split(separator: "\n")
+            .last
+            .map(String.init)
+        if let trimmed, !trimmed.isEmpty { return trimmed }
+        return "exited with code \(exitCode)"
+    }
+}
+
 /// Launches a long-lived process and streams its stdout as lines until it exits.
 public protocol StreamingProcessRunning: Sendable {
     func lines(_ invocation: ProcessInvocation) -> AsyncThrowingStream<String, Error>
@@ -35,8 +63,21 @@ private final class StreamingProc: @unchecked Sendable {
 
     private let process = Process()
     private let outPipe = Pipe()
+    private let errPipe = Pipe()
     private let lock = NSLock()
     private var partial = Data()
+    /// Bounded tail of the plugin's stderr, for the error a bad exit throws.
+    private var capturedError = Data()
+    /// The child's exit status, recorded by `terminationHandler`.
+    ///
+    /// Taken from Foundation's own callback rather than by calling
+    /// `waitUntilExit()`/`terminationStatus` from the reader thread. `Process` is
+    /// not thread-safe, and `cancel()` deliberately guards every access to it
+    /// under `lock` for exactly that reason — a reader blocking inside
+    /// `waitUntilExit()` while `cancel()` calls `terminate()` on the same object
+    /// deadlocks, which is a hang rather than a failed test.
+    private var exitStatus: Int32 = 0
+    private let exited = DispatchSemaphore(value: 0)
     private var finished = false
     /// Guards against re-logging `maxLineBytes` truncation on every subsequent
     /// chunk of a stream that keeps emitting with no newlines.
@@ -58,7 +99,18 @@ private final class StreamingProc: @unchecked Sendable {
             process.currentDirectoryURL = URL(fileURLWithPath: wd)
         }
         process.standardOutput = outPipe
-        process.standardError = FileHandle.nullDevice
+        // Captured, not discarded. This used to be `FileHandle.nullDevice`, so a
+        // streaming plugin that died on a syntax error or a missing interpreter
+        // produced a menu that just said "restarting…" forever, with the actual
+        // reason written to nowhere.
+        process.standardError = errPipe
+        // Set before `run()`: Foundation invokes this itself, so the status is
+        // recorded without the reader ever touching `process`.
+        process.terminationHandler = { [weak self] finished in
+            guard let self else { return }
+            lock.withLock { exitStatus = finished.terminationStatus }
+            exited.signal()
+        }
 
         do {
             try process.run()
@@ -66,8 +118,31 @@ private final class StreamingProc: @unchecked Sendable {
             finish(error: VeeError.launchFailed(pluginID: PluginID(path: invocation.launchPath), reason: error.localizedDescription))
             return
         }
-        // Close the parent's write end so the read loop sees EOF at child exit.
+        // Close the parent's write ends so the read loops see EOF at child exit.
         try? outPipe.fileHandleForWriting.close()
+        try? errPipe.fileHandleForWriting.close()
+
+        // stderr drains on its own queue, and keeps draining after the cap is
+        // reached: a child that fills the stderr pipe and gets no reader blocks
+        // forever on write(2), which would hang the plugin rather than log it.
+        let errFD = errPipe.fileHandleForReading.fileDescriptor
+        let errDone = DispatchSemaphore(value: 0)
+        DispatchQueue.global().async { [self] in
+            var buffer = [UInt8](repeating: 0, count: 16 * 1024)
+            while true {
+                let n = read(errFD, &buffer, buffer.count)
+                if n == 0 { break }
+                if n < 0 {
+                    if errno == EINTR { continue }
+                    break
+                }
+                lock.withLock {
+                    let room = Self.maxCapturedErrorBytes - capturedError.count
+                    if room > 0 { capturedError.append(contentsOf: buffer[0..<Swift.min(n, room)]) }
+                }
+            }
+            errDone.signal()
+        }
 
         // Single dedicated reader. Raw read(2) rather than `availableData`: it
         // lets a stalled read be unblocked by *closing* the handle from another
@@ -88,9 +163,25 @@ private final class StreamingProc: @unchecked Sendable {
                 }
                 ingest(Data(buffer[0..<n]))
             }
-            finish(error: nil)
+            // stdout is at EOF, so the child has closed it. Wait for the exit
+            // callback and the stderr drain — both bounded, because a stream
+            // that never resolves must end as a finished stream, not a hang.
+            _ = exited.wait(timeout: .now() + 5)
+            _ = errDone.wait(timeout: .now() + 2)
+            let status = lock.withLock { exitStatus }
+            guard status != 0 else {
+                finish(error: nil)
+                return
+            }
+            let stderrText = lock.withLock { String(decoding: capturedError, as: UTF8.self) }
+            finish(error: StreamingPluginError(exitCode: status, standardError: stderrText))
         }
     }
+
+    /// Cap on the retained stderr tail. Big enough for an interpreter's stack
+    /// trace, small enough that a plugin looping on an error can't grow it
+    /// without bound.
+    private static let maxCapturedErrorBytes = 64 * 1024
 
     /// A single line with no terminating newline would otherwise grow `partial`
     /// without limit. 1 MB for one menu line is already pathological.

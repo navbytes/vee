@@ -54,9 +54,11 @@ public struct HeaderVariableReader: VariableDeclarationReading {
     public init() {}
 
     public func declarations(for plugin: AggregatablePlugin) -> [VarDeclaration] {
-        // `try?` flattens the throwing, non-optional `String(contentsOfFile:)`
-        // to `String?`, so `?? ""` yields the empty source on read failure.
-        let source = (try? String(contentsOfFile: plugin.path, encoding: .utf8)) ?? ""
+        // `?? ""` yields the empty source only when the file genuinely can't be
+        // read — a file that reads fine but isn't valid UTF-8 still parses, or
+        // this plugin's configured variables would silently vanish from its
+        // environment. See `PluginSource`.
+        let source = PluginSource.read(atPath: plugin.path) ?? ""
         return HeaderParser.parse(source: source).vars
     }
 }

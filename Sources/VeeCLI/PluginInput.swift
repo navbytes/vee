@@ -1,4 +1,5 @@
 import Foundation
+import VeeCore
 import VeeRuntime
 
 /// The two ways a path becomes plugin output, and the single place that choice
@@ -41,7 +42,16 @@ public enum PluginInput {
     ) async throws -> Loaded {
         switch mode {
         case .text:
-            let raw = try String(contentsOfFile: path, encoding: .utf8)
+            // Throws loudly when the file can't be read — `vee lint` and the
+            // dev loop both turn that into "could not read '<path>': <reason>"
+            // rather than linting an empty string and reporting it clean.
+            //
+            // A file that reads fine but isn't valid UTF-8 is NOT that case: it
+            // decodes leniently (see `PluginSource`), because such a plugin
+            // runs perfectly well — the executor reads bytes — and a linter
+            // that refuses to look at a plugin the app happily runs is a linter
+            // disagreeing with production. Same read policy on both sides.
+            let raw = try PluginSource.readOrThrow(atPath: path)
             return Loaded(raw: raw, diagnosticPath: path, outcome: nil)
         case .execute:
             let outcome = try await VeeCLI.runPlugin(path: path, runner: runner)

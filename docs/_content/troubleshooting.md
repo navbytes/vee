@@ -54,6 +54,11 @@ Make sure you downloaded `Vee.app` from the official [GitHub Releases](https://g
 Vee runs each on-demand plugin with a timeout (30 seconds by default) and kills the process if it overruns. If your plugin does slow work (a slow network call, a heavy computation):
 
 - Make it faster, or cache results between runs (use `SWIFTBAR_PLUGIN_CACHE_PATH` / `SWIFTBAR_PLUGIN_DATA_PATH`).
+- A **streaming plugin that keeps restarting** now says why: its standard error
+  is captured and the last line is shown with the restart message, so a missing
+  interpreter or a syntax error is visible instead of an endless "restarting…".
+  If it fails often enough that Vee gives up, its menu offers **Restart Plugin**
+  — previously the only way back was to toggle the plugin off and on.
 - If it is genuinely long-running and pushes continuous updates, make it a **streaming** plugin instead (`<swiftbar.type>streamable</swiftbar.type>` with `~~~` separators), which stays running rather than being re-invoked on a timer. See [Streaming](plugin-authoring.md#streaming).
 
 ## "command not found" / a dependency or interpreter is missing
@@ -68,7 +73,7 @@ Vee does not install your plugin's dependencies. If a plugin needs `python3`, `n
 ## Refreshes aren't happening
 
 - **Confirm the interval.** The filename controls it: `weather.10m.sh` is every 10 minutes, `weather.sh` is on demand only.
-- **Cron plugins** use `<swiftbar.schedule>` (5-field cron). Double-check the expression — an invalid field means it never fires.
+- **Cron plugins** use `<swiftbar.schedule>` (5-field cron). Double-check the expression — an invalid field means it never fires. Vee now says so instead of going quiet: a schedule it can't parse, or one that parses but can never match a real date (`0 0 30 2 *` — February has no 30th), shows an error on the plugin's row rather than silently disabling its refresh forever. A rare-but-real schedule like `0 0 29 2 *` (leap day) is not treated as impossible.
 - **Manual refresh** always works: the plugin's own dropdown has a refresh action if it prints one (`refresh=true`), and the Vee menu has **Refresh all**.
 - Plugins can trigger refreshes via [URL actions](cli-and-urls.md) (`vee://refreshplugin?name=…`).
 

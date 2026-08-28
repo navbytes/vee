@@ -130,6 +130,23 @@ final class ShebangLaunchTests: XCTestCase {
         XCTAssertEqual(path, "/usr/bin/env")
         XCTAssertEqual(args, ["node", p])
     }
+
+    /// A CRLF file used to hand `execve` the interpreter "node\r", which fails
+    /// with nothing that points at the line ending. Every other line-oriented
+    /// reader in Vee tolerates CRLF; this one has to as well.
+    func testHonorsShebangWithCRLFLineEndings() {
+        let p = tempFile("#!/usr/bin/env node\r\nconsole.log('hi')\r\n"); defer { try? FileManager.default.removeItem(atPath: p) }
+        let (path, args) = PluginExecutor.launchCommand(pluginPath: p, runInBash: true)
+        XCTAssertEqual(path, "/usr/bin/env")
+        XCTAssertEqual(args, ["node", p], "the \\r must not survive into the interpreter's argument")
+    }
+
+    func testHonorsBareShebangWithCRLFLineEndings() {
+        let p = tempFile("#!/bin/zsh\r\necho hi\r\n"); defer { try? FileManager.default.removeItem(atPath: p) }
+        let (path, args) = PluginExecutor.launchCommand(pluginPath: p, runInBash: true)
+        XCTAssertEqual(path, "/bin/zsh", "the interpreter path itself must not carry a trailing \\r")
+        XCTAssertEqual(args, [p])
+    }
 }
 
 final class PluginRuntimeTests: XCTestCase {
