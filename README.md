@@ -71,6 +71,9 @@ Already have xbar or SwiftBar plugins? Point Vee at your existing folder
 | [Troubleshooting](https://vee.navbytes.io/guide/troubleshooting/) · [FAQ](https://vee.navbytes.io/guide/faq/) | When something does not work. |
 | [Architecture](ARCHITECTURE.md) · [Contributing](CONTRIBUTING.md) | For contributors. |
 
+If `vee.navbytes.io` is blocked on your network, the same docs are mirrored at
+**[vee-docs.pages.dev](https://vee-docs.pages.dev/)**.
+
 Ready-to-run examples live in [`plugins/showcase/`](plugins/showcase/) —
 including [`kitchen-sink.1m.sh`](plugins/showcase/kitchen-sink.1m.sh), one file
 exercising every JSON field.
