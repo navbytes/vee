@@ -113,7 +113,10 @@ final class PluginCoordinator {
         } else {
             self.controller = StatusItemController(
                 pluginName: plugin.filename.name,
-                handler: AppActionDispatcher(runner: SystemProcessRunner(), baseEnvironment: baseEnvironment) { [weak self] in self?.refresh() },
+                handler: AppActionDispatcher(
+                    runner: SystemProcessRunner(),
+                    environment: { [weak self] in self?.actionEnvironment() ?? baseEnvironment }
+                ) { [weak self] in self?.refresh() },
                 hasSettings: !header.vars.isEmpty || !features.isEmpty,
                 trustSummary: trustSummary,
                 refreshOnOpen: header.refreshOnOpen ?? false,
@@ -423,6 +426,24 @@ final class PluginCoordinator {
     /// declared `<xbar.var>` wins over a static environment value of the same name).
     private func mergedDeclaredVariables() -> [String: String] {
         header.environment.merging(preferences.environmentValues()) { _, pref in pref }
+    }
+
+    /// The environment a clicked menu action runs in — the same merged context
+    /// a render gets, so `$SWIFTBAR_PLUGIN_DATA_PATH` and friends resolve
+    /// identically on both paths.
+    ///
+    /// Before this existed, actions ran with the bare inherited environment
+    /// while renders ran with the merged one. A plugin storing session state
+    /// under `$SWIFTBAR_PLUGIN_DATA_PATH` (falling back to `$TMPDIR`) wrote it
+    /// to `$TMPDIR` from a click and looked for it in the data directory at
+    /// render, so its own running process read back as untracked.
+    func actionEnvironment() -> [String: String] {
+        let context = PluginsDirectory.context(
+            pluginPath: plugin.path,
+            pluginsDirectory: pluginsDirectory,
+            declaredVariables: mergedDeclaredVariables()
+        )
+        return EnvironmentBuilder.merged(base: baseEnvironment, context: context)
     }
 
     /// Schedules refreshes from `<swiftbar.schedule>` cron expressions.

@@ -8,12 +8,33 @@ import VeeMenu
 @MainActor
 final class AppActionDispatcher: MenuActionHandling {
     private let runner: ProcessRunning
-    private let baseEnvironment: [String: String]
+    /// The environment a clicked action runs in, resolved per click rather than
+    /// snapshotted at construction.
+    ///
+    /// It must carry the same `SWIFTBAR_*`/`VEE_*` context a *render* gets
+    /// (`PluginExecutor` builds it via `EnvironmentBuilder.merged`). A plugin
+    /// that writes state in a clicked action and reads it back at render —
+    /// the ordinary xbar pattern — otherwise resolves
+    /// `$SWIFTBAR_PLUGIN_DATA_PATH` in one pass and not the other, and the two
+    /// halves silently address different directories.
+    ///
+    /// A closure, not a dictionary, because the coordinator builds this
+    /// dispatcher once per plugin while the context it depends on keeps
+    /// moving: declared `<xbar.var>` preferences change whenever the user
+    /// edits plugin settings, and dark mode flips under the user. A snapshot
+    /// would freeze both at launch.
+    private let environment: @MainActor () -> [String: String]
     private let onRefresh: () -> Void
 
-    init(runner: ProcessRunning, baseEnvironment: [String: String] = ProcessInfo.processInfo.environment, onRefresh: @escaping () -> Void) {
+    /// `environment` is deliberately **not** defaulted. A default of
+    /// "the inherited environment" is exactly the bug this parameter exists to
+    /// prevent, and it would reintroduce it silently at any new call site.
+    /// Making it required turns that mistake into a compile error.
+    init(runner: ProcessRunning,
+         environment: @escaping @MainActor () -> [String: String],
+         onRefresh: @escaping () -> Void) {
         self.runner = runner
-        self.baseEnvironment = baseEnvironment
+        self.environment = environment
         self.onRefresh = onRefresh
     }
 
@@ -69,7 +90,7 @@ final class AppActionDispatcher: MenuActionHandling {
         let invocation = ControlReinvocation.invocation(
             shell: shell,
             value: value,
-            baseEnvironment: baseEnvironment
+            baseEnvironment: environment()
         )
         let runner = self.runner
         let onRefresh = self.onRefresh
@@ -86,7 +107,7 @@ final class AppActionDispatcher: MenuActionHandling {
         let invocation = ProcessInvocation(
             launchPath: "/usr/bin/shortcuts",
             arguments: ["run", name],
-            environment: baseEnvironment
+            environment: environment()
         )
         let runner = self.runner
         let onRefresh = self.onRefresh
@@ -102,7 +123,7 @@ final class AppActionDispatcher: MenuActionHandling {
         let invocation = ProcessInvocation(
             launchPath: shell.launchPath,
             arguments: shell.arguments,
-            environment: baseEnvironment
+            environment: environment()
         )
         let runner = self.runner
         let onRefresh = self.onRefresh
