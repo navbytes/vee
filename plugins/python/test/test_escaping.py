@@ -13,7 +13,7 @@ import warnings
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from vee import Menu  # noqa: E402
+from vee import Gauge, Menu  # noqa: E402
 
 
 def _unescape(s: str) -> str:
@@ -160,3 +160,30 @@ class OptionNameTests(unittest.TestCase):
             slider={"min": 0, "max": 100, "value": 40},
         )
         self.assertEqual(tuples.to_string(), mappings.to_string())
+
+
+class WidgetCardOptionTests(unittest.TestCase):
+    """`WidgetCard` stored `**options` verbatim and emitted only the names it
+    recognised, so a typo — or `refresh_after`, the spelling every other option
+    in this SDK and the JSON key itself use — vanished with no error and no
+    output key. It now goes through the same rule `Menu` uses."""
+
+    def test_unknown_card_option_raises(self) -> None:
+        with self.assertRaises(TypeError):
+            Gauge(title="T", totally_made_up_option=99)
+
+    def test_snake_case_names_are_canonical(self) -> None:
+        self.assertIn('"refresh_after":300', str(Gauge(title="T", refresh_after=300)))
+
+    def test_camelcase_names_still_work_and_warn(self) -> None:
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            old = str(Gauge(title="T", refreshAfter=300, staleAfter=900))
+            self.assertEqual(len(caught), 2)
+            self.assertTrue(all(w.category is DeprecationWarning for w in caught))
+        self.assertEqual(old, str(Gauge(title="T", refresh_after=300, stale_after=900)))
+
+    def test_misspelling_suggests_the_real_name(self) -> None:
+        with self.assertRaises(TypeError) as caught:
+            Gauge(title="T", refreshafter=300)
+        self.assertIn("refresh_after", str(caught.exception))

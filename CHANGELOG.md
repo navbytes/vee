@@ -13,6 +13,22 @@ All notable changes to Vee are documented here. The format is based on
   parameter separator and well-formed JSON came back buried in bogus "unknown
   parameter" findings. Lint now routes JSON to the JSON parser and reports its
   diagnostics.
+- **`vee lint` passed a plugin that could not run.** A non-zero exit was a
+  `Note:` on stderr and the command still exited `0`, so a plugin whose
+  interpreter was missing (exit 127) or that crashed before printing anything
+  linted clean and sailed through CI. A non-zero exit or a timeout is now an
+  error finding, matching what `vee render` and `vee dev` already do — except
+  for a plugin declaring `<vee.type>streamable</vee.type>`, which is meant to
+  run until it is stopped.
+- **The Python SDK's `WidgetCard` silently dropped unknown options.** `Menu` and
+  `JSONMenu` reject a misspelled option with a did-you-mean; the card stored
+  `**options` verbatim and emitted only the names it recognised, so a typo
+  vanished with no error and no output key. It now goes through the same rule.
+- **`refreshAfter`/`staleAfter` were the Python SDK's last camelCase options.**
+  Every other option is snake_case, so an author writing `refresh_after=` — the
+  spelling the JSON key itself uses — lost the field silently. `refresh_after`
+  and `stale_after` are now the names; the camelCase spellings still work with
+  a `DeprecationWarning`, like the other renamed options.
 
 ## [0.5.0] - 2026-08-28
 

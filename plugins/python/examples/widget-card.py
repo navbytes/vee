@@ -36,8 +36,8 @@ def build() -> str:
             {"kind": "refresh", "label": "Refresh"},
             {"kind": "href", "label": "Open", "url": "https://dash.example.com"},
         ],
-        refreshAfter=900,
-        staleAfter=3600,
+        refresh_after=900,
+        stale_after=3600,
     )
     return card.to_string()
 

@@ -1,5 +1,11 @@
 // Vee plugin SDK — typed builders that emit the xbar/SwiftBar text format Vee
 // parses. Zero dependencies; runs directly on Node (which strips the types).
+//
+// Node only *erases* types, it does not compile them, so this file must stay
+// within erasable syntax: no `enum`, no `namespace`, and no constructor
+// parameter properties (`constructor(private readonly x: number)`) — Node
+// rejects the file outright, which breaks every plugin that imports it, not
+// just the new code.
 
 export type Color = string;
 
