@@ -150,7 +150,12 @@ Lint findings:
 ```
 
 `vee lint` exits `1` when it finds anything, so you can wire it into a
-pre-commit hook or CI.
+pre-commit hook or CI. A plugin that fails to run at all — a missing
+interpreter, a crash before it prints anything — is itself a finding: there is
+no output to lint, so reporting it clean would be the wrong answer. A
+[streaming](plugin-authoring.md#streaming) plugin is the exception: lint runs it
+as a one-shot, so hitting the execution timeout is how it always ends and is not
+reported.
 
 ### Diagnostics in your editor (`--format compact`)
 

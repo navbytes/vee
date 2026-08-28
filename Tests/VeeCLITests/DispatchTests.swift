@@ -67,6 +67,56 @@ final class DispatchTests: XCTestCase {
         XCTAssertTrue(out.contains("No lint findings"), out)
     }
 
+    /// Regression: a plugin that could not run at all — a missing interpreter
+    /// (exit 127), a crash on import — linted clean and exited 0, so CI
+    /// green-lit a plugin that produces nothing. `render`/`dev` already fail
+    /// on a non-zero exit; lint has to agree.
+    func testLintFailsOnNonzeroChildExit() async {
+        let fake = FakeRunner(stdout: "", exitCode: 127)
+        var out = "", err = ""
+        let code = await VeeCLI.run(["lint", "/tmp/plugin.sh"], runner: fake, out: &out, err: &err)
+        XCTAssertEqual(code, 1, out)
+        XCTAssertTrue(out.contains("exited with code 127"), out)
+    }
+
+    func testLintFailsOnTimeout() async throws {
+        let path = try writeTempPlugin("#!/bin/bash\nsleep 99\n")
+        let fake = FakeRunner(stdout: "Partial\n", timedOut: true)
+        var out = "", err = ""
+        let code = await VeeCLI.run(["lint", path], runner: fake, out: &out, err: &err)
+        XCTAssertEqual(code, 1, out)
+        XCTAssertTrue(out.contains("timed out"), out)
+    }
+
+    /// …but a streaming plugin is meant to run forever, and the CLI runs it as a
+    /// one-shot — so the timeout is how every correct streamable plugin ends.
+    /// Flagging it would fail CI on all of them.
+    func testLintDoesNotFlagTimeoutForStreamablePlugin() async throws {
+        let path = try writeTempPlugin("#!/bin/bash\n# <vee.type>streamable</vee.type>\nwhile :; do echo hi; echo '~~~'; done\n")
+        let fake = FakeRunner(stdout: "hi\n~~~\n", timedOut: true)
+        var out = "", err = ""
+        let code = await VeeCLI.run(["lint", path], runner: fake, out: &out, err: &err)
+        XCTAssertEqual(code, 0, out)
+        XCTAssertTrue(out.contains("No lint findings"), out)
+    }
+
+    private func writeTempPlugin(_ source: String) throws -> String {
+        let path = NSTemporaryDirectory() + "vee-lint-\(UUID().uuidString).sh"
+        try source.write(toFile: path, atomically: true, encoding: .utf8)
+        addTeardownBlock { try? FileManager.default.removeItem(atPath: path) }
+        return path
+    }
+
+    /// The exit-code finding must survive the JSON branch, which used to
+    /// *replace* the findings list rather than add to it.
+    func testLintReportsNonzeroExitAlongsideJSONOutput() async {
+        let fake = FakeRunner(stdout: #"{"vee":1,"title":[{"text":"T"}]}"# + "\n", exitCode: 2)
+        var out = "", err = ""
+        let code = await VeeCLI.run(["lint", "/tmp/plugin.sh"], runner: fake, out: &out, err: &err)
+        XCTAssertEqual(code, 1, out)
+        XCTAssertTrue(out.contains("exited with code 2"), out)
+    }
+
     func testLintCleanOutputExitsZero() async {
         let fake = FakeRunner(stdout: "CPU | color=green\n---\nRefresh | refresh=true\n")
         var out = "", err = ""

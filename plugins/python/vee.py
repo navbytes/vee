@@ -219,24 +219,34 @@ _DEPRECATED_ALIASES = {
 }
 
 
-def _normalize_options(options: dict[str, Any]) -> dict[str, Any]:
-    """Maps deprecated spellings onto current ones and rejects unknown keys."""
+def _normalize_options(
+    options: dict[str, Any],
+    names: frozenset[str] = _OPTION_NAMES,
+    aliases: dict[str, str] = _DEPRECATED_ALIASES,
+    label: str = "option",
+    stacklevel: int = 3,
+) -> dict[str, Any]:
+    """Maps deprecated spellings onto current ones and rejects unknown keys.
+
+    Parameterized rather than copied because `WidgetCard` needs the same rule
+    over its own name list — a second hand-written copy is how the card came to
+    accept (and silently drop) anything at all."""
     out: dict[str, Any] = {}
     for name, value in options.items():
-        current = _DEPRECATED_ALIASES.get(name)
+        current = aliases.get(name)
         if current is not None:
             warnings.warn(
                 f"{name!r} is the pre-snake_case spelling; use {current!r}. "
                 "The old name still works and will be removed in the next "
                 "major version.",
                 DeprecationWarning,
-                stacklevel=3,
+                stacklevel=stacklevel,
             )
             name = current
-        elif name not in _OPTION_NAMES:
-            close = sorted(n for n in _OPTION_NAMES if n.replace("_", "") == name.lower().replace("_", ""))
+        elif name not in names:
+            close = sorted(n for n in names if n.replace("_", "") == name.lower().replace("_", ""))
             hint = f" Did you mean {close[0]!r}?" if close else ""
-            raise TypeError(f"unknown option {name!r}.{hint}")
+            raise TypeError(f"unknown {label} {name!r}.{hint}")
         out[name] = value
     return out
 
@@ -439,10 +449,18 @@ _CARD_KEYS: list[tuple[str, str]] = [
     ("trend", "trend"),
     ("items", "items"),
     ("actions", "actions"),
-    ("refreshAfter", "refresh_after"),
-    ("staleAfter", "stale_after"),
+    ("refresh_after", "refresh_after"),
+    ("stale_after", "stale_after"),
     ("layout", "layout"),
 ]
+
+_CARD_OPTION_NAMES = frozenset(name for name, _ in _CARD_KEYS)
+
+# The card's last two camelCase spellings, kept working exactly like the menu's
+# (`_DEPRECATED_ALIASES`). They were the only options in this SDK that were not
+# snake_case, so an author writing `refresh_after=` — the spelling every other
+# option and the JSON key itself use — silently lost the field.
+_CARD_ALIASES = {"refreshAfter": "refresh_after", "staleAfter": "stale_after"}
 
 
 def _json_value(value: Any) -> str:
@@ -486,7 +504,13 @@ class WidgetCard:
     """
 
     def __init__(self, **options: Any) -> None:
-        self._options = options
+        # stacklevel 4, not the default 3: a card is nearly always built
+        # through a template helper (`Stat`/`Gauge`/…), which adds a frame. A
+        # DeprecationWarning attributed to a frame inside this module is
+        # *silently dropped* by Python's default filter, so the extra level is
+        # what makes the warning visible at all.
+        self._options = _normalize_options(
+            options, _CARD_OPTION_NAMES, _CARD_ALIASES, "widget card option", stacklevel=4)
 
     def to_string(self) -> str:
         payload: dict[str, Any] = {"vee_widget": 1}

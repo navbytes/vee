@@ -319,11 +319,29 @@ public enum VeeCLI {
             return 1
         }
         let raw = loaded.raw
-        if let outcome = loaded.outcome, outcome.exitCode != 0 {
-            err += "Note: plugin exited with code \(outcome.exitCode).\n"
-        }
 
         var findings: [ParseDiagnostic] = []
+
+        // A plugin that could not run is a lint failure, not a footnote. This
+        // was a "Note:" on stderr with a 0 exit, so a plugin whose interpreter
+        // was missing (exit 127) or that crashed on import linted clean and
+        // sailed through CI — there is no output to find anything in. `render`
+        // and `dev` already fail on both conditions; lint was the odd one out.
+        if let outcome = loaded.outcome {
+            if outcome.timedOut {
+                // …except for a streaming plugin, which is *supposed* to run
+                // forever: the CLI runs it as a one-shot, so hitting the
+                // timeout is how it always ends. Flagging that would fail CI on
+                // every correct streamable plugin.
+                if !isStreamable(path: path) {
+                    findings.append(.init(severity: .error, message: "plugin timed out before producing output"))
+                }
+            } else if outcome.exitCode != 0 {
+                findings.append(.init(
+                    severity: .error,
+                    message: "plugin exited with code \(outcome.exitCode); only the output it managed to print was linted"))
+            }
+        }
 
         // Structured-JSON output (`{"vee":1,…}`) is a different protocol, and
         // the text-format linter and parser would scan it as xbar lines — every
@@ -333,7 +351,7 @@ public enum VeeCLI {
         // Every other CLI path already routes through `parseAuto` for exactly
         // this reason; lint was the one that did not.
         if let json = JSONOutputParser.parse(raw) {
-            findings = json.diagnostics
+            findings += json.diagnostics
         } else {
             // The raw-line linter re-detects some issues the parser also flags (e.g.
             // unknown params), but with accurate line numbers — whereas the parser's
@@ -736,6 +754,14 @@ public enum VeeCLI {
             workingDirectory: (absolute as NSString).deletingLastPathComponent,
             timeout: 30)
         return try await runner.run(invocation)
+    }
+
+    /// Whether the plugin at `path` declares `<*.type>streamable</*.type>`.
+    /// Read from source because a streaming plugin's stdout says nothing about
+    /// it — the frames look like any other output.
+    static func isStreamable(path: String) -> Bool {
+        guard let source = PluginSource.read(atPath: path) else { return false }
+        return HeaderParser.parse(source: source).streamable
     }
 
     // MARK: - Formatting helpers

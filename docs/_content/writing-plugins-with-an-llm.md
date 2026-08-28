@@ -78,7 +78,10 @@ vee lint ./cpu.30s.sh
 ```
 
 It exits non-zero on anything it flags, so it works as the check in an agent
-loop: generate, lint, feed the findings back, repeat until clean. For a plugin
+loop: generate, lint, feed the findings back, repeat until clean. A plugin that
+fails to run at all is flagged too — a missing interpreter, an import that
+raises — so "clean" means the plugin ran *and* its output is sound, not that
+there was nothing to read. For a plugin
 that is not executable yet, or when you want to iterate on the output shape
 before writing the script, lint the protocol text directly:
 
