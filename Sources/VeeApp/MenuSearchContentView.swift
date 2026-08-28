@@ -75,22 +75,6 @@ struct MenuSearchContentView: View {
         }
     }
 
-    /// Whether any visible row can disclose children / declares an icon. A
-    /// slot (chevron gutter, icon column) is reserved only when some row in the
-    /// current list actually uses it — a flat, icon-less menu keeps its text at
-    /// the leading edge instead of paying for columns nothing fills, which is
-    /// how the AppKit dropdown behaves.
-    private var anyExpandable: Bool {
-        model.visible.contains { if case .row(let row) = $0 { return row.canExpand } else { return false } }
-    }
-
-    private var anyIcon: Bool {
-        model.visible.contains {
-            guard case .row(let row) = $0 else { return false }
-            return row.spec.item.params.swiftbar.sfimage != nil || SearchRowIcon.decodedImage(for: row.spec.item.params) != nil
-        }
-    }
-
     private var rowList: some View {
         ScrollViewReader { proxy in
             ScrollView {
@@ -125,8 +109,6 @@ struct MenuSearchContentView: View {
             MenuRowView(
                 row: row,
                 selected: index == model.selection,
-                showsChevronSlot: anyExpandable,
-                showsIconSlot: anyIcon,
                 onToggleBranch: { model.toggle(row.key) },
                 onCommit: { onCommit(row.spec, $0) }
             )
@@ -180,11 +162,6 @@ enum SearchRowIcon {
 private struct MenuRowView: View {
     let row: VisibleRow
     let selected: Bool
-    /// Whether this list reserves a chevron / icon column at all — computed
-    /// over the visible rows by the caller, so rows agree on their left edge
-    /// and a menu with nothing to disclose (or no icons) pays for no gutter.
-    var showsChevronSlot: Bool = true
-    var showsIconSlot: Bool = true
     var onToggleBranch: () -> Void = {}
     var onCommit: @MainActor (Double) -> Void = { _ in }
 
@@ -201,6 +178,10 @@ private struct MenuRowView: View {
     /// `accessory=leading` anchors the graphic to the row's leading edge, the
     /// same param the AppKit menu row honors.
     private var accessoryLeading: Bool { spec.accessoryLeading }
+
+    /// Whether the row has a label at all. A graphic-only row draws no title
+    /// view — not even an empty one — so it costs no gap.
+    private var hasTitle: Bool { !spec.item.text.isEmpty }
 
     /// What this row draws inline. A live control wins here because a window
     /// can host one; the dropdown draws the display graphic instead and opens
@@ -232,19 +213,30 @@ private struct MenuRowView: View {
     }
 
     var body: some View {
-        HStack(spacing: 9) {
+        // Gaps hang off the pieces rather than off the stack, because a stack's
+        // uniform `spacing:` is paid even by a piece with no width — a bar-only
+        // row (`" | progress=… progressw=full"`, the shape a plugin uses for a
+        // hero gauge) has a zero-width title, and the 9pt on each side of it
+        // pushed the bar 18pt inboard of the text rows above and below it. The
+        // dropdown reserves its gap the same way: only when the label has width
+        // (`ProgressBarLayout.stretchedWidth`).
+        HStack(spacing: 0) {
             chevron
             icon
             if let accessory, accessoryLeading {
                 MenuRowAccessory(kind: accessory, leading: true, onCommit: onCommit)
+                    .padding(.trailing, hasTitle ? 9 : 0)
             }
-            title
-                .font(.system(size: 13))
-                .lineLimit(1)
-                .foregroundStyle(enabled ? (selected ? AnyShapeStyle(.white) : AnyShapeStyle(.primary)) : AnyShapeStyle(.secondary))
+            if hasTitle {
+                title
+                    .font(.system(size: 13))
+                    .lineLimit(1)
+                    .foregroundStyle(enabled ? (selected ? AnyShapeStyle(.white) : AnyShapeStyle(.primary)) : AnyShapeStyle(.secondary))
+            }
             Spacer(minLength: 0)
             if let accessory, !accessoryLeading {
                 MenuRowAccessory(kind: accessory, onCommit: onCommit)
+                    .padding(.leading, hasTitle ? 9 : 0)
             }
             // Surface the plugin's own "currently selected" marker (`checked=true`)
             // so an active choice (e.g. the current context) is visible here.
@@ -252,6 +244,7 @@ private struct MenuRowView: View {
                 Image(systemName: "checkmark")
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(selected ? AnyShapeStyle(.white) : AnyShapeStyle(Color.accentColor))
+                    .padding(.leading, 9)
             }
         }
         .padding(.leading, MenuRowView.indent(for: row.depth) + 10)
@@ -265,10 +258,12 @@ private struct MenuRowView: View {
         )
     }
 
-    /// The disclosure control, or an equal-width blank so leaf rows and parent
-    /// rows keep their text on the same vertical line. When no visible row can
-    /// expand, the whole column disappears rather than indenting every row of a
-    /// flat menu behind an always-empty gutter.
+    /// The disclosure control, drawn only on a row that has children.
+    ///
+    /// No blank gutter for the rest: reserving one because *some* row in the
+    /// list can expand pushes every line of a mostly-flat menu inboard, which
+    /// is the one thing the dropdown never does. Depth is already carried by
+    /// `indent(for:)`, so the column bought alignment and nothing else.
     @ViewBuilder
     private var chevron: some View {
         if row.canExpand {
@@ -280,20 +275,15 @@ private struct MenuRowView: View {
                 .contentShape(Rectangle())
                 .onTapGesture(perform: onToggleBranch)
                 .accessibilityLabel(row.isExpanded ? "Collapse" : "Expand")
-        } else if showsChevronSlot {
-            Color.clear.frame(width: 10)
+                .padding(.trailing, 9)
         }
     }
 
-    /// The row's declared icon, or empty space of the same size.
+    /// The row's declared icon, and nothing at all when the row declares none.
     ///
-    /// A row declaring no `sfimage=`/`image=`/`templateImage=` draws a blank
-    /// 18pt slot when some other visible row *does* declare one — that column
-    /// is what keeps the two aligned — and no slot at all in a menu with no
-    /// icons anywhere. The blank must be a concrete `Color.clear`, not an
-    /// empty `Group` with a frame: a `Group` applies its modifiers to each
-    /// child, so with no child the frame sizes nothing and the "reserved"
-    /// column silently collapses, un-aligning icon-less rows.
+    /// Same rule as the chevron, and the same rule the `NSMenu` rows follow: an
+    /// `sfimage=`/`image=`/`templateImage=` hangs to the left of its own text,
+    /// it does not open an 18pt column every other row then has to pay for.
     @ViewBuilder
     private var icon: some View {
         if let sfimage = spec.item.params.swiftbar.sfimage {
@@ -301,6 +291,7 @@ private struct MenuRowView: View {
                 .font(.system(size: 13))
                 .foregroundStyle(selected ? AnyShapeStyle(.white) : AnyShapeStyle(.secondary))
                 .frame(width: 18, height: 18)
+                .padding(.trailing, 9)
         } else if let nsImage = SearchRowIcon.decodedImage(for: spec.item.params) {
             // A `templateImage=` tints with row selection like an SF Symbol;
             // a plain `image=` keeps its own colors.
@@ -310,8 +301,7 @@ private struct MenuRowView: View {
                 .aspectRatio(contentMode: .fit)
                 .foregroundStyle(selected ? AnyShapeStyle(.white) : AnyShapeStyle(.secondary))
                 .frame(width: 18, height: 18)
-        } else if showsIconSlot {
-            Color.clear.frame(width: 18, height: 18)
+                .padding(.trailing, 9)
         }
     }
 }
