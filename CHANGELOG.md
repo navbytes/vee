@@ -6,6 +6,85 @@ All notable changes to Vee are documented here. The format is based on
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-08-28
+
+Closes twelve findings from an adversarial review of the plugin, deep-link and
+catalog surfaces, plus a menu-window layout fix. Every fix carries a regression
+test.
+
+### Security
+- **The ephemeral-plugin deep link stripped only `shell=`.** `setephemeralplugin`
+  shows no confirmation, so any web page could put a row in the menu bar that ran
+  a Shortcut (`shortcut=`) or opened a JavaScript-enabled web view (`webview=`)
+  on a single click. All three are now stripped from injected content.
+- **A store's signature could be verified against its own manifest's key.** That
+  proves only that a file matches the manifest it shipped with — which the
+  SHA-256 pin already proved — because whoever can rewrite the signature can
+  rewrite the key beside it. `requireSignature` now demands a `pinnedSigningKey`.
+- **The `swiftbar://addplugin` gate warned less than the Discover gate**, showing
+  declared capabilities but not the scan for capabilities a plugin appears to use
+  and did not declare.
+
+### Fixed
+- **Changing the plugins folder destroyed the old folder's Keychain secrets.**
+  Per-plugin state is keyed by filename with no directory component, so
+  reconciliation against the new folder treated every plugin of the old one as
+  deleted. Records now carry the folder they belong to.
+- **A momentary absence was enough to destroy a plugin's secrets.** An editor
+  saving non-atomically, a plugin dragged out to edit, or a volume remount could
+  all trigger it. An absence must now persist for several minutes.
+- **One non-UTF-8 byte voided a plugin's entire header** — no declared variables
+  (so configured values and Keychain secrets vanished from its environment), no
+  schedule, and a trust level indistinguishable from declaring nothing, while the
+  plugin still ran.
+- **A `#!` line with CRLF endings was never recognised**, because Swift treats
+  CRLF as a single character: the "first line" was the whole file.
+- **A cron expression that can never match** (`0 0 30 2 *` — February has no
+  30th) armed no timer and disabled the plugin's refresh permanently and
+  silently. It is now reported, and a leap-day schedule is not mistaken for one.
+- **`vee lint` flagged `\|`** — the escape its own bundled SDKs emit and the
+  parser handles correctly.
+- **`vee new` silently overwrote an existing plugin** while protecting the SDK it
+  vendors beside it. It now refuses unless `--force` is passed.
+- **Extensionless project files** (`README`, `Makefile`, `Dockerfile`, …) were
+  discovered and executed through bash.
+- **Streaming plugins discarded standard error**, so one dying on a missing
+  interpreter or a syntax error could only say "restarting…" forever. Its stderr
+  is captured and reported, and a stream that crash-loops until Vee gives up now
+  offers **Restart Plugin** instead of staying dead.
+- **Discover's search results depended on how far you had scrolled**, and its
+  grid reordered under the cursor as each card's metadata arrived.
+- A failed catalog fetch left a card blank until the app was relaunched.
+- A narrow window between reaping a plugin's process and recording its exit could
+  send a signal to an unrelated process that had reused the pid.
+- **A detached window indented every row behind gutters most of them didn't
+  use.** A chevron slot and an icon slot were reserved list-wide as soon as any
+  one row needed them, and a graphic-only row — a full-width gauge with no label
+  — paid for a gap on each side of a zero-width title, landing it further right
+  still. Each gutter is now drawn by the row that owns it, which is the rule the
+  dropdown already followed.
+
+### Changed
+- **Inline accessory and font sizes are bounded.** `progressw=`/`progressh=`/
+  `sparklinew=`/`sparklineh=` are clamped to 1–200 points (`chartw=`/`charth=`
+  keep their 8–200), `size=`/`sfsize=` to 4–144, and a `webview=` window to the
+  screen it opens on — an oversize window put its own close button out of reach.
+  The parameter reference documented an accessory clamp that did not exist; it
+  does now, and the values are checked against the source that declares them.
+- **Menu output is capped at 2000 rows**, with truncation reported. Submenu depth
+  was already capped; breadth was not, and every row is a real menu item.
+
+## [0.4.0] - 2026-08-27
+
+### Added
+- **Widget vocabulary parity: charts and tappable rows.** The widget's layout
+  tree gained a `chart` leaf (pie, donut, stacked bar, drawn with Swift Charts),
+  and `list`/`board` rows became tappable — `url` as a link, `shortcut` through
+  the existing App-Intent path, with the Shortcut name resolved by the app rather
+  than trusted from the widget process. A new build-enforced parity ledger makes
+  adding a menu graphic without answering what the widget does with it a compile
+  error rather than a silent gap.
+
 ### Changed
 - **The npm package publishes without a token.** `@navbytes/vee` is now released
   through npm trusted publishing: the registry verifies the release workflow's
@@ -805,7 +884,9 @@ lost. Comparison link below is `v0.1.1...v0.2.0` for the same reason.
 - Zero-dependency TypeScript SDK with a golden-fixture drift guard.
 - Developer-ID-signed, notarized distribution outside the Mac App Store.
 
-[Unreleased]: https://github.com/navbytes/vee/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/navbytes/vee/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/navbytes/vee/compare/v0.4.0...v0.5.0
+[0.4.0]: https://github.com/navbytes/vee/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/navbytes/vee/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/navbytes/vee/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/navbytes/vee/compare/v0.1.0...v0.1.1
