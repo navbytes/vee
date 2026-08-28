@@ -229,16 +229,19 @@ The Vee-native inline controls are available in JSON too, as typed item fields:
 | Field | Type | Notes |
 |-------|------|-------|
 | `sparkline` | `number[]` | Inline chart popover data. Non-finite values are dropped. |
-| `sparklineWidth` | `number \| "full"` | Sparkline width in points; `"full"` stretches it to the row's width. |
-| `sparklineHeight` | `number` | Sparkline height in points. |
+| `sparklineWidth` | `number \| "full"` | **Deprecated** — use the item's `accessoryWidth`, which sizes whichever accessory the item carries. Still accepted; `accessoryWidth` on the same item wins. |
+| `sparklineHeight` | `number` | **Deprecated** — use the item's `accessoryHeight`, which sizes whichever accessory the item carries. Still accepted; `accessoryHeight` on the same item wins. |
 | `sparklineColor` | `string` | Sparkline line color (named or hex). Falls back to the item's `color`. |
 | `toggle` | `boolean` | On/off switch. |
 | `slider` | `{ "min": number, "max": number, "value": number }` | Requires `min < max`; `value` is clamped into range. |
 | `progress` | `number` | A completion fraction, clamped to `0…1`. The fill uses the item's `color`. |
 | `progressTrackColor` | `string` | Progress track color (named or hex). |
 | `trackColor` | `string` | **Deprecated** — the pre-v2 spelling of `progressTrackColor`. Still accepted; removed in the next major version. |
-| `progressWidth` | `number` | Progress bar width in points. |
-| `progressHeight` | `number` | Progress bar height in points. |
+| `progressWidth` | `number \| "full"` | **Deprecated** — use the item's `accessoryWidth`, which sizes whichever accessory the item carries. Still accepted; `accessoryWidth` on the same item wins. |
+| `progressHeight` | `number` | **Deprecated** — use the item's `accessoryHeight`, which sizes whichever accessory the item carries. Still accepted; `accessoryHeight` on the same item wins. |
+| `accessoryWidth` | `number \| "full"` | Inline accessory width in points, sizing whichever accessory (sparkline, progress bar, chart) the item carries. `"full"` stretches it to the row's width, where supported. Supersedes `sparklineWidth`/`progressWidth`/`chart.w`. |
+| `accessoryHeight` | `number` | Inline accessory height in points, sizing whichever accessory the item carries. Supersedes `sparklineHeight`/`progressHeight`/`chart.h`. |
+| `accessory` | `"leading" \| "trailing"` | Which edge of the row the accessory renders on. Defaults to `trailing`. |
 | `chart` | `{ "kind": "pie" \| "donut" \| "stackedbar", "values": number[], "labels"?: string[], "colors"?: string[], "w"?: number, "h"?: number }` | A categorical share chart. `values` must be finite and `>= 0` with a positive total; at most 8 segments (a longer series folds its tail into "Other"). `labels`/`colors` are positional — a color that is `null`, blank, malformed, or unrecognised keeps that segment's palette slot. `w`/`h` are **deprecated** — use the item's `accessoryWidth`/`accessoryHeight`, which size whichever accessory the item carries. Both are in points, clamped to 8–200; `"full"` stretches the chart to the row's width. |
 
 ```json

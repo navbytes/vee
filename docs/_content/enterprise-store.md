@@ -68,8 +68,9 @@ declared capabilities are read from its source headers (`<xbar.title>`,
 
 Add a `vee-catalog.json` at the repo root when you want **curation**: explicit
 titles and descriptions without downloading every file, an integrity hash per
-plugin, a minimum-macOS gate, deprecation flags, and optional signing. When the
-file is present it is authoritative; otherwise Vee falls back to the convention.
+plugin, a minimum-macOS gate, a declared output surface, deprecation flags, and
+optional signing. When the file is present it is authoritative; otherwise Vee
+falls back to the convention.
 
 ```jsonc
 {
@@ -89,7 +90,8 @@ file is present it is authoritative; otherwise Vee falls back to the convention.
       "sha256": "9f2b…",                    // integrity pin (see below)
       "signature": "base64…",              // optional (see below)
       "deprecated": false,
-      "tags": ["oncall", "sre"]
+      "tags": ["oncall", "sre"],
+      "surface": "both"                    // optional: "menu" | "both" | "widget"
     }
   ]
 }

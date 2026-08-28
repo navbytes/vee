@@ -46,7 +46,8 @@ only; there are no cycles.
 | `VeeUI`           | SwiftUI windows and views: Preferences, Plugin Manager, Discover, plugin settings forms, the debug console, the Liquid Glass sparkline/control popovers, and the compact row graphics a detached window draws inline (`MenuRowAccessory`). |
 | `VeeWidgetShared` | A tiny Foundation-only model + store shared with the WidgetKit / Control Center extension. See [The widget cross-process channel](#the-widget-cross-process-channel). |
 | `VeeApp`          | The AppKit shell: `AppController`, `PluginCoordinator`, status-item management, App Intents, the URL/action routers, and notifications. Kept as a library so it is unit-testable. |
-| `vee`             | The executable: a thin entry point that either boots the app or dispatches the `render`/`show`/`lint`/`search`/`new` authoring subcommands (`VeeCLI`). |
+| `VeeCLI`          | The zero-install authoring CLI: `render`, `lint`, `new`, `sdk`, `search`, `show`, and `dev`. AppKit-free and kept as a library so the CLI surface is unit-testable without a GUI. |
+| `vee`             | The executable: a thin entry point that either boots the app or dispatches the `render`/`lint`/`new`/`sdk`/`search`/`show`/`dev` authoring subcommands (`VeeCLI`). |
 
 Dependency edges (downward):
 
@@ -57,7 +58,8 @@ VeeCore ─┬─► VeePluginFormat ─┬─► VeeRuntime ─► VeeApp ─�
          │                    └─► VeePreferences ─► VeeUI ─► VeeApp
          ├─► VeeTrust ──────────────────────────► VeeUI
          └─► VeeCatalog ────────────────────────► VeeUI
-VeeWidgetShared ──────────────────────────────► VeeApp   (also linked by the widget extension)
+VeeWidgetShared ─┬────────────────────────────► VeeApp   (also linked by the widget extension)
+                 └────────────────────────────► VeePluginFormat
 ```
 
 `VeeCatalog` and `VeeWidgetShared` are otherwise dependency-light on purpose —
@@ -284,8 +286,8 @@ The channel above carries more than a scrape. Every plugin run gets a
 `VEE_TARGET` environment variable (`VeeRuntime/EnvironmentBuilder.swift`,
 `RuntimeEnvironmentContext.target`); for a plugin declaring
 `<vee.surface>both</vee.surface>`/`widget`, `PluginCoordinator` also runs a
-second `RefreshTimer` on the plugin's widget-mode cadence
-(`<vee.widget.interval>`, floored at 5 minutes) that invokes it with
+second `RefreshTimer` on the plugin's widget-mode cadence — reusing the
+plugin's filename interval, floored at 10 seconds — that invokes it with
 `VEE_TARGET=widget` and parses stdout as a single JSON "card" object
 (`VeePluginFormat/WidgetCardParser.swift` → `VeeWidgetShared.WidgetCard`,
 schema in

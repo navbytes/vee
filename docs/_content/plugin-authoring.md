@@ -592,9 +592,20 @@ desktop. Tall images are scaled down to fit the card.
 
 The `<swiftbar.*>` tags use the same names as their `<xbar.*>` counterparts where they overlap.
 
+### Prefixes are interchangeable
+
+Vee dispatches on the tag name after the dot, not on the prefix before it — `<xbar.title>`, `<swiftbar.title>`, and `<vee.title>` are the same tag, and this holds for every tag on this page, including the `<vee.*>` ones below. The one constraint is that a tag's opening and closing prefix must match: `<vee.title>X</xbar.title>` does not parse.
+
+```sh
+# <vee.title>CPU</vee.title>
+# <xbar.filter>true</xbar.filter>
+```
+
+Convention, not enforcement: use `<xbar.*>` for tags a plugin shares with xbar/SwiftBar, so it stays portable, and `<vee.*>` for Vee-only tags.
+
 ### Vee-native tags (`<vee.*>`)
 
-Vee adds a few tags of its own. All are opt-in — omit them for the classic behavior.
+Vee adds a few tags of its own. All are opt-in — omit them for the classic behavior. As above, the prefix is not load-bearing; these are commonly written `<vee.*>` by convention since they have no xbar/SwiftBar equivalent.
 
 | Tag | Purpose |
 |-----|---------|
@@ -634,14 +645,16 @@ Render inline Markdown with `md=true`:
 
 ## Streaming
 
-A streaming plugin stays running and pushes updates instead of being re-run on a timer. Mark it with `<swiftbar.type>streamable</swiftbar.type>` and print a `~~~` line to signal "the menu that follows replaces the current one." Each block between `~~~` separators is a full menu render. Vee restarts the process with backoff if it exits.
+A streaming plugin stays running and pushes updates instead of being re-run on a timer. Mark it with `<swiftbar.type>streamable</swiftbar.type>` and print a `~~~` line to end and commit a frame: everything printed since the last `~~~` (or since the process started) is one complete menu render, and the `~~~` line is what flushes it to the menu. The buffer is also flushed when the process exits, so a plugin that never prints a separator still renders once, on exit.
+
+Printing `~~~` first, before that iteration's lines, is the common mistake — it commits the *previous* frame instead of the one you just built, so the menu paints empty on startup and every update lands one cycle late.
 
 ```bash
 #!/bin/bash
 # <swiftbar.type>streamable</swiftbar.type>
 while true; do
-  echo "~~~"
   echo "⏱ $(date +%T)"
+  echo "~~~"
   sleep 1
 done
 ```
@@ -680,6 +693,7 @@ Every plugin run inherits your shell environment plus these variables:
 - `VEE_VERSION` — the app version.
 - `VEE_PLUGIN_PATH` — the absolute path of this plugin.
 - `VEE_PLUGIN_ID` — this plugin's id (its filename); pass it as `plugin=` to `swiftbar://notify` for an actionable alert (see [URL actions](cli-and-urls.md#the-notify-action)).
+- `VEE_TARGET` — `menu` or `widget`, which surface this run is for (see [Widgets](widgets.md#vee_target)).
 - `VEE_CONTROL_VALUE` — set only on a re-invocation triggered by an interactive `toggle=`/`slider=` item, carrying the committed value.
 
 Any values from the plugin's declared `<xbar.var>` [preferences](preferences.md) are also injected as environment variables (they take precedence over the above).
@@ -758,10 +772,10 @@ Filename: `clock.sh` (no interval — streaming drives the updates)
 # <swiftbar.type>streamable</swiftbar.type>
 
 while true; do
-  echo "~~~"
   echo "🕒 $(date +%H:%M:%S)"
   echo "---"
   echo "$(date '+%A, %B %d')"
+  echo "~~~"
   sleep 1
 done
 ```

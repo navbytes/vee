@@ -88,7 +88,7 @@ the `vee` executable is a thin entry point.
 | `VeeCatalog`      | The `matryer/xbar-plugins` catalog client + installer (fetch, parse, freshness, provenance). |
 | `VeeUI`           | SwiftUI settings and plugin-manager windows. |
 | `VeeWidgetShared` | Foundation-only snapshot model + store shared with the WidgetKit / Control Center extension. |
-| `VeeCLI`          | AppKit-free logic for the `vee render`/`lint`/`new` authoring subcommands. |
+| `VeeCLI`          | AppKit-free logic for the `vee render`/`lint`/`new`/`sdk`/`search`/`show`/`dev` authoring subcommands. |
 | `VeeApp`          | AppKit shell: status items, coordinators, app delegate (as a library). |
 | `vee`             | Thin executable entry point: boots the app, or dispatches CLI subcommands. |
 | `plugins/`        | Typed plugin SDKs (TypeScript, Python, Go), example plugins, and golden fixtures. |
@@ -149,7 +149,8 @@ python3 docs/scripts/build_reference.py          # write the generated partials
 python3 docs/scripts/build_reference.py --check  # fails if a partial is stale
 ```
 
-Four checks run on docs in CI, all pure standard library:
+Four checks run on docs in CI, all pure standard library — the
+`build_reference.py --check` above, plus these three:
 
 ```sh
 python3 docs/scripts/check_params.py   # parser, linter, docs, and all three SDKs agree
