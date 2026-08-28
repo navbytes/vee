@@ -6,6 +6,26 @@ All notable changes to Vee are documented here. The format is based on
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-08-28
+
+Plugin screenshots in Discover, a documentation pass that corrected the guide
+against the source, and a `vee lint` that no longer fails valid plugins or
+passes broken ones.
+
+### Added
+- **A plugin's screenshot on its Discover card.** `<xbar.image>` has been parsed
+  and documented as a preview image since before the catalog existed, and read
+  by nothing. A plugin that declares one now shows it, so you can see what it
+  looks like before installing it. The image must be served from the same host
+  as the plugin's own source: a Discover card is drawn for plugins nobody has
+  chosen, so an image URL pointing anywhere the author liked would make merely
+  scrolling the catalog announce itself to that author's server. Refusal is
+  silent — a card with no image is the normal case.
+- **A documentation mirror at `vee-docs.pages.dev`.** The docs have exactly one
+  reachable hostname, so a network blocking `navbytes.io` blocks them outright.
+  The mirror publishes the same bytes to a domain such networks generally allow,
+  and every page still canonicalises to `vee.navbytes.io`.
+
 ### Fixed
 - **`vee lint` scanned structured-JSON output with the text-protocol linter.**
   It was the one CLI path still calling `OutputParser.parse` instead of
@@ -29,6 +49,23 @@ All notable changes to Vee are documented here. The format is based on
   spelling the JSON key itself uses — lost the field silently. `refresh_after`
   and `stale_after` are now the names; the camelCase spellings still work with
   a `DeprecationWarning`, like the other renamed options.
+- **The streaming documentation had `~~~` backwards.** It described the
+  separator as introducing the menu that follows, and both examples printed it
+  first. `StreamAccumulator` emits the buffered block when it *sees* the
+  separator, so following the docs painted an empty menu on startup, rendered
+  every frame one tick stale, and never rendered the last one.
+- **Ten more corrections from an audit of the prose against the source**,
+  including a `<vee.widget.interval>` tag that does not exist, four JSON sizing
+  fields documented as current after the parser deprecated them, and the
+  undocumented fact that `<xbar.*>`, `<swiftbar.*>` and `<vee.*>` are
+  interchangeable spellings — enough to make a catalog builder namespace-strict
+  and drop valid plugins.
+- **Sixteen canonical URLs pointed at a hostname that redirects.** The
+  hand-authored pages declared `canonical`, `og:url` and `og:image` on
+  `navbytes.github.io/vee/`, which 301s to the custom domain — so the
+  highest-value pages told search engines their home was a redirect.
+- **`surface` was the one manifest field the store docs never mentioned** — the
+  field that lets Discover flag a widget-only plugin before downloading it.
 
 ## [0.5.0] - 2026-08-28
 
@@ -908,7 +945,8 @@ lost. Comparison link below is `v0.1.1...v0.2.0` for the same reason.
 - Zero-dependency TypeScript SDK with a golden-fixture drift guard.
 - Developer-ID-signed, notarized distribution outside the Mac App Store.
 
-[Unreleased]: https://github.com/navbytes/vee/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/navbytes/vee/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/navbytes/vee/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/navbytes/vee/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/navbytes/vee/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/navbytes/vee/compare/v0.2.0...v0.3.0
