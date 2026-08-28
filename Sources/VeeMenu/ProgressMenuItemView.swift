@@ -13,7 +13,18 @@ public struct ProgressBarLayout: Equatable, Sendable {
     /// fills the trailing space) instead of the default trailing anchor.
     public var leading: Bool
 
-    public init(barWidth: CGFloat, barHeight: CGFloat, leadingInset: CGFloat = 20, trailingInset: CGFloat = 12, gap: CGFloat = 10, leading: Bool = false) {
+    /// `leadingInset` matches where AppKit lays out a plain `NSMenuItem`'s
+    /// title, so a row carrying a graphic lines up with the rows above and
+    /// below it. A view-based row draws its own label and inherits none of
+    /// the menu's text layout, so this constant is the only thing keeping the
+    /// two in step — at 20 it sat 4pt proud of every plain row, which reads as
+    /// a stray indent on the one row in a menu that has a bar or a chart.
+    ///
+    /// 16 is measured, not guessed: rendering the same leading glyph in both
+    /// kinds of row ("Charge:" against "Charging" in the battery plugin) put
+    /// plain text at 16.5pt and the accessory row at 20.5pt. Re-measure the
+    /// same way if a macOS release moves menu metrics.
+    public init(barWidth: CGFloat, barHeight: CGFloat, leadingInset: CGFloat = 16, trailingInset: CGFloat = 12, gap: CGFloat = 10, leading: Bool = false) {
         self.barWidth = barWidth
         self.barHeight = barHeight
         self.leadingInset = leadingInset
