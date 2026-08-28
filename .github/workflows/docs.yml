@@ -73,6 +73,61 @@ jobs:
           path: docs-site/dist
       - id: deploy
         uses: actions/deploy-pages@v5
+      # The mirror below publishes the same bytes rather than rebuilding them.
+      # Two builds of the same commit should be identical, but "should be" is
+      # not a guarantee worth relying on when the point of the mirror is to be
+      # the same site at a second URL.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: site
+          path: docs-site/dist
+          retention-days: 1
+
+  # Publish the same build to Cloudflare Pages, at vee-docs.pages.dev.
+  #
+  # GitHub Pages redirects navbytes.github.io/vee/ to the custom domain, so the
+  # canonical site has exactly one reachable hostname -- and a network that
+  # blocks navbytes.io blocks the documentation outright, with no fallback.
+  # This is that fallback. It is a mirror, not a second home: every page still
+  # carries a canonical pointing at vee.navbytes.io (Astro emits it from `site`
+  # in astro.config.mjs), so search engines keep indexing the primary and the
+  # mirror does not compete with it.
+  #
+  # Runs after the deploy, like the Context7 refresh: the primary site is what
+  # matters, and a mirror is not worth failing it over.
+  mirror:
+    needs: deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: site
+          path: dist
+      - name: Publish to Cloudflare Pages
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          # Absent credentials are not a failure, same reasoning as the
+          # Context7 job below: on a fork, or before the secrets are set, the
+          # mirror simply does not exist yet. Say so and move on rather than
+          # turning a green docs deploy red.
+          if [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
+            echo "CLOUDFLARE_API_TOKEN / CLOUDFLARE_ACCOUNT_ID are not both set — skipping the mirror."
+            echo "Set them in repository secrets to enable it; see docs/design/docs-mirror.md."
+            exit 0
+          fi
+          # --branch=main marks this a production deployment, which is what
+          # serves the stable vee-docs.pages.dev hostname. Without it the
+          # upload lands as a preview at a per-deployment subdomain, which
+          # would defeat the point of having a second fixed URL.
+          npx --yes wrangler@4 pages deploy dist \
+            --project-name=vee-docs \
+            --branch=main \
+            --commit-dirty=true
 
   # Ask Context7 to re-index. It serves Vee's docs to LLMs and AI editors
   # (context7.com/navbytes/vee, indexing docs/_content per context7.json), and
