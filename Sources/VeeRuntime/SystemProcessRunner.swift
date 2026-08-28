@@ -401,10 +401,22 @@ private final class ProcessRun: @unchecked Sendable {
         // posix_spawn has no completion callback, so we reap the child
         // ourselves.
         DispatchQueue.global().async { [weak self] in
+            // Wait WITHOUT reaping first (`WNOWAIT` leaves the zombie in
+            // place), mark the run exited, and only then `waitpid` to collect
+            // the status. Reaping is what frees the pid for reuse, and
+            // `terminateGroup` decides whether to `killpg(pid)` by reading
+            // `exited` — so reaping before setting it opens a window in which
+            // the kernel may already have handed this pid to an unrelated
+            // process while a timeout firing on another thread still believes
+            // it is the plugin's. Narrow, but it is a signal aimed at a
+            // stranger's process group; ordering it away costs one syscall.
+            var info = siginfo_t()
+            while waitid(P_PID, id_t(launchedPid), &info, WEXITED | WNOWAIT) == -1 && errno == EINTR {}
+            self?.noteExited()
+
             var status: Int32 = 0
             while waitpid(launchedPid, &status, 0) == -1 && errno == EINTR {}
             let decoded = ProcessRun.decodeExitStatus(status)
-            self?.noteExited()
             self?.complete { $0.exitCode = decoded }
             self?.armDrainGrace()
         }

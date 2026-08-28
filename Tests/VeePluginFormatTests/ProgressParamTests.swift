@@ -83,6 +83,34 @@ final class ProgressParamTests: XCTestCase {
         XCTAssertFalse(progress("Disk | progress=0.5")?.isFullWidth == true)
     }
 
+    /// `MenuBuilder` passes these straight into a `CGRect` on a live
+    /// `NSMenuItem.view`, so an unclamped `progressh=1000000000` is a row taller
+    /// than the screen and a negative one is a negative-width rect. `chartw=`
+    /// has been clamped for exactly this reason; `progress=`/`sparkline=` were
+    /// the two accessories that weren't.
+    func testProgressAndSparklineSizesAreClamped() {
+        XCTAssertEqual(progress("x | progress=0.5 progressw=1000000000")?.width, ChartParams.sizeLimit.upperBound)
+        XCTAssertEqual(progress("x | progress=0.5 progressh=1000000010")?.height, ChartParams.sizeLimit.upperBound)
+        XCTAssertEqual(progress("x | progress=0.5 progressw=-40")?.width, ChartParams.minimumSize)
+
+        let spark = parse("x | sparkline=1,2,3 sparklinew=99999 sparklineh=-1").params.swiftbar.sparklineStyle
+        XCTAssertEqual(spark?.width, ChartParams.sizeLimit.upperBound)
+        XCTAssertEqual(spark?.height, ChartParams.minimumSize)
+
+        // `accessoryw=` fans out to whichever accessory the row carries, so it
+        // must land inside the same bounds however it is spelled.
+        XCTAssertEqual(progress("x | progress=0.5 accessoryw=5000")?.width, ChartParams.sizeLimit.upperBound)
+    }
+
+    /// The clamp must not move a value anyone would actually write — including
+    /// a bar thinner than a chart's legibility floor of 8, which is what the
+    /// default height already is.
+    func testOrdinaryProgressSizesPassThroughUnchanged() {
+        XCTAssertEqual(progress("x | progress=0.5 progressh=6")?.height, 6)
+        XCTAssertEqual(progress("x | progress=0.5 progressh=\(ProgressParams.defaultHeight)")?.height, ProgressParams.defaultHeight)
+        XCTAssertEqual(progress("x | progress=0.5 progressw=180")?.width, 180)
+    }
+
     func testNonFiniteSizeAndSparklineAndSliderRejected() {
         XCTAssertNil(parse("x | size=nan").params.size)
         XCTAssertNil(parse("x | size=inf").params.size)

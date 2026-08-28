@@ -34,20 +34,7 @@ enum LineParser {
         return (text, pairs, diags)
     }
 
-    /// `\|` → `|`, `\n` → newline, `\\` → `\` — the three escapes honored
-    /// identically by this tokenizer (here, and in the quoted-value scanner
-    /// below) and by the bundled SDKs' serializers. Any other backslash
-    /// sequence (including the per-quote-character `\"`/`\'` the value scanner
-    /// handles itself) is left untouched — permissive, matching this parser's
-    /// "never throw" stance.
-    private static func unescape(_ c: Character) -> Character? {
-        switch c {
-        case "|": return "|"
-        case "n": return "\n"
-        case "\\": return "\\"
-        default: return nil
-        }
-    }
+    private static func unescape(_ c: Character) -> Character? { LineEscape.unescape(c) }
 
     /// Parses a parameter string (`key=value key2="a b" …`) into ordered pairs.
     /// Handles single/double quotes, escaped quotes (`\"`), the shared `\|`/`\n`/
@@ -168,7 +155,7 @@ enum LineParser {
             switch key {
             case "color": p.color = VeeColor.parse(value)
             case "font": p.font = value
-            case "size": p.size = finite(value)
+            case "size": p.size = FontSizeLimit.clamp(finite(value))
             // Clamp to >= 0: a negative length would reach `String.prefix(_:)`
             // downstream, which traps (crashing the app) on a negative argument.
             case "length": p.length = Int(value).map { Swift.max(0, $0) }
@@ -195,7 +182,7 @@ enum LineParser {
             case "templateimage": p.templateImage = validatedImage(value, param: "templateImage", diagnostics: &diagnostics)
             case "sfimage": p.swiftbar.sfimage = value
             case "sfcolor": p.swiftbar.sfcolor = value.split(separator: ",").compactMap { VeeColor.parse(String($0)) }
-            case "sfsize": p.swiftbar.sfsize = finite(value)
+            case "sfsize": p.swiftbar.sfsize = FontSizeLimit.clamp(finite(value))
             case "sfconfig": p.swiftbar.sfconfig = value
             case "symbolize": p.swiftbar.symbolize = bool(value)
             case "tooltip": p.swiftbar.tooltip = value
@@ -541,5 +528,32 @@ enum LineParser {
             return nil
         }
         return value
+    }
+}
+
+/// The escape rule the line format defines, in one place.
+///
+/// `\|` → `|`, `\n` → newline, `\\` → `\` — the three escapes honored by this
+/// module's tokenizers (the text scanner and the quoted-value scanner) and
+/// emitted by the bundled TS/Python/Go SDKs when they serialize user-supplied
+/// text. Any other backslash sequence (including the per-quote-character
+/// `\"`/`\'` the value scanner handles itself) is left untouched — permissive,
+/// matching this parser's "never throw" stance.
+///
+/// Public, and the single definition, because `LineParser` is internal while
+/// `vee lint` re-tokenizes lines in its own module to produce authoring
+/// diagnostics. Two hand-written copies of this rule is exactly how the linter
+/// came to warn about `\|` — output its own bundled SDKs emit — while the
+/// parser handled it correctly.
+public enum LineEscape {
+    /// The character `\` + `c` stands for, or `nil` if `c` does not follow a
+    /// backslash into an escape.
+    public static func unescape(_ c: Character) -> Character? {
+        switch c {
+        case "|": return "|"
+        case "n": return "\n"
+        case "\\": return "\\"
+        default: return nil
+        }
     }
 }

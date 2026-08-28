@@ -38,6 +38,18 @@ public enum PluginDiscovery {
     /// plugins they exist to support.
     private static let vendoredSDKFilenames: Set<String> = ["vee.ts", "vee.py"]
 
+    /// Extensionless files that are documentation or build metadata, not
+    /// plugins. `ignoredExtensions` cannot catch these — they have no
+    /// extension to match — so a `README`, a `Makefile` or a `Dockerfile`
+    /// dropped in the plugins folder (checking the folder into git is a
+    /// common enough habit) is discovered, run through `/bin/bash`, and shows
+    /// up as a broken menu-bar row. Compared case-insensitively; a file with
+    /// an extension is unaffected, so a real `makefile.10s.sh` still loads.
+    private static let ignoredBareFilenames: Set<String> = [
+        "readme", "license", "licence", "copying", "notice", "authors",
+        "changelog", "contributing", "makefile", "dockerfile", "todo", "version"
+    ]
+
     /// Lists candidate plugins in `directory`, sorted by filename. Skips hidden
     /// files, `.vars.json` preference sidecars, subdirectories (a `disabled/`
     /// subfolder is a common convention for parking plugins), editor backup/
@@ -63,6 +75,7 @@ public enum PluginDiscovery {
 
             let filename = PluginFilename(name)
             if ignoredExtensions.contains(filename.ext.lowercased()) { return nil }
+            if ignoredBareFilenames.contains(name.lowercased()) { return nil }
 
             return DiscoveredPlugin(
                 path: path,

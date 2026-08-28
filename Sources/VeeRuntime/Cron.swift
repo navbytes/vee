@@ -56,6 +56,35 @@ public struct CronExpression: Equatable, Sendable {
         return result.isEmpty ? nil : result
     }
 
+    /// Whether any real date can ever satisfy this expression.
+    ///
+    /// `0 0 30 2 *` parses cleanly — every field is inside its own bounds — and
+    /// matches nothing, ever, because February has no 30th. Left undetected the
+    /// scheduler simply never arms a timer and the plugin's refresh is disabled
+    /// permanently and silently.
+    ///
+    /// Decided structurally rather than by searching forward, because a search
+    /// window has to end somewhere and `0 0 29 2 *` (leap day) legitimately has
+    /// no fire for up to four years — a window long enough to clear it is both
+    /// slow and still arbitrary. The day-of-month × month axis is the only place
+    /// impossibility can hide: every other field is range-checked at parse time,
+    /// so some value of it always occurs.
+    ///
+    /// Note the Vixie rule this has to respect: when day-of-month AND
+    /// day-of-week are both restricted they match on *either*, so a restricted
+    /// day-of-week rescues an otherwise-impossible day-of-month — `0 0 30 2 1`
+    /// fires every Monday in February.
+    public var canEverFire: Bool {
+        guard domRestricted, !dowRestricted else { return true }
+        // Longest each month can be; February takes 29 because leap years exist.
+        let longestMonth = [1: 31, 2: 29, 3: 31, 4: 30, 5: 31, 6: 30,
+                            7: 31, 8: 31, 9: 30, 10: 31, 11: 30, 12: 31]
+        return months.contains { month in
+            guard let longest = longestMonth[month] else { return false }
+            return daysOfMonth.contains { $0 <= longest }
+        }
+    }
+
     public func matches(_ date: Date, calendar: Calendar) -> Bool {
         let c = calendar.dateComponents([.minute, .hour, .day, .month, .weekday], from: date)
         guard let mm = c.minute, let hh = c.hour, let dd = c.day, let mo = c.month, let wd = c.weekday else {
@@ -114,9 +143,26 @@ public final class CronScheduler: @unchecked Sendable {
         }
     }
 
+    /// The soonest moment any of this scheduler's expressions next matches, or
+    /// `nil` if none of them will ever match again.
+    ///
+    /// `nil` is a real and reachable state: `30 2 * * *` (February 30th) parses
+    /// as a perfectly valid expression that no date satisfies. The scheduler
+    /// treats that as "nothing to arm" and goes quiet, so callers expose this to
+    /// tell the difference between a schedule that is merely infrequent and one
+    /// that has silently disabled the plugin's refresh forever.
+    public func nextFireDate(after date: Date = Date()) -> Date? {
+        expressions.compactMap { $0.nextFireDate(after: date) }.min()
+    }
+
+    /// Whether any of this scheduler's expressions can ever match a real date.
+    /// `false` means the plugin will never refresh on its schedule — see
+    /// ``CronExpression/canEverFire``.
+    public var canEverFire: Bool { expressions.contains { $0.canEverFire } }
+
     private func scheduleNext() {
         let now = Date()
-        guard let next = expressions.compactMap({ $0.nextFireDate(after: now) }).min() else { return }
+        guard let next = nextFireDate(after: now) else { return }
         let delay = max(1, next.timeIntervalSince(now))
         let t = DispatchSource.makeTimerSource(queue: queue)
         // Wall-clock, not monotonic: `deadline:` pauses while the system sleeps,

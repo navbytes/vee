@@ -41,6 +41,41 @@ final class TextModeDispatchTests: XCTestCase {
         }
     }
 
+    // MARK: - How the file is read
+
+    /// The linter must read a plugin exactly the way the app does. A plugin
+    /// file is a script, not a guaranteed-UTF-8 document, and one Latin-1 byte
+    /// in a comment does not stop it running — the executor reads bytes. A
+    /// linter that refuses to look at a plugin production happily runs is a
+    /// linter disagreeing with production.
+    func testTextModeLintsAFileThatIsNotValidUTF8() async throws {
+        let path = dir + "/latin1.txt"
+        var data = Data("# caf".utf8)
+        data.append(0xE9)                                   // `é` in Latin-1; invalid UTF-8
+        data.append(contentsOf: Data("\nTitle | colour=red\n".utf8))
+        XCTAssertTrue(FileManager.default.createFile(atPath: path, contents: data))
+
+        var out = "", err = ""
+        let code = await VeeCLI.run(["lint", "--text", path], runner: SpyRunner(), out: &out, err: &err)
+
+        XCTAssertEqual(code, 1, "the unknown param is still a finding — the bad byte must not hide it")
+        XCTAssertTrue(out.contains("colour"), out)
+        XCTAssertFalse(err.contains("could not read"), "a decodable-with-loss file is not a read failure: \(err)")
+    }
+
+    /// The other half: lenient decoding must not turn a genuinely unreadable
+    /// file into an empty document that lints clean. Absent is loud.
+    func testTextModeFailsLoudlyWhenTheFileCannotBeRead() async throws {
+        let path = dir + "/does-not-exist.txt"
+        var out = "", err = ""
+        let code = await VeeCLI.run(["lint", "--text", path], runner: SpyRunner(), out: &out, err: &err)
+
+        XCTAssertEqual(code, 1)
+        XCTAssertTrue(err.contains("could not read"), err)
+        XCTAssertTrue(err.contains(path), "the message must name the file: \(err)")
+        XCTAssertFalse(out.contains("No issues"), "an unreadable file must never be reported as clean: \(out)")
+    }
+
     // MARK: - --text does not execute
 
     func testTextModeDoesNotExecuteTheFile() async throws {

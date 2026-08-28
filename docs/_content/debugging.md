@@ -245,13 +245,20 @@ the slow work on a long interval, write the result to
 `vee dev` reports all three on every save and keeps watching, so a script that
 breaks does not end the loop.
 
-### Output is capped at 8 MB
+### Output is capped at 8 MB, and at 2000 lines
 
 Standard output and standard error are each captured up to **8 MB**; beyond that
 the rest is discarded. When it happens you get an `Output truncated at 8 MB`
 diagnostic in the Debug console rather than silence. The cap is orders of
 magnitude beyond any real menu, so hitting it almost always means a plugin is
 printing something it did not mean to — a log, a file dump, an unbounded loop.
+
+A second cap applies to what becomes menu rows: **2000 lines**. Every row is a
+real menu item with a real view, so a plugin stuck in a loop takes the UI down
+long before it exhausts the byte cap. Truncation is reported as a diagnostic, never
+silent. Both numbers are set far past usable rather than tuned — an `NSMenu` is a
+scrolling column, and nobody finds anything in its two-thousandth row. Submenu
+*depth* has its own limit of 64.
 
 ## The Debug console
 

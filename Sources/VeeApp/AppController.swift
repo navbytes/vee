@@ -68,6 +68,33 @@ public final class AppController: NSObject, NSApplicationDelegate {
 
     private var directory: String = PluginsDirectory.resolve()
 
+    /// Filename → when `reconcileDiskState` first saw it missing from
+    /// `directory`, for names it hasn't collected yet. Cleared the moment the
+    /// file comes back. See `deletionGracePeriod`.
+    ///
+    /// Deliberately in-memory: it exists to ride out a *transient* absence, and
+    /// every transient absence resolves in seconds. Losing it at quit only means
+    /// a genuinely-deleted plugin's state waits out one more grace period after
+    /// the next launch, which is the harmless direction for this to fail in —
+    /// the same "safe-but-leaky beats false-wipe" trade the guards above make.
+    private var missingSince: [String: Date] = [:]
+
+    /// How long a plugin's file must stay missing before its irreversible state
+    /// — Keychain secrets above all — is destroyed.
+    ///
+    /// Long enough to cover every transient absence: an editor's save window is
+    /// milliseconds, a volume remount seconds, a drag-out-and-back a few. Short
+    /// enough that the risk it introduces stays remote: while state lingers, a
+    /// NEW plugin installed under the same filename inherits the old one's
+    /// settings and secrets. That is the hazard this trades against, and it
+    /// needs a same-name reinstall inside the window to happen at all —
+    /// far rarer than an editor save.
+    ///
+    /// Injectable (not a buried literal) for the same reason
+    /// `SystemProcessRunner.defaultDetachedTimeout` is: a test asserting the GC
+    /// itself should not have to wait out five real minutes.
+    private let deletionGracePeriod: TimeInterval
+
     /// Widget-snapshot publishing state/policy (coalesced writes, metered
     /// WidgetKit reloads) — see `WidgetSnapshotPublisher`. Constructed here with
     /// the production effects so the publisher itself stays WidgetKit-free.
@@ -83,8 +110,9 @@ public final class AppController: NSObject, NSApplicationDelegate {
     /// The running controller, so App Intents (Shortcuts/Spotlight) can drive it.
     public static weak var shared: AppController?
 
-    public init(secretStoreFactory: ((PluginID) -> SecretStoring)? = nil) {
+    public init(secretStoreFactory: ((PluginID) -> SecretStoring)? = nil, deletionGracePeriod: TimeInterval = 300) {
         self.secretStoreFactory = secretStoreFactory ?? { KeychainSecretStore(pluginID: $0.rawValue) }
+        self.deletionGracePeriod = deletionGracePeriod
         super.init()
         Self.shared = self
     }
@@ -398,6 +426,7 @@ public final class AppController: NSObject, NSApplicationDelegate {
     /// explicit click before an `addplugin` install writes anything to disk.
     private func confirmInstall(filename: String, source: String, from url: URL) -> Bool {
         let summary = TrustAnalyzer.analyze(TrustParser.parse(source: source))
+        let warnings = Self.installGateWarnings(source: source)
         let alert = NSAlert()
         alert.alertStyle = .warning
         alert.messageText = "Install “\(filename)” from the web?"
@@ -407,14 +436,31 @@ public final class AppController: NSObject, NSApplicationDelegate {
         } else {
             info += summary.badges.map { "• \($0.capability.plainName): \($0.detail)" }.joined(separator: "\n")
         }
-        if !summary.warnings.isEmpty {
-            info += "\n\n" + summary.warnings.map { "⚠︎ \($0)" }.joined(separator: "\n")
+        if !warnings.isEmpty {
+            info += "\n\n" + warnings.map { "⚠︎ \($0)" }.joined(separator: "\n")
         }
         alert.informativeText = info
         alert.addButton(withTitle: "Install")
         alert.addButton(withTitle: "Cancel")
         NSApp.activate(ignoringOtherApps: true)
         return alert.runModal() == .alertFirstButtonReturn
+    }
+
+    /// Every warning the install gate must show for `source`.
+    ///
+    /// The same two sources the Discover gate combines
+    /// (`PluginBrowserModel.requestInstall`): what the plugin *declared*, and
+    /// what a scan of its source suggests it does but did NOT declare. The
+    /// deep-link gate showed only the first, so the install path with the least
+    /// context about where a plugin came from was also the one telling the user
+    /// the least about what it does.
+    ///
+    /// `nonisolated static` so this — the actual warning set, the part worth
+    /// asserting — is unit-testable without the `NSAlert` around it.
+    nonisolated static func installGateWarnings(source: String) -> [String] {
+        let declaration = TrustParser.parse(source: source)
+        return TrustAnalyzer.analyze(declaration).warnings
+            + TrustAnalyzer.installWarnings(declaration: declaration, source: source)
     }
 
     /// `swiftbar://setephemeralplugin?name=…&content=…&exitafter=N`: show
@@ -454,14 +500,31 @@ public final class AppController: NSObject, NSApplicationDelegate {
         }
     }
 
-    /// Returns a copy of a parsed output with every `shell=`/`bash=` action
+    /// Returns a copy of a parsed output with every code-executing action
     /// removed (title lines, items, submenus, and alternates). Used to defang
     /// menu content injected through the `setephemeralplugin` deep link.
+    ///
+    /// `setephemeralplugin` is not in `URLActionRouter.needsConfirmation`, so
+    /// any web page can put a row in the menu bar with no prompt — which makes
+    /// every action `AppActionDispatcher.perform` can dispatch reachable from
+    /// one click on a row the user never installed. `shell=` was stripped from
+    /// the start; `shortcut=` (`/usr/bin/shortcuts run <name>`) and `webview=`
+    /// (a `WKWebView` with JS enabled and no navigation delegate) are the same
+    /// class of thing and are stripped for the same reason.
     nonisolated static func strippingShellActions(_ output: ParsedOutput) -> ParsedOutput {
         var out = output
-        out.titleLines = out.titleLines.map { var line = $0; line.params.shell = nil; return line }
+        out.titleLines = out.titleLines.map { var line = $0; defang(&line.params); return line }
         out.body = out.body.map(stripShell)
         return out
+    }
+
+    /// The one place that decides what an untrusted row may not do. Every
+    /// caller below routes through it so a title line, an item, an alternate
+    /// and a submenu row can never drift apart.
+    nonisolated private static func defang(_ params: inout LineParams) {
+        params.shell = nil
+        params.swiftbar.shortcut = nil
+        params.swiftbar.webview = nil
     }
 
     nonisolated private static func stripShell(_ node: MenuNode) -> MenuNode {
@@ -469,9 +532,9 @@ public final class AppController: NSObject, NSApplicationDelegate {
         case .separator:
             return .separator
         case .item(var item):
-            item.params.shell = nil
+            defang(&item.params)
             if var alternate = item.alternate {
-                alternate.params.shell = nil
+                defang(&alternate.params)
                 item.alternate = alternate
             }
             item.submenu = item.submenu.map(stripShell)
@@ -489,7 +552,7 @@ public final class AppController: NSObject, NSApplicationDelegate {
     /// drive it directly — the same seam `makeLibraryModel` already is —
     /// without going through `applicationDidFinishLaunching`, which touches
     /// `NSApp` and is unsafe to invoke from a unit test.
-    func reload() {
+    func reload(reconcile: Bool = true) {
         // Runs on EVERY call, unconditionally, before the early-return below:
         // a disabled plugin is excluded from `enabledPlugins()` (and so never
         // enters `signature`), so deleting a *disabled* plugin's file would
@@ -497,7 +560,10 @@ public final class AppController: NSObject, NSApplicationDelegate {
         // would then never fire for it. GC has to look at the full disk
         // listing anyway (see `reconcileDiskState`), independent of which
         // plugins happen to be enabled.
-        reconcileDiskState()
+        //
+        // `reconcile: false` is for the one caller that changes `directory`
+        // out from under it — see `setPluginsDirectory`.
+        if reconcile { reconcileDiskState() }
 
         let plugins = enabledPlugins()
         // Remember every plugin loaded, for the legacy-activity sweep — see
@@ -614,8 +680,40 @@ public final class AppController: NSObject, NSApplicationDelegate {
         let sidecarSuffix = ".vars.json"
         candidates.formUnion(rawNames.filter { $0.hasSuffix(sidecarSuffix) }.map { String($0.dropLast(sidecarSuffix.count)) })
 
+        // Claim everything actually in this folder as living here, BEFORE
+        // deciding what's gone — so a plugin present right now can never be
+        // collected on the strength of a stale home record.
+        prefs.recordPluginHomes(onDisk, directory: directory)
+
+        // Anything back on disk is no longer missing; its clock resets.
+        missingSince = missingSince.filter { !onDisk.contains($0.key) }
+        let now = Date()
+
         for filename in candidates where !onDisk.contains(filename) {
+            // Absent from THIS folder is only evidence of deletion if this
+            // folder is where the record came from. A record homed elsewhere
+            // belongs to a plugin that is still on disk in a folder Vee isn't
+            // looking at — collecting it would destroy a live plugin's
+            // Keychain secrets irreversibly (see `AppPreferences.pluginHome`).
+            // An unhomed record predates that bookkeeping and stays collectable,
+            // which is the behavior every single-folder install already had.
+            if let home = prefs.pluginHome(filename), home != directory { continue }
+
+            // One absent listing is not proof of deletion. The directory
+            // watcher fires on a 0.3s debounce, so this runs during any moment
+            // the file isn't there: a non-atomic editor save (write to a temp
+            // file, unlink, rename), a plugin dragged out to edit and dragged
+            // back, a network/automount volume between unmount and remount.
+            // Destroying Keychain secrets on the strength of one such moment is
+            // irreversible, and every one of those cases resolves in seconds.
+            // Require the absence to persist instead.
+            let firstMissing = missingSince[filename] ?? now
+            missingSince[filename] = firstMissing
+            guard now.timeIntervalSince(firstMissing) >= deletionGracePeriod else { continue }
+            missingSince[filename] = nil
+
             prefs.clearAllState(id: filename)
+            prefs.clearPluginHome(filename)
             VarStore(pluginPath: (directory as NSString).appendingPathComponent(filename)).delete()
             try? provenanceStore.remove(filename: filename)
             secretStoreFactory(PluginID(rawValue: filename)).deleteAll()
@@ -996,7 +1094,14 @@ public final class AppController: NSObject, NSApplicationDelegate {
         directory = path
         PluginsDirectory.ensureExists(directory)
         loadedSignature.removeAll()
-        reload()
+        // Skips disk reconciliation: switching folders is not evidence that
+        // anything was deleted, and the old folder's plugins are all "missing"
+        // from the new one by definition. `reconcileDiskState` won't collect
+        // them anyway (it is scoped by `AppPreferences.pluginHome`), but the
+        // records this reload would GC against belong to a folder Vee was
+        // pointed at a moment ago — the safe pass is the one that runs after
+        // the new folder has been listed at least once.
+        reload(reconcile: false)
         startWatching()
     }
 
@@ -1067,7 +1172,7 @@ public final class AppController: NSObject, NSApplicationDelegate {
     /// actor-isolated state.
     private nonisolated static func buildManagerRows(_ inputs: [ManagerRowInput]) -> [PluginManagerRow] {
         inputs.map { input in
-            let source = (try? String(contentsOfFile: input.path, encoding: .utf8)) ?? ""
+            let source = PluginSource.read(atPath: input.path) ?? ""
             let header = HeaderParser.parse(source: source)
             let level = TrustAnalyzer.analyze(TrustParser.parse(source: source)).level
             // Declared features gate Settings reachability (so a disabled hotkey
@@ -1088,6 +1193,7 @@ public final class AppController: NSObject, NSApplicationDelegate {
                 name: input.name,
                 interval: describe(input.interval),
                 trust: describe(level),
+                trustLevel: level,
                 // `PluginDiscovery.enabled` (what `enabledPlugins()` actually
                 // loads) runs a non-executable plugin bash-wrapped, matching
                 // SwiftBar — it isn't filtered by the execute bit. The

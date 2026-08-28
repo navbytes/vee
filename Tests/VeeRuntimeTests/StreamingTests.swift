@@ -146,6 +146,63 @@ private final class ReadyFlag: @unchecked Sendable {
 /// `StreamingProc`, and the process itself, on every reload of that plugin.
 /// `killGracePeriod` is injected small here so the escalation path is
 /// exercised quickly instead of waiting out the 2.5s production duration.
+/// A streaming plugin that dies used to do so silently: stderr went to
+/// `/dev/null` and a non-zero exit ended the stream exactly like a clean one,
+/// so the only thing the user ever saw was "restarting…" on a loop.
+final class StreamingStderrTests: XCTestCase {
+    func testNonZeroExitThrowsWithTheStderrTail() async {
+        let runner = SystemStreamingRunner()
+        let invocation = ProcessInvocation(
+            launchPath: "/bin/sh",
+            arguments: ["-c", "printf 'partial\n'; echo 'boom: missing interpreter' >&2; exit 3"]
+        )
+        var lines: [String] = []
+        var caught: StreamingPluginError?
+        do {
+            for try await line in runner.lines(invocation) { lines.append(line) }
+        } catch let error as StreamingPluginError {
+            caught = error
+        } catch {
+            XCTFail("unexpected error type: \(error)")
+        }
+
+        XCTAssertEqual(lines, ["partial"], "output produced before the crash must still arrive")
+        XCTAssertEqual(caught?.exitCode, 3)
+        XCTAssertTrue(caught?.standardError.contains("boom: missing interpreter") == true,
+                      "stderr must be captured, not discarded: \(caught?.standardError ?? "nil")")
+        XCTAssertEqual(caught?.summary, "boom: missing interpreter",
+                       "the summary is what a menu row shows")
+    }
+
+    func testCleanExitStillFinishesWithoutError() async throws {
+        let runner = SystemStreamingRunner()
+        let invocation = ProcessInvocation(launchPath: "/bin/sh", arguments: ["-c", "printf 'a\n'"])
+        var lines: [String] = []
+        for try await line in runner.lines(invocation) { lines.append(line) }
+        XCTAssertEqual(lines, ["a"], "a plugin that exits 0 must not be reported as a failure")
+    }
+
+    /// A plugin writing a lot to stderr must not be able to grow the retained
+    /// tail without bound, and must not deadlock on a full pipe with no reader.
+    func testHeavyStderrIsBoundedAndDoesNotBlockTheProcess() async {
+        let runner = SystemStreamingRunner()
+        let invocation = ProcessInvocation(
+            launchPath: "/bin/sh",
+            arguments: ["-c", "i=0; while [ $i -lt 4000 ]; do echo 'noisy stderr line padding padding padding' >&2; i=$((i+1)); done; exit 1"]
+        )
+        var caught: StreamingPluginError?
+        do {
+            for try await _ in runner.lines(invocation) {}
+        } catch let error as StreamingPluginError {
+            caught = error
+        } catch {
+            XCTFail("unexpected error type: \(error)")
+        }
+        XCTAssertNotNil(caught, "the process must exit rather than block on a full stderr pipe")
+        XCTAssertLessThanOrEqual(caught?.standardError.utf8.count ?? 0, 64 * 1024)
+    }
+}
+
 final class StreamingCancelEscalationTests: XCTestCase {
     private let gracePeriod: TimeInterval = 0.2
 
@@ -244,7 +301,7 @@ final class StreamingSessionCancelFlushTests: XCTestCase {
             runner: FakeLineRunner(stream: stream),
             makeInvocation: { ProcessInvocation(launchPath: "/bin/true") },
             onUpdate: { recorder.record($0) },
-            onStopped: { _ in }
+            onStopped: { _, _ in }
         )
         session.start()
 

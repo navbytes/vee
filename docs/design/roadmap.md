@@ -4,6 +4,10 @@ Status: **internal design record**, not a published commitment. It lives in
 `docs/design/` rather than the guide so that priorities can change without
 reading as a promise about what ships when.
 
+Not to be confused with `ROADMAP.md` at the repository root, which tracks
+specific engineering deferrals (a known problem, deliberately not fixed yet).
+This document is about product direction; that one is about outstanding work.
+
 This document is a prioritized product strategy for making Vee the best
 menu-bar script runner on macOS. It is grounded in a competitive analysis of
 xbar and SwiftBar (feature surface, open issues, community sentiment) and the

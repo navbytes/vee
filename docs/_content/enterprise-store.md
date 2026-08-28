@@ -147,9 +147,22 @@ Vee offers three levels of assurance, each optional and layered on the existing
    client-side and **cannot be lowered by the store** — a compromised catalog
    can't downgrade a machine that requires signing.
 
-Prefer a **policy-pinned key** (`pinnedSigningKey`, delivered by MDM) over the
-manifest's own key when you can: it can't be replaced by whoever controls the
-repo.
+> **Requiring signatures requires pinning a key.** `requireSignature` without a
+> `pinnedSigningKey` now fails every install from that store, with *"this store
+> requires a signed plugin, but no signing key is pinned."*
+>
+> This is not a pin-if-you-can preference — it is what makes the signature mean
+> anything. Verified against a key the manifest itself advertises, a signature
+> proves only that a file matches the manifest it came with, which the SHA-256
+> pin already proved: whoever can rewrite the signature can rewrite the key
+> beside it. Only a key delivered out of band, by policy, establishes *who*
+> produced the plugin. Vee used to accept the manifest's key here and report the
+> install as verified, which claimed a guarantee it did not have.
+>
+> A store with no `requireSignature` is unaffected. A signature that is present
+> but wrong is still refused either way — checking it against the manifest's key
+> catches corruption, which is a different and lesser job than establishing
+> provenance.
 
 ## Managed configuration (MDM)
 

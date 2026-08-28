@@ -38,7 +38,10 @@ public final class StreamingSession {
     private let runner: StreamingProcessRunning
     private let makeInvocation: @Sendable () -> ProcessInvocation
     private let onUpdate: (ParsedOutput) -> Void
-    private let onStopped: (String) -> Void
+    /// Called when the stream ends. `isFinal` distinguishes "backing off, will
+    /// try again" from "given up" — the second needs a way back, because
+    /// nothing else will start it.
+    private let onStopped: (_ message: String, _ isFinal: Bool) -> Void
     private let clock: VeeClock
 
     private var task: Task<Void, Never>?
@@ -54,7 +57,7 @@ public final class StreamingSession {
         clock: VeeClock = SystemClock(),
         makeInvocation: @escaping @Sendable () -> ProcessInvocation,
         onUpdate: @escaping (ParsedOutput) -> Void,
-        onStopped: @escaping (String) -> Void
+        onStopped: @escaping (_ message: String, _ isFinal: Bool) -> Void
     ) {
         self.runner = runner
         self.clock = clock
@@ -72,10 +75,26 @@ public final class StreamingSession {
         task = nil
     }
 
+    /// Starts the plugin again after it crash-looped and the session gave up.
+    ///
+    /// Giving up is right — a plugin failing on launch would otherwise respawn
+    /// forever — but it left the plugin dead with no way back short of toggling
+    /// it off and on in the Manager, which is not something the menu it left
+    /// behind suggests. The crash-loop window and the backoff counter both
+    /// reset, so this is a genuine fresh start and not one more doomed attempt
+    /// against an already-tripped detector.
+    public func restart() {
+        stop()
+        detector = CrashLoopDetector()
+        attempt = 0
+        start()
+    }
+
     private func runLoop() async {
         while !Task.isCancelled {
             let startedAt = clock.now
             var accumulator = StreamAccumulator()
+            var failure: String?
             do {
                 for try await line in runner.lines(makeInvocation()) {
                     if let block = accumulator.consume(line) {
@@ -91,7 +110,12 @@ public final class StreamingSession {
                     onUpdate(OutputParser.parseAuto(block))
                 }
             } catch {
-                // Launch failure: fall through to restart handling.
+                // A bad exit or a launch failure. Keep the reason: it is the
+                // only description of the problem the user will ever get, and
+                // the restart message alone ("stopped — restarting…") says
+                // nothing about why the plugin keeps dying.
+                failure = (error as? StreamingPluginError)?.summary
+                    ?? (error as? VeeError).map { "\($0)" }
             }
 
             if Task.isCancelled { break }
@@ -102,11 +126,12 @@ public final class StreamingSession {
             }
             attempt += 1
 
+            let reason = failure.map { ": \($0)" } ?? ""
             if detector.record(now: clock.now) {
-                onStopped("Plugin stopped — restarting too frequently")
+                onStopped("Plugin stopped — restarting too frequently\(reason)", true)
                 break
             }
-            onStopped("Plugin stopped — restarting…")
+            onStopped("Plugin stopped — restarting…\(reason)", false)
             try? await clock.sleep(for: BackoffPolicy.delay(attempt: attempt))
         }
     }

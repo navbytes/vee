@@ -1,12 +1,20 @@
 import SwiftUI
 import VeePluginFormat
+import VeeTrust
 
 /// One row in the plugin manager.
 public struct PluginManagerRow: Identifiable, Sendable {
     public var id: String
     public var name: String
     public var interval: String
+    /// The human-readable trust summary shown beside the shield.
     public var trust: String
+    /// What the shield actually means. Carried as the parsed level rather than
+    /// re-derived from `trust`: the shield used to pick its colour by
+    /// substring-matching that prose ("declared" and not "un"), so rewording a
+    /// user-facing string — or translating it — would silently turn an
+    /// undeclared plugin's shield green.
+    public var trustLevel: TrustLevel
     public var isEnabled: Bool
     public var hasSettings: Bool
     /// The plugin's effective Vee-native features (search panel, active hotkey),
@@ -20,11 +28,12 @@ public struct PluginManagerRow: Identifiable, Sendable {
     /// identifiable in the Manager.
     public var surface: HeaderMetadata.WidgetSurface
 
-    public init(id: String, name: String, interval: String, trust: String, isEnabled: Bool, hasSettings: Bool, features: PluginFeatures = PluginFeatures(), lastError: String? = nil, surface: HeaderMetadata.WidgetSurface = .menu) {
+    public init(id: String, name: String, interval: String, trust: String, trustLevel: TrustLevel = .undeclared, isEnabled: Bool, hasSettings: Bool, features: PluginFeatures = PluginFeatures(), lastError: String? = nil, surface: HeaderMetadata.WidgetSurface = .menu) {
         self.id = id
         self.name = name
         self.interval = interval
         self.trust = trust
+        self.trustLevel = trustLevel
         self.isEnabled = isEnabled
         self.hasSettings = hasSettings
         self.features = features
@@ -252,7 +261,14 @@ struct ManagerRow: View {
             Button("Move to Trash", role: .destructive) { model.delete(row.id) }
             Button("Cancel", role: .cancel) {}
         } message: {
-            Text("The plugin script will be moved to the Trash. You can restore it from there.")
+            // Only the script is recoverable. Disk reconciliation
+            // (`AppController.reconcileDiskState`) fires on the very next
+            // reload and permanently removes this plugin's settings, its
+            // saved passwords and tokens from the Keychain, and its install
+            // record — so restoring the file from the Trash brings back a
+            // plugin that has to be set up again from scratch. Promising a
+            // clean restore was the part of this dialog that wasn't true.
+            Text("The plugin script will be moved to the Trash. Its settings, saved passwords and install history are deleted and cannot be restored.")
         }
     }
 
@@ -316,15 +332,17 @@ struct ManagerRow: View {
     }
 
     private var trustTint: Color {
-        let t = row.trust.lowercased()
-        if t.contains("declared") && !t.contains("un") { return .green }
-        if t.contains("incomplete") || t.contains("partial") { return .orange }
-        return .secondary
+        switch row.trustLevel {
+        case .declared: return .green
+        case .partial: return .orange
+        case .undeclared: return .secondary
+        }
     }
     private var trustSymbol: String {
-        let t = row.trust.lowercased()
-        if t.contains("declared") && !t.contains("un") { return "checkmark.shield.fill" }
-        if t.contains("incomplete") || t.contains("partial") { return "exclamationmark.shield.fill" }
-        return "shield"
+        switch row.trustLevel {
+        case .declared: return "checkmark.shield.fill"
+        case .partial: return "exclamationmark.shield.fill"
+        case .undeclared: return "shield"
+        }
     }
 }

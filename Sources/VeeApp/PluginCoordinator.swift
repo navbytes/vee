@@ -39,10 +39,12 @@ final class PluginCoordinator {
     /// racing the replacement coordinator's run of the same plugin.
     private var refreshTask: Task<Void, Never>?
     /// The second, independent scheduler for `.both`/`.widget` plugins — see
-    /// `start()`. The widget cadence is floored at 5 minutes regardless of
-    /// source; it is driven by the same in-process timer as every other
-    /// interval, so it cannot register a launch-on-demand activity that would
-    /// keep Vee alive against the user's wishes.
+    /// `start()`. The widget cadence is floored at `widgetRefreshFloor` (10s,
+    /// an energy guard — NOT WidgetKit's passive reload budget; see
+    /// `docs/design/widget-surface-contract.md` §2); it is driven by the same
+    /// in-process timer as every other interval, so it cannot register a
+    /// launch-on-demand activity that would keep Vee alive against the user's
+    /// wishes.
     private var widgetBackground: RefreshTimer?
     private var isRefreshingWidget = false
     /// The in-flight `refreshWidget()` Task — same reasoning as `refreshTask`.
@@ -68,10 +70,17 @@ final class PluginCoordinator {
     /// way reusing `lastError` for this would.
     private(set) var hotkeyRegistrationError: String?
 
+    /// Set when `<swiftbar.schedule>` can never fire — unparseable, or valid but
+    /// matching no real date. Like `hotkeyRegistrationError` this is a *config*
+    /// error, not a run outcome, so it deliberately does not live in
+    /// `lastError`: a successful manual refresh must not clear a schedule that
+    /// is still broken.
+    private(set) var scheduleError: String?
+
     /// The error the Plugin Manager should show for this row: the last run's
     /// failure takes priority (more actionable/urgent), falling back to a
     /// still-unresolved hotkey collision so that doesn't go unsurfaced either.
-    var displayError: String? { lastError ?? hotkeyRegistrationError }
+    var displayError: String? { lastError ?? scheduleError ?? hotkeyRegistrationError }
 
     /// Called with the plugin's current widget state after each render (or an
     /// error marker), so `AppController` can publish it to the widget snapshot.
@@ -84,7 +93,7 @@ final class PluginCoordinator {
         self.runtime = runtime
         self.baseEnvironment = baseEnvironment
 
-        let source = (try? String(contentsOfFile: plugin.path, encoding: .utf8)) ?? ""
+        let source = PluginSource.read(atPath: plugin.path) ?? ""
         self.header = HeaderParser.parse(source: source)
         // Honor an explicit runInBash; otherwise run executables directly (so a
         // Python/Ruby plugin uses its shebang) and bash-wrap non-executables.
@@ -417,10 +426,26 @@ final class PluginCoordinator {
     }
 
     /// Schedules refreshes from `<swiftbar.schedule>` cron expressions.
+    ///
+    /// Both failure modes are reported rather than swallowed. A schedule that
+    /// doesn't parse leaves `CronScheduler.init?` nil, and a schedule that
+    /// parses but can never match — `30 2 * * *`, February 30th — leaves it with
+    /// no date to arm a timer for. Either way the plugin simply never refreshes
+    /// again, which is indistinguishable from a plugin that is merely slow, so
+    /// it goes into `scheduleError` where the Manager row can show it.
     private func startCron() {
-        cron = CronScheduler(schedules: header.schedule) { [weak self] in
+        scheduleError = nil
+        guard let scheduler = CronScheduler(schedules: header.schedule, onFire: { [weak self] in
             Task { @MainActor in self?.refresh() }
+        }) else {
+            scheduleError = "Schedule “\(header.schedule.joined(separator: ", "))” isn’t a valid cron expression — this plugin won’t refresh on a schedule."
+            return
         }
+        guard scheduler.canEverFire else {
+            scheduleError = "Schedule “\(header.schedule.joined(separator: ", "))” never matches a real date — this plugin won’t refresh on a schedule."
+            return
+        }
+        cron = scheduler
         cron?.start()
     }
 
@@ -442,13 +467,27 @@ final class PluginCoordinator {
                 self?.controller?.render(output)
                 self?.publishScrape(WidgetPublish(title: Self.publishableTitle(output), fields: Self.widgetFields(from: output)))
             },
-            onStopped: { [weak self] message in
-                self?.controller?.renderError(message)
+            onStopped: { [weak self] message, isFinal in
+                // Only a session that has GIVEN UP offers a restart. While it's
+                // still backing off it will come back on its own, and a button
+                // saying otherwise would be noise.
+                self?.controller?.renderError(
+                    message,
+                    onRestart: isFinal ? { [weak self] in self?.restartStreaming() } : nil
+                )
                 self?.publishScrape(WidgetPublish(title: "⚠︎ stopped", isError: true))
             }
         )
         streaming = session
         session.start()
+    }
+
+    /// Restarts a streaming plugin the session gave up on, from the "Restart"
+    /// row its own error menu offers.
+    private func restartStreaming() {
+        guard !stopped, let streaming else { return }
+        controller?.renderError("Restarting…")
+        streaming.restart()
     }
 
     private func scheduleTimer() {

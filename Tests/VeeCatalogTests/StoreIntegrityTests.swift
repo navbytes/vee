@@ -10,14 +10,14 @@ final class StoreIntegrityTests: XCTestCase {
     func testMatchingHashPasses() {
         let hash = PluginHash.sha256Hex(source)
         XCTAssertEqual(
-            StoreIntegrity.verify(source: source, declaredSHA256: hash, signatureBase64: nil, signingKeyBase64: nil, requireSignature: false),
+            StoreIntegrity.verify(source: source, declaredSHA256: hash, signatureBase64: nil, pinnedKeyBase64: nil, requireSignature: false),
             .ok
         )
     }
 
     func testWrongHashFails() {
         XCTAssertEqual(
-            StoreIntegrity.verify(source: source, declaredSHA256: "deadbeef", signatureBase64: nil, signingKeyBase64: nil, requireSignature: false),
+            StoreIntegrity.verify(source: source, declaredSHA256: "deadbeef", signatureBase64: nil, pinnedKeyBase64: nil, requireSignature: false),
             .hashMismatch
         )
     }
@@ -25,14 +25,14 @@ final class StoreIntegrityTests: XCTestCase {
     func testHashIsCaseInsensitive() {
         let hash = PluginHash.sha256Hex(source).uppercased()
         XCTAssertEqual(
-            StoreIntegrity.verify(source: source, declaredSHA256: hash, signatureBase64: nil, signingKeyBase64: nil, requireSignature: false),
+            StoreIntegrity.verify(source: source, declaredSHA256: hash, signatureBase64: nil, pinnedKeyBase64: nil, requireSignature: false),
             .ok
         )
     }
 
     func testNoHashSkipsHashCheck() {
         XCTAssertEqual(
-            StoreIntegrity.verify(source: source, declaredSHA256: nil, signatureBase64: nil, signingKeyBase64: nil, requireSignature: false),
+            StoreIntegrity.verify(source: source, declaredSHA256: nil, signatureBase64: nil, pinnedKeyBase64: nil, requireSignature: false),
             .ok
         )
     }
@@ -49,7 +49,7 @@ final class StoreIntegrityTests: XCTestCase {
         let sig = try sign(source, key: key)
         let pub = key.publicKey.rawRepresentation.base64EncodedString()
         XCTAssertEqual(
-            StoreIntegrity.verify(source: source, declaredSHA256: nil, signatureBase64: sig, signingKeyBase64: pub, requireSignature: true),
+            StoreIntegrity.verify(source: source, declaredSHA256: nil, signatureBase64: sig, pinnedKeyBase64: pub, requireSignature: true),
             .ok
         )
     }
@@ -59,7 +59,7 @@ final class StoreIntegrityTests: XCTestCase {
         let sig = try sign("something else", key: key)
         let pub = key.publicKey.rawRepresentation.base64EncodedString()
         XCTAssertEqual(
-            StoreIntegrity.verify(source: source, declaredSHA256: nil, signatureBase64: sig, signingKeyBase64: pub, requireSignature: true),
+            StoreIntegrity.verify(source: source, declaredSHA256: nil, signatureBase64: sig, pinnedKeyBase64: pub, requireSignature: true),
             .signatureInvalid
         )
     }
@@ -69,14 +69,14 @@ final class StoreIntegrityTests: XCTestCase {
         let sig = try sign(source, key: key)
         let otherPub = Curve25519.Signing.PrivateKey().publicKey.rawRepresentation.base64EncodedString()
         XCTAssertEqual(
-            StoreIntegrity.verify(source: source, declaredSHA256: nil, signatureBase64: sig, signingKeyBase64: otherPub, requireSignature: true),
+            StoreIntegrity.verify(source: source, declaredSHA256: nil, signatureBase64: sig, pinnedKeyBase64: otherPub, requireSignature: true),
             .signatureInvalid
         )
     }
 
     func testRequiredSignatureMissingFails() {
         XCTAssertEqual(
-            StoreIntegrity.verify(source: source, declaredSHA256: nil, signatureBase64: nil, signingKeyBase64: nil, requireSignature: true),
+            StoreIntegrity.verify(source: source, declaredSHA256: nil, signatureBase64: nil, pinnedKeyBase64: nil, requireSignature: true),
             .signatureMissing
         )
     }
@@ -87,7 +87,7 @@ final class StoreIntegrityTests: XCTestCase {
         let sig = try sign("tampered", key: key)
         let pub = key.publicKey.rawRepresentation.base64EncodedString()
         XCTAssertEqual(
-            StoreIntegrity.verify(source: source, declaredSHA256: nil, signatureBase64: sig, signingKeyBase64: pub, requireSignature: false),
+            StoreIntegrity.verify(source: source, declaredSHA256: nil, signatureBase64: sig, pinnedKeyBase64: pub, requireSignature: false),
             .signatureInvalid
         )
     }
@@ -108,4 +108,42 @@ final class StoreIntegrityTests: XCTestCase {
             .ok
         )
     }
+    /// A store that demands signatures but pins no key is asking for a
+    /// guarantee it cannot get: the manifest supplies the signature AND the key
+    /// used to check it, so whoever can rewrite one can rewrite the other. That
+    /// check passed while proving nothing more than the SHA-256 pin already did.
+    func testRequireSignatureIsNotSatisfiedByAManifestSuppliedKey() throws {
+        let source = "echo hi"
+        let key = Curve25519.Signing.PrivateKey()
+        let pub = key.publicKey.rawRepresentation.base64EncodedString()
+        let sig = try key.signature(for: Data(SHA256.hash(data: Data(source.utf8)))).base64EncodedString()
+
+        XCTAssertEqual(
+            StoreIntegrity.verify(source: source, declaredSHA256: nil, signatureBase64: sig,
+                                  pinnedKeyBase64: nil, manifestKeyBase64: pub, requireSignature: true),
+            .signatureUnpinned,
+            "a self-supplied key cannot satisfy a signature requirement")
+
+        XCTAssertEqual(
+            StoreIntegrity.verify(source: source, declaredSHA256: nil, signatureBase64: sig,
+                                  pinnedKeyBase64: pub, manifestKeyBase64: nil, requireSignature: true),
+            .ok,
+            "the same signature against a PINNED key is exactly what the policy asks for")
+    }
+
+    /// The manifest key keeps its one honest job: catching a store that
+    /// advertises a signature and gets it wrong. That is corruption detection,
+    /// not provenance, and it must not start passing silently.
+    func testManifestKeyStillCatchesAWrongSignatureWhenNotRequired() throws {
+        let source = "echo hi"
+        let other = Curve25519.Signing.PrivateKey()
+        let wrongSig = try other.signature(for: Data(SHA256.hash(data: Data("something else".utf8)))).base64EncodedString()
+        let manifestPub = Curve25519.Signing.PrivateKey().publicKey.rawRepresentation.base64EncodedString()
+
+        XCTAssertEqual(
+            StoreIntegrity.verify(source: source, declaredSHA256: nil, signatureBase64: wrongSig,
+                                  pinnedKeyBase64: nil, manifestKeyBase64: manifestPub, requireSignature: false),
+            .signatureInvalid)
+    }
+
 }

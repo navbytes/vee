@@ -117,6 +117,8 @@ public final class StatusItemController {
     /// (`reconcileMode()`) repaint the right thing on the new surface.
     private var lastErrorMessage: String?
     private var lastErrorDetail: String?
+    /// Action behind the error menu's "Restart Plugin" row, while one is shown.
+    private var restartHandler: (() -> Void)?
     /// The "Updated <time>" stamp row in the controls submenu, kept so an
     /// identical-output render can advance the timestamp in place without
     /// rebuilding the menu.
@@ -314,7 +316,11 @@ public final class StatusItemController {
     }
 
     /// Renders an error surface (the launcher stays up; the plugin shows ⚠️).
-    public func renderError(_ message: String, detail: String? = nil) {
+    /// Renders the error surface. `onRestart`, when given, adds a row that puts
+    /// the plugin back — the affordance a streaming plugin that crash-looped
+    /// otherwise has no way to offer, leaving it dead until the user thinks to
+    /// toggle it off and on in the Manager.
+    public func renderError(_ message: String, detail: String? = nil, onRestart: (() -> Void)? = nil) {
         // A recovering plugin whose new output happens to equal its
         // pre-error output must still rebuild (the error surface replaced the
         // menu the equality check would otherwise skip re-rendering).
@@ -353,6 +359,17 @@ public final class StatusItemController {
             menu.addItem(details)
         }
 
+        if let onRestart {
+            restartHandler = onRestart
+            menu.addItem(.separator())
+            let restart = NSMenuItem(title: "Restart Plugin", action: #selector(restartFromErrorMenu), keyEquivalent: "")
+            restart.target = self
+            restart.isEnabled = true
+            menu.addItem(restart)
+        } else {
+            restartHandler = nil
+        }
+
         menu.delegate = controls
         appendControls(to: menu)
         applyMenu(menu)
@@ -363,6 +380,10 @@ public final class StatusItemController {
         if let compactEntry {
             compactController.setEntryError(compactEntry, hasError: true)
         }
+    }
+
+    @objc private func restartFromErrorMenu() {
+        restartHandler?()
     }
 
     /// Surfaces an in-flight refresh: the controls submenu's stamp row (if

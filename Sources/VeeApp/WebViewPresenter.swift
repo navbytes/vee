@@ -17,11 +17,37 @@ final class WebViewPresenter {
     /// a data race.
     private var observerTokens: [ObjectIdentifier: NSObjectProtocol] = [:]
 
+    /// The window size for a `webview=` row, bounded by the screen it will open
+    /// on.
+    ///
+    /// `webvieww=`/`webviewh=` come straight from plugin stdout and used to
+    /// reach `NSWindow(contentRect:)` unbounded, so `webvieww=99999` opened a
+    /// window far larger than the display — with its title bar and close button
+    /// off-screen, which is a window the user cannot dismiss. Clamping to the
+    /// visible frame keeps the chrome reachable. Nothing here is a matter of
+    /// taste: a window bigger than the screen is never what the author meant.
+    ///
+    /// `static` and internal so the bounds are unit-testable without opening a
+    /// real window.
+    static func windowSize(width: Double?, height: Double?, screen: NSSize? = nil) -> NSSize {
+        let visible = screen ?? NSScreen.main?.visibleFrame.size ?? NSSize(width: 1440, height: 900)
+        let minimumSide: Double = 120
+        func bound(_ requested: Double?, default fallback: Double, limit: Double) -> Double {
+            let value = requested ?? fallback
+            guard value.isFinite else { return fallback }
+            return Swift.min(Swift.max(value, minimumSide), Swift.max(limit, minimumSide))
+        }
+        return NSSize(
+            width: bound(width, default: 640, limit: Double(visible.width)),
+            height: bound(height, default: 480, limit: Double(visible.height))
+        )
+    }
+
     func show(url: URL, width: Double?, height: Double?) {
         // Defense in depth: the parser already restricts `webview=` to http/https,
         // but never load a non-web URL (e.g. file://) into an in-app WKWebView.
         guard URLScheme.isWebURL(url) else { return }
-        let size = NSSize(width: width ?? 640, height: height ?? 480)
+        let size = Self.windowSize(width: width, height: height)
         let webView = WKWebView(frame: NSRect(origin: .zero, size: size))
         webView.load(URLRequest(url: url))
 

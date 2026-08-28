@@ -120,8 +120,16 @@ public struct ProgressParams: Equatable, Sendable {
     public init(fraction: Double, trackColor: VeeColor? = nil, width: Double? = nil, height: Double? = nil, isFullWidth: Bool = false) {
         self.fraction = fraction
         self.trackColor = trackColor
-        self.width = width
-        self.height = height
+        // Clamped here, in the initializer, rather than at the parser: this is
+        // the only door into the type, so every construction site — the line
+        // parser, `accessoryw=`'s fan-out, a renderer building one directly —
+        // gets the same bounds. `MenuBuilder` passes `effectiveWidth` straight
+        // into a `CGRect` on a live `NSMenuItem.view`, where an unclamped
+        // `progressw=1000000000` is a row taller than the screen and a
+        // negative one is a negative-width rect. `minimumSize`, not the
+        // chart's floor of 8: a bar's own default height is 6.
+        self.width = ChartParams.clampSize(width, minimum: ChartParams.minimumSize)
+        self.height = ChartParams.clampSize(height, minimum: ChartParams.minimumSize)
         self.isFullWidth = isFullWidth
     }
 
@@ -161,8 +169,9 @@ public struct SparklineStyle: Equatable, Sendable {
     public var isFullWidth: Bool
 
     public init(width: Double? = nil, height: Double? = nil, color: VeeColor? = nil, isFullWidth: Bool = false) {
-        self.width = width
-        self.height = height
+        // Same clamp, same reason, as `ProgressParams.init` — see there.
+        self.width = ChartParams.clampSize(width, minimum: ChartParams.minimumSize)
+        self.height = ChartParams.clampSize(height, minimum: ChartParams.minimumSize)
         self.color = color
         self.isFullWidth = isFullWidth
     }
@@ -176,6 +185,26 @@ public struct SparklineStyle: Equatable, Sendable {
     /// The declared chart width/height, or the default.
     public var effectiveWidth: Double { width ?? Self.defaultWidth }
     public var effectiveHeight: Double { height ?? Self.defaultHeight }
+}
+
+/// Bounds for the two params that become a font point size, `size=` and
+/// `sfsize=`.
+///
+/// They reach `NSFont.systemFont(ofSize:)` and
+/// `NSImage.SymbolConfiguration(pointSize:weight:)` directly, and a menu row
+/// grows to fit its text — so an unclamped `size=1000000` is a row taller than
+/// the display, from one line of plugin output. `LineParser.finite()` already
+/// rejects NaN/infinity (NaN would defeat the clamp); this bounds the rest.
+///
+/// The ceiling is deliberately far above any real use — a plugin wanting a
+/// genuinely large title, for legibility or accessibility, must not be clipped
+/// by it. The floor keeps a zero or negative point size out of AppKit.
+public enum FontSizeLimit {
+    public static let range: ClosedRange<Double> = 4...144
+
+    public static func clamp(_ value: Double?) -> Double? {
+        value.map { Swift.min(Swift.max($0, range.lowerBound), range.upperBound) }
+    }
 }
 
 /// Strongly-typed representation of a menu line's `|`-delimited parameters.
