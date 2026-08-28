@@ -27,7 +27,67 @@ public enum PluginInstaller {
         try assertContained(path, in: directory, requested: filename)
         try source.write(toFile: path, atomically: true, encoding: .utf8)
         try fileManager.setAttributes([.posixPermissions: 0o755], ofItemAtPath: path)
+        vendorSDKIfNeeded(for: source, filename: safeName, in: directory, fileManager: fileManager)
         return path
+    }
+
+    /// Writes the vendored SDK beside a plugin that imports it, when the
+    /// directory has no copy yet.
+    ///
+    /// A Vee plugin is a single file with no build step, so its SDK travels as
+    /// a sibling — `vee.py` next to a Python plugin, `vee.ts` next to a
+    /// TypeScript one. That works in the plugin repository, where the file is
+    /// checked in beside the plugins, and it works for `vee new`, which writes
+    /// both. It did not work for the two paths that install *one* file: a
+    /// plugin downloaded from Discover or opened from an `addplugin` link
+    /// landed alone, and every run died on `ModuleNotFoundError: No module
+    /// named 'vee'` — a traceback in the menu bar for something the user did
+    /// nothing to cause and had no way to read as "fetch a second file".
+    ///
+    /// Best-effort by design: a plugin that has been written is installed, and
+    /// failing to place a companion must not undo that or surface as an install
+    /// error. The plugin still runs the moment an SDK appears beside it.
+    ///
+    /// An existing SDK file is never overwritten. A directory that already has
+    /// one is a directory someone else is curating — the plugin repository's
+    /// own copy, or a newer SDK a previous install vendored — and replacing it
+    /// could break the plugins already relying on it.
+    private static func vendorSDKIfNeeded(for source: String, filename: String, in directory: String, fileManager: FileManager) {
+        guard let language = sdkLanguage(forPlugin: filename, source: source),
+              let sdkName = EmbeddedSDK.filename(for: language),
+              let sdkSource = EmbeddedSDK.source(for: language)
+        else { return }
+        let sdkPath = (directory as NSString).appendingPathComponent(sdkName)
+        guard !fileManager.fileExists(atPath: sdkPath) else { return }
+        try? sdkSource.write(toFile: sdkPath, atomically: true, encoding: .utf8)
+    }
+
+    /// The SDK a plugin needs beside it, or nil if it needs none.
+    ///
+    /// Matched on the import the SDK is actually reached through, not on the
+    /// file extension alone: most Python plugins vendor nothing, and writing a
+    /// 34 KB `vee.py` next to every `.py` file someone installs would litter
+    /// the directory with a dependency they never asked for.
+    ///
+    /// Go is deliberately absent — a Go plugin is a compiled binary that
+    /// imports the module, so there is no sibling file to vendor.
+    static func sdkLanguage(forPlugin filename: String, source: String) -> String? {
+        let ext = (filename as NSString).pathExtension.lowercased()
+        switch ext {
+        case "py":
+            // `from vee import X` / `import vee` — anchored so a plugin that
+            // merely mentions vee in a comment or its own `vee_` helper isn't
+            // mistaken for one that imports the SDK.
+            let pattern = #"(?m)^\s*(from\s+vee\s+import\s|import\s+vee\s*$)"#
+            return source.range(of: pattern, options: .regularExpression) != nil ? "python" : nil
+        case "ts":
+            // The vendored SDK is imported by relative path (`./vee.ts`); a
+            // package import of `@navbytes/vee` resolves through npm instead
+            // and needs no sibling.
+            return source.range(of: #"from\s+['"]\./vee(\.ts)?['"]"#, options: .regularExpression) != nil ? "typescript" : nil
+        default:
+            return nil
+        }
     }
 
     public static func isInstalled(filename: String, in directory: String, fileManager: FileManager = .default) -> Bool {
