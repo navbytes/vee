@@ -63,7 +63,7 @@ Already have xbar or SwiftBar plugins? Point Vee at your existing folder
 | [Plugin SDKs](https://vee.navbytes.io/guide/sdk/) | Zero-dependency TypeScript, Python, and Go builders. |
 | [Rich params & charts](https://vee.navbytes.io/guide/charts/) | `progress=`, `sparkline=`, pie/donut/stacked-bar, `toggle=`, `slider=`. |
 | [Widgets](https://vee.navbytes.io/guide/widgets/) | Notification Center tiles and the Vee Health roll-up. |
-| [Preferences](https://vee.navbytes.io/guide/preferences/) | `<xbar.var>` → typed settings forms; secrets in the Keychain. |
+| [Preferences](https://vee.navbytes.io/guide/preferences/) | Declared plugin variables become typed settings forms; secrets in the Keychain. |
 | [Trust model](https://vee.navbytes.io/guide/trust-model/) | `<vee.*>` declarations and the install-time trust summary. |
 | [CLI & URL actions](https://vee.navbytes.io/guide/cli-and-urls/) | `vee render`, `vee lint`, `vee dev`, `vee new`, `vee://`. |
 | [Migrating from SwiftBar/xbar](https://vee.navbytes.io/guide/migrating-from-swiftbar/) | What carries over, and what does not. |
