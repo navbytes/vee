@@ -115,8 +115,9 @@ final class PluginCoordinator {
                 pluginName: plugin.filename.name,
                 handler: AppActionDispatcher(
                     runner: SystemProcessRunner(),
-                    environment: { [weak self] in self?.actionEnvironment() ?? baseEnvironment }
-                ) { [weak self] in self?.refresh() },
+                    environment: { [weak self] in self?.actionEnvironment() ?? baseEnvironment },
+                    onRefresh: { [weak self] in self?.refresh() }
+                ),
                 hasSettings: !header.vars.isEmpty || !features.isEmpty,
                 trustSummary: trustSummary,
                 refreshOnOpen: header.refreshOnOpen ?? false,

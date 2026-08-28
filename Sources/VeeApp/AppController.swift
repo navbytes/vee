@@ -477,7 +477,7 @@ public final class AppController: NSObject, NSApplicationDelegate {
                 // plugin context to merge — and their `shell=`/`shortcut=`
                 // actions are stripped before render anyway
                 // (`strippingShellActions`), so nothing here executes with it.
-                handler: AppActionDispatcher(runner: SystemProcessRunner(), environment: { [baseEnvironment] in baseEnvironment }) {},
+                handler: AppActionDispatcher(runner: SystemProcessRunner(), environment: { [baseEnvironment] in baseEnvironment }, onRefresh: {}),
                 onRefresh: {}
             )
             ephemerals[key] = controller
