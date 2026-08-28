@@ -550,7 +550,7 @@ Put `<xbar.*>` / `<swiftbar.*>` tags anywhere in the file (usually in a comment 
 | `<xbar.author>` | Author name. |
 | `<xbar.author.github>` | Author's GitHub handle. |
 | `<xbar.desc>` | One-line description. |
-| `<xbar.image>` | Preview image URL. |
+| `<xbar.image>` | Screenshot URL, shown on the plugin's Discover card — see [Screenshots](#screenshots). |
 | `<xbar.dependencies>` | Comma-separated tools the plugin needs (e.g. `python3,jq`). |
 | `<xbar.abouturl>` | A link to the plugin's homepage. |
 | `<xbar.var>` | A typed, user-editable preference — see [Preferences](preferences.md). |
@@ -565,6 +565,30 @@ Put `<xbar.*>` / `<swiftbar.*>` tags anywhere in the file (usually in a comment 
 | `<swiftbar.hideDisablePlugin>` | Hide the "Disable Plugin" item. |
 | `<swiftbar.hideSwiftBar>` | Hide the app (Vee) submenu. |
 | `<swiftbar.persistentWebView>` | Keep a `webview=` window alive across refreshes instead of recreating it. |
+
+### Screenshots
+
+`<xbar.image>` gives a plugin a screenshot on its Discover card, so someone can
+see what it looks like before installing it:
+
+```sh
+# <xbar.image>https://raw.githubusercontent.com/you/your-plugins/main/Tools/cpu.png</xbar.image>
+```
+
+**The image must be served from the same host as the plugin's own source.** In
+practice that means committing it next to the plugin in the catalog repository
+and linking to it there. An image hosted anywhere else is ignored, and the card
+renders exactly as it does for a plugin with no screenshot at all.
+
+The reason is that a Discover card is drawn for plugins nobody has chosen — the
+grid loads them as you scroll. If the URL could point anywhere, browsing the
+catalog would tell each plugin author's server who was looking, when, and from
+what address, for plugins they never clicked. Requiring the same host keeps a
+screenshot to a file that travels with the plugin and adds no server the user
+hasn't already trusted by adding the store.
+
+Wide and short works best — a screenshot of the menu itself, rather than a whole
+desktop. Tall images are scaled down to fit the card.
 
 The `<swiftbar.*>` tags use the same names as their `<xbar.*>` counterparts where they overlap.
 

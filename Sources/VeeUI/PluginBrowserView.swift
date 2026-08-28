@@ -380,6 +380,36 @@ public final class PluginBrowserModel: ObservableObject {
     /// newest-first with `nil`-date entries pushed to the end, falling back to
     /// `.name` order within that "unknown date" group so it isn't left
     /// arbitrary/unstable.
+    /// The plugin's preview image (`<xbar.image>`) for its Discover card, or
+    /// `nil` if it declares none, declares something that isn't a web URL, or
+    /// declares one served by a different host than the plugin itself.
+    ///
+    /// That last condition is the whole of the policy. Vee currently fetches
+    /// everything Discover shows from the store the user configured, and a card
+    /// is drawn for plugins nobody has chosen — the grid loads them just by
+    /// being scrolled. An image URL pointing anywhere the plugin's author likes
+    /// would make merely *browsing* the catalog announce itself to that author's
+    /// server: who looked, when, from which address, for a plugin they never
+    /// clicked. Requiring the image to come from the same host as the source
+    /// keeps a screenshot to what it should be — a file committed next to the
+    /// plugin, fetched from the host the script already comes from — and adds no
+    /// origin the user hasn't already trusted by adding the store.
+    ///
+    /// Deliberately silent when it refuses: a card with no image is the normal
+    /// case, and an author who points somewhere else gets the layout everyone
+    /// else gets rather than an error about a screenshot.
+    func previewImageURL(for entry: CatalogEntry) -> URL? {
+        guard let declared = headers[entry.id]?.image?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !declared.isEmpty,
+              let url = URL(string: declared),
+              URLScheme.isWebURL(url),
+              let host = url.host?.lowercased(),
+              let sourceHost = entry.rawURL.host?.lowercased(),
+              host == sourceHost
+        else { return nil }
+        return url
+    }
+
     /// Whether `entry` matches `query`, using only fields known for EVERY entry
     /// the moment the catalog loads.
     ///
@@ -912,6 +942,47 @@ private struct PluginCard: View {
     @State private var hovering = false
 
     var body: some View {
+        VStack(alignment: .leading, spacing: Space.sm) {
+            details
+            preview
+        }
+        .padding(Space.md)
+        .veeCardSurface(hovering: hovering)
+        .onHover { hovering = $0 }
+        .animation(.easeOut(duration: 0.15), value: hovering)
+        .task { await model.loadLastUpdated(for: entry) }
+    }
+
+    /// The plugin's own screenshot (`<xbar.image>`), when it publishes one from
+    /// the same host as its source — see `PluginBrowserModel.previewImageURL`.
+    ///
+    /// `AsyncImage` rather than a hand-rolled loader: the grid is lazy, so this
+    /// only fetches for cards actually on screen, and URLSession's shared cache
+    /// means scrolling back doesn't refetch. A card without an image is exactly
+    /// the card that existed before, so nothing shifts for the plugins — the
+    /// large majority — that publish none.
+    ///
+    /// Height-capped because the declared image is arbitrary: a screenshot of a
+    /// menu is wide and short, and one that isn't must not be allowed to push
+    /// every other card off the grid. Failure draws nothing at all rather than a
+    /// broken-image placeholder, which would be a worse card than no image.
+    @ViewBuilder
+    private var preview: some View {
+        if let url = model.previewImageURL(for: entry) {
+            AsyncImage(url: url) { phase in
+                if case .success(let image) = phase {
+                    image
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(maxWidth: .infinity, maxHeight: 120)
+                        .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                        .accessibilityLabel("Screenshot of \(model.title(for: entry))")
+                }
+            }
+        }
+    }
+
+    private var details: some View {
         HStack(alignment: .top, spacing: 11) {
             PluginTile(symbol: CategoryStyle.symbol(for: entry.category), tint: CategoryStyle.tint(for: entry.category))
 
@@ -969,11 +1040,6 @@ private struct PluginCard: View {
                 }
             }
         }
-        .padding(Space.md)
-        .veeCardSurface(hovering: hovering)
-        .onHover { hovering = $0 }
-        .animation(.easeOut(duration: 0.15), value: hovering)
-        .task { await model.loadLastUpdated(for: entry) }
     }
 }
 
