@@ -747,10 +747,19 @@ public enum VeeCLI {
             ? path
             : (FileManager.default.currentDirectoryPath as NSString).appendingPathComponent(path)
         let (launchPath, arguments) = PluginExecutor.launchCommand(pluginPath: absolute, runInBash: true)
+        // The same SDK injection the app does, so a plugin behaves identically
+        // under `vee render`/`vee dev` and under the menu bar. Without it an
+        // author debugging a plugin that imports the SDK would see it fail here
+        // and work there, or the reverse — the class of inconsistency that made
+        // a clicked action resolve a different `$SWIFTBAR_PLUGIN_DATA_PATH`
+        // than a render.
+        let sdkRoot = SDKProvisioner.provision(into: SDKProvisioner.defaultRoot)
+        var environment = ProcessInfo.processInfo.environment
+        if let sdkRoot { environment = SDKProvisioner.apply(to: environment, root: sdkRoot) }
         let invocation = ProcessInvocation(
             launchPath: launchPath,
             arguments: arguments,
-            environment: ProcessInfo.processInfo.environment,
+            environment: environment,
             workingDirectory: (absolute as NSString).deletingLastPathComponent,
             timeout: 30)
         return try await runner.run(invocation)
