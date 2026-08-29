@@ -46,8 +46,8 @@ only; there are no cycles.
 | `VeeUI`           | SwiftUI windows and views: Preferences, Plugin Manager, Discover, plugin settings forms, the debug console, the Liquid Glass sparkline/control popovers, and the compact row graphics a detached window draws inline (`MenuRowAccessory`). |
 | `VeeWidgetShared` | A tiny Foundation-only model + store shared with the WidgetKit / Control Center extension. See [The widget cross-process channel](#the-widget-cross-process-channel). |
 | `VeeApp`          | The AppKit shell: `AppController`, `PluginCoordinator`, status-item management, App Intents, the URL/action routers, and notifications. Kept as a library so it is unit-testable. |
-| `VeeCLI`          | The zero-install authoring CLI: `render`, `lint`, `new`, `sdk`, `search`, `show`, and `dev`. AppKit-free and kept as a library so the CLI surface is unit-testable without a GUI. |
-| `vee`             | The executable: a thin entry point that either boots the app or dispatches the `render`/`lint`/`new`/`sdk`/`search`/`show`/`dev` authoring subcommands (`VeeCLI`). |
+| `VeeCLI`          | The zero-install authoring CLI: `render`, `lint`, `new`, `search`, `show`, and `dev`. AppKit-free and kept as a library so the CLI surface is unit-testable without a GUI. |
+| `vee`             | The executable: a thin entry point that either boots the app or dispatches the `render`/`lint`/`new`/`search`/`show`/`dev` authoring subcommands (`VeeCLI`). |
 
 Dependency edges (downward):
 

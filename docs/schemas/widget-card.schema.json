@@ -155,7 +155,7 @@
       "description": "A named color (for example `green`, `secondary`) or `#rrggbb` / `#rrggbbaa`."
     },
     "node": {
-      "description": "One node of the layout tree. Containers carry `children`; leaves do not. The tree is capped at 8 levels deep and 64 nodes; anything beyond is dropped with a diagnostic. Each `type` accepts only the properties that mean something for it -- `columns` on a `text` node is rejected here, as it is by all three SDKs.",
+      "description": "One node of the layout tree. Containers carry `children`; leaves do not. The tree is capped at 8 levels deep and 64 nodes; anything beyond is dropped with a diagnostic. Each `type` accepts only the properties that mean something for it -- `columns` on a `text` node is rejected here.",
       "oneOf": [
         {
           "type": "object",

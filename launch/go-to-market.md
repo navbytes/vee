@@ -30,7 +30,7 @@ Seed evergreen assets first, then fire the time-boxed launches in one window. **
 **First comment:**
 > I built Vee because I loved xbar's idea — write a script in any language, print text, get a live menu-bar widget — but I kept having to quit and relaunch it as its memory climbed over the day. SwiftBar fixed the native side well; I wanted to go further on subprocess handling and add the things I kept wishing existed.
 >
-> Vee runs your existing xbar and SwiftBar plugins unchanged (same text protocol, same `<xbar.var>` prefs → an auto-generated settings form, secrets in Keychain). What's new: plugins declare what they touch — network, filesystem, secrets, exec — and you get a plain-language trust summary *before* you install. It's advisory, not a sandbox; these are still ordinary executables. There's also a built-in Discover browser over the xbar catalog with trust chips, and a typed TS SDK with no build step.
+> Vee runs your existing xbar and SwiftBar plugins unchanged (same text protocol, same `<xbar.var>` prefs → an auto-generated settings form, secrets in Keychain). What's new: plugins declare what they touch — network, filesystem, secrets, exec — and you get a plain-language trust summary *before* you install. It's advisory, not a sandbox; these are still ordinary executables. There's also a built-in Discover browser over the xbar catalog with trust chips, and dependency-free typed authoring (`vee new` scaffolds, a published JSON Schema validates).
 >
 > macOS 26+, Apple Silicon, notarized, open source. It's v0.1.x — early, and I'd genuinely like to hear where the compatibility or trust model breaks. What would you want a menu-bar runner to guarantee?
 
