@@ -161,13 +161,19 @@ public struct VariablesEditorView: View {
                 .formStyle(.grouped)
                 Divider()
                 HStack {
+                    // `.lineLimit(1)` on both: a narrow window otherwise wraps
+                    // this sentence onto a second line and squeezes "Saved"/
+                    // the Save button into the same hyphenation risk as a
+                    // capsule chip.
                     Text("Secret values are stored in your macOS Keychain.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
+                        .lineLimit(1)
                     Spacer()
                     if justSaved {
                         Label("Saved", systemImage: "checkmark.circle.fill")
                             .font(.caption).foregroundStyle(.green)
+                            .lineLimit(1)
                             .transition(.opacity)
                     }
                     Button("Save") { save() }

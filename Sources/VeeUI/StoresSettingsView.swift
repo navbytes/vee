@@ -171,7 +171,10 @@ private struct StoreRow: View {
             Image(systemName: icon).foregroundStyle(.secondary).frame(width: 18)
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
-                    Text(store.displayName).fontWeight(.medium)
+                    // A long store name must not wrap here — it would squeeze
+                    // the badges beside it into the same mid-word hyphenation
+                    // `StoreBadge` itself is now guarded against (see below).
+                    Text(store.displayName).fontWeight(.medium).lineLimit(1)
                     if store.isManaged {
                         StoreBadge(text: "Managed", tint: .orange)
                     } else if store.isBuiltIn {
@@ -235,6 +238,10 @@ private struct StoreRow: View {
     }
 }
 
+/// A hand-rolled capsule chip predating `DesignKit`'s `TrustChip`/`MetaChip` —
+/// same shape, so it needs the same fix: without `.lineLimit`/`.fixedSize`, a
+/// long store name in the same row squeezes this into a wrapped, mid-word
+/// hyphenated capsule ("Manag-ed") instead of just keeping its own width.
 private struct StoreBadge: View {
     let text: String
     let tint: Color
@@ -242,6 +249,8 @@ private struct StoreBadge: View {
     var body: some View {
         Text(text)
             .font(.caption2.weight(.semibold))
+            .lineLimit(1)
+            .fixedSize()
             .padding(.horizontal, 6).padding(.vertical, 1)
             .background(tint.opacity(0.18), in: Capsule())
             .foregroundStyle(tint)

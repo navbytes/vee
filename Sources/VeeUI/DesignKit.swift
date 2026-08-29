@@ -227,6 +227,15 @@ public struct TrustChip: View {
         Label(label, systemImage: symbol)
             .font(.caption2.weight(.semibold))
             .foregroundStyle(tint)
+            .lineLimit(1)
+            // Without this, a chip squeezed by a narrow card (several chips
+            // in one row, e.g. a Discover card's badge row) shrinks its text
+            // box below the label's natural width — SwiftUI then hyphenates
+            // mid-word rather than truncating ("Wid-get", "De-clare-d"),
+            // confirmed live in a real narrow card. A capsule is short text;
+            // it should keep its natural width and let the row overflow
+            // instead of mangling the word.
+            .fixedSize()
             .padding(.horizontal, 7)
             .padding(.vertical, 3)
             .background(Capsule().fill(tint.opacity(0.14)))
@@ -251,6 +260,8 @@ public struct MetaChip: View {
         Label(label, systemImage: symbol)
             .font(.caption2)
             .foregroundStyle(tint)
+            .lineLimit(1)
+            .fixedSize()
     }
 }
 

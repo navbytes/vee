@@ -74,12 +74,14 @@ public struct PluginDebugContent: View {
     }
 
     @ViewBuilder private var statusLabel: some View {
+        // `.lineLimit(1)` so a narrow window squeezes this against the
+        // "Run again" button by truncating, not wrapping/hyphenating.
         if model.timedOut {
-            Label("Timed out", systemImage: "clock.badge.exclamationmark").foregroundStyle(.orange)
+            Label("Timed out", systemImage: "clock.badge.exclamationmark").foregroundStyle(.orange).lineLimit(1)
         } else if model.exitCode == 0 {
-            Label("Exit 0", systemImage: "checkmark.circle").foregroundStyle(.green)
+            Label("Exit 0", systemImage: "checkmark.circle").foregroundStyle(.green).lineLimit(1)
         } else {
-            Label("Exit \(model.exitCode)", systemImage: "xmark.octagon").foregroundStyle(.red)
+            Label("Exit \(model.exitCode)", systemImage: "xmark.octagon").foregroundStyle(.red).lineLimit(1)
         }
     }
 
