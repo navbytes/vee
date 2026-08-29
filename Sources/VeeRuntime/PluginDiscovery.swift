@@ -30,13 +30,13 @@ public enum PluginDiscovery {
     /// Filenames Vee itself writes into a plugins folder that are not plugins.
     ///
     /// The official SDK is retired, but some plugin folders still carry a
-    /// historical `vee.ts`/`vee.py` sibling from when `vee new`/`vee sdk`
+    /// historical `vee.ts`/`vee.py`/`vee.js` sibling from when `vee new`/`vee sdk`
     /// vendored it beside a plugin. That sibling is a module, not a
     /// plugin — and `vee.ts`/`vee.py` are otherwise perfectly valid plugin
     /// filenames (name `vee`, manual interval), so without this filter they
     /// are discovered, run, and surface as a broken menu-bar row beside the
     /// real plugins they exist to support.
-    private static let vendoredSDKFilenames: Set<String> = ["vee.ts", "vee.py"]
+    private static let vendoredSDKFilenames: Set<String> = ["vee.ts", "vee.py", "vee.js"]
 
     /// Extensionless files that are documentation or build metadata, not
     /// plugins. `ignoredExtensions` cannot catch these — they have no
@@ -53,7 +53,7 @@ public enum PluginDiscovery {
     /// Lists candidate plugins in `directory`, sorted by filename. Skips hidden
     /// files, `.vars.json` preference sidecars, subdirectories (a `disabled/`
     /// subfolder is a common convention for parking plugins), editor backup/
-    /// autosave files, the vendored SDK (`vee.ts`/`vee.py`), and obvious
+    /// autosave files, the vendored SDK (`vee.ts`/`vee.py`/`vee.js`), and obvious
     /// non-plugin document/data files.
     public static func enumerate(directory: String, fileManager: FileManager = .default) -> [DiscoveredPlugin] {
         guard let names = try? fileManager.contentsOfDirectory(atPath: directory) else { return [] }

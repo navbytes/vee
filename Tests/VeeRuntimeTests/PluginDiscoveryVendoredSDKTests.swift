@@ -37,6 +37,7 @@ final class PluginDiscoveryVendoredSDKTests: XCTestCase {
         try write("cpu.10s.ts", executable: true)
         try write("vee.ts")
         try write("vee.py")
+        try write("vee.js")
         // Without the skip these run as plugins, exit non-zero, and surface as
         // broken menu-bar rows beside the plugins they exist to support.
         XCTAssertEqual(discovered(), ["cpu.10s.ts"])
