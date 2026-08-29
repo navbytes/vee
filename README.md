@@ -60,7 +60,7 @@ Already have xbar or SwiftBar plugins? Point Vee at your existing folder
 | [Getting started](https://vee.navbytes.io/guide/getting-started/) | Install, first plugin, the basics. |
 | [Plugin authoring](https://vee.navbytes.io/guide/plugin-authoring/) | The full text protocol: params, submenus, headers, surface targeting (`visibleOn=`), streaming, cron. |
 | [JSON output](https://vee.navbytes.io/guide/json-output/) | The recommended format for new plugins — typed, no `\|`-quoting. |
-| [Plugin SDKs](https://vee.navbytes.io/guide/sdk/) | Zero-dependency TypeScript, Python, and Go builders. |
+| [SDK migration guide](https://vee.navbytes.io/guide/sdk/) | Porting a plugin off the retired official SDKs. |
 | [Rich params & charts](https://vee.navbytes.io/guide/charts/) | `progress=`, `sparkline=`, pie/donut/stacked-bar, `toggle=`, `slider=`. |
 | [Widgets](https://vee.navbytes.io/guide/widgets/) | Notification Center tiles and the Vee Health roll-up. |
 | [Preferences](https://vee.navbytes.io/guide/preferences/) | Declared plugin variables become typed settings forms; secrets in the Keychain. |

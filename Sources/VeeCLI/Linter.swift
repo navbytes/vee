@@ -231,4 +231,80 @@ public enum Linter {
     private static func isKnownParam(_ key: String) -> Bool {
         LineParameterKeys.isRecognized(key)
     }
+
+    // MARK: - Retired-SDK tombstone
+
+    /// Migration guide linked from every tombstone diagnostic.
+    private static let sdkGuideURL = "https://vee.navbytes.io/guide/sdk/"
+
+    /// Flags a plugin's own source for an import of the now-retired official
+    /// SDK. A sibling `vee.py`/`vee.ts`/`vee.js` beside it keeps the plugin
+    /// running forever by plain language precedence (Python checks the
+    /// script's own directory first; a relative `./vee.ts` names a file
+    /// directly) — so that case is only a warning that the copy is frozen.
+    /// With no sibling the import cannot resolve anywhere, which is an error.
+    ///
+    /// Detects on the plugin's own source, not its stdout — the two `Linter`
+    /// entry points look at different halves of the same plugin.
+    public static func lintSDKImport(path: String, source: String, fileManager: FileManager = .default) -> [ParseDiagnostic] {
+        let ext = (path as NSString).pathExtension.lowercased()
+        let pluginDir = (path as NSString).deletingLastPathComponent
+
+        let errorMessage = "the SDK is retired and this plugin cannot run — port to JSON output, "
+            + "or copy a frozen SDK sibling from an old checkout: \(sdkGuideURL)"
+
+        switch ext {
+        case "py":
+            guard source.range(of: #"(?m)^\s*(from\s+vee\s+import\s|import\s+vee\b)"#, options: .regularExpression) != nil else { return [] }
+            let siblingPath = (pluginDir as NSString).appendingPathComponent("vee.py")
+            guard fileManager.fileExists(atPath: siblingPath) else {
+                return [.init(severity: .error, message: errorMessage)]
+            }
+            return [.init(
+                severity: .warning,
+                message: "imports the retired Vee SDK; 'vee.py' beside it is a frozen copy that keeps working — see \(sdkGuideURL)")]
+        case "ts", "js", "mjs", "mts", "cjs":
+            guard let specifier = tsSDKImportSpecifier(in: source) else { return [] }
+            let candidates = tsSDKSiblingCandidates(specifier: specifier, pluginDir: pluginDir)
+            guard let sibling = candidates.first(where: { fileManager.fileExists(atPath: $0) }) else {
+                return [.init(severity: .error, message: errorMessage)]
+            }
+            let name = (sibling as NSString).lastPathComponent
+            return [.init(
+                severity: .warning,
+                message: "imports the retired Vee SDK; '\(name)' resolves to a frozen copy that keeps working — see \(sdkGuideURL)")]
+        default:
+            return []
+        }
+    }
+
+    /// Extracts the SDK specifier from a TS/JS import/require, restricted to
+    /// actual import syntax (`\b(import|require|from)\b` before the quoted
+    /// string) so a string literal that merely mentions the package name —
+    /// e.g. inside a `console.log` — is not flagged.
+    private static func tsSDKImportSpecifier(in source: String) -> String? {
+        let pattern = #"\b(?:import|require|from)\b[^'"\n]*['"](\.\.?/vee(?:\.(?:ts|js|mjs|cjs|mts))?|@navbytes/vee)['"]"#
+        guard let regex = try? NSRegularExpression(pattern: pattern) else { return nil }
+        let nsSource = source as NSString
+        guard let match = regex.firstMatch(in: source, range: NSRange(location: 0, length: nsSource.length)) else { return nil }
+        return nsSource.substring(with: match.range(at: 1))
+    }
+
+    /// Resolves an import `specifier` to the sibling file(s) that would
+    /// satisfy it: a relative specifier names a file against the plugin's own
+    /// directory (`./vee.js` -> `vee.js` beside it, `../vee.ts` -> `vee.ts` in
+    /// the parent), an extensionless relative (`./vee`) or the bare package
+    /// name (`@navbytes/vee`) accepts either `vee.ts` or `vee.js`.
+    private static func tsSDKSiblingCandidates(specifier: String, pluginDir: String) -> [String] {
+        if specifier == "@navbytes/vee" {
+            return ["vee.ts", "vee.js"].map { (pluginDir as NSString).appendingPathComponent($0) }
+        }
+        let isParent = specifier.hasPrefix("../")
+        let baseDir = isParent ? (pluginDir as NSString).deletingLastPathComponent : pluginDir
+        let fileName = String(specifier.dropFirst(isParent ? 3 : 2))
+        if fileName.contains(".") {
+            return [(baseDir as NSString).appendingPathComponent(fileName)]
+        }
+        return ["vee.ts", "vee.js"].map { (baseDir as NSString).appendingPathComponent($0) }
+    }
 }

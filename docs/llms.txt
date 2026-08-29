@@ -1,0 +1,35 @@
+# Vee plugin authoring
+
+> Vee is a native macOS menu-bar script runner (xbar/SwiftBar successor). A
+> plugin is any executable printing a documented stdout format — no SDK, no
+> import, no build step. Vee's three official runtime SDKs (TypeScript,
+> Python, Go) are retired; see the migration guide below if you find a plugin
+> that still imports one.
+
+For the same pointers written as agent instructions rather than an index, see
+`/AGENTS.md` at the repository root. For the site's full auto-generated
+`llms.txt`/`llms-full.txt` covering every guide page, see
+<https://vee.navbytes.io/llms.txt>.
+
+## Start here
+
+- [JSON output format](https://vee.navbytes.io/guide/json-output/): the recommended output for a new plugin — typed values, no `|`-param escaping. Schema: <https://vee.navbytes.io/schemas/json-output.schema.json>
+- [Plugin authoring reference](https://vee.navbytes.io/guide/plugin-authoring/): the xbar/SwiftBar-compatible text protocol, and the full parameter reference.
+- [Getting started](https://vee.navbytes.io/guide/getting-started/): where the plugins folder is, the filename/interval convention, install.
+- [Widgets](https://vee.navbytes.io/guide/widgets/): the `VEE_TARGET=widget` JSON card payload. Schema: <https://vee.navbytes.io/schemas/widget-card.schema.json>
+- [Trust model](https://vee.navbytes.io/guide/trust-model/): the advisory `<vee.*>` capability declarations.
+- [Debugging and testing plugins](https://vee.navbytes.io/guide/debugging/): `vee lint`, `vee render`, `vee dev` — the generate/check/repeat loop.
+- [Writing plugins with an LLM](https://vee.navbytes.io/guide/writing-plugins-with-an-llm/): this same guidance, plus the specific mistakes models make.
+- [SDK migration guide](https://vee.navbytes.io/guide/sdk/): why the official SDKs were retired, what still works forever (a sibling `vee.py`/`vee.ts` file), and how to port to JSON output.
+
+## Complete example plugins
+
+- <https://raw.githubusercontent.com/navbytes/vee/main/plugins/showcase/hello-world.10s.sh> — the absolute basics: title, dropdown, a link, a submenu, `refresh=true`.
+- <https://raw.githubusercontent.com/navbytes/vee/main/plugins/showcase/disk-usage.30m.sh> — system state via a shelled-out command, color-coding, an SF Symbol, graceful degradation, a `<vee.exec>` declaration.
+- <https://raw.githubusercontent.com/navbytes/vee/main/plugins/showcase/kitchen-sink.1m.sh> — every field of the JSON output format in one file.
+
+## Reference
+
+- Parameter reference (data): <https://vee.navbytes.io/api/params.json>
+- JSON output schema: <https://vee.navbytes.io/schemas/json-output.schema.json>
+- Widget card schema: <https://vee.navbytes.io/schemas/widget-card.schema.json>

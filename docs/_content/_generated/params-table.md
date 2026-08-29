@@ -93,7 +93,7 @@ The inline accessory slot: a sparkline, a progress bar, or a share chart. See th
 | `progressw` | points \| full | 120 | progress | **Deprecated** — use `accessoryw=` instead. Bar width in points, or `full` to stretch it to the row's own width. Clamped to 1–200 points. |
 | `progressh` | points | 6 | progress | **Deprecated** — use `accessoryh=` instead. Bar height in points. Clamped to 1–200 points. |
 | `progresstrackcolor` | color | — | progress | The color of the bar's groove, behind the fill. |
-| `trackcolor` | color | — | progress | **Deprecated** — use `progresstrackcolor=` instead. The pre-v2 spelling of `progresstrackcolor=`. Still parsed, so published plugins keep working, but the SDKs no longer emit it and `vee lint` warns on it. |
+| `trackcolor` | color | — | progress | **Deprecated** — use `progresstrackcolor=` instead. The pre-v2 spelling of `progresstrackcolor=`. Still parsed, so published plugins keep working, but `vee lint` warns on it. |
 | `pie` | n[,n…] | — | any line | Non-negative numbers read as shares of a whole (e.g. `pie=45,30,25`), drawn as a filled circle divided into sectors. [More](#share-charts-pie-donut-stackedbar) |
 | `donut` | n[,n…] | — | any line | The same shares as `pie=`, drawn with the middle punched out; the hole carries the total. [More](#share-charts-pie-donut-stackedbar) |
 | `stackedbar` | n[,n…] | — | any line | The same shares as `pie=`, drawn as one horizontal bar whose segments are laid end to end. [More](#share-charts-pie-donut-stackedbar) |

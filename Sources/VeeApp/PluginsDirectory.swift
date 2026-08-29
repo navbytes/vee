@@ -19,11 +19,6 @@ enum PluginsDirectory {
 
     static func cacheDirectory() -> String { support("cache") }
     static func dataDirectory() -> String { support("data") }
-    /// Vee's own copy of the plugin SDKs, put on each plugin's import path so a
-    /// plugin that imports the SDK runs without one sitting beside it. Vee's to
-    /// manage: rewritten to match the running build, never read from a user's
-    /// plugins folder.
-    static func sdkDirectory() -> String { SDKProvisioner.defaultRoot }
 
     private static func support(_ leaf: String) -> String {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
@@ -45,10 +40,6 @@ enum PluginsDirectory {
         let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "0.1.2"
         ensureExists(cacheDirectory())
         ensureExists(dataDirectory())
-        // Refreshed here rather than once at launch so an upgraded Vee serves
-        // its own SDK on the very next plugin run, and a support directory
-        // deleted underneath us is rebuilt rather than silently missing.
-        let sdkRoot = SDKProvisioner.provision(into: sdkDirectory())
         return RuntimeEnvironmentContext(
             pluginPath: pluginPath,
             pluginsDirectory: pluginsDirectory,
@@ -58,8 +49,7 @@ enum PluginsDirectory {
             osVersion: (os.majorVersion, os.minorVersion, os.patchVersion),
             appVersion: version,
             declaredVariables: declaredVariables,
-            target: target,
-            sdkDirectory: sdkRoot
+            target: target
         )
     }
 }

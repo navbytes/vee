@@ -42,7 +42,6 @@ Vee runs the same plugins, so it is a superset in practice, plus:
 - **A trust/transparency layer** — plugins declare their footprint and Vee surfaces it.
 - **Discover** — a built-in catalog browser with one-click install through a trust gate.
 - **Auto-generated preference forms** with Keychain-backed secrets.
-- **Optional typed SDKs** for TypeScript, Python, and Go.
 
 See [Migrating from SwiftBar/xbar](migrating-from-swiftbar.md).
 
@@ -72,7 +71,7 @@ From the plugin's filename: `cpu.5s.sh` runs every 5 seconds, `mail.10m.py` ever
 
 ### Do I need to compile plugins? What languages can I use?
 
-Any language. A plugin is just an executable that prints to stdout — bash, Python, Ruby, Node, a compiled binary, anything. For TypeScript there is a zero-dependency SDK that runs `.ts` files directly on Node with no build step. See the [SDK docs](sdk.md).
+Any language. A plugin is just an executable that prints to stdout — bash, Python, Ruby, Node, a compiled binary, anything. TypeScript runs directly on Node 24+ with no build step. `vee new` scaffolds a starting point in shell, TypeScript, or Python.
 
 ### Can plugins talk back to Vee (refresh, notify)?
 

@@ -400,5 +400,6 @@ surface. Separable, hence deferred.
    back to the Tier-0 scrape and logs the `WidgetCardParser` diagnostic.
 3. SDK scope for the first PR — TS only, or all three at once? **Resolved: all
    three** — porting the builder to Python and Go turned out straightforward,
-   so `plugins/python/vee.py` and `plugins/go/vee.go` shipped alongside the TS
-   SDK rather than as a follow-up.
+   so a Python and a Go SDK shipped alongside the TS SDK rather than as a
+   follow-up. (All three official SDKs were later retired; see the
+   [SDK migration guide](https://vee.navbytes.io/guide/sdk/).)

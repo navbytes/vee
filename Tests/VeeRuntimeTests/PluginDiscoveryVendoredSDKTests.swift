@@ -2,9 +2,9 @@ import Foundation
 import XCTest
 @testable import VeeRuntime
 
-/// `vee new` and `vee sdk` write the SDK beside a plugin, because a Vee plugin
-/// is a single executable with no build step and cannot resolve the SDK from a
-/// package manager. That vendored file lands in the same folder Vee scans, and
+/// The official SDK is retired, but a plugin folder may still carry a
+/// historical `vee.ts`/`vee.py` sibling from when `vee new`/`vee sdk` vendored
+/// it beside a plugin. That sibling lands in the same folder Vee scans, and
 /// `vee.ts`/`vee.py` are otherwise valid plugin filenames — name `vee`, manual
 /// interval — so discovery has to know they are not plugins.
 final class PluginDiscoveryVendoredSDKTests: XCTestCase {
@@ -37,6 +37,7 @@ final class PluginDiscoveryVendoredSDKTests: XCTestCase {
         try write("cpu.10s.ts", executable: true)
         try write("vee.ts")
         try write("vee.py")
+        try write("vee.js")
         // Without the skip these run as plugins, exit non-zero, and surface as
         // broken menu-bar rows beside the plugins they exist to support.
         XCTAssertEqual(discovered(), ["cpu.10s.ts"])

@@ -5,9 +5,9 @@ import XCTest
 /// dispositions table is *generated* from `WidgetParity`, so a reason edited in
 /// the switch and not in the document — or a row added to the document by hand
 /// — fails here, with the replacement text in the failure message. Same
-/// fixture-drift pattern as the SDKs' golden fixtures
-/// (`plugins/typescript/test/drift.test.ts`): compare against what is committed,
-/// and say how to make it current.
+/// fixture-drift pattern the retired plugin SDKs used for their own golden
+/// fixtures: compare against what is committed, and say how to make it
+/// current.
 ///
 /// The compiler already forces a new `MenuAccessory` case to be *answered*
 /// (`WidgetParity.disposition(of:)` carries no `default`). This forces the

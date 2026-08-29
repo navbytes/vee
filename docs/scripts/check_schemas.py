@@ -6,10 +6,9 @@ widget card and the JSON menu output. Those schemas are documentation, and they
 are what a plugin author's editor validates against, so they have to stay true
 to what the Swift parsers actually accept.
 
-The SDKs already commit golden fixtures that all three SDKs produce
-byte-identically and that the Swift parsers round-trip. Validating the schemas
-against those fixtures means the schema is checked against payloads three
-implementations already agree on, rather than against hand-written samples.
+`plugins/fixtures/` already commits golden payloads the Swift parsers round-trip.
+Validating the schemas against those fixtures means the schema is checked
+against real accepted payloads, rather than against hand-written samples.
 
     python3 docs/scripts/check_schemas.py
 

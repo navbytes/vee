@@ -284,6 +284,12 @@ footprint visible.
 
 ### P4 — Authoring reach (typed SDKs, not UI frameworks)
 
+**All three official SDKs below were later retired** — the format is the SDK
+now; docs/schema/lint/templates carry the ergonomics instead. See the
+[SDK migration guide](https://vee.navbytes.io/guide/sdk/) and
+`openspec/changes/retire-plugin-sdks/design.md`. The items are kept here as a
+historical record of what shipped.
+
 - ✅ Zero-dependency **TypeScript SDK** with a golden-fixture drift guard
   (`plugins/`).
 - ✅ **Typed SDKs in more languages** — Python + Go builders that emit the same
@@ -291,11 +297,10 @@ footprint visible.
   gives authors the ergonomics people imagine they want from "Flutter/React
   Native" (typed, structured output) with none of the runtime cost. (A Swift
   builder remains a possible future addition.)
-  - ✅ **Python SDK** — `plugins/python/` (`vee.py` Menu/Section builders,
-    `unittest` drift guard reusing the TS golden fixtures byte-for-byte; CI job
-    "Plugin SDK (Python)").
-  - ✅ **Go SDK** — `plugins/go/` (`vee.go` Menu/Section builders, `go test`
-    drift guard against the shared fixture; CI job "Plugin SDK (Go)").
+  - ✅ **Python SDK** — `vee.py` Menu/Section builders, `unittest` drift guard
+    reusing the TS golden fixtures byte-for-byte; CI job "Plugin SDK (Python)".
+  - ✅ **Go SDK** — `vee.go` Menu/Section builders, `go test` drift guard
+    against the shared fixture; CI job "Plugin SDK (Go)".
 - ✅ **SDK builders for the rich params.** All three SDKs (TS/Python/Go) ship
   typed builders for `sparkline=`/`toggle=`/`slider=`/`progress=` (+ `trackColor`/
   `progressW`/`progressH`), quoting/escaping handled internally, covered by the
@@ -412,8 +417,8 @@ each validated by CI on `macos-26` (Swift) or a language job (SDKs).
 5. Liquid Glass sparkline popover (P2, partial) — `VeeUI/SparklineChartView.swift`, `VeeApp/PluginPopover.swift`
 6. Actionable, time-sensitive notifications (P2) — `VeeApp/Notifier.swift`
 7. Catalog provenance / modified-plugin flag (P3) — `VeeCatalog/PluginProvenance.swift`
-8. Python plugin SDK (P4) — `plugins/python/`
-9. Go plugin SDK (P4) — `plugins/go/`
+8. Python plugin SDK (P4) — later retired, see the [SDK migration guide](https://vee.navbytes.io/guide/sdk/)
+9. Go plugin SDK (P4) — later retired, see the [SDK migration guide](https://vee.navbytes.io/guide/sdk/)
 
 **Shipped since PR #15, on a real Mac** (built, signed, and exercised on
 Apple-Silicon macOS 26 — the local-development handoff the items below waited on):

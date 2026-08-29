@@ -72,8 +72,10 @@ $ vee new --lang sh --interval 30s --name weather --trust network --out ~/plugin
 # writes ~/plugins/weather.30s.sh with <xbar.*> + <vee.*> headers and a working body
 ```
 
-For `ts`/`py`, the generated body imports the corresponding [SDK](sdk.md) so a
-scaffold doubles as a starting point for typed authoring.
+For `ts`/`py`, the generated body prints the [JSON output format](json-output.md)
+directly, with an inlined type block (TypeScript `interface`, Python
+`TypedDict`) for editor autocomplete — nothing to import, so the scaffold runs
+as-is.
 
 ### `vee search`
 

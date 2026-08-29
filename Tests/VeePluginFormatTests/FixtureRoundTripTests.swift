@@ -2,9 +2,9 @@ import XCTest
 @testable import VeePluginFormat
 @testable import VeeWidgetShared
 
-/// Parses the golden fixtures shared by all three plugin SDKs (plugins/fixtures)
-/// and asserts they round-trip through the Swift parser. This ties the SDK's
-/// output to the parser: if either drifts, this fails.
+/// Parses the parser-conformance golden fixtures (plugins/fixtures) — output
+/// captured from the now-retired TS/Python/Go SDKs — and asserts they
+/// round-trip through the Swift parser byte-for-byte.
 final class FixtureRoundTripTests: XCTestCase {
     private func fixturesDirectory() -> URL {
         // .../Tests/VeePluginFormatTests/FixtureRoundTripTests.swift → repo root
@@ -44,19 +44,18 @@ final class FixtureRoundTripTests: XCTestCase {
         XCTAssertEqual(output.titleLines.first?.text, "JSON ✓")
         XCTAssertEqual(output.body.count, 4) // item · separator · submenu · escaping
 
-        // The last item carries the characters the three SDKs' JSON encoders
-        // disagree about by default — Python escapes non-ASCII, Go escapes
-        // `<`, `>` and `&`. Recovering them intact proves the fixture was
-        // written the way JSON.stringify writes it, in whichever SDK produced
-        // it, and that the parser reads that spelling back unchanged.
+        // The last item carries characters the retired SDKs' JSON encoders
+        // disagreed about by default — Python escaped non-ASCII, Go escaped
+        // `<`, `>` and `&`. Recovering them intact proves the parser reads
+        // each encoder's spelling back unchanged.
         let items = output.body.compactMap { node -> MenuItem? in
             if case .item(let i) = node { return i } else { return nil }
         }
         XCTAssertEqual(items.last?.text, "R&D <beta> ✓")
         XCTAssertEqual(items.last?.params.swiftbar.tooltip, "a & b")
 
-        // Surface targeting has a JSON spelling too, and all three SDKs emit it
-        // in the same place in the key order.
+        // Surface targeting has a JSON spelling too, at the same place in the
+        // key order.
         XCTAssertEqual(items.first?.params.swiftbar.visibleOn, [.menu, .window])
         XCTAssertEqual(items.first?.params.swiftbar.searchable, false)
     }

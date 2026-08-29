@@ -118,10 +118,9 @@ final class LineParserEdgeCaseTests: XCTestCase {
         XCTAssertTrue(pairs.isEmpty)
     }
 
-    /// End-to-end: the exact line shape the bundled SDKs (plugins/typescript/vee.ts,
-    /// plugins/python/vee.py, plugins/go/vee.go) emit for an item whose text is
-    /// `Left | Right<newline>Second line` round-trips through the full parser
-    /// back to the original text.
+    /// End-to-end: the exact line shape the retired TS/Python/Go SDKs emitted
+    /// for an item whose text is `Left | Right<newline>Second line` round-trips
+    /// through the full parser back to the original text.
     func testEscapedPipeAndNewlineRoundTripsThroughOutputParser() {
         let escapedLine = #"Left \| Right\nSecond line | color=red"#
         let out = OutputParser.parse("Title\n---\n\(escapedLine)")

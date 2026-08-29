@@ -1,7 +1,7 @@
 {
   "$schema": "./params.schema.json",
   "version": 1,
-  "about": "The menu-line parameter surface of the Vee plugin format, as data. This file is the documentation surface that docs/scripts/check_params.py holds in agreement with the parser (LineParser.mapParams), the linter (LineParameterKeys.recognized), and each of the three SDKs. Every published parameter table is generated from it by docs/scripts/build_reference.py; do not hand-edit a generated table. Keys are lowercase because LineParser lowercases before dispatching.",
+  "about": "The menu-line parameter surface of the Vee plugin format, as data. This file is the documentation surface that docs/scripts/check_params.py holds in agreement with the parser (LineParser.mapParams) and the linter (LineParameterKeys.recognized). Every published parameter table is generated from it by docs/scripts/build_reference.py; do not hand-edit a generated table. Keys are lowercase because LineParser lowercases before dispatching.",
   "groups": [
     {
       "id": "rendering",
@@ -418,7 +418,7 @@
       "deprecated": true,
       "replacedBy": "progresstrackcolor",
       "removedIn": "the next major version",
-      "summary": "The pre-v2 spelling of `progresstrackcolor=`. Still parsed, so published plugins keep working, but the SDKs no longer emit it and `vee lint` warns on it."
+      "summary": "The pre-v2 spelling of `progresstrackcolor=`. Still parsed, so published plugins keep working, but `vee lint` warns on it."
     },
     {
       "key": "pie",

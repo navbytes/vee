@@ -1,6 +1,6 @@
 ---
 title: "Migrating from SwiftBar / xbar"
-description: "Move to Vee from SwiftBar or xbar in one step: point it at your existing plugins folder. Full protocol compatibility, plus a trust layer and typed SDK."
+description: "Move to Vee from SwiftBar or xbar in one step: point it at your existing plugins folder. Full protocol compatibility, plus a trust layer and an optional structured-JSON output format."
 sidebar:
   label: "Migrating from SwiftBar / xbar"
   order: 2
@@ -127,7 +127,7 @@ row still appears, just plain.
 - **A trust/transparency layer.** Plugins can declare what they touch — network domains, filesystem paths, secrets, external binaries — with `<vee.*>` tags. Vee shows a plain-language summary before you install a catalog plugin and trust badges in the Manager. It is advisory, not a sandbox. See the [trust model](trust-model.md).
 - **Discover.** A built-in browser over the shared [matryer/xbar-plugins](https://github.com/matryer/xbar-plugins) catalog, with trust chips and one-click install through the trust gate.
 - **Auto-generated preference forms.** `<xbar.var>` declarations become a typed settings form; secret fields are masked and stored in the macOS Keychain. See [preferences](preferences.md).
-- **Optional typed SDKs.** Zero-dependency SDKs for TypeScript, Python, and Go let you build plugins with `Menu`/`Section` builders instead of hand-formatting text. See the [SDK docs](sdk.md).
+- **An optional structured-JSON output format.** Print a `{"vee":1,…}` object instead of hand-formatting text — typed values, no `|`-param escaping, and a [published JSON Schema](json-output.md#editor-validation-json-schema) for editor autocomplete. `vee new --lang ts|py` scaffolds a self-contained starting point.
 
 ## A note for xbar users
 

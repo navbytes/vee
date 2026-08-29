@@ -165,62 +165,44 @@ browse to it deliberately.
 }
 ```
 
-## Building it with an SDK
+## Building it
 
-All three SDKs have a typed builder for this format, mirroring the text-protocol
-`Menu` method for method — `title`, `dropdown`, `item`, `separator`, `submenu`,
-`print` — so choosing a wire format does not mean learning a second builder:
+Construct the object directly and print it — no builder to import:
 
 ```ts
-import { JSONMenu } from "./vee.ts";
-
-const menu = new JSONMenu();
-menu.title("JSON ✓", { color: "green", sfimage: "curlybraces" });
-
-const d = menu.dropdown;
-d.item("Structured item", { href: "https://example.com" });
-d.separator();
-d.submenu("Submenu").item("Child", { color: "blue" });
-
-menu.print();
+console.log(JSON.stringify({
+  vee: 1,
+  title: [{ text: "JSON ✓", color: "green", sfimage: "curlybraces" }],
+  items: [
+    { text: "Structured item", href: "https://example.com" },
+    { separator: true },
+    { text: "Submenu", submenu: [{ text: "Child", color: "blue" }] },
+  ],
+}));
 ```
 
 ```python
-from vee import JSONMenu
+import json
 
-menu = JSONMenu()
-menu.title("JSON ✓", color="green", sfimage="curlybraces")
-
-d = menu.dropdown
-d.item("Structured item", href="https://example.com")
-d.separator()
-d.submenu("Submenu").item("Child", color="blue")
-
-menu.print()
+print(json.dumps({
+    "vee": 1,
+    "title": [{"text": "JSON ✓", "color": "green", "sfimage": "curlybraces"}],
+    "items": [
+        {"text": "Structured item", "href": "https://example.com"},
+        {"separator": True},
+        {"text": "Submenu", "submenu": [{"text": "Child", "color": "blue"}]},
+    ],
+}))
 ```
 
-```go
-m := &vee.JSONMenu{}
-m.Title("JSON ✓", &vee.JSONOptions{Color: vee.Str("green"), SFImage: vee.Str("curlybraces")})
-
-d := m.Dropdown()
-d.Item("Structured item", &vee.JSONOptions{Href: vee.Str("https://example.com")})
-d.Separator()
-d.Submenu("Submenu", nil).Item("Child", &vee.JSONOptions{Color: vee.Str("blue")})
-
-m.Print()
-```
-
-The builder emits the keys in one canonical order, so the three SDKs produce
-byte-identical JSON for the same menu (a shared golden fixture proves it).
-Because the JSON format carries a subset of the text protocol's parameters, its
-option type is a distinct one: an option JSON cannot express is a compile error
-in TypeScript and Go, and a `TypeError` in Python, rather than a key silently
-dropped on the way out.
+`vee new --lang ts|py` scaffolds exactly this shape, with an inlined type block
+(TypeScript `interface`, Python `TypedDict`) for editor autocomplete over the
+fields the template uses — see the [SDK migration guide](sdk.md) if you have an
+existing plugin that imported the retired `JSONMenu` builder.
 
 ## A runnable example
 
-The repository ships a runnable JSON plugin at [`plugins/typescript/examples/json-demo.ts`](https://github.com/navbytes/vee/tree/main/plugins/typescript/examples/json-demo.ts). It builds a `{"vee":1,…}` object with `JSONMenu` — a colored title, a link, a separator, and a submenu — then prints it. A good starting point to copy.
+The repository ships a runnable JSON plugin at [`plugins/showcase/kitchen-sink.1m.sh`](https://github.com/navbytes/vee/tree/main/plugins/showcase/kitchen-sink.1m.sh). It prints a `{"vee":1,…}` object exercising every field in this document — titles, rich controls, nested submenus, an alternate — in one file, no dependencies. A good starting point to copy.
 
 ## Rich params
 
@@ -287,5 +269,5 @@ schema against the shipped fixtures.
 ## See also
 
 - [Plugin authoring reference](plugin-authoring.md) — the text protocol and the full set of line parameters, including the rich params.
-- [Plugin SDKs](sdk.md) — typed builders that emit the text protocol in TypeScript, Python, and Go.
+- [SDK migration guide](sdk.md) — porting a plugin off the retired official SDKs.
 - [Getting started](getting-started.md) — where the plugins folder is.

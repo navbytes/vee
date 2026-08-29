@@ -190,5 +190,4 @@ contract.
 - [Trust model](trust-model.md) — how plugins declare what they access.
 - [Widgets](widgets.md) — the full widget surface contract, card schema, and layout tree.
 - [Debugging and testing plugins](debugging.md) — preview a plugin, watch it re-render on save, and lint it.
-- [Plugin SDKs](sdk.md) — build plugins with typed builders (TypeScript, Python, or Go) instead of hand-formatting text.
-- [JSON output format](json-output.md) — the structured-JSON format, recommended for new plugins.
+- [JSON output format](json-output.md) — the structured-JSON format, recommended for new plugins; `$schema`-validatable and what `vee new`'s TS/Python templates emit.

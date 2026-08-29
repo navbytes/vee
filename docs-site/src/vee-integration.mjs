@@ -132,12 +132,12 @@ export function veeStaticAndMachineReadable() {
           "## Documentation", "",
           ...all.map((p) => `- [${p.meta.label ?? p.meta.title}](${SITE}/guide/${p.slug}.md): ${p.meta.description}`),
           "", "## Machine-readable contracts", "",
-          `- [Widget card schema](${SITE}/schemas/widget-card.schema.json): JSON Schema for the payload a plugin prints in widget mode, including the layout tree. Validated in CI against the SDKs' golden fixtures.`,
+          `- [Widget card schema](${SITE}/schemas/widget-card.schema.json): JSON Schema for the payload a plugin prints in widget mode, including the layout tree. Validated in CI against the shipped fixtures.`,
           `- [JSON output schema](${SITE}/schemas/json-output.schema.json): JSON Schema for the structured-JSON alternative to the text protocol.`,
-          `- [Parameter reference](${SITE}/api/params.json): every menu-line parameter as data — type, accepted values, default, and the chart it belongs to. The published tables are generated from it, and CI holds it in agreement with the parser, the linter, and all three SDKs.`,
+          `- [Parameter reference](${SITE}/api/params.json): every menu-line parameter as data — type, accepted values, default, and the chart it belongs to. The published tables are generated from it, and CI holds it in agreement with the parser and the linter.`,
           "", "## Optional", "",
-          `- [Plugin SDKs](https://github.com/navbytes/vee/tree/main/plugins): zero-dependency TypeScript, Python, and Go builders that emit byte-identical output.`,
           `- [Example plugins](https://github.com/navbytes/vee/tree/main/plugins/showcase): runnable, heavily commented showcase plugins.`,
+          `- [AGENTS.md](https://github.com/navbytes/vee/blob/main/AGENTS.md): plugin-authoring pointers written for an LLM/agent generating a plugin.`,
           "",
         ].join("\n");
         fs.writeFileSync(path.join(out, "llms.txt"), index);
