@@ -234,6 +234,29 @@ A plugin that regularly approaches its timeout is usually better off caching: do
 the slow work on a long interval, write the result to
 `SWIFTBAR_PLUGIN_CACHE_PATH`, and have the fast plugin read it.
 
+## "No module named 'vee'"
+
+A plugin that imports an SDK runs fine under Vee and under `vee render`, then
+fails the moment you run it with the interpreter directly:
+
+```
+$ python3 my-plugin.py
+ModuleNotFoundError: No module named 'vee'
+```
+
+Nothing is wrong with the plugin. Vee puts its own copy of the SDK on the
+interpreter's import path when *it* runs a plugin, and a bare `python3` (or
+`node`) knows nothing about that. Either run it the way Vee does, or keep a copy
+beside the plugin for the times you do not:
+
+```sh
+vee render my-plugin.py    # same environment Vee uses, SDK included
+vee sdk py --out .         # a sibling copy, for editors, debuggers and bare runs
+```
+
+A sibling copy always takes precedence over Vee's, so adding one changes nothing
+about how the plugin behaves in the menu bar.
+
 ## Exit codes and standard error
 
 - **Exit code 0** — normal. Whatever the plugin printed to standard output is

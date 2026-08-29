@@ -23,8 +23,12 @@ public struct RuntimeEnvironmentContext: Sendable {
     /// Which surface this run is for — injected as `VEE_TARGET`. Defaults to
     /// `.menu` so every existing call site (a normal run) is unaffected.
     public var target: PluginTarget
+    /// Where Vee has provisioned the SDKs (see `SDKProvisioner`), or nil to
+    /// inject nothing — a plugin that vendors its own copy, or prints the
+    /// format directly, needs neither.
+    public var sdkDirectory: String?
 
-    public init(pluginPath: String, pluginsDirectory: String, cacheDirectory: String, dataDirectory: String, isDarkMode: Bool, osVersion: (major: Int, minor: Int, patch: Int), appVersion: String, declaredVariables: [String: String] = [:], target: PluginTarget = .menu) {
+    public init(pluginPath: String, pluginsDirectory: String, cacheDirectory: String, dataDirectory: String, isDarkMode: Bool, osVersion: (major: Int, minor: Int, patch: Int), appVersion: String, declaredVariables: [String: String] = [:], target: PluginTarget = .menu, sdkDirectory: String? = nil) {
         self.pluginPath = pluginPath
         self.pluginsDirectory = pluginsDirectory
         self.cacheDirectory = cacheDirectory
@@ -34,6 +38,7 @@ public struct RuntimeEnvironmentContext: Sendable {
         self.appVersion = appVersion
         self.declaredVariables = declaredVariables
         self.target = target
+        self.sdkDirectory = sdkDirectory
     }
 }
 
@@ -79,7 +84,14 @@ public enum EnvironmentBuilder {
     }
 
     /// The inherited user environment merged with the injected variables.
+    ///
+    /// The SDK search paths are applied here rather than in `injected` because
+    /// they are the two variables that must *extend* what the user already has
+    /// instead of replacing it: someone's own `PYTHONPATH`, or a plugin's own
+    /// `NODE_OPTIONS`, has to survive.
     public static func merged(base: [String: String], context ctx: RuntimeEnvironmentContext) -> [String: String] {
-        base.merging(injected(ctx)) { _, injected in injected }
+        let env = base.merging(injected(ctx)) { _, injected in injected }
+        guard let root = ctx.sdkDirectory else { return env }
+        return SDKProvisioner.apply(to: env, root: root, pluginPath: ctx.pluginPath)
     }
 }
