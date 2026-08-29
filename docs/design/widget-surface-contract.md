@@ -276,6 +276,8 @@ the renderer uses the template; when absent it falls back to the scraped fields
 
 ## SDK
 
+*(Historical — the SDKs were retired; see the [SDK migration guide](../_content/sdk.md). The card JSON and fixtures below remain the contract.)*
+
 Add `Widget`/`Card`/`Stat`/`Gauge`/`Trend`/`List`/`Board` builders to the TS SDK
 (the reference), emitting the card JSON with quoting/escaping handled, plus a golden
 fixture round-tripped through the Swift `WidgetCardParser`. Python and Go mirror it
@@ -362,7 +364,7 @@ unknown chart `kind` — degraded to a diagnostic. A hostile payload degrades to
 never a throw (Foundation's own ~512-level decode limit is the backstop for a
 pure-depth bomb, and the existing 8 MB stdout drain bounds total payload size).
 
-**SDKs.** All three gain namespaced `Node.*` builders (`Node.VStack`,
+**SDKs** *(historical — retired, see above)*. All three gain namespaced `Node.*` builders (`Node.VStack`,
 `Node.Text`, `Node.Gauge`, …) — namespaced so they don't collide with the
 card-level template builders (`Stat`/`Gauge`/…). The `widget-layout` example is
 a golden fixture, byte-identical across TS/Python/Go and round-tripped through

@@ -31,17 +31,17 @@ not the headline.
 2. **Drop-in for everything you already have.** A superset of both the xbar *and* SwiftBar protocols — your plugins just work, unchanged.
 3. **Trust at install, not blind execution.** (The standout — uncontested.) Plugins declare what they touch; a plain-language summary and badges show the reach before you grant it. Transparency, not a sandbox.
 4. **Discover and install in one click.** A built-in browser over the xbar catalog, with trust chips and a Plugin Manager.
-5. **A real SDK for authors.** Typed, zero-dependency TypeScript SDK, no build step, fixture drift guard.
+5. **Typed authoring, zero dependencies.** Plugins are plain scripts — `vee new` scaffolds inlined types, and the published JSON Schema (SchemaStore-registered) gives autocomplete in any editor. Nothing to install, no build step.
 
 ## Personas
 
 1. **Menu-bar power user** (primary convert) — already runs 5–15 plugins on xbar/SwiftBar. Converts on zero-switching-cost drop-in compat + the leak/reliability fix.
 2. **Security-conscious developer** (uncontested) — wants the automation but distrusts running arbitrary un-sandboxed code. Only Vee serves them, via the trust layer. Give this disproportionate weight.
-3. **Plugin author / tinkerer** (ecosystem flywheel) — converts on the typed SDK + trust-badge signal + Discover distribution.
+3. **Plugin author / tinkerer** (ecosystem flywheel) — converts on dependency-free typed authoring + trust-badge signal + Discover distribution.
 
 ## Objection → response (short forms)
 
-- *"Why not SwiftBar?"* → Vee is a superset of it; the difference is the trust layer, the built-in Discover catalog, refresh reliability, and a typed SDK. Same native lightness, more finish.
+- *"Why not SwiftBar?"* → Vee is a superset of it; the difference is the trust layer, the built-in Discover catalog, refresh reliability, and dependency-free typed authoring. Same native lightness, more finish.
 - *"Un-sandboxed = unsafe."* → Every tool in the category runs plugins un-sandboxed; it's inherent. The honest question is "do you know what you're running?" Vee is the only one that makes plugins declare their reach and shows it before install. Transparency, not enforcement.
 - *"macOS 26 only?"* → Deliberate — a modern base is *why* it's clean. Forward bet. Need older macOS today? SwiftBar covers 10.15+.
 - *"Apple Silicon only?"* → arm64 only, keeps the binary lean; that's where the install base is heading.
