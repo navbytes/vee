@@ -55,15 +55,15 @@
 
 ## 5. Catalog port (vee-plugins)
 
-- [ ] 5.1 Port every SDK-importing plugin (14 + `demo/controls-sdk.*`) to
+- [x] 5.1 Port every SDK-importing plugin (14 + `demo/controls-sdk.*`) to
   build a dict/object and print JSON directly; capture each plugin's rendered
   stdout before and after and diff (allowing only whitespace/key-order-neutral
   differences); plugins needing credentials/network: verify structure by
   running with stubbed env where feasible
-- [ ] 5.2 Delete all sibling `vee.py`/`vee.ts` copies, `scripts/sync-sdk.sh`,
+- [x] 5.2 Delete all sibling `vee.py`/`vee.ts` copies, `scripts/sync-sdk.sh`,
   and `demo/controls-sdk.*` (keep `controls-raw.*`, rename if clearer);
   update `demo/README.md`
-- [ ] 5.3 Update `README.md`/`CONTRIBUTING.md`: plugins are dependency-free
+- [x] 5.3 Update `README.md`/`CONTRIBUTING.md`: plugins are dependency-free
   executables; no SDK files may be committed (add a CI/build-catalog check if
   one line suffices)
 
