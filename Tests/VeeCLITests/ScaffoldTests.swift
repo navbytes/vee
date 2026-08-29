@@ -27,12 +27,18 @@ final class ScaffoldTests: XCTestCase {
         assertClean(.sh, trust: [])
     }
 
-    func testTsContentsParseWithNoErrorDiagnostics() {
-        assertClean(.ts, trust: ["network", "secrets"])
+    // TS/Python templates are self-contained: no SDK import, so the only way
+    // to prove they're accepted is to actually run them through `vee render`
+    // (the same seam the app uses) and check its JSON output parses clean.
+    func testTsOutputIsAcceptedByVeeRender() async throws {
+        guard ["/opt/homebrew/bin/node", "/usr/local/bin/node", "/usr/bin/node"]
+            .contains(where: { FileManager.default.isExecutableFile(atPath: $0) })
+        else { throw XCTSkip("node is not installed on this machine") }
+        try await assertRenderAccepts(.ts, trust: ["network", "secrets"])
     }
 
-    func testPyContentsParseWithNoErrorDiagnostics() {
-        assertClean(.py, trust: ["exec", "filesystem"])
+    func testPyOutputIsAcceptedByVeeRender() async throws {
+        try await assertRenderAccepts(.py, trust: ["exec", "filesystem"])
     }
 
     func testHeaderMetadataRoundTrips() {
@@ -49,6 +55,25 @@ final class ScaffoldTests: XCTestCase {
         let parsed = OutputParser.parse(contents)
         let errors = parsed.diagnostics.filter { $0.severity == .error }
         XCTAssertTrue(errors.isEmpty, "\(lang): \(errors)")
+    }
+
+    /// Scaffolds `lang` into a temp dir and runs it through `vee render`,
+    /// asserting a clean, non-empty result.
+    private func assertRenderAccepts(_ lang: Scaffold.Language, trust: [String]) async throws {
+        let dir = NSTemporaryDirectory() + "vee-scaffold-render-" + UUID().uuidString
+        defer { try? FileManager.default.removeItem(atPath: dir) }
+
+        var out = "", err = ""
+        var code = await VeeCLI.run(
+            ["new", "--lang", lang.rawValue, "--name", "Example", "--interval", "10s", "--out", dir, "--trust", trust.joined(separator: ",")],
+            runner: SystemProcessRunner(), out: &out, err: &err)
+        XCTAssertEqual(code, 0, err)
+        let path = dir + "/example.10s.\(lang.ext)"
+
+        out = ""; err = ""
+        code = await VeeCLI.run(["render", path], runner: SystemProcessRunner(), out: &out, err: &err)
+        XCTAssertEqual(code, 0, "\(lang): stdout=\(out) stderr=\(err)")
+        XCTAssertTrue(out.contains("Example"), "\(lang): \(out)")
     }
     /// `vee new` vendors the SDK beside the plugin and skips it when present
     /// ("Kept … already present"). The plugin file itself had no such guard, so

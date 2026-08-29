@@ -103,4 +103,55 @@ final class LinterTests: XCTestCase {
                        "the unknown key after the real separator must still be found: \(diags.map(\.message))")
     }
 
+    // MARK: - Retired-SDK tombstone
+
+    /// A Python plugin importing the retired SDK with no sibling `vee.py`
+    /// cannot run anywhere — an error.
+    func testPythonImportWithNoSiblingIsAnError() throws {
+        let dir = try tempDir()
+        let diags = Linter.lintSDKImport(path: dir + "/plugin.5m.py", source: "from vee import Menu\n")
+        XCTAssertEqual(diags.map(\.severity), [.error])
+    }
+
+    /// A sibling `vee.py` beside the plugin means the import still resolves
+    /// (by plain Python precedence) — just a frozen copy, so only a warning.
+    func testPythonImportWithSiblingIsAWarning() throws {
+        let dir = try tempDir()
+        try "# sibling\n".write(toFile: dir + "/vee.py", atomically: true, encoding: .utf8)
+        let diags = Linter.lintSDKImport(path: dir + "/plugin.5m.py", source: "from vee import Menu\n")
+        XCTAssertEqual(diags.map(\.severity), [.warning])
+    }
+
+    /// A TypeScript plugin importing `@navbytes/vee` by package name with no
+    /// sibling `vee.ts` cannot run anywhere — an error.
+    func testTypeScriptPackageImportWithNoSiblingIsAnError() throws {
+        let dir = try tempDir()
+        let diags = Linter.lintSDKImport(path: dir + "/plugin.5m.ts", source: "import { Menu } from '@navbytes/vee';\n")
+        XCTAssertEqual(diags.map(\.severity), [.error])
+    }
+
+    /// A relative `./vee.ts` sibling import keeps working by plain language
+    /// rules once the file actually exists beside it — just a warning.
+    func testTypeScriptRelativeImportWithSiblingIsAWarning() throws {
+        let dir = try tempDir()
+        try "// sibling\n".write(toFile: dir + "/vee.ts", atomically: true, encoding: .utf8)
+        let diags = Linter.lintSDKImport(path: dir + "/plugin.5m.ts", source: "import { Menu } from './vee.ts';\n")
+        XCTAssertEqual(diags.map(\.severity), [.warning])
+    }
+
+    /// A plugin that never imports the SDK stays silent — the common case,
+    /// and the one that must never false-positive.
+    func testNoSDKImportStaysSilent() throws {
+        let dir = try tempDir()
+        XCTAssertTrue(Linter.lintSDKImport(path: dir + "/plugin.5m.py", source: "import json\nprint('{}')\n").isEmpty)
+        XCTAssertTrue(Linter.lintSDKImport(path: dir + "/plugin.5m.ts", source: "console.log(JSON.stringify({vee: 1}));\n").isEmpty)
+        XCTAssertTrue(Linter.lintSDKImport(path: dir + "/plugin.5m.sh", source: "echo hello\n").isEmpty)
+    }
+
+    private func tempDir() throws -> String {
+        let dir = NSTemporaryDirectory() + "vee-linter-sdk-" + UUID().uuidString
+        try FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
+        addTeardownBlock { try? FileManager.default.removeItem(atPath: dir) }
+        return dir
+    }
 }

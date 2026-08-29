@@ -102,54 +102,71 @@ public enum Scaffold {
         """
     }
 
-    /// The SDK language a scaffolded plugin vendors, if any. Shell plugins
-    /// format the protocol by hand; Go compiles to a binary and consumes the
-    /// SDK as a module, so neither vendors a sibling file.
-    static func vendoredSDK(for lang: Language) -> String? {
-        switch lang {
-        case .ts: return "typescript"
-        case .py: return "python"
-        case .sh: return nil
-        }
-    }
-
     private static func tsBody(title: String) -> String {
-        // Seeds with the SDK import so `new` teaches the SDK. The path is
-        // `./vee.ts` because `vee new --out` writes the SDK next to the plugin:
-        // a Vee plugin is a single executable with no install step, so the SDK
-        // travels beside it rather than being resolved from a package manager.
+        // Self-contained: no import, nothing to vendor. The inlined `interface`
+        // gives editor autocomplete over the JSON output vocabulary this
+        // template actually uses; see docs/schemas/json-output.schema.json for
+        // the full format.
         """
-        import { Menu } from "./vee.ts";
+        interface JSONItem {
+          text: string;
+          refresh?: boolean;
+        }
 
-        const menu = new Menu();
-        menu.title("\(title)");
+        interface JSONOutput {
+          vee: 1;
+          title: { text: string }[];
+          items: JSONItem[];
+        }
 
-        const d = menu.dropdown;
-        d.item("It works");
-        d.item("Refresh", { refresh: true });
+        const output: JSONOutput = {
+          vee: 1,
+          title: [{ text: "\(title)" }],
+          items: [
+            { text: "It works" },
+            { text: "Refresh", refresh: true },
+          ],
+        };
 
-        process.stdout.write(menu.toString() + "\\n");
+        console.log(JSON.stringify(output));
         """
     }
 
     private static func pyBody(title: String) -> String {
+        // Self-contained: stdlib only, nothing to vendor. The inlined
+        // TypedDict gives editor autocomplete over the JSON output vocabulary
+        // this template actually uses; see
+        // docs/schemas/json-output.schema.json for the full format.
         """
-        import os
-        import sys
+        import json
+        from typing import TypedDict
 
-        # `vee new --out` writes vee.py next to this plugin; look there first so
-        # the plugin runs wherever it is dropped.
-        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-        from vee import Menu  # noqa: E402
 
-        menu = Menu()
-        menu.title("\(title)")
+        class JSONTitle(TypedDict):
+            text: str
 
-        d = menu.dropdown
-        d.item("It works")
-        d.item("Refresh", refresh=True)
 
-        sys.stdout.write(menu.to_string() + "\\n")
+        class JSONItem(TypedDict, total=False):
+            text: str
+            refresh: bool
+
+
+        class JSONOutput(TypedDict):
+            vee: int
+            title: list[JSONTitle]
+            items: list[JSONItem]
+
+
+        output: JSONOutput = {
+            "vee": 1,
+            "title": [{"text": "\(title)"}],
+            "items": [
+                {"text": "It works"},
+                {"text": "Refresh", "refresh": True},
+            ],
+        }
+
+        print(json.dumps(output))
         """
     }
 

@@ -44,8 +44,6 @@ public enum VeeCLI {
                 return await runLint(rest, runner: runner, out: &out, err: &err)
             case "new":
                 return runNew(rest, out: &out, err: &err)
-            case "sdk":
-                return runSDK(rest, out: &out, err: &err)
             case "search":
                 return await runSearch(rest, runner: runner, out: &out, err: &err)
             case "show":
@@ -64,87 +62,6 @@ public enum VeeCLI {
     // inside; `fallbackVersion` (Version.swift, rewritten by the release
     // workflow) covers a binary with no bundle around it.
     static let version = Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? fallbackVersion
-
-    // MARK: - sdk
-
-    static let sdkUsage = "Usage: vee sdk <ts|py> [--out DIR]\n"
-
-    /// `vee sdk <lang>` — write the plugin SDK for one language into a
-    /// directory, so a plugin can import it as a sibling file.
-    ///
-    /// This is the counterpart to `vee new`, for a plugin that already exists —
-    /// one copied out of the examples, most often. The examples import
-    /// `../vee.ts` because they live beside the SDK in the repository; a copy
-    /// of one needs its own sibling copy and a `./vee.ts` import.
-    ///
-    /// Go is deliberately unsupported: a Go plugin compiles to a binary and
-    /// consumes the SDK as a normal module, so there is nothing to vendor.
-    static func runSDK(_ args: [String], out: inout String, err: inout String) -> Int32 {
-        var language: String?
-        var outDir = FileManager.default.currentDirectoryPath
-        var i = 0
-        while i < args.count {
-            let arg = args[i]
-            switch arg {
-            case "--out":
-                guard i + 1 < args.count else {
-                    err += "vee sdk: --out needs a directory\n\n" + sdkUsage
-                    return 2
-                }
-                outDir = args[i + 1]
-                i += 1
-            case "go", "golang":
-                err += "vee sdk: Go does not vendor an SDK file — a Go plugin is a "
-                err += "compiled binary, so it imports the module instead:\n\n"
-                err += "  go get github.com/navbytes/vee/plugins/go\n"
-                return 2
-            default:
-                if arg.hasPrefix("-") {
-                    err += "vee sdk: unknown flag '\(arg)'\n\n" + sdkUsage
-                    return 2
-                }
-                language = arg
-            }
-            i += 1
-        }
-
-        let resolved: String
-        switch (language ?? "").lowercased() {
-        case "ts", "typescript", "js", "node": resolved = "typescript"
-        case "py", "python": resolved = "python"
-        case "": err += "vee sdk: missing <lang>\n\n" + sdkUsage; return 2
-        default:
-            err += "vee sdk: unknown language '\(language ?? "")' (expected ts|py)\n\n" + sdkUsage
-            return 2
-        }
-
-        guard let filename = EmbeddedSDK.filename(for: resolved),
-              let source = EmbeddedSDK.source(for: resolved) else {
-            err += "vee sdk: no embedded SDK for '\(resolved)'\n"
-            return 1
-        }
-
-        let path = (outDir as NSString).appendingPathComponent(filename)
-        do {
-            try FileManager.default.createDirectory(atPath: outDir, withIntermediateDirectories: true)
-            try source.write(toFile: path, atomically: true, encoding: .utf8)
-        } catch {
-            err += "vee sdk: could not write '\(path)': \(error)\n"
-            return 1
-        }
-        out += "Created \(path)\n"
-        let importLine = resolved == "typescript"
-            ? "import { Menu } from \"./vee.ts\";"
-            : "from vee import Menu"
-        out += "Import it from a plugin in this directory with:\n\n  \(importLine)\n"
-        // Vee already provides the SDK when it runs a plugin, so say what this
-        // copy is actually for — otherwise `vee sdk` reads like a required
-        // setup step it stopped being.
-        out += "\nVee provides this SDK to plugins it runs, so this copy is for running the\n"
-        out += "plugin yourself — a bare python3/node, an editor, a debugger. A copy beside\n"
-        out += "the plugin always takes precedence over Vee's.\n"
-        return 0
-    }
 
     // MARK: - dev
 
@@ -373,6 +290,13 @@ public enum VeeCLI {
             for diagnostic in parsed.diagnostics where !linterMessages.contains(diagnostic.message) {
                 findings.append(diagnostic)
             }
+        }
+
+        // Checked on the plugin's own source, not its stdout, so only in
+        // `.execute` mode — under `--text`, `path`'s contents ARE the output
+        // under test, not a script to inspect for an import.
+        if mode == .execute, let source = PluginSource.read(atPath: path) {
+            findings += Linter.lintSDKImport(path: path, source: source)
         }
 
         if findings.isEmpty {
@@ -707,27 +631,6 @@ public enum VeeCLI {
                 // Make shell/node/python plugins executable.
                 try? FileManager.default.setAttributes([.posixPermissions: 0o755], ofItemAtPath: path)
                 out += "Created \(path)\n"
-
-                // Vendor the SDK beside the plugin. Without this the scaffolded
-                // plugin does not run: its import resolves to a sibling file
-                // that would not exist. A Vee plugin is a single executable with
-                // no install step, so the SDK travels with it.
-                if let language = Scaffold.vendoredSDK(for: resolvedLang),
-                   let sdkName = EmbeddedSDK.filename(for: language),
-                   let sdkSource = EmbeddedSDK.source(for: language) {
-                    let sdkPath = (dir as NSString).appendingPathComponent(sdkName)
-                    if FileManager.default.fileExists(atPath: sdkPath) {
-                        out += "Kept \(sdkPath) (already present)\n"
-                    } else {
-                        do {
-                            try sdkSource.write(toFile: sdkPath, atomically: true, encoding: .utf8)
-                            out += "Created \(sdkPath)\n"
-                        } catch {
-                            err += "vee new: could not write '\(sdkPath)': \(error)\n"
-                            return 1
-                        }
-                    }
-                }
                 return 0
             } catch {
                 err += "vee new: could not write '\(path)': \(error)\n"
@@ -753,19 +656,10 @@ public enum VeeCLI {
             ? path
             : (FileManager.default.currentDirectoryPath as NSString).appendingPathComponent(path)
         let (launchPath, arguments) = PluginExecutor.launchCommand(pluginPath: absolute, runInBash: true)
-        // The same SDK injection the app does, so a plugin behaves identically
-        // under `vee render`/`vee dev` and under the menu bar. Without it an
-        // author debugging a plugin that imports the SDK would see it fail here
-        // and work there, or the reverse — the class of inconsistency that made
-        // a clicked action resolve a different `$SWIFTBAR_PLUGIN_DATA_PATH`
-        // than a render.
-        let sdkRoot = SDKProvisioner.provision(into: SDKProvisioner.defaultRoot)
-        var environment = ProcessInfo.processInfo.environment
-        if let sdkRoot { environment = SDKProvisioner.apply(to: environment, root: sdkRoot, pluginPath: absolute) }
         let invocation = ProcessInvocation(
             launchPath: launchPath,
             arguments: arguments,
-            environment: environment,
+            environment: ProcessInfo.processInfo.environment,
             workingDirectory: (absolute as NSString).deletingLastPathComponent,
             timeout: 30)
         return try await runner.run(invocation)
@@ -810,7 +704,6 @@ enum Usage {
       vee show <plugin>        Live-render a plugin's dropdown in the terminal.
       vee dev <path>           Watch a file and re-render it on every save.
       vee new [flags]          Scaffold a new plugin.
-      vee sdk <ts|py> [--out]  Write the plugin SDK into a directory.
 
     show flags:
       --once               Print a single frame instead of live-refreshing.

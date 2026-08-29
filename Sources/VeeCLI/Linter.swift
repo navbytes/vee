@@ -231,4 +231,40 @@ public enum Linter {
     private static func isKnownParam(_ key: String) -> Bool {
         LineParameterKeys.isRecognized(key)
     }
+
+    // MARK: - Retired-SDK tombstone
+
+    /// Flags a plugin's own source for an import of the now-retired official
+    /// SDK. A sibling `vee.py`/`vee.ts` beside it keeps the plugin running
+    /// forever by plain language precedence (Python checks the script's own
+    /// directory first; a relative `./vee.ts` names a file directly) — so that
+    /// case is only a warning that the copy is frozen. With no sibling the
+    /// import cannot resolve anywhere, which is an error.
+    ///
+    /// Detects on the plugin's own source, not its stdout — the two `Linter`
+    /// entry points look at different halves of the same plugin.
+    public static func lintSDKImport(path: String, source: String, fileManager: FileManager = .default) -> [ParseDiagnostic] {
+        let ext = (path as NSString).pathExtension.lowercased()
+        let sibling: String
+        switch ext {
+        case "py":
+            guard source.range(of: #"(?m)^\s*(from\s+vee\s+import\s|import\s+vee\b)"#, options: .regularExpression) != nil else { return [] }
+            sibling = "vee.py"
+        case "ts", "js", "mjs", "mts", "cjs":
+            guard source.range(of: #"['"](@navbytes/vee|\./vee(\.ts|\.js)?)['"]"#, options: .regularExpression) != nil else { return [] }
+            sibling = "vee.ts"
+        default:
+            return []
+        }
+
+        let siblingPath = ((path as NSString).deletingLastPathComponent as NSString).appendingPathComponent(sibling)
+        if fileManager.fileExists(atPath: siblingPath) {
+            return [.init(
+                severity: .warning,
+                message: "imports the retired Vee SDK; the sibling '\(sibling)' beside it is a frozen copy that keeps working — see the migration guide")]
+        }
+        return [.init(
+            severity: .error,
+            message: "the SDK is retired and this plugin cannot run — port to JSON output, see the migration guide (docs/_content/sdk.md)")]
+    }
 }
