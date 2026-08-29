@@ -86,13 +86,13 @@ The JSON output format has a [published JSON Schema](https://vee.navbytes.io/sch
 }
 ```
 
-*Follow-up (tracked, not yet done): submit this schema to [SchemaStore](https://www.schemastore.org/) so editors pick it up without a manual `$schema` reference.*
+The schema is registered in the [SchemaStore](https://www.schemastore.org/) catalog as "Vee JSON menu output", so editors with SchemaStore integration also offer it in their schema pickers.
 
 ## Published artifact status
 
 Nothing already published is deleted or broken:
 
-- **`@navbytes/vee` on npm** will be marked deprecated (`npm deprecate`) — it stays installable forever, and any plugin already importing it (with a frozen sibling as a fallback, or run under an old Vee) keeps working. No new versions will be published.
+- **`@navbytes/vee` on npm** is deprecated — it stays installable forever, and any plugin already importing it (with a frozen sibling as a fallback, or run under an old Vee) keeps working. No new versions will be published.
 - **The Go module** (`github.com/navbytes/vee/plugins/go`) is unaffected in the way that matters most — Go module tags are immutable, so `go get` continues to resolve every tag that was ever cut. No new tags will be cut.
 - **`plugins/fixtures/`** in this repository survives, repurposed: it's no longer an SDK contract, just the parser's own conformance goldens.
 
