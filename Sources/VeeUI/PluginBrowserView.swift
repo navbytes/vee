@@ -80,6 +80,11 @@ public final class PluginBrowserModel: ObservableObject {
     /// failure that shouldn't blow away the whole catalog.
     @Published public var notice: CatalogNotice?
     @Published public var prompt: InstallPrompt?
+    /// Entry ids currently fetching a source for install/update — drives the
+    /// card's button into a disabled/progress state so the primary action
+    /// isn't silently unresponsive during the network round trip, and a
+    /// second click can't fire a concurrent fetch for the same entry.
+    @Published public var installingEntryIDs: Set<String> = []
     /// Lazily-fetched metadata, keyed by catalog path.
     @Published public var headers: [String: HeaderMetadata] = [:]
     @Published public var trustLevels: [String: TrustLevel] = [:]
@@ -88,6 +93,18 @@ public final class PluginBrowserModel: ObservableObject {
     /// Entry ids whose last-updated fetch has been started, so we only make the
     /// (one-call-per-plugin) commits-API request once.
     private var lastUpdatedRequested: Set<String> = []
+    /// Cache for `isInstalled`/`provenanceStatus`, both of which otherwise hit
+    /// disk (a directory read, then a full file read + hash) on every card
+    /// body evaluation — for every visible card, on every re-render, on the
+    /// main actor. Keyed by `entry.id` (store + path), NOT filename: two
+    /// stores can list the same filename, and `provenanceStatus` must judge
+    /// each entry against its own `rawURL` rather than reuse another store's
+    /// answer for that filename (see `ProvenanceStatus.installedFromAnotherSource`).
+    /// Not `@Published`: mutating it during a view's own `body` computation
+    /// must not also fire `objectWillChange`. Invalidated on `refresh()` and
+    /// right after an install.
+    private var installedCache: [String: Bool] = [:]
+    private var provenanceCache: [String: ProvenanceStatus] = [:]
     /// The on-disk freshness ledger, decoded once at construction (and again
     /// on `refresh()`) rather than on every card appearance — a per-card disk
     /// read/decode of the whole ledger on `@MainActor` was a jank source.
@@ -228,6 +245,26 @@ public final class PluginBrowserModel: ObservableObject {
         }
     }
 
+    /// Eagerly backfills header metadata (title/summary) for every entry, used
+    /// when the user has typed a search — normal browsing still relies on each
+    /// card's own lazy `loadHeader` firing as it scrolls into view. Without
+    /// this, search could only ever match a filename/category/manifest field:
+    /// the title actually shown on a card that hasn't scrolled into view yet
+    /// would never be found, even though it's right there on screen for cards
+    /// that have. Same bounded-concurrency shape as `ensureLastUpdatedLoaded`.
+    func ensureHeadersLoaded(for entries: [CatalogEntry]) async {
+        let maxConcurrent = 4
+        await withTaskGroup(of: Void.self) { group in
+            var iterator = entries.makeIterator()
+            func addNext() {
+                guard let entry = iterator.next() else { return }
+                group.addTask { await self.loadHeader(for: entry) }
+            }
+            for _ in 0..<maxConcurrent { addNext() }
+            while await group.next() != nil { addNext() }
+        }
+    }
+
     /// Loads every enabled store and merges their entries. A store that fails is
     /// skipped; the full-screen error only shows when *nothing* loaded — a
     /// store that fails alongside others that succeed instead gets a
@@ -300,6 +337,8 @@ public final class PluginBrowserModel: ObservableObject {
         trustLevels = [:]
         lastUpdated = [:]
         lastUpdatedRequested = []
+        installedCache = [:]
+        provenanceCache = [:]
         // Reseed from the in-memory ledger (no disk read) rather than leaving
         // it empty: a still-fresh record should keep being served without a
         // wasted re-fetch, while an expired one is skipped so this refresh is
@@ -325,10 +364,14 @@ public final class PluginBrowserModel: ObservableObject {
 
     func dismissNotice() { notice = nil }
 
-    /// Clears the active category and search text (the empty-state "show all").
+    /// Clears every active filter (the empty-state "show all"): category,
+    /// search text, and store scope. Leaving the store scope out used to mean
+    /// "Show All Plugins" could still be scoped to a store with zero entries —
+    /// a dead end that looked like it should have worked.
     func clearFilters() {
         selectedCategory = ""
         search = ""
+        selectedStoreID = nil
     }
 
     /// Entries in the selected store scope (all stores when `selectedStoreID` is nil).
@@ -410,24 +453,25 @@ public final class PluginBrowserModel: ObservableObject {
         return url
     }
 
-    /// Whether `entry` matches `query`, using only fields known for EVERY entry
-    /// the moment the catalog loads.
+    /// Whether `entry` matches `query`.
     ///
-    /// The header title/summary are fetched lazily, per card, when that card
-    /// scrolls into view — so matching on them made search results depend on how
-    /// far the user had scrolled: the same query returned more plugins the
-    /// second time it was typed. Filename, category and any manifest-supplied
-    /// title/summary are present for every entry from the start, so the answer
-    /// is the same however much of the grid has been looked at.
-    ///
-    /// This narrows what search can find for stores whose manifest carries no
-    /// metadata — the real fix is manifest-supplied title/summary, tracked in
-    /// ROADMAP.md, since it also removes the per-card source download.
+    /// Filename, category, and any manifest-supplied title/summary are known
+    /// for every entry from the moment the catalog loads. The header
+    /// title/summary — what a card actually *displays* as its name — is only
+    /// fetched lazily, per card, when that card scrolls into view; matching a
+    /// nonempty search also kicks off `ensureHeadersLoaded` for the whole
+    /// catalog (see `DiscoverContentView`), so typing a plugin's on-screen
+    /// title finds it within a few seconds rather than never. Results can
+    /// still grow as those fetches land — the alternative, matching only
+    /// fields that never change, meant a search for the exact title on
+    /// screen routinely came back empty.
     private func matchesSearch(_ entry: CatalogEntry, query: String) -> Bool {
         if entry.filename.lowercased().contains(query) { return true }
         if entry.category.lowercased().contains(query) { return true }
         if entry.manifestTitle?.lowercased().contains(query) == true { return true }
         if entry.manifestSummary?.lowercased().contains(query) == true { return true }
+        if headers[entry.id]?.title?.lowercased().contains(query) == true { return true }
+        if headers[entry.id]?.summary?.lowercased().contains(query) == true { return true }
         return false
     }
 
@@ -467,7 +511,10 @@ public final class PluginBrowserModel: ObservableObject {
     var visibleTitle: String { selectedCategory.isEmpty ? "All Plugins" : selectedCategory }
 
     func isInstalled(_ entry: CatalogEntry) -> Bool {
-        PluginInstaller.isInstalled(filename: entry.filename, in: pluginsDirectory)
+        if let cached = installedCache[entry.filename] { return cached }
+        let result = PluginInstaller.isInstalled(filename: entry.filename, in: pluginsDirectory)
+        installedCache[entry.filename] = result
+        return result
     }
 
     /// Provenance status of an installed plugin, from THIS entry's point of
@@ -479,10 +526,22 @@ public final class PluginBrowserModel: ObservableObject {
     /// THIS entry would overwrite it), and `.unknown` when there's no record
     /// at all (e.g. a hand-authored plugin).
     func provenanceStatus(for entry: CatalogEntry) -> ProvenanceStatus {
+        if let cached = provenanceCache[entry.id] { return cached }
         let record = provenanceStore.record(for: entry.filename)
         let path = (pluginsDirectory as NSString).appendingPathComponent(entry.filename)
         let current = PluginSource.read(atPath: path)
-        return ProvenanceStatus.evaluate(record: record, currentSource: current, entrySourceURL: entry.rawURL)
+        let result = ProvenanceStatus.evaluate(record: record, currentSource: current, entrySourceURL: entry.rawURL)
+        provenanceCache[entry.id] = result
+        return result
+    }
+
+    /// Whether the catalog has a newer version of an installed plugin than
+    /// what's on disk — drives the card's Update button so it isn't offered
+    /// unconditionally on every installed plugin regardless of whether
+    /// there's anything to update.
+    func updateStatus(for entry: CatalogEntry) -> CatalogUpdateStatus {
+        guard let record = provenanceStore.record(for: entry.filename) else { return .notInCatalog }
+        return CatalogUpdateCheck.status(installed: record, entry: entry, catalogLastUpdated: lastUpdatedDate(for: entry))
     }
 
     /// The installed plugin's source on disk, if any — used to diff against an
@@ -493,8 +552,14 @@ public final class PluginBrowserModel: ObservableObject {
     }
 
     /// Fetch the source, verify store integrity, and open the trust gate.
+    /// Guarded against re-entrancy: a second click while the first fetch is
+    /// still in flight is a no-op rather than a concurrent duplicate fetch
+    /// racing to set `prompt`. `installingEntryIDs` also drives the card's
+    /// button into a disabled/progress state for the same reason.
     func requestInstall(_ entry: CatalogEntry) async {
         guard let client = client(for: entry) else { return }
+        guard installingEntryIDs.insert(entry.id).inserted else { return }
+        defer { installingEntryIDs.remove(entry.id) }
         do {
             let source = try await client.fetchSource(entry)
             // Verify the store's integrity guarantees (pinned hash / signature)
@@ -502,7 +567,7 @@ public final class PluginBrowserModel: ObservableObject {
             if let store = store(for: entry) {
                 let verdict = StoreIntegrity.verify(source: source, entry: entry, store: store, manifestSigningKey: entry.manifestSigningKey)
                 guard verdict.passes else {
-                    notice = CatalogNotice(kind: .failure, message: "\(entry.filename): \(Self.integrityMessage(verdict))")
+                    notice = CatalogNotice(kind: .failure, message: "\(title(for: entry)): \(Self.integrityMessage(verdict))")
                     return
                 }
             }
@@ -530,7 +595,7 @@ public final class PluginBrowserModel: ObservableObject {
         } catch {
             // An install/fetch failure is transient — surface it as a banner, not
             // the full-screen catalog-load error (which would hide the grid).
-            notice = CatalogNotice(kind: .failure, message: "Couldn't fetch \(entry.filename): \(CatalogErrorPresenter.message(for: error))")
+            notice = CatalogNotice(kind: .failure, message: "Couldn't fetch \(title(for: entry)): \(CatalogErrorPresenter.message(for: error))")
         }
     }
 
@@ -544,7 +609,17 @@ public final class PluginBrowserModel: ObservableObject {
             // not block the install itself.
             let provenance = PluginProvenance(filename: filename, sourceURL: prompt.entry.rawURL, source: prompt.source)
             try? provenanceStore.record(provenance)
-            notice = CatalogNotice(kind: .success, message: "Installed \(filename)")
+            // The install/provenance state just changed underneath this
+            // filename — drop the memoized card state instead of leaving it
+            // stale until the next full refresh. `provenanceCache` is keyed by
+            // entry id (not filename, see its declaration), and every entry
+            // sharing this filename across every store could now read
+            // differently — e.g. a same-named entry in another store that used
+            // to be `.installedFromAnotherSource` — so it's cleared entirely
+            // rather than by one key.
+            installedCache[filename] = nil
+            provenanceCache = [:]
+            notice = CatalogNotice(kind: .success, message: "Installed \(prompt.title)")
             onInstalled()
         } catch {
             notice = CatalogNotice(kind: .failure, message: "Install failed: \(error.localizedDescription)")
@@ -584,7 +659,32 @@ public struct DiscoverContentView: View {
     }
 
     public var body: some View {
-        detail
+        VStack(spacing: 0) {
+            if let notice = model.notice {
+                NoticeBanner(notice: notice) { model.dismissNotice() }
+                    .padding(.horizontal, Space.lg)
+                    .padding(.top, Space.sm)
+                    // Only a success banner self-dismisses. A failure — a store
+                    // that didn't load, an install that failed — stays until the
+                    // user dismisses it: 3 seconds was long enough to miss real
+                    // trouble entirely. `try?` would swallow the
+                    // CancellationError from a notice change cancelling this
+                    // task and still dismiss the NEW banner it raced with — only
+                    // dismiss on a real timeout.
+                    .task(id: notice.id) {
+                        guard notice.kind == .success else { return }
+                        do {
+                            try await Task.sleep(for: .seconds(3))
+                        } catch {
+                            return
+                        }
+                        model.dismissNotice()
+                    }
+                    .transition(.move(edge: .top).combined(with: .opacity))
+            }
+            detail
+        }
+            .animation(.easeInOut(duration: 0.2), value: model.notice)
             .searchable(text: $model.search, placement: .toolbar, prompt: "Search plugins")
             .toolbar {
                 // The store scope only exists when more than one store is
@@ -616,27 +716,19 @@ public struct DiscoverContentView: View {
                 guard model.sortOrder == .updated else { return }
                 await model.ensureLastUpdatedLoaded(for: model.visibleEntries)
             }
-            .overlay(alignment: .top) {
-                if let notice = model.notice {
-                    NoticeBanner(notice: notice) { model.dismissNotice() }
-                        .padding(.top, 8)
-                        // Auto-dismiss after a few seconds; re-arms whenever the
-                        // notice changes (a newer install replaces an older banner).
-                        // `try?` would swallow the CancellationError from a notice
-                        // change cancelling this task and still dismiss the NEW
-                        // banner it raced with — only dismiss on a real timeout.
-                        .task(id: notice.id) {
-                            do {
-                                try await Task.sleep(for: .seconds(3))
-                            } catch {
-                                return
-                            }
-                            model.dismissNotice()
-                        }
-                        .transition(.move(edge: .top).combined(with: .opacity))
+            // A brief debounce so a fast typist doesn't restart this sweep on
+            // every keystroke — searching needs header titles/summaries loaded
+            // for the whole catalog, not just the cards already on screen (see
+            // `matchesSearch`), so this backfills them once typing settles.
+            .task(id: model.search) {
+                guard !model.search.isEmpty else { return }
+                do {
+                    try await Task.sleep(for: .milliseconds(300))
+                } catch {
+                    return
                 }
+                await model.ensureHeadersLoaded(for: model.entries)
             }
-            .animation(.easeInOut(duration: 0.2), value: model.notice)
             .sheet(item: $model.prompt) { prompt in
                 InstallTrustSheet(prompt: prompt, onCancel: { model.prompt = nil }, onInstall: { model.confirmInstall() })
             }
@@ -653,6 +745,10 @@ public struct DiscoverContentView: View {
             Label(model.selectedCategory.isEmpty ? "All Categories" : model.selectedCategory,
                   systemImage: "line.3.horizontal.decrease.circle")
         }
+        // The label text IS the active-filter indicator — a toolbar button can
+        // otherwise collapse to icon-only when space is tight, silently
+        // hiding which category is selected.
+        .labelStyle(.titleAndIcon)
         .help("Filter by category")
         .popover(isPresented: $showingCategoryPopover) {
             categoryFilterPopover
@@ -728,8 +824,12 @@ public struct DiscoverContentView: View {
             }
             .pickerStyle(.inline)
         } label: {
-            Label("Sort", systemImage: "arrow.up.arrow.down")
+            // Shows the active order, matching the store/category menus —
+            // a bare "Sort" label was the only toolbar control that didn't
+            // say what it was currently set to.
+            Label(model.sortOrder.label, systemImage: "arrow.up.arrow.down")
         }
+        .labelStyle(.titleAndIcon)
         .help("Sort plugins")
     }
 
@@ -756,6 +856,7 @@ public struct DiscoverContentView: View {
         } label: {
             Label(storeMenuLabel, systemImage: "shippingbox")
         }
+        .labelStyle(.titleAndIcon)
         .help("Filter by store")
     }
 
@@ -782,6 +883,10 @@ public struct DiscoverContentView: View {
         [GridItem(.adaptive(minimum: 300, maximum: 460), spacing: Space.md)]
     }
 
+    private func pluginsSubtitle(_ count: Int) -> String {
+        count == 1 ? "1 plugin" : "\(count) plugins"
+    }
+
     @ViewBuilder
     private var detail: some View {
         if model.isLoading {
@@ -803,6 +908,7 @@ public struct DiscoverContentView: View {
             } actions: {
                 Button("Retry") { Task { await model.load() } }.buttonStyle(.borderedProminent)
             }
+            .navigationTitle("Discover")
         } else if model.visibleEntries.isEmpty {
             ContentUnavailableView {
                 Label("No matching plugins", systemImage: "magnifyingglass")
@@ -815,15 +921,29 @@ public struct DiscoverContentView: View {
                     // explicit about before someone concludes the plugin isn't
                     // in the catalog at all.
                     Text("Nothing matches “\(model.search)” by name, category or description. Try a shorter or different term, or browse a category.")
-                } else {
+                } else if !model.selectedCategory.isEmpty {
                     Text("This category has no plugins yet.")
+                } else if model.entries.isEmpty {
+                    // Reachable with zero filters active: every configured
+                    // store is disabled, or every store failed to load — a
+                    // wholly different situation than "this category is
+                    // empty," and a retry here would refetch the same
+                    // nothing.
+                    Text("No plugins are available. Check that a store is enabled in Settings → Stores.")
+                } else {
+                    // A store scope with no entries of its own — reachable
+                    // only if `selectedStoreID` somehow survives its own
+                    // reset; kept as a fallback so this branch is never a
+                    // dead end with no explanation.
+                    Text("This store has no plugins yet.")
                 }
             } actions: {
-                if !model.search.isEmpty || !model.selectedCategory.isEmpty {
+                if !model.search.isEmpty || !model.selectedCategory.isEmpty || model.selectedStoreID != nil {
                     Button("Show All Plugins") { model.clearFilters() }
                         .buttonStyle(.borderedProminent)
                 }
             }
+            .navigationTitle("Discover")
         } else if model.selectedCategory.isEmpty {
             // "All Categories" — group into sections so a large catalog scans
             // by category instead of one undifferentiated wall of cards. A
@@ -846,7 +966,7 @@ public struct DiscoverContentView: View {
                 .padding(Space.lg)
             }
             .navigationTitle(model.visibleTitle)
-            .navigationSubtitle("\(model.visibleEntries.count) plugins")
+            .navigationSubtitle(pluginsSubtitle(model.visibleEntries.count))
         } else {
             ScrollView {
                 LazyVGrid(columns: gridColumns, spacing: Space.md) {
@@ -858,7 +978,7 @@ public struct DiscoverContentView: View {
                 .padding(Space.lg)
             }
             .navigationTitle(model.visibleTitle)
-            .navigationSubtitle("\(model.visibleEntries.count) plugins")
+            .navigationSubtitle(pluginsSubtitle(model.visibleEntries.count))
         }
     }
 }
@@ -939,7 +1059,6 @@ private struct NoticeBanner: View {
 private struct PluginCard: View {
     @ObservedObject var model: PluginBrowserModel
     let entry: CatalogEntry
-    @State private var hovering = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: Space.sm) {
@@ -947,9 +1066,12 @@ private struct PluginCard: View {
             preview
         }
         .padding(Space.md)
-        .veeCardSurface(hovering: hovering)
-        .onHover { hovering = $0 }
-        .animation(.easeOut(duration: 0.15), value: hovering)
+        // No hover treatment: `veeCardSurface`'s accent-on-hover border is the
+        // app's affordance for "this whole surface is clickable," but the card
+        // itself has no click action — only its own Install/Update/View source
+        // controls do, and those already get their own hover feedback from
+        // AppKit. Hovering the card used to promise an action it didn't have.
+        .veeCardSurface()
         .task { await model.loadLastUpdated(for: entry) }
     }
 
@@ -982,6 +1104,8 @@ private struct PluginCard: View {
         }
     }
 
+    private var isInstalling: Bool { model.installingEntryIDs.contains(entry.id) }
+
     private var details: some View {
         HStack(alignment: .top, spacing: 11) {
             PluginTile(symbol: CategoryStyle.symbol(for: entry.category), tint: CategoryStyle.tint(for: entry.category))
@@ -989,11 +1113,7 @@ private struct PluginCard: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text(model.title(for: entry)).font(TypeRole.cardTitle).lineLimit(1)
                 if model.hasMultipleStores, let storeName = model.storeName(for: entry) {
-                    Text(storeName)
-                        .font(.caption2.weight(.medium))
-                        .padding(.horizontal, 6).padding(.vertical, 1)
-                        .background(.quaternary, in: Capsule())
-                        .lineLimit(1)
+                    MetaChip(symbol: "shippingbox", label: storeName)
                 }
                 if let author = model.author(for: entry) {
                     Text("by \(author)").font(.caption).foregroundStyle(.secondary).lineLimit(1)
@@ -1003,9 +1123,17 @@ private struct PluginCard: View {
                 }
                 // One ranked badge row instead of a vertical ladder of
                 // same-weight pills: a filled chip for state that matters (trust,
-                // widget-only), muted text for metadata (freshness).
+                // deprecation), muted text for metadata (surface, freshness).
                 HStack(spacing: Space.sm) {
-                    if let level = model.trustLevel(for: entry), level != .undeclared {
+                    if entry.deprecated {
+                        TrustChip(symbol: "exclamationmark.triangle.fill", label: "Deprecated", tint: .red)
+                            .help("The store that lists this plugin marks it deprecated")
+                    }
+                    // Shown for `.undeclared` too — a plugin declaring no
+                    // permissions at all is exactly the state a trust chip
+                    // exists to surface. A `nil` level (header not fetched
+                    // yet) still shows nothing, same as before.
+                    if let level = model.trustLevel(for: entry) {
                         TrustChip(symbol: level.symbol, label: level.label, tint: level.color)
                     }
                     SurfaceBadge(surface: entry.manifestSurface)
@@ -1015,6 +1143,12 @@ private struct PluginCard: View {
                 }
                 .padding(.top, 2)
             }
+            // Reserves room for the metadata that streams in after the card
+            // first appears (author, description, trust/freshness badges) so
+            // the card doesn't grow underneath the cursor mid-scroll — the
+            // model already fixed this exact hazard for sort order (see
+            // `PluginBrowserModel.sortKey`); the layout was still doing it.
+            .frame(minHeight: 84, alignment: .top)
 
             Spacer(minLength: 6)
 
@@ -1022,24 +1156,58 @@ private struct PluginCard: View {
                 if model.isInstalled(entry) {
                     Label("Installed", systemImage: "checkmark").font(.caption).foregroundStyle(.secondary)
                     ProvenanceBadge(status: model.provenanceStatus(for: entry))
-                    // Re-fetch the latest catalog source and overwrite in place,
-                    // through the same trust gate.
-                    Button("Update") { Task { await model.requestInstall(entry) } }
-                        .buttonStyle(.bordered)
-                        .controlSize(.small)
+                    updateButton
                 } else {
-                    Button("Install") { Task { await model.requestInstall(entry) } }
-                        .buttonStyle(.borderedProminent)
-                        .controlSize(.small)
+                    installButton
                 }
                 if let url = model.sourceURL(for: entry) {
                     Link(destination: url) {
-                        Text("View source").font(.caption2)
+                        Text("View source").font(.caption)
                     }
-                    .help("Open this plugin's source on GitHub")
+                    .help("Open this plugin's source")
+                    .accessibilityLabel("View source for \(model.title(for: entry))")
                 }
             }
         }
+    }
+
+    /// Re-fetches the catalog source and re-opens the trust gate. Its style
+    /// and label reflect whether the model actually found a newer version —
+    /// previously this offered "Update" unconditionally on every installed
+    /// plugin, indistinguishable from one that's already current.
+    @ViewBuilder
+    private var updateButton: some View {
+        let status = model.updateStatus(for: entry)
+        let label = status == .updateAvailable ? "Update" : "Reinstall"
+        Group {
+            if status == .updateAvailable {
+                Button(action: install) { updateButtonLabel(label) }.buttonStyle(.borderedProminent)
+            } else {
+                Button(action: install) { updateButtonLabel(label) }.buttonStyle(.bordered)
+            }
+        }
+        .controlSize(.small)
+        .disabled(isInstalling)
+        .accessibilityLabel("\(label) \(model.title(for: entry))")
+    }
+
+    private func install() { Task { await model.requestInstall(entry) } }
+
+    @ViewBuilder
+    private func updateButtonLabel(_ text: String) -> some View {
+        if isInstalling {
+            ProgressView().controlSize(.small)
+        } else {
+            Text(text)
+        }
+    }
+
+    private var installButton: some View {
+        Button(action: install) { updateButtonLabel("Install") }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.small)
+            .disabled(isInstalling)
+            .accessibilityLabel("Install \(model.title(for: entry))")
     }
 }
 
@@ -1079,6 +1247,7 @@ private struct ProvenanceBadge: View {
             TrustChip(symbol: "checkmark.seal.fill", label: "Verified", tint: .green)
         case .modified:
             TrustChip(symbol: "exclamationmark.triangle.fill", label: "Modified", tint: .orange)
+                .help("Changed since it was installed — updating overwrites the local change")
         case .installedFromAnotherSource:
             TrustChip(symbol: "arrow.triangle.branch", label: "Other source", tint: .orange)
                 .help("Installed from another source — installing overwrites it")
@@ -1091,17 +1260,24 @@ private struct ProvenanceBadge: View {
 /// A "Widget-only" / "Widget" chip when the store declares a plugin's surface
 /// (`vee-catalog.json`), so a widget-only plugin — one with no menu-bar
 /// presence — is visible *before* install. Hidden for a plain menu plugin or a
-/// store that declares nothing (the zero-config public catalog). Matches
-/// ``TrustChip``.
+/// store that declares nothing (the zero-config public catalog). A `MetaChip`,
+/// not a `TrustChip`: surface is descriptive metadata, not state that
+/// matters — the installed-plugin list draws the identical fact this way
+/// (`ManagerRow`'s `MetaChip(symbol:label:tint: .purple)`), and a filled chip
+/// here competed with the trust chip for attention it hadn't earned. Matched
+/// case-insensitively/trimmed so a manifest field like `"Widget"` or one with
+/// stray whitespace isn't silently dropped.
 private struct SurfaceBadge: View {
     let surface: String?
 
     var body: some View {
-        switch surface {
+        switch surface?.trimmingCharacters(in: .whitespaces).lowercased() {
         case "widget":
-            TrustChip(symbol: "square.grid.2x2.fill", label: "Widget-only", tint: .purple)
+            MetaChip(symbol: "square.grid.2x2.fill", label: "Widget-only", tint: .purple)
+                .help("Widget-only — no menu-bar item; add it in Notification Center")
         case "both":
-            TrustChip(symbol: "square.grid.2x2", label: "Widget", tint: .purple)
+            MetaChip(symbol: "square.grid.2x2", label: "Widget", tint: .purple)
+                .help("Shows in the menu bar and as a widget")
         default:
             EmptyView()
         }
