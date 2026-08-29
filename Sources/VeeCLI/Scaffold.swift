@@ -108,6 +108,7 @@ public enum Scaffold {
         // template actually uses; see docs/schemas/json-output.schema.json for
         // the full format.
         """
+        // Runs on Node's built-in TypeScript type stripping — needs Node >= 22.18; Node 24+ recommended.
         interface JSONItem {
           text: string;
           refresh?: boolean;

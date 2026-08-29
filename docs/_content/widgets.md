@@ -398,6 +398,9 @@ if (process.env.VEE_TARGET === "widget") {
 ```
 
 ```python
+import json
+import os
+
 if os.environ.get("VEE_TARGET") == "widget":
     print(json.dumps({
         "vee_widget": 1,

@@ -182,6 +182,8 @@ console.log(JSON.stringify({
 ```
 
 ```python
+import json
+
 print(json.dumps({
     "vee": 1,
     "title": [{"text": "JSON ✓", "color": "green", "sfimage": "curlybraces"}],

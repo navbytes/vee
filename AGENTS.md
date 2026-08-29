@@ -35,9 +35,10 @@ xbar/SwiftBar text protocol — typed values, no `|`-param quoting/escaping:
 - **A file that exercises every field**: `plugins/showcase/kitchen-sink.1m.sh`
 
 The xbar/SwiftBar-compatible text protocol (`title\n---\nitem | key=value`) is
-still fully supported and is what every example in `plugins/showcase/` uses —
-reach for it only if the plugin needs to keep running unchanged on
-xbar/SwiftBar too. Full reference: `docs/_content/plugin-authoring.md`, with
+still fully supported and is what most examples in `plugins/showcase/` use
+(`kitchen-sink.1m.sh` emits JSON instead, to exercise every field) — reach for
+it only if the plugin needs to keep running unchanged on xbar/SwiftBar too.
+Full reference: `docs/_content/plugin-authoring.md`, with
 the generated parameter table at
 `docs/_content/_generated/params-table.md`.
 

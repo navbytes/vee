@@ -29,13 +29,13 @@ public enum PluginDiscovery {
 
     /// Filenames Vee itself writes into a plugins folder that are not plugins.
     ///
-    /// `vee new` and `vee sdk` vendor the SDK beside a plugin, because a Vee
-    /// plugin is a single executable with no build step and so cannot resolve
-    /// the SDK from a package manager. The vendored file is a module, not a
+    /// The official SDK is retired, but some plugin folders still carry a
+    /// historical `vee.ts`/`vee.py` sibling from when `vee new`/`vee sdk`
+    /// vendored it beside a plugin. That sibling is a module, not a
     /// plugin — and `vee.ts`/`vee.py` are otherwise perfectly valid plugin
-    /// filenames (name `vee`, manual interval), so without this they are
-    /// discovered, run, and surface as a broken menu-bar row beside the real
-    /// plugins they exist to support.
+    /// filenames (name `vee`, manual interval), so without this filter they
+    /// are discovered, run, and surface as a broken menu-bar row beside the
+    /// real plugins they exist to support.
     private static let vendoredSDKFilenames: Set<String> = ["vee.ts", "vee.py"]
 
     /// Extensionless files that are documentation or build metadata, not

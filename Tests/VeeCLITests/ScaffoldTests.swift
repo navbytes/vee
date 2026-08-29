@@ -31,10 +31,26 @@ final class ScaffoldTests: XCTestCase {
     // to prove they're accepted is to actually run them through `vee render`
     // (the same seam the app uses) and check its JSON output parses clean.
     func testTsOutputIsAcceptedByVeeRender() async throws {
-        guard ["/opt/homebrew/bin/node", "/usr/local/bin/node", "/usr/bin/node"]
-            .contains(where: { FileManager.default.isExecutableFile(atPath: $0) })
-        else { throw XCTSkip("node is not installed on this machine") }
+        guard nodeIsOnPath() else { throw XCTSkip("node is not installed on this machine") }
         try await assertRenderAccepts(.ts, trust: ["network", "secrets"])
+    }
+
+    /// Resolves via the shell's PATH rather than a handful of hardcoded
+    /// absolute prefixes, so an nvm/mise-managed `node` is found instead of
+    /// silently skipping the only end-to-end TS test.
+    private func nodeIsOnPath() -> Bool {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+        process.arguments = ["which", "node"]
+        process.standardOutput = Pipe()
+        process.standardError = Pipe()
+        do {
+            try process.run()
+            process.waitUntilExit()
+            return process.terminationStatus == 0
+        } catch {
+            return false
+        }
     }
 
     func testPyOutputIsAcceptedByVeeRender() async throws {
@@ -74,12 +90,15 @@ final class ScaffoldTests: XCTestCase {
         code = await VeeCLI.run(["render", path], runner: SystemProcessRunner(), out: &out, err: &err)
         XCTAssertEqual(code, 0, "\(lang): stdout=\(out) stderr=\(err)")
         XCTAssertTrue(out.contains("Example"), "\(lang): \(out)")
+        // The title alone can pass even if the template's `items` key were
+        // mistyped and the body silently dropped; require the rendered menu
+        // body text too.
+        XCTAssertTrue(out.contains("It works"), "\(lang): \(out)")
     }
-    /// `vee new` vendors the SDK beside the plugin and skips it when present
-    /// ("Kept … already present"). The plugin file itself had no such guard, so
-    /// re-running the command destroyed whatever the author had written into it
-    /// — and a scaffold is generated from flags, so nothing of the original is
-    /// recoverable from what replaces it.
+    /// `vee new` writes a single self-contained plugin file. Without a guard,
+    /// re-running the command would destroy whatever the author had written
+    /// into it — and a scaffold is generated from flags, so nothing of the
+    /// original is recoverable from what replaces it.
     func testNewRefusesToOverwriteAnExistingPlugin() async throws {
         let dir = NSTemporaryDirectory() + "vee-new-" + UUID().uuidString
         defer { try? FileManager.default.removeItem(atPath: dir) }

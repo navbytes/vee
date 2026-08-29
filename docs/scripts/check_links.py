@@ -43,10 +43,13 @@ def sources():
     for name in sorted(os.listdir(CONTENT)):
         if name.endswith(".md"):
             yield os.path.join(CONTENT, name)
-    for name in ("README.md", "CONTRIBUTING.md", "CHANGELOG.md", "SECURITY.md"):
+    for name in ("README.md", "CONTRIBUTING.md", "CHANGELOG.md", "SECURITY.md", "AGENTS.md"):
         path = os.path.join(ROOT, name)
         if os.path.exists(path):
             yield path
+    llms = os.path.join(DOCS, "llms.txt")
+    if os.path.exists(llms):
+        yield llms
     for root, dirs, files in os.walk(os.path.join(ROOT, "plugins")):
         dirs[:] = [d for d in dirs if d not in ("node_modules", "__pycache__")]
         for name in files:

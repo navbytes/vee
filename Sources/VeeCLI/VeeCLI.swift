@@ -615,12 +615,10 @@ public enum VeeCLI {
 
         if let dir = outDir {
             let path = (dir as NSString).appendingPathComponent(filename)
-            // Refuse to clobber an existing plugin. The SDK vendored a few
-            // lines below has always been protected this way ("Kept … already
-            // present"); the plugin itself — the file with the user's actual
-            // work in it — was the one being silently overwritten, and a
-            // scaffold is generated from flags, so what it destroys is never
-            // recoverable from what it writes.
+            // Refuse to clobber an existing plugin — the file with the
+            // user's actual work in it — since a scaffold is generated from
+            // flags, so what it destroys is never recoverable from what it
+            // writes.
             if !force, FileManager.default.fileExists(atPath: path) {
                 err += "vee new: '\(path)' already exists — pass --force to overwrite it.\n"
                 return 1

@@ -49,7 +49,7 @@ jobs:
           match() { echo "$files" | grep -qE "$1"; }
 
           # Swift, the app target, and the toolchain config that builds them.
-          if match '^(Sources|Tests|App|WidgetExtension)/|^Package\.swift$|^project\.yml$|^\.swiftlint\.yml$|^\.github/workflows/(ci|lint)\.yml$'; then
+          if match '^(Sources|Tests|App|WidgetExtension)/|^plugins/fixtures/|^Package\.swift$|^project\.yml$|^\.swiftlint\.yml$|^\.github/workflows/(ci|lint)\.yml$'; then
             echo "swift=true" >> "$GITHUB_OUTPUT"
           else
             echo "swift=false" >> "$GITHUB_OUTPUT"

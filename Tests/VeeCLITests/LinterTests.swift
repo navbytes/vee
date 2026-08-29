@@ -148,6 +148,46 @@ final class LinterTests: XCTestCase {
         XCTAssertTrue(Linter.lintSDKImport(path: dir + "/plugin.5m.sh", source: "echo hello\n").isEmpty)
     }
 
+    /// A string literal that merely mentions the package name, with no
+    /// `import`/`require`/`from` keyword before it, must not be flagged.
+    func testPackageNameInsideAStringLiteralIsNotFlagged() throws {
+        let dir = try tempDir()
+        let diags = Linter.lintSDKImport(
+            path: dir + "/plugin.5m.ts",
+            source: "console.log('migrated off @navbytes/vee last week');\n")
+        XCTAssertTrue(diags.isEmpty, "\(diags)")
+    }
+
+    /// A `.js` plugin importing a relative `./vee.js` sibling must resolve
+    /// against `vee.js`, not the TS name — the reviewer-reported bug where a
+    /// working JS sibling was hard-errored.
+    func testJavaScriptRelativeImportResolvesJSSibling() throws {
+        let dir = try tempDir()
+        try "// sibling\n".write(toFile: dir + "/vee.js", atomically: true, encoding: .utf8)
+        let diags = Linter.lintSDKImport(path: dir + "/plugin.5m.js", source: "import { Menu } from './vee.js';\n")
+        XCTAssertEqual(diags.map(\.severity), [.warning])
+    }
+
+    /// A parent-relative `../vee.ts` import resolves against the parent
+    /// directory, not the plugin's own directory.
+    func testParentRelativeImportResolvesSiblingInParentDirectory() throws {
+        let dir = try tempDir()
+        try "// sibling\n".write(toFile: dir + "/vee.ts", atomically: true, encoding: .utf8)
+        let subdir = dir + "/nested"
+        try FileManager.default.createDirectory(atPath: subdir, withIntermediateDirectories: true)
+        let diags = Linter.lintSDKImport(path: subdir + "/plugin.5m.ts", source: "import { Menu } from '../vee.ts';\n")
+        XCTAssertEqual(diags.map(\.severity), [.warning])
+    }
+
+    /// An extensionless relative `./vee` import (or the bare package name)
+    /// accepts either a `vee.ts` or a `vee.js` sibling.
+    func testExtensionlessRelativeImportAcceptsEitherJSOrTSSibling() throws {
+        let dir = try tempDir()
+        try "// sibling\n".write(toFile: dir + "/vee.js", atomically: true, encoding: .utf8)
+        let diags = Linter.lintSDKImport(path: dir + "/plugin.5m.js", source: "import { Menu } from './vee';\n")
+        XCTAssertEqual(diags.map(\.severity), [.warning])
+    }
+
     private func tempDir() throws -> String {
         let dir = NSTemporaryDirectory() + "vee-linter-sdk-" + UUID().uuidString
         try FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
