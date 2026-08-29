@@ -29,9 +29,35 @@ Pick whichever language you are most comfortable in; the API is the same shape i
 ## Getting the SDK
 
 A Vee plugin is a single executable you drop in your plugins folder — no build
-step, no `node_modules`, no virtualenv. So the TypeScript and Python SDKs travel
-*with* the plugin as a sibling file rather than being resolved from a package
-manager:
+step, no `node_modules`, no virtualenv.
+
+**When Vee runs your plugin, the SDK is already importable.** Vee puts its own
+copy on the interpreter's import path, so a plugin you install from Discover
+works with nothing beside it, whichever import you wrote:
+
+```python
+from vee import Menu          # resolves to Vee's copy
+```
+
+```ts
+import { Menu } from "@navbytes/vee";   // resolves to Vee's copy
+import { Menu } from "./vee.ts";        // resolves to your copy, if you have one
+```
+
+A copy sitting beside your plugin always wins, so a repository that checks the
+SDK in — or an author pinning a version — is unaffected.
+
+You still want your own copy for one case: **running a plugin with the bare
+interpreter yourself**, outside Vee. `python3 my-plugin.py` knows nothing about
+Vee's import path and will fail with `ModuleNotFoundError: No module named
+'vee'`. Two ways round it:
+
+```sh
+vee render my-plugin.py    # run it the way Vee does — the SDK resolves
+vee sdk py --out .         # or drop a copy beside it, for editors and debuggers
+```
+
+To vendor the SDK deliberately:
 
 ```sh
 vee sdk ts --out ~/Library/Application\ Support/Vee/plugins   # writes vee.ts
@@ -76,8 +102,9 @@ import vee "github.com/navbytes/vee/plugins/go"
 ```
 
 The examples in this repository import `../vee.ts` (and the local module)
-because they sit beside the SDK there. Copying one out means running
-`vee sdk` beside it — and, for TypeScript, changing that import to `./vee.ts`.
+because they sit beside the SDK there. Copy one out and it still runs under Vee
+— and under `vee render` — because Vee provides the SDK either way. Run it with
+a bare `python3`/`node` and you will want `vee sdk` beside it first.
 
 ## Requirements
 

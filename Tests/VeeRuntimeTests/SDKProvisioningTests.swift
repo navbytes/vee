@@ -136,3 +136,137 @@ final class SDKProvisioningTests: XCTestCase {
         XCTAssertTrue(output.contains("ok"), "expected @navbytes/vee to resolve; got: \(output)")
     }
 }
+
+/// A plugin that never touches the SDK must run in the environment it had
+/// before any of this existed.
+///
+/// `NODE_OPTIONS` in particular applies to every Node process started under it,
+/// so injecting it for a bash plugin would put Vee's resolver in front of code
+/// that never asked for it — and make a broken shim everyone's problem instead
+/// of only the SDK users'.
+final class SDKInjectionScopeTests: XCTestCase {
+    private let root = "/tmp/vee-sdk-root"
+
+    private func env(for plugin: String) -> [String: String] {
+        SDKProvisioner.apply(to: [:], root: root, pluginPath: plugin)
+    }
+
+    func testShellPluginGetsNeitherVariable() {
+        for plugin in ["/p/status.5m.sh", "/p/thing.1m.bash", "/p/x.10s.zsh"] {
+            let env = env(for: plugin)
+            XCTAssertNil(env["PYTHONPATH"], "a shell plugin has no use for PYTHONPATH: \(plugin)")
+            XCTAssertNil(env["NODE_OPTIONS"], "and must not carry Vee's Node resolver: \(plugin)")
+        }
+    }
+
+    func testOtherLanguagesGetNeitherVariable() {
+        for plugin in ["/p/x.1m.rb", "/p/x.1m.swift", "/p/x.1m.go", "/p/x.1m.pl", "/p/x.1m.php", "/p/x.1m.lua"] {
+            let env = env(for: plugin)
+            XCTAssertNil(env["PYTHONPATH"], plugin)
+            XCTAssertNil(env["NODE_OPTIONS"], plugin)
+        }
+    }
+
+    func testPythonPluginGetsOnlyPythonPath() {
+        let env = env(for: "/p/status.5m.py")
+        XCTAssertNotNil(env["PYTHONPATH"])
+        XCTAssertNil(env["NODE_OPTIONS"], "a Python plugin has no use for the Node resolver")
+        XCTAssertNil(env["VEE_SDK_TS"])
+    }
+
+    func testNodePluginGetsOnlyNodeOptions() {
+        for plugin in ["/p/cost.90s.ts", "/p/x.1m.mjs", "/p/x.1m.js"] {
+            let env = env(for: plugin)
+            XCTAssertNotNil(env["NODE_OPTIONS"], plugin)
+            XCTAssertNotNil(env["VEE_SDK_TS"], plugin)
+            XCTAssertNil(env["PYTHONPATH"], "a Node plugin has no use for PYTHONPATH: \(plugin)")
+        }
+    }
+
+    /// A plugin named `status.5m` with a `#!/usr/bin/env python3` shebang is a
+    /// plugin whose language only its first line knows — so an unrecognised
+    /// extension keeps the guarantee rather than the tidiness.
+    func testUnknownExtensionGetsBoth() {
+        for plugin in ["/p/status.5m", "/p/weird.1m.xyz"] {
+            let env = env(for: plugin)
+            XCTAssertNotNil(env["PYTHONPATH"], plugin)
+            XCTAssertNotNil(env["NODE_OPTIONS"], plugin)
+        }
+    }
+}
+
+/// The SDK is sugar, not a requirement: an xbar plugin that prints its own
+/// lines must run in exactly the environment it had before any of this existed.
+///
+/// Vee's whole compatibility promise is that existing xbar/SwiftBar plugins
+/// keep working, and most of them predate any SDK. Injecting an import path
+/// into them would be harmless on a good day and, on a bad one, shadow an
+/// unrelated module of the same name the author installed themselves.
+final class NonSDKPluginsAreUntouchedTests: XCTestCase {
+    private let root = "/tmp/vee-sdk-root"
+
+    private func env(_ plugin: String, _ source: String) -> [String: String] {
+        SDKProvisioner.apply(to: [:], root: root, pluginPath: plugin, source: source)
+    }
+
+    /// The classic xbar plugin: a shell script echoing a line.
+    func testShellPluginGetsNothing() {
+        let env = env("/p/cpu.5s.sh", "#!/bin/bash\necho \"CPU 12% | color=green\"\n")
+        XCTAssertTrue(env.isEmpty, "an echoing shell plugin needs nothing injected, got \(env)")
+    }
+
+    /// A Python xbar plugin that formats its own output — by far the commonest
+    /// shape in the xbar catalog.
+    func testPythonPluginPrintingDirectlyGetsNothing() {
+        let source = "#!/usr/bin/env python3\nimport json, urllib.request\nprint('Rate 1.09 | color=green')\n"
+        let env = env("/p/rates.15m.py", source)
+        XCTAssertNil(env["PYTHONPATH"], "a plugin that never imports the SDK must not have its import path altered")
+        XCTAssertTrue(env.isEmpty)
+    }
+
+    /// The case that makes this matter rather than merely tidy: a plugin using
+    /// somebody else's module that happens to be named `vee`, installed with
+    /// pip. `PYTHONPATH` precedes site-packages, so injecting unconditionally
+    /// would shadow it.
+    func testUnrelatedPipModuleNamedVeeIsNotShadowed() {
+        // No import of `vee` at all — nothing to inject for.
+        let env = env("/p/thing.5m.py", "#!/usr/bin/env python3\nimport requests\nprint('ok')\n")
+        XCTAssertNil(env["PYTHONPATH"])
+    }
+
+    /// A Node plugin writing the format directly gets no NODE_OPTIONS, so Vee's
+    /// resolver is not loaded into a process that never asked for it.
+    func testNodePluginPrintingDirectlyGetsNothing() {
+        let env = env("/p/x.1m.mjs", "console.log('Hello | color=green');\n")
+        XCTAssertNil(env["NODE_OPTIONS"])
+        XCTAssertNil(env["VEE_SDK_TS"])
+    }
+
+    /// A Node plugin that vendors the SDK reaches it by path, so it needs no
+    /// resolver either.
+    func testNodePluginWithAVendoredCopyGetsNoResolver() {
+        let env = env("/p/x.90s.ts", "import { Menu } from './vee.ts';\n")
+        XCTAssertNil(env["NODE_OPTIONS"], "a relative import names a file; no hook required")
+    }
+
+    // MARK: - and the plugins that do want it, still do
+
+    func testPythonPluginImportingTheSDKStillGetsIt() {
+        XCTAssertNotNil(env("/p/gh.5m.py", "from vee import JSONMenu\n")["PYTHONPATH"])
+        XCTAssertNotNil(env("/p/gh.5m.py", "import vee as v\n")["PYTHONPATH"])
+    }
+
+    func testNodePluginImportingByPackageNameStillGetsIt() {
+        let env = env("/p/cost.90s.ts", "import { Menu } from '@navbytes/vee';\n")
+        XCTAssertNotNil(env["NODE_OPTIONS"])
+        XCTAssertNotNil(env["VEE_SDK_TS"])
+    }
+
+    /// An unreadable source injects anyway: a plugin that needs the SDK and
+    /// does not get it fails outright, while one that gets an unused import
+    /// path loses nothing.
+    func testUnknownSourceFallsBackToInjecting() {
+        let env = SDKProvisioner.apply(to: [:], root: root, pluginPath: "/p/gone.5m.py", source: nil)
+        XCTAssertNotNil(env["PYTHONPATH"], "erring towards a working plugin when the source cannot be read")
+    }
+}

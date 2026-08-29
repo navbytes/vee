@@ -92,6 +92,6 @@ public enum EnvironmentBuilder {
     public static func merged(base: [String: String], context ctx: RuntimeEnvironmentContext) -> [String: String] {
         let env = base.merging(injected(ctx)) { _, injected in injected }
         guard let root = ctx.sdkDirectory else { return env }
-        return SDKProvisioner.apply(to: env, root: root)
+        return SDKProvisioner.apply(to: env, root: root, pluginPath: ctx.pluginPath)
     }
 }

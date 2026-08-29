@@ -95,21 +95,71 @@ public enum SDKProvisioner {
         return support.appendingPathComponent("Vee/sdk").path
     }
 
-    /// `env` with the SDK reachable from it: Python's search path extended, and
-    /// Node's resolver hook loaded.
+    /// `env` with the SDK reachable from it, for the language `pluginPath` is
+    /// written in.
     ///
-    /// Both are *prepended* to whatever the user already had, never replacing
-    /// it — someone's own `PYTHONPATH`, or a plugin's own `NODE_OPTIONS`, has
-    /// to survive, and an entry of theirs that resolves the same name should
-    /// keep winning.
-    public static func apply(to env: [String: String], root: String) -> [String: String] {
+    /// Scoped by extension so a plugin that never touches the SDK is run in an
+    /// environment identical to the one it had before any of this existed. A
+    /// bash plugin echoing a line of text gets neither variable; a Python one
+    /// gets no `NODE_OPTIONS`. That matters beyond tidiness: `NODE_OPTIONS`
+    /// applies to every Node process started under it, so injecting it
+    /// unconditionally would put Vee's resolver in front of plugins that never
+    /// asked for it — and make a broken shim everyone's problem rather than
+    /// only the SDK users'.
+    ///
+    /// An unrecognised or absent extension gets both, since a plugin named
+    /// `status.5m` with a `#!/usr/bin/env python3` shebang is a plugin whose
+    /// language only its first line knows.
+    ///
+    /// Both variables are *prepended* to whatever the user already had, never
+    /// replacing it — someone's own `PYTHONPATH`, or a plugin's own
+    /// `NODE_OPTIONS`, has to survive, and an entry of theirs that resolves the
+    /// same name should keep winning.
+    public static func apply(to env: [String: String], root: String, pluginPath: String? = nil, source: String? = nil) -> [String: String] {
         var env = env
-        env["PYTHONPATH"] = prepend(pythonPath(in: root), to: env["PYTHONPATH"], separator: ":")
-        if let importURL = nodeImportURL(in: root) {
-            env["NODE_OPTIONS"] = prepend("--import \(importURL)", to: env["NODE_OPTIONS"], separator: " ")
-            env["VEE_SDK_TS"] = typescriptPath(in: root)
+        let ext = pluginPath.map { ($0 as NSString).pathExtension.lowercased() }
+        let known = ["py", "ts", "js", "mjs", "mts", "cjs", "sh", "bash", "zsh", "rb", "pl", "swift", "go", "php", "lua"]
+        let unknownLanguage = ext.map { !known.contains($0) } ?? true
+        let text = source ?? pluginPath.flatMap { try? String(contentsOfFile: $0, encoding: .utf8) }
+
+        if unknownLanguage || ext == "py", needsPythonSDK(text) {
+            env["PYTHONPATH"] = prepend(pythonPath(in: root), to: env["PYTHONPATH"], separator: ":")
+        }
+        if unknownLanguage || ["ts", "js", "mjs", "mts", "cjs"].contains(ext ?? ""), needsNodeSDK(text) {
+            if let importURL = nodeImportURL(in: root) {
+                env["NODE_OPTIONS"] = prepend("--import \(importURL)", to: env["NODE_OPTIONS"], separator: " ")
+                env["VEE_SDK_TS"] = typescriptPath(in: root)
+            }
         }
         return env
+    }
+
+    /// Whether a plugin reaches for the Python SDK by import.
+    ///
+    /// Nil source — unreadable, or a caller that has none — injects anyway: a
+    /// plugin that turns out to need the SDK and does not get it fails
+    /// outright, while one that gets an import path it never uses loses
+    /// nothing.
+    ///
+    /// This is the difference between the SDK being available and the SDK being
+    /// imposed. An xbar plugin that prints its own lines is run in exactly the
+    /// environment it would have had before any of this existed — no extra
+    /// entry on its import path, and no chance of Vee's `vee.py` shadowing an
+    /// unrelated module of that name the author installed themselves.
+    static func needsPythonSDK(_ source: String?) -> Bool {
+        guard let source else { return true }
+        return source.range(of: #"(?m)^\s*(from\s+vee\s+import\s|import\s+vee\b)"#, options: .regularExpression) != nil
+    }
+
+    /// Whether a plugin reaches for the TypeScript SDK *by package name*.
+    ///
+    /// A relative `./vee.ts` names a file and needs no resolver, so it does not
+    /// count — which keeps `NODE_OPTIONS` off every Node plugin that vendors
+    /// its own copy or writes the format directly. `NODE_OPTIONS` applies to
+    /// every Node process started under it, so it is worth not setting.
+    static func needsNodeSDK(_ source: String?) -> Bool {
+        guard let source else { return true }
+        return source.range(of: #"['"](@navbytes/vee|vee)['"]"#, options: .regularExpression) != nil
     }
 
     private static func prepend(_ value: String, to existing: String?, separator: String) -> String {

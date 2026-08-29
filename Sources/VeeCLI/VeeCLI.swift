@@ -137,6 +137,12 @@ public enum VeeCLI {
             ? "import { Menu } from \"./vee.ts\";"
             : "from vee import Menu"
         out += "Import it from a plugin in this directory with:\n\n  \(importLine)\n"
+        // Vee already provides the SDK when it runs a plugin, so say what this
+        // copy is actually for — otherwise `vee sdk` reads like a required
+        // setup step it stopped being.
+        out += "\nVee provides this SDK to plugins it runs, so this copy is for running the\n"
+        out += "plugin yourself — a bare python3/node, an editor, a debugger. A copy beside\n"
+        out += "the plugin always takes precedence over Vee's.\n"
         return 0
     }
 
@@ -755,7 +761,7 @@ public enum VeeCLI {
         // than a render.
         let sdkRoot = SDKProvisioner.provision(into: SDKProvisioner.defaultRoot)
         var environment = ProcessInfo.processInfo.environment
-        if let sdkRoot { environment = SDKProvisioner.apply(to: environment, root: sdkRoot) }
+        if let sdkRoot { environment = SDKProvisioner.apply(to: environment, root: sdkRoot, pluginPath: absolute) }
         let invocation = ProcessInvocation(
             launchPath: launchPath,
             arguments: arguments,
