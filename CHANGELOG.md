@@ -6,6 +6,42 @@ All notable changes to Vee are documented here. The format is based on
 
 ## [Unreleased]
 
+### Removed
+- **BREAKING: the three official plugin SDKs (TypeScript, Python, Go) are
+  retired.** `vee sdk` is gone, `vee new` no longer vendors an SDK file beside
+  a scaffolded plugin, and Vee no longer puts a copy of the SDK on a plugin's
+  import path at runtime. A Vee plugin is any executable printing the
+  documented stdout format — no SDK, no import, no build step — matching every
+  other stdout-contract app in this lineage (xbar, SwiftBar, BitBar, Alfred,
+  GitHub Actions).
+
+  **If a plugin has a sibling `vee.py`/`vee.ts` file beside it (everything
+  `vee new`/`vee sdk` ever scaffolded, and every plugin repository that
+  checked its SDK in), it keeps working forever** — Python resolves the
+  script's own directory before anything else, and a relative `./vee.ts`
+  names a file directly. Only a bare `import { Menu } from "@navbytes/vee"`
+  (or a Python plugin relying on Vee's now-removed `PYTHONPATH` injection)
+  with no sibling copy anywhere breaks; `vee lint` now flags exactly that case
+  as an error, and a sibling-but-frozen import as a warning.
+
+  See the **[migration guide](https://vee.navbytes.io/guide/sdk/)** for why,
+  what still works, and a before/after example porting a plugin to the
+  [JSON output format](https://vee.navbytes.io/guide/json-output/). `vee new
+  --lang ts|py` now scaffolds a self-contained plugin that prints JSON output
+  directly, with an inlined type block (TypeScript `interface`, Python
+  `TypedDict`) for editor autocomplete — nothing to import.
+
+  `plugins/go`, `plugins/python`, and `plugins/typescript` are deleted from
+  this repository; `plugins/fixtures/` survives, repurposed as the parser's
+  own conformance goldens. `AGENTS.md` and `docs/llms.txt` are new, carrying
+  the parameter/schema pointers and worked examples for LLM-assisted
+  authoring.
+
+  **Manual post-merge ops** (not part of this change): `npm deprecate
+  @navbytes/vee` (stays installable forever; no new versions). No new Go
+  module tags will be cut for `plugins/go` — existing tags are immutable and
+  remain resolvable forever.
+
 ## [0.6.2] - 2026-08-29
 
 A plugin installed from Discover now runs whether or not it uses an SDK, and a

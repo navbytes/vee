@@ -2,55 +2,55 @@
 
 ## 1. Runtime and core deletion (vee)
 
-- [ ] 1.1 Delete `Sources/VeeRuntime/SDKProvisioner.swift` and the SDK branch
+- [x] 1.1 Delete `Sources/VeeRuntime/SDKProvisioner.swift` and the SDK branch
   of `Sources/VeeRuntime/EnvironmentBuilder.swift` (injection, import
   sniffing); delete `Sources/VeeCore/EmbeddedSDK.swift` and the Node resolver
   source it embeds
-- [ ] 1.2 Remove `SDKProvisioner.provision()` call from
+- [x] 1.2 Remove `SDKProvisioner.provision()` call from
   `Sources/VeeApp/PluginsDirectory.swift` and `sdkDirectory` from the runtime
   context; keep the `vee.ts`/`vee.py` discovery filename filter in
   `PluginDiscovery` (existing sibling copies must not run as plugins)
-- [ ] 1.3 Delete `Tests/VeeRuntimeTests/SDKProvisioningTests.swift`; keep
+- [x] 1.3 Delete `Tests/VeeRuntimeTests/SDKProvisioningTests.swift`; keep
   `PluginDiscoveryVendoredSDKTests` (filter still exists)
 
 ## 2. CLI (vee)
 
-- [ ] 2.1 Delete the `vee sdk` command and `Scaffold.vendoredSDK()`; `vee new`
+- [x] 2.1 Delete the `vee sdk` command and `Scaffold.vendoredSDK()`; `vee new`
   no longer writes a sibling SDK file
-- [ ] 2.2 Rewrite `vee new` templates (TS, Python; shell/other untouched) to
+- [x] 2.2 Rewrite `vee new` templates (TS, Python; shell/other untouched) to
   build the JSON output format directly with an inlined type block
   (TS `interface`, Python `TypedDict`) and print it — no imports beyond
   stdlib; `vee render` must accept each template's output
-- [ ] 2.3 Add the template↔schema drift test in VeeCLITests: type-block keys
+- [x] 2.3 Add the template↔schema drift test in VeeCLITests: type-block keys
   ⊆ `docs/schemas/json-output.schema.json` properties
-- [ ] 2.4 Linter: retired-SDK rules per design.md — error when an SDK import
+- [x] 2.4 Linter: retired-SDK rules per design.md — error when an SDK import
   has no sibling file, warning when a sibling exists; unit tests for both,
   plus the no-import case staying silent
 
 ## 3. SDK trees and pipelines (vee)
 
-- [ ] 3.1 Delete `plugins/go`, `plugins/python`, `plugins/typescript`; keep
+- [x] 3.1 Delete `plugins/go`, `plugins/python`, `plugins/typescript`; keep
   `plugins/fixtures/` (parser goldens) and `plugins/showcase/`; rewrite
   `plugins/README.md` for the new layout
-- [ ] 3.2 `.github/workflows/ci.yml`: remove the three SDK test jobs;
+- [x] 3.2 `.github/workflows/ci.yml`: remove the three SDK test jobs;
   `release.yml`: remove npm version stamping, `@navbytes/vee` publish, and
   the `plugins/go/*` tag step
-- [ ] 3.3 Verify `swift build && swift test && swiftlint lint --strict` passes
+- [x] 3.3 Verify `swift build && swift test && swiftlint lint --strict` passes
   with the trees gone (fixture round-trip and parity tests intact)
 
 ## 4. Docs (vee)
 
-- [ ] 4.1 Replace `docs/_content/sdk.md` with a migration guide: why retired,
+- [x] 4.1 Replace `docs/_content/sdk.md` with a migration guide: why retired,
   sibling copies keep working, no-sibling imports fail, how to port to JSON
   output (before/after example), npm/Go artifact status
-- [ ] 4.2 `plugin-authoring.md` + `getting-started.md`: lead with JSON output
+- [x] 4.2 `plugin-authoring.md` + `getting-started.md`: lead with JSON output
   + `$schema` autocomplete; remove SDK references repo-wide (`README.md`,
   `debugging.md` "No module named 'vee'" section now points at the migration
   guide)
-- [ ] 4.3 Add `AGENTS.md` (repo root) and `docs/llms.txt`: parameter
+- [x] 4.3 Add `AGENTS.md` (repo root) and `docs/llms.txt`: parameter
   reference, schema URL, 2–3 complete example plugins; update
   `writing-plugins-with-an-llm.md` to stop mentioning SDKs
-- [ ] 4.4 Note SchemaStore submission as a follow-up in the migration guide
+- [x] 4.4 Note SchemaStore submission as a follow-up in the migration guide
   (the PR itself is manual, post-merge)
 
 ## 5. Catalog port (vee-plugins)
@@ -69,6 +69,6 @@
 
 ## 6. Release note
 
-- [ ] 6.1 `CHANGELOG.md` entry: breaking-change framing, migration guide
+- [x] 6.1 `CHANGELOG.md` entry: breaking-change framing, migration guide
   link, the manual post-merge ops (`npm deprecate @navbytes/vee`, no new Go
   tags)
