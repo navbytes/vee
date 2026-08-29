@@ -104,7 +104,7 @@ empty diagnostics list is the goal.
 | `duplicate parameter '…'` | The same key appeared twice on one line. | Remove one; the winner is not something to rely on. |
 | `parameter '…' has no value` | A bare key with no `=value`. | Give it a value, or drop it. |
 | `value for '…' contains a space but isn't quoted` | The value was cut short at the space. | Quote it: `tooltip="two words"`. |
-| `stray '\|' in title text` | A later `\|` was read as the params delimiter and truncated the item. | Escape it as `\\|`, or let an [SDK](sdk.md) do the escaping. |
+| `stray '\|' in title text` | A later `\|` was read as the params delimiter and truncated the item. | Escape it as `\\|`, or switch to the [JSON output format](json-output.md), which has no `\|` escaping to get wrong. |
 | `alternate item has no preceding item` | `alternate=true` on a line with nothing above it to be the alternate *of*. | Move it below the item it alternates with. |
 | `paramN given without shell=/bash=` | Positional arguments with no command to pass them to. | Add `shell=`/`bash=`, or remove the params. |
 | `submenu depth exceeded; truncated` | More than 64 levels of `--` nesting. | Flatten the menu — this is far past usable. |

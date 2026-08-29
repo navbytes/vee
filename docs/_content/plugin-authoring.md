@@ -16,7 +16,7 @@ head:
 ---
 A Vee plugin is any executable that prints text to standard output in the xbar/SwiftBar format. This page is the full reference: filenames, menu structure, the parameter table, metadata headers, and the richer features (SF Symbols, ANSI, Markdown, streaming, cron). It is also, unchanged, how every xbar/SwiftBar plugin keeps running on Vee — this text protocol is the compatibility format, and it stays fully supported.
 
-For a **new** plugin, consider the [JSON output format](json-output.md) instead: typed booleans and numbers, no `|`-param quoting or escaping, and clean nesting for submenus. [`plugins/showcase/kitchen-sink.1m.sh`](https://raw.githubusercontent.com/navbytes/vee/main/plugins/showcase/kitchen-sink.1m.sh) is one runnable file that exercises the whole JSON format. If you would rather build menus with typed code than format text by hand, see the [Plugin SDKs](sdk.md) (TypeScript, Python, and Go), both of which have a JSON builder.
+For a **new** plugin, consider the [JSON output format](json-output.md) instead: typed booleans and numbers, no `|`-param quoting or escaping, and clean nesting for submenus. [`plugins/showcase/kitchen-sink.1m.sh`](https://raw.githubusercontent.com/navbytes/vee/main/plugins/showcase/kitchen-sink.1m.sh) is one runnable file that exercises the whole JSON format, and `vee new --lang ts|py` scaffolds a self-contained starting point with an inlined type block for editor autocomplete.
 
 ## The authoring loop
 
@@ -131,11 +131,11 @@ In the search panel, section headers render as dimmed context rows and become pa
 
 Append `| key=value key2=value2 …` to any line to attach parameters. Quote values that contain spaces (`title="Open in browser"`), and escape quotes with `\"`.
 
-A literal `|`, backslash, or newline in the display text (or in a quoted value) must be escaped as `\|`, `\\`, or `\n` — otherwise an unescaped `|` is read as the params delimiter and truncates the item, and a raw newline splits it into two corrupted lines. The bundled [TypeScript, Python, and Go SDKs](sdk.md) escape these automatically for any text/value you pass in; only hand-written plugin output needs to do it explicitly.
+A literal `|`, backslash, or newline in the display text (or in a quoted value) must be escaped as `\|`, `\\`, or `\n` — otherwise an unescaped `|` is read as the params delimiter and truncates the item, and a raw newline splits it into two corrupted lines. Prefer the [JSON output format](json-output.md) for a new plugin and this class of escaping goes away entirely.
 
 Every parameter below is generated from `docs/api/params.json`, the same
-record `vee lint` and the three SDKs are checked against — so a parameter
-that exists is listed here, and one listed here exists.
+record `vee lint` is checked against — so a parameter that exists is listed
+here, and one listed here exists.
 
 [**The full parameter table** →](_generated/params-table.md)
 

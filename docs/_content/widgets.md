@@ -323,112 +323,40 @@ the card:
 
 Unknown keys are ignored, so a tree stays forward-compatible.
 
-### Building a tree with the SDK
+### Building a tree by hand
 
-All three SDKs expose the same namespaced builders — `Node.VStack`,
-`Node.HStack`, `Node.ZStack`, `Grid`, `Text`, `Image`, `Gauge`, `Sparkline`,
-`Chart`, `Spacer`, `Divider` — and emit byte-identical JSON. Each of these
-produces exactly the payload shown at the top of this section:
+There is no builder to import — construct the object directly and print it.
+Point `$schema` at the [published schema](#editor-validation-json-schema) for
+field-name autocomplete and validation as you write it. This produces exactly
+the payload shown at the top of this section:
 
-**TypeScript**
-
-```ts
-import { widgetCard, Node } from "./vee.ts";
-
-widgetCard({
-  layout: Node.VStack(
-    [
-      Node.HStack([
-        Node.Image("cpu", { style: { tint: "blue" } }),
-        Node.Text("CPU", { style: { font: { size: "caption", weight: "semibold" }, tint: "secondary" } }),
-        Node.Spacer(),
-      ], { spacing: 5 }),
-      Node.Text("38%", {
-        style: { font: { size: "title", design: "rounded" }, tint: "green", monospacedDigit: true, minScale: 0.6 },
-      }),
-      Node.Gauge(0.38, { gaugeStyle: "circular", style: { tint: "green" } }),
-      Node.Chart("stackedbar", [62, 21, 17], {
-        labels: ["User", "System", "Idle"],
-        colors: ["blue", "orange"],
-        families: ["medium", "large"],
-      }),
-    ],
-    { align: "leading", spacing: 6 },
-  ),
-}).print();
+```json
+{
+  "$schema": "https://vee.navbytes.io/schemas/widget-card.schema.json",
+  "vee_widget": 1,
+  "layout": {
+    "type": "vstack",
+    "align": "leading",
+    "spacing": 6,
+    "children": [
+      {
+        "type": "hstack",
+        "spacing": 5,
+        "children": [
+          { "type": "image", "symbol": "cpu", "style": { "tint": "blue" } },
+          { "type": "text", "text": "CPU", "style": { "font": { "size": "caption", "weight": "semibold" }, "tint": "secondary" } },
+          { "type": "spacer" }
+        ]
+      },
+      { "type": "text", "text": "38%", "style": { "font": { "size": "title", "design": "rounded" }, "tint": "green", "monospaced_digit": true, "min_scale": 0.6 } },
+      { "type": "gauge", "value": 0.38, "gauge_style": "circular", "style": { "tint": "green" } },
+      { "type": "chart", "kind": "stackedbar", "values": [62, 21, 17], "labels": ["User", "System", "Idle"], "colors": ["blue", "orange"], "families": ["medium", "large"] }
+    ]
+  }
+}
 ```
 
-**Python**
-
-```python
-from vee import widget_card, Node
-
-widget_card(
-    layout=Node.VStack(
-        [
-            Node.HStack(
-                [
-                    Node.Image("cpu", style={"tint": "blue"}),
-                    Node.Text("CPU", style={"font": {"size": "caption", "weight": "semibold"}, "tint": "secondary"}),
-                    Node.Spacer(),
-                ],
-                spacing=5,
-            ),
-            Node.Text(
-                "38%",
-                style={"font": {"size": "title", "design": "rounded"}, "tint": "green",
-                       "monospaced_digit": True, "min_scale": 0.6},
-            ),
-            Node.Gauge(0.38, gauge_style="circular", style={"tint": "green"}),
-            Node.Chart(
-                "stackedbar",
-                [62, 21, 17],
-                labels=["User", "System", "Idle"],
-                colors=["blue", "orange"],
-                families=["medium", "large"],
-            ),
-        ],
-        align="leading",
-        spacing=6,
-    ),
-).print()
-```
-
-**Go**
-
-```go
-layout := vee.Node.VStack(
-	[]vee.WidgetNode{
-		vee.Node.HStack([]vee.WidgetNode{
-			vee.Node.Image("cpu", vee.Style(vee.WidgetNodeStyle{Tint: vee.Str("blue")})),
-			vee.Node.Text("CPU", vee.Style(vee.WidgetNodeStyle{
-				Font: &vee.WidgetNodeFont{Size: vee.Str("caption"), Weight: vee.Str("semibold")},
-				Tint: vee.Str("secondary"),
-			})),
-			vee.Node.Spacer(),
-		}, vee.Spacing(5)),
-		vee.Node.Text("38%", vee.Style(vee.WidgetNodeStyle{
-			Font:            &vee.WidgetNodeFont{Size: vee.Str("title"), Design: vee.Str("rounded")},
-			Tint:            vee.Str("green"),
-			MonospacedDigit: vee.Bool(true),
-			MinScale:        vee.Float(0.6),
-		})),
-		vee.Node.Gauge(0.38, vee.GaugeStyle("circular"), vee.Style(vee.WidgetNodeStyle{Tint: vee.Str("green")})),
-		vee.Node.Chart("stackedbar", []float64{62, 21, 17},
-			vee.Labels("User", "System", "Idle"),
-			vee.Colors("blue", "orange"),
-			vee.Families("medium", "large"),
-		),
-	},
-	vee.Align("leading"), vee.Spacing(6),
-)
-
-c := &vee.WidgetCard{Layout: &layout}
-c.Print()
-```
-
-Each SDK ships this as a runnable `widget-layout` example with a shared golden
-fixture, so the three implementations and the Swift parser cannot drift apart.
+Print it with `console.log(JSON.stringify(payload))` / `print(json.dumps(payload))`, whichever language the plugin is written in — see the [runnable `widget-layout` fixture](https://github.com/navbytes/vee/blob/main/plugins/fixtures/widget-layout.txt) for a full example the Swift parser is tested against.
 
 ## Actions
 
@@ -448,29 +376,42 @@ menu display graphic and action kind has a recorded widget disposition —
 supported, or excluded with a reason — in the [surface parity
 ledger](https://github.com/navbytes/vee/blob/main/docs/design/surface-parity.md).
 
-## Building the card with the SDK
+## Building the card
 
-The [TypeScript, Python, and Go SDKs](sdk.md) all have `Stat`/`Gauge`/`Trend`/
-`List`/`Board` builders that emit this JSON for you:
+Print the object directly — no builder to import:
 
 ```ts
-import { Stat } from "./vee.ts";
-
 if (process.env.VEE_TARGET === "widget") {
-  Stat({
+  console.log(JSON.stringify({
+    vee_widget: 1,
+    template: "stat",
     title: "Revenue",
     symbol: "chart.line.uptrend.xyaxis",
     tint: "green",
     value: "$18.2k",
     status: "ok",
     actions: [{ kind: "refresh", label: "Refresh" }],
-  }).print();
+  }));
 } else {
   // ordinary menu-bar output
 }
 ```
 
-See [Plugin SDKs](sdk.md#widget-cards) for the Python/Go equivalents.
+```python
+if os.environ.get("VEE_TARGET") == "widget":
+    print(json.dumps({
+        "vee_widget": 1,
+        "template": "stat",
+        "title": "Revenue",
+        "symbol": "chart.line.uptrend.xyaxis",
+        "tint": "green",
+        "value": "$18.2k",
+        "status": "ok",
+        "actions": [{"kind": "refresh", "label": "Refresh"}],
+    }))
+else:
+    pass  # ordinary menu-bar output
+```
 
 ## Editor validation (JSON Schema)
 
@@ -495,13 +436,12 @@ Reference it from a card you are authoring by hand:
 in a shipped plugin is harmless.
 
 The schema covers every field the parser reads, including the layout tree, and
-CI validates it against the SDKs' golden fixtures — so it cannot quietly drift
-from what Vee accepts.
+CI validates it against the shipped fixtures — so it cannot quietly drift from
+what Vee accepts.
 
 ## See also
 
 - [Plugin authoring reference](plugin-authoring.md) — the menu-bar output format.
-- [Plugin SDKs](sdk.md#widget-cards) — build cards with typed builders in TypeScript, Python, or Go.
 - [JSON output format](json-output.md) — the structured alternative for menu output.
 - [Getting started](getting-started.md#widgets-on-your-desktop--notification-center) — adding a widget to your desktop.
 - [Debugging and testing plugins](debugging.md) — previewing a plugin's output while you write it.

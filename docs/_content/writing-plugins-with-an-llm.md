@@ -107,8 +107,9 @@ plugin that *runs* while rendering something subtly wrong — which is why readi
 the output is not enough on its own.
 
 - **An unescaped `|` in display text.** The first `|` on a line separates text
-  from parameters, so a literal pipe truncates the item. It must be `\|`. The
-  [SDKs](sdk.md) escape this for you; hand-written output does not.
+  from parameters, so a literal pipe truncates the item. It must be `\|` — or
+  side-step the whole class of mistake with the
+  [JSON output format](json-output.md), which has nothing to escape.
 - **Unquoted parameter values containing spaces.** `tooltip=two words` silently
   keeps only `two`. It needs `tooltip="two words"`.
 - **Confusing the first `---` with the rest.** The first one splits the menu-bar
@@ -131,6 +132,11 @@ the output is not enough on its own.
   `cpu.30s.sh` runs every thirty seconds. The plugin also needs `chmod +x`.
 - **Expecting state between runs.** Every refresh is a fresh process. Anything
   that must persist goes in `SWIFTBAR_PLUGIN_CACHE_PATH`, not a variable.
+- **`from vee import ...` / `import { Menu } from "@navbytes/vee"`.** Vee's
+  three official SDKs are retired (see the [migration guide](sdk.md)); a model
+  trained on older material will still reach for one. `vee lint` flags this as
+  an error when there's no sibling `vee.py`/`vee.ts` to resolve it — the fix is
+  to print the format directly, not to add a copy of the SDK.
 
 ## Be specific about the surface
 
@@ -150,5 +156,5 @@ does not match its behavior is worse than none.
 
 - [Plugin authoring reference](plugin-authoring.md) — the format itself.
 - [Debugging and testing plugins](debugging.md) — `vee lint`, `vee dev`, and the rest of the loop.
-- [Plugin SDKs](sdk.md) — typed builders that make whole classes of the mistakes above impossible.
+- [SDK migration guide](sdk.md) — porting a plugin off the retired official SDKs.
 - [Trust model](trust-model.md) — declaring what a plugin touches.

@@ -139,8 +139,9 @@ executable action, install the plugin normally.
 
 ## `vee lint`
 
-Catches the common authoring mistakes before you ship — especially the
-quoting bugs the [SDKs](sdk.md) prevent by construction:
+Catches the common authoring mistakes before you ship — the quoting bugs the
+[JSON output format](json-output.md) sidesteps entirely, and a retired-SDK
+import that can no longer run (see the [migration guide](sdk.md)):
 
 ```sh
 $ vee lint ./broken.5s.sh
@@ -234,28 +235,24 @@ A plugin that regularly approaches its timeout is usually better off caching: do
 the slow work on a long interval, write the result to
 `SWIFTBAR_PLUGIN_CACHE_PATH`, and have the fast plugin read it.
 
-## "No module named 'vee'"
+## "No module named 'vee'" / "Cannot find module '@navbytes/vee'"
 
-A plugin that imports an SDK runs fine under Vee and under `vee render`, then
-fails the moment you run it with the interpreter directly:
+The three official SDKs are retired — see the **[SDK migration guide](sdk.md)**
+for the full story. Short version:
 
 ```
 $ python3 my-plugin.py
 ModuleNotFoundError: No module named 'vee'
 ```
 
-Nothing is wrong with the plugin. Vee puts its own copy of the SDK on the
-interpreter's import path when *it* runs a plugin, and a bare `python3` (or
-`node`) knows nothing about that. Either run it the way Vee does, or keep a copy
-beside the plugin for the times you do not:
-
-```sh
-vee render my-plugin.py    # same environment Vee uses, SDK included
-vee sdk py --out .         # a sibling copy, for editors, debuggers and bare runs
-```
-
-A sibling copy always takes precedence over Vee's, so adding one changes nothing
-about how the plugin behaves in the menu bar.
+- **A `vee.py`/`vee.ts` file sits beside the plugin?** It keeps resolving —
+  Python checks the script's own directory first, and a relative `./vee.ts`
+  names a file directly. `vee lint` flags the import as a warning (a frozen
+  copy, but working).
+- **No sibling file anywhere?** The import cannot resolve at all — Vee no
+  longer puts a copy on the interpreter's path. `vee lint` flags this as an
+  error. Port the plugin to print the [JSON output format](json-output.md)
+  directly; the migration guide has a before/after example.
 
 ## Exit codes and standard error
 
@@ -304,4 +301,4 @@ usual explanation for "it works in my shell but not in Vee" (see
 - [CLI and URL actions](cli-and-urls.md) — the full subcommand and flag reference, plus `vee new` and `vee search`.
 - [Troubleshooting](troubleshooting.md) — symptoms and fixes when a plugin does not appear, errors, or times out.
 - [Plugin authoring reference](plugin-authoring.md) — the output format the tools on this page parse.
-- [Plugin SDKs](sdk.md) — typed builders that prevent the quoting mistakes `vee lint` reports.
+- [SDK migration guide](sdk.md) — porting a plugin off the retired official SDKs.

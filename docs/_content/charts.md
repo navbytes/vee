@@ -116,4 +116,3 @@ who cannot see the difference.
 - [Widgets](widgets.md) — the gauge, sparkline and chart layout nodes, and the
   `trend` and `gauge` templates.
 - [JSON output](json-output.md) — the structured spelling of every chart.
-- [Plugin SDKs](sdk.md) — emitting charts from TypeScript, Python, or Go.

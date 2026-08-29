@@ -1,7 +1,7 @@
 {
   "$schema": "https://context7.com/schema/context7.json",
   "projectTitle": "Vee",
-  "description": "Native, leak-free macOS menu-bar script runner — the modern successor to xbar and SwiftBar. Runs any xbar/SwiftBar plugin unchanged, and adds a native AppKit/SwiftUI UI, a trust/transparency layer, a built-in plugin catalog, widgets, and typed SDKs (TypeScript, Python, Go).",
+  "description": "Native, leak-free macOS menu-bar script runner — the modern successor to xbar and SwiftBar. Runs any xbar/SwiftBar plugin unchanged, and adds a native AppKit/SwiftUI UI, a trust/transparency layer, a built-in plugin catalog, and widgets. A plugin is any executable printing a documented stdout format; there is no runtime SDK to install.",
   "folders": [
     "docs/_content"
   ],
@@ -13,7 +13,7 @@
     "The refresh interval comes from the filename (e.g. cpu.10s.sh runs every 10s); there is no separate interval tag.",
     "Plugins run un-sandboxed by design. They declare what they touch via <vee.*> tags; Vee shows a plain-language trust summary before install and trust badges in the Manager, but never enforces it.",
     "Configuration belongs to the plugin: <xbar.var> declarations become an auto-generated settings form, and secret fields are masked and stored in the macOS Keychain.",
-    "Prefer the typed SDKs (TypeScript, Python, Go) with Menu/Section builders over hand-formatting stdout when writing new plugins.",
+    "For a new plugin, prefer printing the optional structured-JSON output format ({\"vee\":1,...}) over the xbar/SwiftBar text protocol -- typed values, no |-param quoting or escaping. `vee new` scaffolds a self-contained starting point (no SDK, no import).",
     "For widgets, choose the surface with <vee.surface> (menu, both, or widget) and emit a JSON widget card. The widget renders an app-produced snapshot and never executes the plugin itself.",
     "Size a row's inline accessory -- progress gauge, sparkline, chart, or slider -- with accessoryw=/accessoryh= (points, or accessoryw=full to stretch to the row's width). A row draws at most one accessory, so one pair sizes any of them. The older per-accessory names (progressw=, sparklinew=, chartw= and their heights) still parse but are deprecated, and silently do nothing when aimed at a different accessory than the row carries."
   ],

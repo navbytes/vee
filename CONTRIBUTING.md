@@ -13,10 +13,8 @@ merged.
 
 - **Be kind.** Assume good faith and keep discussion technical.
 - **Zero third-party dependencies in what ships.** Vee ships with no external
-  Swift packages, and all three SDKs are dependency-free (Node runs the `.ts`
-  directly; Python and Go are standard library only). A PR that adds a
-  dependency to the app or an SDK will almost always be declined — please open
-  an issue to discuss before writing code that needs one.
+  Swift packages. A PR that adds one will almost always be declined — please
+  open an issue to discuss before writing code that needs one.
 
   The documentation site under `docs-site/` is the one deliberate exception: it
   builds with Astro and Starlight. Nothing it pulls in is linked into a binary,
@@ -31,8 +29,6 @@ merged.
 - **macOS 26+** on Apple Silicon (arm64). The package targets `.macOS("26.0")`
   for the Liquid Glass UI, so older SDKs cannot build the app.
 - **Swift 6.2+ / Xcode 26+.**
-- **Node 24+** — only if you touch the TypeScript SDK under `plugins/` (Node 24
-  runs TypeScript natively, so there is no build step).
 - **XcodeGen** — only if you build the packaged `.app` bundle
   (`brew install xcodegen`).
 
@@ -55,23 +51,6 @@ xcodegen generate                                   # project.yml -> Vee.xcodepr
 xcodebuild -project Vee.xcodeproj -scheme Vee build # build the app target
 ```
 
-### The plugin SDK (`plugins/`)
-
-The TypeScript SDK lives in `plugins/`. It has no build step and no
-dependencies — Node runs the `.ts` files directly.
-
-```sh
-cd plugins
-npm test                 # fixture "drift guard" (node --test)
-npm run build:fixtures   # regenerate golden fixtures from examples/*.ts
-```
-
-The drift guard asserts that each example plugin's `build()` output still
-matches its committed golden fixture in `plugins/fixtures/`. Those same fixtures
-are parsed by the Swift `VeePluginFormat` tests, so the SDK, the fixtures, and
-the parser stay in lockstep. If you intentionally change an example's output,
-regenerate the fixtures and commit them alongside the code.
-
 ## Where things live
 
 Vee is a modular SwiftPM package. All testable logic lives in library targets;
@@ -88,10 +67,10 @@ the `vee` executable is a thin entry point.
 | `VeeCatalog`      | The `matryer/xbar-plugins` catalog client + installer (fetch, parse, freshness, provenance). |
 | `VeeUI`           | SwiftUI settings and plugin-manager windows. |
 | `VeeWidgetShared` | Foundation-only snapshot model + store shared with the WidgetKit / Control Center extension. |
-| `VeeCLI`          | AppKit-free logic for the `vee render`/`lint`/`new`/`sdk`/`search`/`show`/`dev` authoring subcommands. |
+| `VeeCLI`          | AppKit-free logic for the `vee render`/`lint`/`new`/`search`/`show`/`dev` authoring subcommands. |
 | `VeeApp`          | AppKit shell: status items, coordinators, app delegate (as a library). |
 | `vee`             | Thin executable entry point: boots the app, or dispatches CLI subcommands. |
-| `plugins/`        | Typed plugin SDKs (TypeScript, Python, Go), example plugins, and golden fixtures. |
+| `plugins/`        | Showcase example plugins (`showcase/`) and parser-conformance golden fixtures (`fixtures/`). |
 | `docs/`           | Documentation sources: guides in `docs/_content/*.md`, the parameter record in `docs/api/params.json`, JSON Schemas, the hand-written landing and comparison pages, and the guard scripts. Nothing here is generated output. |
 | `docs-site/`      | The Astro + Starlight build that turns `docs/` into the published site. The only third-party dependency in the repository. |
 
@@ -153,10 +132,10 @@ Four checks run on docs in CI, all pure standard library — the
 `build_reference.py --check` above, plus these three:
 
 ```sh
-python3 docs/scripts/check_params.py   # parser, linter, docs, and all three SDKs agree
-                                       # on the parameter set, and on the constants the
+python3 docs/scripts/check_params.py   # parser, linter, and docs agree on the
+                                       # parameter set, and on the constants the
                                        # docs state about it
-python3 docs/scripts/check_schemas.py  # docs/schemas matches the SDK golden fixtures
+python3 docs/scripts/check_schemas.py  # docs/schemas matches the shipped fixtures
 python3 docs/scripts/check_links.py    # every documented repository and same-site link
                                        # resolves, anchors included
 ```
@@ -189,9 +168,8 @@ so they stay unit-testable in isolation.
 
 - Add tests in the matching `Tests/<Module>Tests` suite.
 - For plugin-format changes, prefer a golden fixture in `plugins/fixtures/`
-  (parsed by both the Swift tests and the SDK drift guard) when it fits.
-- Run `swift test` locally before pushing. If you touched `plugins/`, also run
-  `npm test` in that directory.
+  (parsed by `FixtureRoundTripTests`) when it fits.
+- Run `swift test` locally before pushing.
 
 ## Pull request flow
 
@@ -201,7 +179,6 @@ so they stay unit-testable in isolation.
    - **SwiftPM** `swift build` + `swift test` on `macos-26`.
    - **App bundle** `xcodegen generate` + unsigned `xcodebuild` on `macos-26`.
    - **SwiftLint** (advisory — annotates, doesn't block).
-   - **Plugin SDK** `npm test` (fixture drift guard) on Node 24.
 4. Open the PR using the template. Describe what changed, why, and how you
    tested it. Link any related issue.
 5. Respond to review. Squash-friendly, focused history is appreciated.
@@ -224,17 +201,12 @@ not required.
 
 ## Proposing a new plugin
 
-Two folders take plugins — pick the right one:
-
 - **`plugins/showcase/`** — copy-paste showcase plugins (plain shell) that
   demonstrate Vee features and the trust model. Add here for a runnable,
   well-commented demo. Not wired into the test suite.
-- **`plugins/typescript/examples/`**, **`plugins/python/examples/`**,
-  **`plugins/go/examples/`** — SDK examples that double as golden fixtures for
-  the drift guard. Each language mirrors the same example set, and all three
-  are checked byte-for-byte against the shared fixtures in
-  **`plugins/fixtures/`**. Add here only if you're prepared to commit a
-  matching fixture and port the example to the other two SDKs.
+- **`plugins/fixtures/`** — parser-conformance goldens for
+  `FixtureRoundTripTests`, not an authoring reference. Add here only alongside
+  a Swift parser change that needs a new fixture.
 
 To propose a plugin for the community catalog/gallery, open an issue using the
 **Plugin submission** template. Include what it does, its language and
