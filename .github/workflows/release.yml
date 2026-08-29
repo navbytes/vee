@@ -18,9 +18,6 @@ on:
 
 permissions:
   contents: write
-  # npm provenance signs the package against this workflow run; without it
-  # `npm publish --provenance` fails.
-  id-token: write
 
 jobs:
   release:
@@ -65,26 +62,6 @@ jobs:
           git tag -a "$TAG" -m "Release $TAG"
           git push origin "$TAG"
 
-      # The Go SDK is a module in a subdirectory, so Go resolves its versions
-      # from tags prefixed with that path — a bare `v0.2.0` is invisible to it,
-      # and `go get` falls back to a pseudo-version naming a commit hash. This
-      # gives Go users the same version everything else ships under.
-      #
-      # Runs for both triggers (dispatch and a pushed tag), and tolerates the
-      # tag already existing so a re-run after a later failure is not blocked.
-      - name: Tag the Go module
-        env:
-          TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
-        run: |
-          go_tag="plugins/go/${TAG}"
-          if git ls-remote --exit-code --tags origin "refs/tags/${go_tag}" >/dev/null 2>&1; then
-            echo "${go_tag} already exists — leaving it alone."
-          else
-            git tag -a "${go_tag}" -m "Go SDK ${TAG}"
-            git push origin "${go_tag}"
-            echo "Pushed ${go_tag}"
-          fi
-
       - uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1
         with:
           xcode-version: latest-stable
@@ -105,10 +82,6 @@ jobs:
           sed -i '' "s/^let fallbackVersion = \".*\"$/let fallbackVersion = \"${version}\"/" Sources/VeeCLI/Version.swift
           grep -q "let fallbackVersion = \"${version}\"" Sources/VeeCLI/Version.swift \
             || { echo "::error::failed to stamp the version into Sources/VeeCLI/Version.swift"; exit 1; }
-          # The npm package carries the same version as the app on purpose: the
-          # SDK and the parser that reads its output ship from one commit, so a
-          # matching pair is a guaranteed-compatible pair.
-          ( cd plugins/typescript && npm version "${version}" --no-git-tag-version --allow-same-version )
 
       - name: Generate project
         run: xcodegen generate
@@ -177,39 +150,6 @@ jobs:
           tag_name: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
           files: Vee.zip
           fail_on_unmatched_files: true
-
-      # Publish the TypeScript SDK using npm trusted publishing: the registry
-      # verifies this workflow's OIDC identity instead of a token, so there is
-      # no NPM_TOKEN to leak, to rotate every 90 days, or to forget. It also
-      # sidesteps the two things that broke 0.3.0 — a token without 2FA bypass
-      # is rejected outright (EOTP), and one *with* it has its publishes staged
-      # for manual confirmation, which npm is restricting anyway.
-      #
-      # Configured at npmjs.com on the package: publisher GitHub Actions,
-      # navbytes/vee, workflow release.yml. Requires npm >= 11.5.1 (Node 24
-      # ships 11.17) and the id-token: write permission granted above.
-      # Provenance is attested automatically; no --provenance flag needed.
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 24
-          registry-url: "https://registry.npmjs.org"
-      - name: Publish @navbytes/vee to npm
-        working-directory: plugins/typescript
-        run: |
-          version="$(node -p "require('./package.json').version")"
-          # npm refuses to republish a version, which would strand a re-run here
-          # the way the tag step used to. Skipping work that is already done is
-          # not the same as skipping because a credential is missing: there is
-          # no credential to miss any more, and a genuine publish failure still
-          # fails the release.
-          if npm view "@navbytes/vee@${version}" version >/dev/null 2>&1; then
-            echo "::notice::@navbytes/vee@${version} is already published — nothing to do."
-            exit 0
-          fi
-          # prepublishOnly builds and re-checks the compiled output against the
-          # golden fixtures, so a package that would differ from the source
-          # never leaves the runner.
-          npm publish --access public
 
       # Keep navbytes/homebrew-tap tracking this release. Self-seeding: creates
       # Casks/vee.rb on the first run and bumps version + sha256 afterwards.

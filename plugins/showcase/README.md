@@ -4,10 +4,9 @@ Copy-paste showcase plugins that demonstrate Vee's core features and its
 trust/transparency layer. They are meant to be **read, learned from, and run** —
 each one is heavily commented and self-contained.
 
-> **Not the same as `plugins/examples/`** — that folder holds TypeScript **SDK**
-> examples that double as golden fixtures for the drift guard (`npm test`).
-> Change those and you must regenerate their fixtures. Nothing in *this* folder
-> is wired into the test suite.
+> **Not the same as `plugins/fixtures/`** — that folder holds golden plugin
+> output the Swift parser is tested against. Nothing in *this* folder is wired
+> into the test suite.
 
 ## What's here
 

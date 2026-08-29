@@ -32,7 +32,6 @@ jobs:
     timeout-minutes: 5
     outputs:
       swift: ${{ steps.filter.outputs.swift }}
-      plugins: ${{ steps.filter.outputs.plugins }}
     steps:
       - id: filter
         env:
@@ -41,7 +40,6 @@ jobs:
           if [ "${{ github.event_name }}" != "pull_request" ]; then
             echo "not a pull request — running everything"
             echo "swift=true"   >> "$GITHUB_OUTPUT"
-            echo "plugins=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           files=$(gh api --paginate \
@@ -55,13 +53,6 @@ jobs:
             echo "swift=true" >> "$GITHUB_OUTPUT"
           else
             echo "swift=false" >> "$GITHUB_OUTPUT"
-          fi
-
-          # The SDKs and their shared golden fixtures.
-          if match '^plugins/|^scripts/embed_sdk\.py$|^\.github/workflows/ci\.yml$'; then
-            echo "plugins=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "plugins=false" >> "$GITHUB_OUTPUT"
           fi
 
   swift:
@@ -128,65 +119,3 @@ jobs:
           VEE_SOAK: "1"
           VEE_SOAK_DURATION_SECONDS: "120"
         run: swift test --filter MemorySoakBenchmarkTests
-
-  plugins:
-    name: Plugin SDK (TypeScript)
-    needs: changes
-    if: needs.changes.outputs.plugins == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    defaults:
-      run:
-        working-directory: plugins/typescript
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 24
-      # No dependencies to install — the SDK is zero-dep and Node runs the
-      # TypeScript directly. `npm test` runs the fixture drift guard.
-      - name: Test (fixture drift guard)
-        run: npm test
-      # The published package ships compiled JavaScript, because Node will not
-      # strip types under node_modules. That makes `tsc` output a fourth copy of
-      # this SDK, so it is held to the same golden fixtures as the source.
-      - name: Compiled SDK matches the fixtures
-        run: npm run build && npm run check:dist
-
-  plugins-python:
-    name: Plugin SDK (Python)
-    needs: changes
-    if: needs.changes.outputs.plugins == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    defaults:
-      run:
-        working-directory: plugins/python
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-python@v7
-        with:
-          python-version: "3.11"
-      # Zero-dep, standard-library only. The drift guard asserts each example's
-      # build() output matches its golden fixture (shared with the TS SDK).
-      - name: Test (fixture drift guard)
-        run: python3 -m unittest discover -s test -v
-
-  plugins-go:
-    name: Plugin SDK (Go)
-    needs: changes
-    if: needs.changes.outputs.plugins == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    defaults:
-      run:
-        working-directory: plugins/go
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-go@v7
-        with:
-          go-version: "1.21"
-      # Zero-dep, standard-library only. `go test` runs the fixture drift guard
-      # (the fixture is shared byte-for-byte with the TS/Python SDKs).
-      - name: Test (fixture drift guard)
-        run: go test ./...
