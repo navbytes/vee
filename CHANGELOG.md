@@ -6,6 +6,48 @@ All notable changes to Vee are documented here. The format is based on
 
 ## [Unreleased]
 
+## [0.6.2] - 2026-08-29
+
+A plugin installed from Discover now runs whether or not it uses an SDK, and a
+pass over the Discover tab itself.
+
+### Fixed
+- **A plugin installed from Discover that imports an SDK failed on every run.**
+  A Vee plugin is a single file with no build step, so the SDK travelled as a
+  sibling — checked in beside the plugins in a repository, written alongside by
+  `vee new`. Neither applies to installing one file, so a plugin downloaded from
+  Discover or opened from an `addplugin` link landed alone and died with
+  `ModuleNotFoundError: No module named 'vee'` — a traceback in the menu bar for
+  something the user did nothing to cause. It hit the plugins most worth
+  installing, since everything in the plugin catalog is built on an SDK.
+
+  Vee now puts its own copy of the SDK on the plugin's import path when it runs
+  one, rather than copying files into a folder you own. A copy sitting beside
+  the plugin still takes precedence, so a repository that checks the SDK in, or
+  an author pinning a version, is unaffected. `@navbytes/vee` resolves too,
+  which it previously could not from a plugins folder at all.
+
+  Nothing is injected into a plugin that doesn't reach for an SDK: an xbar or
+  SwiftBar plugin printing its own lines runs in an environment identical to the
+  one it had before. `vee render` and `vee dev` inject the same paths as the
+  app, so a plugin cannot behave one way under an author's tooling and another
+  under the menu bar. Running a plugin with a bare `python3` or `node` still
+  wants a local copy — `vee sdk` writes one, and the debugging guide says so.
+
+- **Discover was harder to use than it looked.** Search now matches the name
+  actually shown on a card rather than only the filename and manifest fields.
+  Install and Update show progress and refuse to double-fire. The trust chip
+  appears for the `undeclared` level too — the one state most worth surfacing
+  was the one being hidden. Toolbar filters keep their labels instead of
+  collapsing to bare icons, and Sort shows the current order. Failure notices
+  stay put instead of vanishing after three seconds, and push the content down
+  rather than floating over it. Update now reflects a real version comparison
+  ("Update" versus "Reinstall") instead of being offered unconditionally,
+  deprecated plugins are marked, and empty states distinguish no stores from an
+  empty category. Cards no longer reflow under the cursor as data streams in,
+  and installed/provenance state is cached instead of hitting disk on every
+  re-render.
+
 ## [0.6.1] - 2026-08-29
 
 Two menu-bar fixes found by using the plugins rather than reading them: a
@@ -977,7 +1019,8 @@ lost. Comparison link below is `v0.1.1...v0.2.0` for the same reason.
 - Zero-dependency TypeScript SDK with a golden-fixture drift guard.
 - Developer-ID-signed, notarized distribution outside the Mac App Store.
 
-[Unreleased]: https://github.com/navbytes/vee/compare/v0.6.1...HEAD
+[Unreleased]: https://github.com/navbytes/vee/compare/v0.6.2...HEAD
+[0.6.2]: https://github.com/navbytes/vee/compare/v0.6.1...v0.6.2
 [0.6.1]: https://github.com/navbytes/vee/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/navbytes/vee/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/navbytes/vee/compare/v0.4.0...v0.5.0
