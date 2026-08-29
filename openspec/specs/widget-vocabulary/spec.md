@@ -76,14 +76,14 @@ recorded dispositions SHALL be published in a human-readable parity ledger.
   actions or live sliders)
 - **THEN** the parity ledger states the exclusion and its reason
 
-### Requirement: New vocabulary reaches every authoring format
+### Requirement: New vocabulary reaches the published schema
 
-The chart leaf and item tap targets SHALL be expressible in every published
-SDK and the JSON card schema, with identical semantics, covered by the shared
-fixtures so the formats cannot diverge silently.
+The chart leaf and item tap targets SHALL be expressible in the JSON card
+schema with semantics identical to the parser's, covered by the
+parser-conformance fixtures so schema and parser cannot diverge silently.
 
-#### Scenario: SDKs express the new vocabulary
+#### Scenario: Schema and parser agree
 
-- **WHEN** the same card is authored with each published SDK using a chart leaf
-  and tappable items
-- **THEN** each SDK emits the same card payload
+- **WHEN** the same card is authored against the published card schema using
+  a chart leaf and tappable items
+- **THEN** the parser accepts it and the widget renders the declared payload
