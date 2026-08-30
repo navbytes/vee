@@ -25,8 +25,8 @@ public enum StoreRegistryError: Error, Equatable, Sendable {
 /// - **Managed** — read from the MDM-forced `vee.managedStores` key. Read-only
 ///   and force-enabled.
 /// - **User** — stores the user added, persisted as JSON under `vee.customStores`.
-/// - **Built-in** — the public xbar catalog, appended unless the managed
-///   `vee.disablePublicStore` flag is set.
+/// - **Built-in** — `vee-plugins` and the public xbar catalog, appended
+///   unless the managed `vee.disablePublicStore` flag is set.
 ///
 /// On an id collision a managed store wins. `@unchecked Sendable`: `UserDefaults`
 /// is thread-safe.
@@ -38,6 +38,11 @@ public final class StoreRegistry: @unchecked Sendable {
     private let managedStoresKey = "vee.managedStores"
     private let disablePublicKey = "vee.disablePublicStore"
     private let disabledIDsKey = "vee.disabledStoreIDs"
+    /// VeePreferences' first-run flag, read directly: `VeeCatalog` doesn't
+    /// depend on `VeePreferences`, and both read the same `UserDefaults` in
+    /// production. Used only by `seedDefaultStoresIfNeeded()`.
+    private let hasCompletedFirstRunKey = "vee.hasCompletedFirstRun"
+    private let didSeedDefaultStoresKey = "vee.didSeedDefaultStores"
 
     public init(
         defaults: UserDefaults = .standard,
@@ -51,7 +56,8 @@ public final class StoreRegistry: @unchecked Sendable {
 
     /// The full store list: managed ⊕ user ⊕ built-in (unless disabled). Managed
     /// stores are force-enabled; a managed id shadows a user store with the same
-    /// id. Order: managed first, then user, then the built-in catalog last.
+    /// id. Order: managed first, then user, then the built-in catalogs
+    /// (`vee-plugins`, then `xbar`) last.
     public func stores() -> [StoreConfig] {
         let managed = managedStores()
         let managedIDs = Set(managed.map(\.id))
@@ -64,10 +70,11 @@ public final class StoreRegistry: @unchecked Sendable {
             result.append(store)
         }
 
-        if !defaults.bool(forKey: disablePublicKey), !managedIDs.contains(BuiltInStores.xbarID) {
-            var xbar = BuiltInStores.xbar
-            xbar.isEnabled = !disabled.contains(BuiltInStores.xbarID)
-            result.append(xbar)
+        if !defaults.bool(forKey: disablePublicKey) {
+            for var builtIn in BuiltInStores.all where !managedIDs.contains(builtIn.id) {
+                builtIn.isEnabled = !disabled.contains(builtIn.id)
+                result.append(builtIn)
+            }
         }
         return result
     }
@@ -118,13 +125,13 @@ public final class StoreRegistry: @unchecked Sendable {
     /// already matches an existing user, built-in, or managed store under a
     /// different id.
     public func add(_ store: StoreConfig) throws {
-        guard store.id != BuiltInStores.xbarID else { throw StoreRegistryError.builtInImmutable }
+        guard !BuiltInStores.allIDs.contains(store.id) else { throw StoreRegistryError.builtInImmutable }
         let managed = managedStores()
         guard !managed.contains(where: { $0.id == store.id }) else { throw StoreRegistryError.managedImmutable }
         var stores = try loadUserStoresOrThrow()
         guard !stores.contains(where: { $0.id == store.id }) else { throw StoreRegistryError.duplicateID(store.id.rawValue) }
         if let identity = store.storeIdentity,
-           let clash = ([BuiltInStores.xbar] + stores + managed).first(where: { $0.storeIdentity == identity }) {
+           let clash = (BuiltInStores.all + stores + managed).first(where: { $0.storeIdentity == identity }) {
             throw StoreRegistryError.duplicateStore(clash.displayName)
         }
         var normalized = store
@@ -137,7 +144,7 @@ public final class StoreRegistry: @unchecked Sendable {
     /// Removes a user store and drops its Keychain token. Rejects built-in
     /// and managed ids.
     public func remove(_ id: StoreID) throws {
-        guard id != BuiltInStores.xbarID else { throw StoreRegistryError.builtInImmutable }
+        guard !BuiltInStores.allIDs.contains(id) else { throw StoreRegistryError.builtInImmutable }
         guard !managedStores().contains(where: { $0.id == id }) else { throw StoreRegistryError.managedImmutable }
         var stores = try loadUserStoresOrThrow()
         guard stores.contains(where: { $0.id == id }) else { throw StoreRegistryError.notFound(id.rawValue) }
@@ -153,7 +160,7 @@ public final class StoreRegistry: @unchecked Sendable {
 
     /// Replaces a user store's config. Rejects built-in and managed ids.
     public func update(_ store: StoreConfig) throws {
-        guard store.id != BuiltInStores.xbarID else { throw StoreRegistryError.builtInImmutable }
+        guard !BuiltInStores.allIDs.contains(store.id) else { throw StoreRegistryError.builtInImmutable }
         guard !managedStores().contains(where: { $0.id == store.id }) else { throw StoreRegistryError.managedImmutable }
         var stores = try loadUserStoresOrThrow()
         guard let idx = stores.firstIndex(where: { $0.id == store.id }) else { throw StoreRegistryError.notFound(store.id.rawValue) }
@@ -164,10 +171,29 @@ public final class StoreRegistry: @unchecked Sendable {
         try writeUserStores(stores)
     }
 
+    // MARK: - Default-store seeding
+
+    /// One-shot: on a genuinely fresh install, `xbar` ships disabled by
+    /// default in favor of `vee-plugins`, Vee's new default catalog. An
+    /// existing install — where `vee.hasCompletedFirstRun` is already `true`
+    /// — keeps `xbar` enabled exactly as before, since `disabledIDs()` alone
+    /// can't tell "never touched Stores" apart from "fresh install".
+    ///
+    /// Gated by its own one-shot flag, so calling this more than once (e.g.
+    /// once per launch) only ever seeds on the first call. That first call
+    /// MUST happen before `vee.hasCompletedFirstRun` is set — otherwise every
+    /// install looks "existing" and `xbar` never gets seeded disabled.
+    public func seedDefaultStoresIfNeeded() {
+        guard !defaults.bool(forKey: didSeedDefaultStoresKey) else { return }
+        defaults.set(true, forKey: didSeedDefaultStoresKey)
+        guard !defaults.bool(forKey: hasCompletedFirstRunKey) else { return }
+        setDisabled(true, id: BuiltInStores.xbarID)
+    }
+
     // MARK: - Enable / disable
 
     /// Enables or disables a store. Managed stores are force-enabled — this is a
-    /// no-op for them. The built-in catalog and user stores are toggled via a
+    /// no-op for them. The built-in catalogs and user stores are toggled via a
     /// persisted disabled-id set.
     public func setEnabled(_ enabled: Bool, id: StoreID) {
         guard !managedStores().contains(where: { $0.id == id }) else { return }

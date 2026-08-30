@@ -45,6 +45,18 @@ final class StoreEndpointsTests: XCTestCase {
         )
     }
 
+    // MARK: - Built-in vee-plugins resolves the published manifest URL
+
+    func testVeePluginsManifestURL() {
+        let e = StoreEndpoints(BuiltInStores.veePlugins)
+        XCTAssertEqual(
+            e.manifestURL?.absoluteString,
+            "https://raw.githubusercontent.com/navbytes/vee-plugins/main/vee-catalog.json"
+        )
+        // Manifest-backed .http kind, not the git-tree API.
+        XCTAssertNil(e.treeURL)
+    }
+
     // MARK: - GitHub Enterprise
 
     func testEnterpriseHostsAreHonored() {

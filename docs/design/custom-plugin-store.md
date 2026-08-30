@@ -203,7 +203,7 @@ public struct StoreConfig: Identifiable, Codable, Sendable, Equatable {
     public var displayName: String
     public var kind: StoreKind
     public var isEnabled: Bool
-    public var isBuiltIn: Bool               // xbar; not removable
+    public var isBuiltIn: Bool               // vee-plugins/xbar; not removable
     public var isManaged: Bool               // from MDM; read-only in UI
 
     // Location (which fields apply depends on kind):
@@ -225,10 +225,17 @@ public struct StoreConfig: Identifiable, Codable, Sendable, Equatable {
 public enum StoreAuthMode: String, Codable, Sendable { case none, token }
 ```
 
-The built-in xbar store is a fixed `StoreConfig` (id `com.vee.store.xbar`,
-`isBuiltIn: true`, `github`, `owner: "matryer"`, `repo: "xbar-plugins"`,
-`trustPolicy: .publicUntrusted`). Constructing it reproduces today's URLs exactly
-→ zero behavior change when it is the only store.
+Vee ships two built-in `StoreConfig`s (`BuiltInStores.all`, in this order):
+
+- `vee-plugins` (id `com.vee.store.vee-plugins`, `isBuiltIn: true`, `http` — a
+  manifest-backed store against `navbytes/vee-plugins`'s raw-content root; a
+  `.github`-kind built-in skips its manifest probe, see §6.1). The default
+  store — enabled on every install, including fresh ones.
+- `xbar` (id `com.vee.store.xbar`, `isBuiltIn: true`, `github`,
+  `owner: "matryer"`, `repo: "xbar-plugins"`, `trustPolicy: .publicUntrusted`).
+  Constructing it reproduces the original single-store URLs exactly. A fresh
+  install seeds it *disabled* (`vee-plugins` is now the default); an existing
+  install that already completed first-run keeps it enabled — see §5.4.
 
 ### 5.3 `CatalogEntry` gains a store dimension
 
@@ -252,7 +259,8 @@ same `path`.
 ```swift
 public final class StoreRegistry: @unchecked Sendable {
     public init(defaults: UserDefaults = .standard)
-    public func stores() -> [StoreConfig]          // managed ⊕ user ⊕ built-in xbar
+    public func stores() -> [StoreConfig]          // managed ⊕ user ⊕ built-ins (vee-plugins, xbar)
+    public func seedDefaultStoresIfNeeded()        // one-shot: xbar disabled on a fresh install
     public func add(_ store: StoreConfig) throws    // user store
     public func remove(_ id: StoreID) throws        // rejects built-in/managed
     public func setEnabled(_ enabled: Bool, id: StoreID) // rejects managed (force-enabled)
@@ -270,8 +278,16 @@ explicitly **not** in scope for now.)
 Persistence: user stores as JSON under a new `AppPreferences` key
 `vee.customStores`. **Managed** stores come from the MDM-forced defaults key
 `vee.managedStores` (see §7) and are merged read-only, taking precedence on ID
-collision. The built-in xbar store is always appended unless a managed policy
-key `vee.disablePublicStore` is set.
+collision. Both built-in stores are appended (`vee-plugins` before `xbar`)
+unless a managed policy key `vee.disablePublicStore` is set, which hides both.
+
+`xbar` ships disabled by default on a fresh install: `disabledIDs()` alone
+can't tell "never touched Stores" from "just installed", so a one-shot
+`seedDefaultStoresIfNeeded()` disables `xbar` the first time it runs with
+VeePreferences' `vee.hasCompletedFirstRun` still `false`, gated by its own
+`vee.didSeedDefaultStores` flag so it never re-applies. An existing install
+(`hasCompletedFirstRun` already `true`) is left untouched — `xbar` stays
+enabled. The app calls this before first-run onboarding flips that flag.
 
 ---
 
@@ -347,7 +363,7 @@ read-only.
 - Reserved managed keys (pushed via a `.mobileconfig` / `com.vee.Vee` domain):
   - `vee.managedStores` — array of dicts mirroring `StoreConfig` public fields
     (minus secrets). Merged into `StoreRegistry.stores()` as `isManaged: true`.
-  - `vee.disablePublicStore` (Bool) — hide the built-in xbar store.
+  - `vee.disablePublicStore` (Bool) — hide both built-in stores (`vee-plugins`, `xbar`).
   - `vee.managedPluginsDirectory` (String, optional) — pin the plugins folder.
 - Managed stores render in the Stores settings tab **locked** with a "Managed by
   your organization" badge; add/remove/edit are disabled for them.
@@ -458,8 +474,9 @@ Pure/unit (no network — inject fakes like the existing suites):
 - `StoreIntegrity`: SHA-256 pin pass/fail; Ed25519 signature valid/invalid/
   missing under `requireSignature` true/false.
 - `sanitizedFilename` applied to manifest paths (traversal fixtures).
-- `StoreRegistry`: user-store CRUD; managed precedence; built-in not removable;
-  `disablePublicStore`.
+- `StoreRegistry`: user-store CRUD; managed precedence; built-ins not removable;
+  `disablePublicStore` hides both; `seedDefaultStoresIfNeeded` (fresh install
+  disables xbar, existing install is untouched, one-shot).
 - Auth: a fake `URLProtocol`/session asserts the `Authorization` header is set
   when and only when `authMode == .token`.
 - `PluginBrowserModel`: multi-store merge, per-store error isolation, entry `id`

@@ -917,7 +917,11 @@ public final class AppController: NSObject, NSApplicationDelegate {
         let groups = VariableAggregator.aggregate(plugins: aggregatablePlugins(), reader: HeaderVariableReader())
         let variables = VariablesEditorModel(groups: groups, onSaved: { [weak self] in self?.refreshAll() })
 
-        let stores = StoresSettingsModel()
+        // Pushes a Settings-driven store change straight into the live
+        // Discover tab (no relaunch/reopen needed) — see `handleStoresChanged`.
+        let stores = StoresSettingsModel(onStoresChanged: { [weak self] newStores in
+            self?.handleStoresChanged(newStores)
+        })
 
         return LibraryModel(
             section: section,
@@ -981,6 +985,19 @@ public final class AppController: NSObject, NSApplicationDelegate {
         return model
     }
 
+    /// Called whenever the Stores settings tab changes the store list (toggle,
+    /// add, remove) so an already-open Discover tab reflects it immediately,
+    /// with no relaunch or window reopen. Pushes the new stores into the
+    /// retained browser model in place (same instance the live view observes,
+    /// if the window is open) rather than discarding it, and updates the
+    /// cache markers `browserModel()` compares against so the next window
+    /// open doesn't redundantly rebuild what's already current.
+    private func handleStoresChanged(_ stores: [StoreConfig]) {
+        cachedBrowserStores = stores
+        guard let cachedBrowserModel else { return }
+        Task { await cachedBrowserModel.reload(stores: stores) }
+    }
+
     /// Opens the consolidated window on the Discover section. Kept as a thin
     /// wrapper (rather than inlined) so the ⌘D menu action, the Manager
     /// empty-state, and first-run all route through one place.
@@ -1013,7 +1030,13 @@ public final class AppController: NSObject, NSApplicationDelegate {
     /// has to guess what to do. If their plugins folder is also empty, open
     /// Discover once so there's an obvious next step. Existing SwiftBar/xbar
     /// users (who already have plugins) are left undisturbed.
+    ///
+    /// Also seeds `xbar` disabled-by-default (`vee-plugins` is now the
+    /// default store) — this MUST run before `prefs.hasCompletedFirstRun` is
+    /// set below, since that's exactly the signal `seedDefaultStoresIfNeeded`
+    /// uses to tell a fresh install from an existing one.
     private func presentFirstRunIfNeeded() {
+        StoreRegistry().seedDefaultStoresIfNeeded()
         guard !prefs.hasCompletedFirstRun else { return }
         prefs.hasCompletedFirstRun = true
         if PluginDiscovery.enumerate(directory: directory).isEmpty {

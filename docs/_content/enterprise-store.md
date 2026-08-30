@@ -14,10 +14,12 @@ head:
   - tag: title
     content: "Custom plugin stores (enterprise) — Vee docs"
 ---
-Vee ships with the public [`matryer/xbar-plugins`](https://github.com/matryer/xbar-plugins)
-catalog in **Discover**. You can also point Vee at **your own store** — a curated,
-trust-gated catalog of internal plugins — and it shows up in Discover next to (or
-instead of) the public one, installing through the same trust gate.
+Vee ships with two public catalogs in **Discover**: `vee-plugins` — the default,
+curated store — and the legacy [`matryer/xbar-plugins`](https://github.com/matryer/xbar-plugins)
+catalog (enabled for existing users; off by default on a fresh install). You can
+also point Vee at **your own store** — a curated, trust-gated catalog of internal
+plugins — and it shows up in Discover next to (or instead of) the public ones,
+installing through the same trust gate.
 
 A store is just a place Vee can read an index and download sources from. **It can
 be a plain GitHub repo** (public, private, or GitHub Enterprise Server), a static
@@ -177,7 +179,7 @@ Reserved keys:
 | Key | Type | Effect |
 | --- | --- | --- |
 | `vee.managedStores` | array of dicts | Stores to install (see fields below). |
-| `vee.disablePublicStore` | bool | Hide the built-in public xbar catalog. |
+| `vee.disablePublicStore` | bool | Hide both built-in public catalogs (`vee-plugins`, `xbar`). |
 
 Each entry in `vee.managedStores` mirrors a store's fields:
 
@@ -223,7 +225,7 @@ Anyone (not just enterprise) can add a store in **Preferences → Stores →
 Add store…**: pick the kind, fill in the location, optionally paste a token, and
 optionally mark it *internal-reviewed* or *require signature*. User-added stores
 are fully under your control — enable, disable, edit, or remove them at any time.
-The built-in public catalog can be toggled off but not removed.
+The built-in public catalogs can be toggled off but not removed.
 
 ## Security notes
 
