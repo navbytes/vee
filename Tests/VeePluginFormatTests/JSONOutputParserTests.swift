@@ -185,6 +185,15 @@ final class JSONOutputParserTests: XCTestCase {
         XCTAssertNil(JSONOutputParser.parse(#"{"title":"not ours"}"#))
     }
 
+    /// `"vee"` isn't just present, it must equal the declared `version` — a
+    /// mismatched value is not an opt-in, so the caller falls back to the text
+    /// parser instead of half-decoding a future/unknown payload shape.
+    func testUnsupportedVeeVersionFallsBackToText() {
+        XCTAssertNil(JSONOutputParser.parse(#"{"vee":2,"title":[{"text":"T"}]}"#))
+        let out = OutputParser.parseAuto(#"{"vee":2,"title":[{"text":"T"}]}"#)
+        XCTAssertEqual(out.titleLines.first?.text, #"{"vee":2,"title":[{"text":"T"}]}"#)
+    }
+
     func testParseAutoFallsBackToText() {
         // No "vee" key → text parser handles it.
         let out = OutputParser.parseAuto("Title\n---\nItem")

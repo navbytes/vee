@@ -24,6 +24,9 @@ public enum WidgetCardParser {
         } catch {
             return (nil, [ParseDiagnostic(severity: .error, message: "widget output is not a JSON object")])
         }
+        guard raw.veeWidget == 1 else {
+            return (nil, [ParseDiagnostic(severity: .error, message: "widget output must include \"vee_widget\": 1")])
+        }
 
         var diagnostics: [ParseDiagnostic] = []
 
@@ -176,6 +179,7 @@ public enum WidgetCardParser {
 /// whole decode (`WidgetTemplate`/`WidgetStatus` themselves stay strict —
 /// see `WidgetCard.swift`).
 private struct RawWidgetCard: Decodable {
+    let veeWidget: Int?
     let template: String?
     let title: String?
     let symbol: String?
@@ -194,6 +198,7 @@ private struct RawWidgetCard: Decodable {
 
     enum CodingKeys: String, CodingKey {
         case template, title, symbol, tint, value, caption, detail, status, progress, trend, items, actions, layout
+        case veeWidget = "vee_widget"
         case refreshAfter = "refresh_after"
         case staleAfter = "stale_after"
     }

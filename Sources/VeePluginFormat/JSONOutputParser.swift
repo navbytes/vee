@@ -16,7 +16,7 @@ public enum JSONOutputParser {
     public static func parse(_ text: String) -> ParsedOutput? {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard trimmed.hasPrefix("{"), let data = trimmed.data(using: .utf8) else { return nil }
-        guard let menu = try? JSONDecoder().decode(JSONMenu.self, from: data) else { return nil }
+        guard let menu = try? JSONDecoder().decode(JSONMenu.self, from: data), menu.vee == version else { return nil }
 
         var diagnostics: [ParseDiagnostic] = []
         let titleLines = (menu.title ?? []).map {

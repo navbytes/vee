@@ -27,7 +27,7 @@ final class WidgetCardParserTests: XCTestCase {
 
     func testGaugeCardRoundTrips() throws {
         let json = """
-        {"template":"gauge","title":"Disk","value":"72%","progress":0.72}
+        {"vee_widget":1,"template":"gauge","title":"Disk","value":"72%","progress":0.72}
         """
         let (card, diagnostics) = WidgetCardParser.parse(json)
         XCTAssertEqual(diagnostics, [])
@@ -36,7 +36,7 @@ final class WidgetCardParserTests: XCTestCase {
 
     func testTrendCardRoundTrips() throws {
         let json = """
-        {"template":"trend","title":"Revenue","value":"$18.2k","trend":[12.1,13.4,12.9,15.0,18.2]}
+        {"vee_widget":1,"template":"trend","title":"Revenue","value":"$18.2k","trend":[12.1,13.4,12.9,15.0,18.2]}
         """
         let (card, diagnostics) = WidgetCardParser.parse(json)
         XCTAssertEqual(diagnostics, [])
@@ -45,7 +45,7 @@ final class WidgetCardParserTests: XCTestCase {
 
     func testListCardRoundTrips() throws {
         let json = """
-        {"template":"list","title":"Orders","items":[
+        {"vee_widget":1,"template":"list","title":"Orders","items":[
           {"label":"Orders","value":"214","symbol":"bag","tint":"blue"},
           {"label":"Refunds","value":"3","symbol":"arrow.uturn.left","tint":"red"}
         ]}
@@ -61,7 +61,7 @@ final class WidgetCardParserTests: XCTestCase {
 
     func testBoardCardRoundTrips() throws {
         let json = """
-        {"template":"board","title":"KPIs","items":[
+        {"vee_widget":1,"template":"board","title":"KPIs","items":[
           {"label":"Orders","value":"214"},
           {"label":"Refunds","value":"3"}
         ],"actions":[
@@ -83,16 +83,32 @@ final class WidgetCardParserTests: XCTestCase {
 
     func testShortcutActionRoundTrips() throws {
         let json = """
-        {"template":"stat","value":"1","actions":[{"kind":"shortcut","label":"Deploy","name":"Deploy Prod"}]}
+        {"vee_widget":1,"template":"stat","value":"1","actions":[{"kind":"shortcut","label":"Deploy","name":"Deploy Prod"}]}
         """
         let (card, _) = WidgetCardParser.parse(json)
         XCTAssertEqual(card?.actions, [WidgetCardAction(kind: .shortcut, label: "Deploy", name: "Deploy Prod")])
     }
 
+    // MARK: - vee_widget version gate
+
+    func testMissingVeeWidgetKeyIsRejectedWithDiagnostic() {
+        let (card, diagnostics) = WidgetCardParser.parse(#"{"template":"stat","value":"1"}"#)
+        XCTAssertNil(card)
+        XCTAssertEqual(diagnostics.count, 1)
+        XCTAssertEqual(diagnostics.first?.severity, .error)
+        XCTAssertTrue(diagnostics.first?.message.contains("vee_widget") ?? false)
+    }
+
+    func testVeeWidgetKeyPresentParses() {
+        let (card, diagnostics) = WidgetCardParser.parse(#"{"vee_widget":1,"template":"stat","value":"1"}"#)
+        XCTAssertEqual(card?.value, "1")
+        XCTAssertEqual(diagnostics, [])
+    }
+
     // MARK: - Tolerance
 
     func testUnknownTemplateFallsBackToStatWithDiagnostic() {
-        let (card, diagnostics) = WidgetCardParser.parse(#"{"template":"pie","value":"1"}"#)
+        let (card, diagnostics) = WidgetCardParser.parse(#"{"vee_widget":1,"template":"pie","value":"1"}"#)
         XCTAssertEqual(card?.template, .stat)
         XCTAssertEqual(diagnostics.count, 1)
         XCTAssertEqual(diagnostics.first?.severity, .warning)
@@ -100,23 +116,23 @@ final class WidgetCardParserTests: XCTestCase {
     }
 
     func testMissingTemplateDefaultsToStatSilently() {
-        let (card, diagnostics) = WidgetCardParser.parse(#"{"value":"1"}"#)
+        let (card, diagnostics) = WidgetCardParser.parse(#"{"vee_widget":1,"value":"1"}"#)
         XCTAssertEqual(card?.template, .stat)
         XCTAssertEqual(diagnostics, [])
     }
 
     func testOutOfRangeProgressIsClamped() {
-        let (card, diagnostics) = WidgetCardParser.parse(#"{"template":"gauge","progress":1.4}"#)
+        let (card, diagnostics) = WidgetCardParser.parse(#"{"vee_widget":1,"template":"gauge","progress":1.4}"#)
         XCTAssertEqual(card?.progress, 1.0)
         XCTAssertEqual(diagnostics.count, 1)
 
-        let (negative, negDiagnostics) = WidgetCardParser.parse(#"{"template":"gauge","progress":-0.2}"#)
+        let (negative, negDiagnostics) = WidgetCardParser.parse(#"{"vee_widget":1,"template":"gauge","progress":-0.2}"#)
         XCTAssertEqual(negative?.progress, 0.0)
         XCTAssertEqual(negDiagnostics.count, 1)
     }
 
     func testInRangeProgressPassesThroughWithNoDiagnostic() {
-        let (card, diagnostics) = WidgetCardParser.parse(#"{"template":"gauge","progress":0.5}"#)
+        let (card, diagnostics) = WidgetCardParser.parse(#"{"vee_widget":1,"template":"gauge","progress":0.5}"#)
         XCTAssertEqual(card?.progress, 0.5)
         XCTAssertEqual(diagnostics, [])
     }
@@ -129,7 +145,7 @@ final class WidgetCardParserTests: XCTestCase {
     // pattern, not exercised by a literal fixture.
 
     func testUnknownStatusIsIgnoredWithDiagnostic() {
-        let (card, diagnostics) = WidgetCardParser.parse(#"{"template":"stat","status":"critical"}"#)
+        let (card, diagnostics) = WidgetCardParser.parse(#"{"vee_widget":1,"template":"stat","status":"critical"}"#)
         XCTAssertNil(card?.status)
         XCTAssertEqual(diagnostics.count, 1)
     }
@@ -158,18 +174,18 @@ final class WidgetCardParserTests: XCTestCase {
     }
 
     func testUnknownTopLevelKeysAreIgnored() {
-        let (card, diagnostics) = WidgetCardParser.parse(#"{"template":"stat","value":"1","totally_unknown_field":42}"#)
+        let (card, diagnostics) = WidgetCardParser.parse(#"{"vee_widget":1,"template":"stat","value":"1","totally_unknown_field":42}"#)
         XCTAssertEqual(card?.value, "1")
         XCTAssertEqual(diagnostics, [])
     }
 
     func testTintParsesNamedAndHex() {
-        let (named, _) = WidgetCardParser.parse(#"{"template":"stat","tint":"green"}"#)
+        let (named, _) = WidgetCardParser.parse(#"{"vee_widget":1,"template":"stat","tint":"green"}"#)
         XCTAssertEqual(named?.tint, .named("green"))
 
         // Two-# delimiter: the JSON contains `"#` (the quote before the hex
         // color), which would close a single-# raw string early.
-        let (hex, _) = WidgetCardParser.parse(##"{"template":"stat","tint":"#ff0000aa"}"##)
+        let (hex, _) = WidgetCardParser.parse(##"{"vee_widget":1,"template":"stat","tint":"#ff0000aa"}"##)
         XCTAssertEqual(hex?.tint, .rgba(r: 0xff, g: 0x00, b: 0x00, a: 0xaa))
     }
 
@@ -177,7 +193,7 @@ final class WidgetCardParserTests: XCTestCase {
 
     func testHrefActionWithSafeSchemeIsKept() {
         let (card, diagnostics) = WidgetCardParser.parse(
-            #"{"template":"stat","actions":[{"kind":"href","label":"Open","url":"https://dash.example.com"}]}"#
+            #"{"vee_widget":1,"template":"stat","actions":[{"kind":"href","label":"Open","url":"https://dash.example.com"}]}"#
         )
         XCTAssertEqual(card?.actions, [WidgetCardAction(kind: .href, label: "Open", url: "https://dash.example.com")])
         XCTAssertEqual(diagnostics, [])
@@ -186,7 +202,7 @@ final class WidgetCardParserTests: XCTestCase {
     func testHrefActionWithUnsafeSchemeIsDropped() {
         for hostile in ["file:///etc/passwd", "javascript:alert(1)", "data:text/html,x"] {
             let (card, diagnostics) = WidgetCardParser.parse(
-                #"{"template":"stat","actions":[{"kind":"href","label":"Open","url":"\#(hostile)"}]}"#
+                #"{"vee_widget":1,"template":"stat","actions":[{"kind":"href","label":"Open","url":"\#(hostile)"}]}"#
             )
             XCTAssertEqual(card?.actions, [], hostile)
             XCTAssertEqual(diagnostics.count, 1, hostile)
@@ -194,7 +210,7 @@ final class WidgetCardParserTests: XCTestCase {
     }
 
     func testHrefActionWithMissingOrUnparseableURLIsDropped() {
-        let (missingURL, missingDiagnostics) = WidgetCardParser.parse(#"{"template":"stat","actions":[{"kind":"href","label":"Open"}]}"#)
+        let (missingURL, missingDiagnostics) = WidgetCardParser.parse(#"{"vee_widget":1,"template":"stat","actions":[{"kind":"href","label":"Open"}]}"#)
         XCTAssertEqual(missingURL?.actions, [])
         XCTAssertEqual(missingDiagnostics.count, 1)
     }
@@ -203,7 +219,7 @@ final class WidgetCardParserTests: XCTestCase {
     /// untouched regardless of the href scheme filter.
     func testNonHrefActionsAreUnaffectedBySchemeFilter() {
         let (card, diagnostics) = WidgetCardParser.parse(
-            #"{"template":"stat","actions":[{"kind":"refresh","label":"Refresh"},{"kind":"shortcut","label":"Deploy","name":"Deploy Prod"}]}"#
+            #"{"vee_widget":1,"template":"stat","actions":[{"kind":"refresh","label":"Refresh"},{"kind":"shortcut","label":"Deploy","name":"Deploy Prod"}]}"#
         )
         XCTAssertEqual(card?.actions, [
             WidgetCardAction(kind: .refresh, label: "Refresh"),
@@ -216,7 +232,7 @@ final class WidgetCardParserTests: XCTestCase {
 
     func testItemTapTargetsRoundTrip() {
         let json = """
-        {"template":"list","items":[
+        {"vee_widget":1,"template":"list","items":[
           {"label":"Orders","value":"214","url":"https://dash.example.com/orders"},
           {"label":"Deploy","shortcut":"Deploy Prod"},
           {"label":"Refunds","value":"3"}
@@ -236,7 +252,7 @@ final class WidgetCardParserTests: XCTestCase {
     func testItemWithUnsafeOrUnparseableURLKeepsTheRowAndDropsTheTap() {
         for hostile in ["file:///etc/passwd", "javascript:alert(1)", ""] {
             let (card, diagnostics) = WidgetCardParser.parse(
-                #"{"template":"list","items":[{"label":"Orders","value":"214","url":"\#(hostile)"}]}"#
+                #"{"vee_widget":1,"template":"list","items":[{"label":"Orders","value":"214","url":"\#(hostile)"}]}"#
             )
             XCTAssertEqual(card?.items, [WidgetCardItem(label: "Orders", value: "214")], hostile)
             XCTAssertEqual(diagnostics.count, 1, hostile)
@@ -245,7 +261,7 @@ final class WidgetCardParserTests: XCTestCase {
 
     func testItemWithEmptyShortcutDropsTheTap() {
         let (card, diagnostics) = WidgetCardParser.parse(
-            #"{"template":"board","items":[{"label":"Deploy","shortcut":"   "}]}"#
+            #"{"vee_widget":1,"template":"board","items":[{"label":"Deploy","shortcut":"   "}]}"#
         )
         XCTAssertEqual(card?.items, [WidgetCardItem(label: "Deploy")])
         XCTAssertEqual(diagnostics.count, 1)
@@ -256,7 +272,7 @@ final class WidgetCardParserTests: XCTestCase {
     /// swallowed, so the author learns why the row does nothing.
     func testItemShellDeclarationIsRejectedWithDiagnostic() {
         let (card, diagnostics) = WidgetCardParser.parse(
-            #"{"template":"list","items":[{"label":"Wipe","shell":"rm -rf /"}]}"#
+            #"{"vee_widget":1,"template":"list","items":[{"label":"Wipe","shell":"rm -rf /"}]}"#
         )
         XCTAssertEqual(card?.items, [WidgetCardItem(label: "Wipe")])
         XCTAssertEqual(diagnostics.count, 1)
@@ -264,7 +280,7 @@ final class WidgetCardParserTests: XCTestCase {
     }
 
     func testRefreshAndStaleAfterDecodeFromSnakeCase() {
-        let (card, _) = WidgetCardParser.parse(#"{"template":"stat","refresh_after":900,"stale_after":3600}"#)
+        let (card, _) = WidgetCardParser.parse(#"{"vee_widget":1,"template":"stat","refresh_after":900,"stale_after":3600}"#)
         XCTAssertEqual(card?.refreshAfter, 900)
         XCTAssertEqual(card?.staleAfter, 3600)
     }
