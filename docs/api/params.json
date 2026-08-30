@@ -76,6 +76,7 @@
       "key": "trim",
       "group": "rendering",
       "type": "boolean",
+      "default": "true",
       "summary": "Trim surrounding whitespace from the text."
     },
     {
@@ -90,6 +91,7 @@
       "key": "emojize",
       "group": "rendering",
       "type": "boolean",
+      "default": "true",
       "summary": "Convert `:shortcode:` tokens (e.g. `:smile:`) into emoji."
     },
     {

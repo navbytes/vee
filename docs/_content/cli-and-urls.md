@@ -114,6 +114,12 @@ The **action is the URL host**, and parameters come from the query string. The p
 
 The same URLs work with the `swiftbar://` scheme, e.g. `swiftbar://refreshplugin?name=cpu`.
 
+`enableplugin`/`disableplugin`/`toggleplugin`, and a `notify` that carries an
+`href`, are spoofable enough (any web page can open a `vee://`/`swiftbar://`
+link) that Vee pops a confirmation dialog before running them when triggered
+this way — they don't fire immediately. A title/body-only `notify` needs no
+confirmation.
+
 ### The `setephemeralplugin` action
 
 `setephemeralplugin` renders menu content that never touches disk — what
@@ -163,6 +169,9 @@ Because these are ordinary URLs, a plugin triggers them the same way it opens an
 echo "Refresh now | href=vee://refreshplugin?name=cpu"
 echo "Enable weather | href=vee://enableplugin?name=weather"
 ```
+
+Clicking that second row pops the confirmation dialog described above — it's a
+deep link like any other, not a direct call into the app.
 
 **From the script itself** (open the URL with `open`):
 
