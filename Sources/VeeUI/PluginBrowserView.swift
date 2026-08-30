@@ -110,9 +110,12 @@ public final class PluginBrowserModel: ObservableObject {
     /// read/decode of the whole ledger on `@MainActor` was a jank source.
     private var freshnessLedger: [String: CatalogFreshnessStore.Record]
 
-    /// The configured stores (in Discover order) and a client per store.
-    private let stores: [StoreConfig]
-    private let clients: [StoreID: CatalogFetching]
+    /// The configured stores (in Discover order) and a client per store. Not
+    /// `let`: `reload(stores:)` swaps both in place so a live Discover tab
+    /// picks up a Settings-driven store change without the window reopening.
+    private var stores: [StoreConfig]
+    private var clients: [StoreID: CatalogFetching]
+    private let makeClient: (StoreConfig) -> CatalogFetching
     private let pluginsDirectory: String
     private let provenanceStore: ProvenanceStore
     private let freshnessStore: CatalogFreshnessStore
@@ -127,8 +130,9 @@ public final class PluginBrowserModel: ObservableObject {
     private let onUpdatesFound: ([PluginUpdateCandidate], Set<String>) -> Void
 
     /// Multi-store initializer: builds a client per store via `makeClient`.
-    public init(stores: [StoreConfig], makeClient: (StoreConfig) -> CatalogFetching, pluginsDirectory: String, onInstalled: @escaping () -> Void, onUpdatesFound: @escaping ([PluginUpdateCandidate], Set<String>) -> Void = { _, _ in }) {
+    public init(stores: [StoreConfig], makeClient: @escaping (StoreConfig) -> CatalogFetching, pluginsDirectory: String, onInstalled: @escaping () -> Void, onUpdatesFound: @escaping ([PluginUpdateCandidate], Set<String>) -> Void = { _, _ in }) {
         self.stores = stores
+        self.makeClient = makeClient
         var map: [StoreID: CatalogFetching] = [:]
         for store in stores { map[store.id] = makeClient(store) }
         self.clients = map
@@ -140,6 +144,19 @@ public final class PluginBrowserModel: ObservableObject {
         self.onInstalled = onInstalled
         self.onUpdatesFound = onUpdatesFound
         seedFreshnessCache()
+    }
+
+    /// Swaps in a new store list (e.g. after the user toggles/adds/removes a
+    /// store in Settings while Discover is open) and re-fetches against it —
+    /// rebuilds `clients` for the new set and re-runs `refresh()`, the same
+    /// full reload the toolbar Refresh button triggers, so entries from a
+    /// since-disabled store don't linger and a newly-enabled one appears.
+    public func reload(stores: [StoreConfig]) async {
+        self.stores = stores
+        var map: [StoreID: CatalogFetching] = [:]
+        for store in stores { map[store.id] = makeClient(store) }
+        self.clients = map
+        await refresh()
     }
 
     /// Single-store convenience, preserved for existing call sites and tests

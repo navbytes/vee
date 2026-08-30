@@ -45,24 +45,42 @@ public final class StoresSettingsModel: ObservableObject {
     private let registry: StoreRegistry
     private let makeTokenStore: (StoreID) -> StoreTokenStoring
     private let makeClient: (StoreConfig, StoreTokenProviding?) -> CatalogFetching
+    /// Fired with the new store list after a store is enabled/disabled, added,
+    /// or removed — NOT after the initial load in `init`, since a fresh
+    /// `StoresSettingsModel` (and the initial store list it loads) is
+    /// constructed on every Library window open, and firing here too would
+    /// undo the Discover browser's "no re-fetch on reopen" caching. Lets the
+    /// app push the change into a live Discover tab without the window
+    /// needing to be closed and reopened.
+    private let onStoresChanged: ([StoreConfig]) -> Void
 
     public init(
         registry: StoreRegistry = StoreRegistry(),
         makeTokenStore: @escaping (StoreID) -> StoreTokenStoring = { KeychainStoreTokenStore(storeID: $0) },
-        makeClient: @escaping (StoreConfig, StoreTokenProviding?) -> CatalogFetching = { CatalogClientFactory.make(for: $0, tokenProvider: $1) }
+        makeClient: @escaping (StoreConfig, StoreTokenProviding?) -> CatalogFetching = { CatalogClientFactory.make(for: $0, tokenProvider: $1) },
+        onStoresChanged: @escaping ([StoreConfig]) -> Void = { _ in }
     ) {
         self.registry = registry
         self.makeTokenStore = makeTokenStore
         self.makeClient = makeClient
+        self.onStoresChanged = onStoresChanged
         reload()
     }
 
     public func reload() { stores = registry.stores() }
 
+    /// `reload()` plus notifying `onStoresChanged` — every mutator below uses
+    /// this instead of `reload()` directly; see `onStoresChanged`'s doc for
+    /// why `init` doesn't.
+    private func reloadAndNotify() {
+        reload()
+        onStoresChanged(stores)
+    }
+
     /// Toggles a store on/off. Managed stores are force-enabled and ignore this.
     public func setEnabled(_ enabled: Bool, _ store: StoreConfig) {
         registry.setEnabled(enabled, id: store.id)
-        reload()
+        reloadAndNotify()
     }
 
     /// Removes a user store, surfacing a friendly message into `removeError`
@@ -76,7 +94,7 @@ public final class StoresSettingsModel: ObservableObject {
         } catch {
             removeError = storeRegistryErrorMessage(error)
         }
-        reload()
+        reloadAndNotify()
     }
 
     /// Adds a user store, saving its token if one was provided. Gated on the
@@ -87,7 +105,7 @@ public final class StoresSettingsModel: ObservableObject {
     public func add(_ config: StoreConfig, token: String?) throws {
         try registry.add(config)
         if config.authMode == .token, let token, !token.isEmpty { makeTokenStore(config.id).set(token) }
-        reload()
+        reloadAndNotify()
     }
 
     /// Clears any previous test result (called when the Add sheet appears).

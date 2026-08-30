@@ -468,4 +468,55 @@ final class PluginBrowserModelTests: XCTestCase {
         XCTAssertTrue(model.entries.isEmpty)
         XCTAssertNotNil(model.errorMessage, "nothing loaded at all — the full-screen error must still show")
     }
+
+    // MARK: - Store changes refresh the live Discover tab (no relaunch)
+
+    /// `reload(stores:)` is what a Settings-tab store change drives (via
+    /// `AppController.handleStoresChanged`) — a newly-enabled store's entries
+    /// must show up without the model being torn down and rebuilt.
+    func testReloadStoresPicksUpANewlyAddedStore() async throws {
+        let dir = tempDir()
+        let storeA = StoreConfig(id: StoreID("a"), displayName: "Store A", kind: .github)
+        let storeB = StoreConfig(id: StoreID("b"), displayName: "Store B", kind: .github)
+        let entryA = CatalogEntry(storeID: storeA.id, path: "System/a.sh", category: "System", filename: "a.sh", rawURL: URL(string: "https://a.example.com/a.sh")!)
+        let entryB = CatalogEntry(storeID: storeB.id, path: "System/b.sh", category: "System", filename: "b.sh", rawURL: URL(string: "https://b.example.com/b.sh")!)
+
+        let model = PluginBrowserModel(
+            stores: [storeA],
+            makeClient: { $0.id == storeA.id ? FakeCatalogFetcher(index: [entryA]) : FakeCatalogFetcher(index: [entryB]) },
+            pluginsDirectory: dir,
+            onInstalled: {}
+        )
+        await model.load()
+        XCTAssertEqual(model.entries.map(\.filename), ["a.sh"])
+
+        await model.reload(stores: [storeA, storeB])
+
+        XCTAssertEqual(model.entries.map(\.filename), ["a.sh", "b.sh"], "the newly-added store's entries must appear without rebuilding the model")
+        XCTAssertTrue(model.hasMultipleStores)
+    }
+
+    /// The inverse: a store removed/disabled in Settings must drop its
+    /// entries from the SAME live model, not just a freshly-built one.
+    func testReloadStoresDropsARemovedStoresEntries() async throws {
+        let dir = tempDir()
+        let storeA = StoreConfig(id: StoreID("a"), displayName: "Store A", kind: .github)
+        let storeB = StoreConfig(id: StoreID("b"), displayName: "Store B", kind: .github)
+        let entryA = CatalogEntry(storeID: storeA.id, path: "System/a.sh", category: "System", filename: "a.sh", rawURL: URL(string: "https://a.example.com/a.sh")!)
+        let entryB = CatalogEntry(storeID: storeB.id, path: "System/b.sh", category: "System", filename: "b.sh", rawURL: URL(string: "https://b.example.com/b.sh")!)
+
+        let model = PluginBrowserModel(
+            stores: [storeA, storeB],
+            makeClient: { $0.id == storeA.id ? FakeCatalogFetcher(index: [entryA]) : FakeCatalogFetcher(index: [entryB]) },
+            pluginsDirectory: dir,
+            onInstalled: {}
+        )
+        await model.load()
+        XCTAssertEqual(Set(model.entries.map(\.filename)), ["a.sh", "b.sh"])
+
+        await model.reload(stores: [storeA])
+
+        XCTAssertEqual(model.entries.map(\.filename), ["a.sh"], "the removed store's entries must not linger")
+        XCTAssertFalse(model.hasMultipleStores)
+    }
 }

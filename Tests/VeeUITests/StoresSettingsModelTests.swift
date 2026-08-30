@@ -64,4 +64,44 @@ final class StoresSettingsModelTests: XCTestCase {
 
         XCTAssertNil(tokenStore.token())
     }
+
+    // MARK: - onStoresChanged (drives the live Discover tab refresh)
+
+    /// `init`'s own initial load must NOT fire the callback — a fresh
+    /// `StoresSettingsModel` is constructed on every Library window open, and
+    /// firing here too would defeat the Discover browser's "no re-fetch on
+    /// reopen" caching (see the property's doc in `StoresSettingsView.swift`).
+    func testOnStoresChangedDoesNotFireOnInit() {
+        let (registry, suiteName) = makeRegistry()
+        defer { UserDefaults().removePersistentDomain(forName: suiteName) }
+        var fired = false
+        _ = StoresSettingsModel(registry: registry, onStoresChanged: { _ in fired = true })
+        XCTAssertFalse(fired)
+    }
+
+    func testOnStoresChangedFiresOnSetEnabledWithTheNewStoreList() {
+        let (registry, suiteName) = makeRegistry()
+        defer { UserDefaults().removePersistentDomain(forName: suiteName) }
+        var received: [StoreConfig]?
+        let model = StoresSettingsModel(registry: registry, onStoresChanged: { received = $0 })
+
+        model.setEnabled(false, model.stores.first!)
+
+        XCTAssertEqual(received?.map(\.id), model.stores.map(\.id))
+        XCTAssertEqual(received?.first?.isEnabled, false)
+    }
+
+    func testOnStoresChangedFiresOnAddAndRemove() throws {
+        let (registry, suiteName) = makeRegistry()
+        defer { UserDefaults().removePersistentDomain(forName: suiteName) }
+        var fireCount = 0
+        let model = StoresSettingsModel(registry: registry, onStoresChanged: { _ in fireCount += 1 })
+        let config = StoreConfig(id: StoreID("gh-3"), displayName: "GH3", kind: .github, owner: "acme", repo: "plugins")
+
+        try model.add(config, token: nil)
+        XCTAssertEqual(fireCount, 1)
+
+        model.remove(config)
+        XCTAssertEqual(fireCount, 2)
+    }
 }

@@ -917,7 +917,11 @@ public final class AppController: NSObject, NSApplicationDelegate {
         let groups = VariableAggregator.aggregate(plugins: aggregatablePlugins(), reader: HeaderVariableReader())
         let variables = VariablesEditorModel(groups: groups, onSaved: { [weak self] in self?.refreshAll() })
 
-        let stores = StoresSettingsModel()
+        // Pushes a Settings-driven store change straight into the live
+        // Discover tab (no relaunch/reopen needed) — see `handleStoresChanged`.
+        let stores = StoresSettingsModel(onStoresChanged: { [weak self] newStores in
+            self?.handleStoresChanged(newStores)
+        })
 
         return LibraryModel(
             section: section,
@@ -979,6 +983,19 @@ public final class AppController: NSObject, NSApplicationDelegate {
         cachedBrowserStores = stores
         cachedBrowserDirectory = directory
         return model
+    }
+
+    /// Called whenever the Stores settings tab changes the store list (toggle,
+    /// add, remove) so an already-open Discover tab reflects it immediately,
+    /// with no relaunch or window reopen. Pushes the new stores into the
+    /// retained browser model in place (same instance the live view observes,
+    /// if the window is open) rather than discarding it, and updates the
+    /// cache markers `browserModel()` compares against so the next window
+    /// open doesn't redundantly rebuild what's already current.
+    private func handleStoresChanged(_ stores: [StoreConfig]) {
+        cachedBrowserStores = stores
+        guard let cachedBrowserModel else { return }
+        Task { await cachedBrowserModel.reload(stores: stores) }
     }
 
     /// Opens the consolidated window on the Discover section. Kept as a thin
