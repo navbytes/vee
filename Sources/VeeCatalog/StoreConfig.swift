@@ -163,8 +163,33 @@ public extension StoreConfig {
 
 /// The stores Vee ships with.
 public enum BuiltInStores {
+    /// The identifier of the built-in `vee-plugins` catalog — Vee's default
+    /// store since it publishes a curated `vee-catalog.json` manifest.
+    public static let veePluginsID = StoreID("com.vee.store.vee-plugins")
     /// The identifier of the built-in public xbar catalog.
     public static let xbarID = StoreID("com.vee.store.xbar")
+
+    /// The `navbytes/vee-plugins` catalog, expressed as a `StoreConfig`. It
+    /// publishes a `vee-catalog.json` manifest (titles, summaries,
+    /// categories, pinned hashes), so this uses the manifest-backed `.http`
+    /// kind against the repo's raw-content root rather than `.github`: a
+    /// `.github` store skips its manifest probe when `isBuiltIn` is true (see
+    /// `GitHubCatalogClient.manifestIndexIfPresent`, kept for xbar's
+    /// zero-config git-tree convention), which would silently fall back to
+    /// listing every file in the repo instead of the curated catalog.
+    public static var veePlugins: StoreConfig {
+        StoreConfig(
+            id: veePluginsID,
+            displayName: "Vee Plugins",
+            kind: .http,
+            isEnabled: true,
+            isBuiltIn: true,
+            isManaged: false,
+            baseURL: URL(string: "https://raw.githubusercontent.com/navbytes/vee-plugins/main"),
+            trustPolicy: .publicUntrusted,
+            authMode: .none
+        )
+    }
 
     /// The public `matryer/xbar-plugins` catalog, expressed as a `StoreConfig`.
     /// Its endpoints reproduce the URLs Vee used before custom stores existed
@@ -186,4 +211,11 @@ public enum BuiltInStores {
             authMode: .none
         )
     }
+
+    /// Every built-in store, in Discover's default order (`vee-plugins` — the
+    /// default, manifest-curated catalog — before the legacy `xbar` mirror).
+    public static var all: [StoreConfig] { [veePlugins, xbar] }
+    /// The ids of every built-in store, for immutability/dedup checks that
+    /// don't need the full configs.
+    public static var allIDs: Set<StoreID> { [veePluginsID, xbarID] }
 }

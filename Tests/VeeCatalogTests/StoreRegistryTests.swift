@@ -40,19 +40,23 @@ final class StoreRegistryTests: XCTestCase {
 
     // MARK: - Baseline
 
-    func testEmptyRegistryHasOnlyBuiltInXbar() {
+    /// No seeding call, no prior state: both built-ins are present, enabled,
+    /// vee-plugins before xbar (default store lists first).
+    func testEmptyRegistryHasBothBuiltInsVeePluginsBeforeXbar() {
         let stores = registry.stores()
-        XCTAssertEqual(stores.map(\.id), [BuiltInStores.xbarID])
+        XCTAssertEqual(stores.map(\.id), [BuiltInStores.veePluginsID, BuiltInStores.xbarID])
         XCTAssertTrue(stores[0].isEnabled)
         XCTAssertTrue(stores[0].isBuiltIn)
+        XCTAssertTrue(stores[1].isEnabled)
+        XCTAssertTrue(stores[1].isBuiltIn)
     }
 
     // MARK: - User stores
 
-    func testAddUserStoreAppearsBeforeBuiltIn() throws {
+    func testAddUserStoreAppearsBeforeBuiltIns() throws {
         try registry.add(userStore("acme-internal"))
         let stores = registry.stores()
-        XCTAssertEqual(stores.map(\.id.rawValue), ["acme-internal", "com.vee.store.xbar"])
+        XCTAssertEqual(stores.map(\.id.rawValue), ["acme-internal", "com.vee.store.vee-plugins", "com.vee.store.xbar"])
         XCTAssertTrue(stores[0].isEnabled)
     }
 
@@ -278,10 +282,18 @@ final class StoreRegistryTests: XCTestCase {
         XCTAssertThrowsError(try registry.remove(BuiltInStores.xbarID)) { XCTAssertEqual($0 as? StoreRegistryError, .builtInImmutable) }
     }
 
+    func testCannotAddOrRemoveVeePluginsBuiltIn() {
+        var veePlugins = BuiltInStores.veePlugins
+        veePlugins.displayName = "hijack"
+        XCTAssertThrowsError(try registry.add(veePlugins)) { XCTAssertEqual($0 as? StoreRegistryError, .builtInImmutable) }
+        XCTAssertThrowsError(try registry.remove(BuiltInStores.veePluginsID)) { XCTAssertEqual($0 as? StoreRegistryError, .builtInImmutable) }
+        XCTAssertThrowsError(try registry.update(veePlugins)) { XCTAssertEqual($0 as? StoreRegistryError, .builtInImmutable) }
+    }
+
     func testRemoveUserStore() throws {
         try registry.add(userStore("temp"))
         try registry.remove(StoreID("temp"))
-        XCTAssertEqual(registry.stores().map(\.id), [BuiltInStores.xbarID])
+        XCTAssertEqual(registry.stores().map(\.id), [BuiltInStores.veePluginsID, BuiltInStores.xbarID])
     }
 
     /// `remove()` used to only clear the disabled flag, despite a comment
@@ -310,10 +322,10 @@ final class StoreRegistryTests: XCTestCase {
     func testDisableBuiltInHidesItFromEnabled() {
         registry.setEnabled(false, id: BuiltInStores.xbarID)
         XCTAssertFalse(registry.stores().first { $0.id == BuiltInStores.xbarID }!.isEnabled)
-        XCTAssertTrue(registry.enabledStores().isEmpty)
+        XCTAssertEqual(registry.enabledStores().map(\.id), [BuiltInStores.veePluginsID])
         // Re-enabling restores it.
         registry.setEnabled(true, id: BuiltInStores.xbarID)
-        XCTAssertEqual(registry.enabledStores().map(\.id), [BuiltInStores.xbarID])
+        XCTAssertEqual(registry.enabledStores().map(\.id), [BuiltInStores.veePluginsID, BuiltInStores.xbarID])
     }
 
     func testDisableUserStore() throws {
@@ -362,9 +374,39 @@ final class StoreRegistryTests: XCTestCase {
         XCTAssertEqual(matches[0].displayName, "Managed Shared")
     }
 
-    func testDisablePublicStoreHidesXbar() {
+    func testDisablePublicStoreHidesBothBuiltIns() {
         defaults.set(true, forKey: "vee.disablePublicStore")
-        XCTAssertFalse(registry.stores().contains { $0.id == BuiltInStores.xbarID })
+        let stores = registry.stores()
+        XCTAssertFalse(stores.contains { $0.id == BuiltInStores.xbarID })
+        XCTAssertFalse(stores.contains { $0.id == BuiltInStores.veePluginsID })
+    }
+
+    // MARK: - Default-store seeding (xbar disabled by default on a fresh install)
+
+    /// A fresh install: `vee.hasCompletedFirstRun` is absent (still false),
+    /// so the seed disables xbar. vee-plugins is untouched (stays enabled).
+    func testSeedOnFreshInstallDisablesXbarOnly() {
+        registry.seedDefaultStoresIfNeeded()
+        let stores = registry.stores()
+        XCTAssertFalse(stores.first { $0.id == BuiltInStores.xbarID }!.isEnabled)
+        XCTAssertTrue(stores.first { $0.id == BuiltInStores.veePluginsID }!.isEnabled)
+    }
+
+    /// An existing install: `vee.hasCompletedFirstRun` is already true (set
+    /// by a prior launch, before this seed existed) — xbar must stay enabled.
+    func testSeedOnExistingInstallLeavesXbarEnabled() {
+        defaults.set(true, forKey: "vee.hasCompletedFirstRun")
+        registry.seedDefaultStoresIfNeeded()
+        XCTAssertTrue(registry.stores().first { $0.id == BuiltInStores.xbarID }!.isEnabled)
+    }
+
+    /// One-shot: a second call (e.g. a later launch) doesn't reapply — a user
+    /// who re-enabled xbar after the first seed isn't silently flipped back.
+    func testSeedOnlyAppliesOnce() {
+        registry.seedDefaultStoresIfNeeded()
+        registry.setEnabled(true, id: BuiltInStores.xbarID)
+        registry.seedDefaultStoresIfNeeded()
+        XCTAssertTrue(registry.stores().first { $0.id == BuiltInStores.xbarID }!.isEnabled)
     }
 }
 

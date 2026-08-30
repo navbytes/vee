@@ -1013,7 +1013,13 @@ public final class AppController: NSObject, NSApplicationDelegate {
     /// has to guess what to do. If their plugins folder is also empty, open
     /// Discover once so there's an obvious next step. Existing SwiftBar/xbar
     /// users (who already have plugins) are left undisturbed.
+    ///
+    /// Also seeds `xbar` disabled-by-default (`vee-plugins` is now the
+    /// default store) — this MUST run before `prefs.hasCompletedFirstRun` is
+    /// set below, since that's exactly the signal `seedDefaultStoresIfNeeded`
+    /// uses to tell a fresh install from an existing one.
     private func presentFirstRunIfNeeded() {
+        StoreRegistry().seedDefaultStoresIfNeeded()
         guard !prefs.hasCompletedFirstRun else { return }
         prefs.hasCompletedFirstRun = true
         if PluginDiscovery.enumerate(directory: directory).isEmpty {

@@ -142,8 +142,12 @@ public final class PluginBrowserModel: ObservableObject {
         seedFreshnessCache()
     }
 
-    /// Single-store convenience (the public catalog), preserved for existing
-    /// call sites and tests.
+    /// Single-store convenience, preserved for existing call sites and tests
+    /// (the real app always goes through the multi-store initializer with
+    /// `StoreRegistry().stores()`). Stays scoped to `xbar` specifically —
+    /// `CatalogEntry.storeID` defaults to `BuiltInStores.xbarID`, so a fetcher
+    /// built without an explicit store id (every test fixture here) only
+    /// resolves against this store.
     public convenience init(fetcher: CatalogFetching, pluginsDirectory: String, onInstalled: @escaping () -> Void, onUpdatesFound: @escaping ([PluginUpdateCandidate], Set<String>) -> Void = { _, _ in }) {
         self.init(stores: [BuiltInStores.xbar], makeClient: { _ in fetcher }, pluginsDirectory: pluginsDirectory, onInstalled: onInstalled, onUpdatesFound: onUpdatesFound)
     }
