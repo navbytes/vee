@@ -71,7 +71,7 @@ From the plugin's filename: `cpu.5s.sh` runs every 5 seconds, `mail.10m.py` ever
 
 ### Do I need to compile plugins? What languages can I use?
 
-Any language. A plugin is just an executable that prints to stdout — bash, Python, Ruby, Node, a compiled binary, anything. TypeScript runs directly on Node 24+ with no build step. `vee new` scaffolds a starting point in shell, TypeScript, or Python.
+Any language. A plugin is just an executable that prints to stdout — bash, Python, Ruby, Node, a compiled binary, anything. TypeScript runs directly on Node's built-in type stripping (Node >= 22.18, Node 24+ recommended) with no build step. `vee new` scaffolds a starting point in shell, TypeScript, or Python.
 
 ### Can plugins talk back to Vee (refresh, notify)?
 

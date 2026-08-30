@@ -263,9 +263,9 @@ ModuleNotFoundError: No module named 'vee'
   best-effort, so a partial menu is better than a blank one.
 - **Standard error** — never parsed as menu output. It is captured and shown in
   the Debug console, which makes it the right place to write your own debug
-  tracing: it will not corrupt the menu. The exception is a **streaming** plugin,
-  whose standard error is discarded rather than captured — if you are debugging
-  one, print your tracing somewhere you can read it instead.
+  tracing: it will not corrupt the menu. A **streaming** plugin's standard error
+  is captured too, as a bounded tail — a crash-looping stream surfaces its last
+  line in the "Plugin stopped — restarting…" message instead of failing silently.
 
 `vee dev` reports all three on every save and keeps watching, so a script that
 breaks does not end the loop.

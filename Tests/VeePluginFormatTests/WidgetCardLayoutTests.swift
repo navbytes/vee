@@ -44,14 +44,14 @@ final class WidgetCardLayoutTests: XCTestCase {
     }
 
     func testLayoutAndPresetFieldsCoexist() {
-        let (card, _) = WidgetCardParser.parse(#"{"template":"gauge","value":"72%","layout":{"type":"text","text":"x"}}"#)
+        let (card, _) = WidgetCardParser.parse(#"{"vee_widget":1,"template":"gauge","value":"72%","layout":{"type":"text","text":"x"}}"#)
         XCTAssertEqual(card?.template, .gauge)
         XCTAssertEqual(card?.value, "72%")
         XCTAssertEqual(card?.layout?.type, "text")
     }
 
     func testNoLayoutKeyLeavesLayoutNil() {
-        let (card, _) = WidgetCardParser.parse(#"{"template":"stat","value":"1"}"#)
+        let (card, _) = WidgetCardParser.parse(#"{"vee_widget":1,"template":"stat","value":"1"}"#)
         XCTAssertNil(card?.layout)
     }
 
@@ -61,7 +61,7 @@ final class WidgetCardLayoutTests: XCTestCase {
         // 20 nested vstacks; the parser prunes children past depth 8.
         var json = #"{"type":"text","text":"deep"}"#
         for _ in 0..<20 { json = #"{"type":"vstack","children":[\#(json)]}"# }
-        let (card, diagnostics) = WidgetCardParser.parse(#"{"layout":\#(json)}"#)
+        let (card, diagnostics) = WidgetCardParser.parse(#"{"vee_widget":1,"layout":\#(json)}"#)
 
         // Walk to the deepest surviving node; it must bottom out at the cap.
         var depth = 0
@@ -75,7 +75,7 @@ final class WidgetCardLayoutTests: XCTestCase {
 
     func testTooManyNodesAreCappedWithDiagnostic() {
         let children = Array(repeating: #"{"type":"text","text":"x"}"#, count: 200).joined(separator: ",")
-        let (card, diagnostics) = WidgetCardParser.parse(#"{"layout":{"type":"vstack","children":[\#(children)]}}"#)
+        let (card, diagnostics) = WidgetCardParser.parse(#"{"vee_widget":1,"layout":{"type":"vstack","children":[\#(children)]}}"#)
         // Total node count (root + surviving children) must not exceed the cap.
         func count(_ n: WidgetNode?) -> Int {
             guard let n else { return 0 }
@@ -89,7 +89,7 @@ final class WidgetCardLayoutTests: XCTestCase {
 
     func testOverlongTextIsTruncatedWithDiagnostic() {
         let long = String(repeating: "a", count: 1000)
-        let (card, diagnostics) = WidgetCardParser.parse(#"{"layout":{"type":"text","text":"\#(long)"}}"#)
+        let (card, diagnostics) = WidgetCardParser.parse(#"{"vee_widget":1,"layout":{"type":"text","text":"\#(long)"}}"#)
         XCTAssertEqual(card?.layout?.text?.count, 512)
         XCTAssertTrue(diagnostics.contains { $0.message.contains("text") })
     }
@@ -98,7 +98,7 @@ final class WidgetCardLayoutTests: XCTestCase {
 
     func testSparklineIsCapped() {
         let many = (0..<400).map { String($0) }.joined(separator: ",")
-        let (card, diagnostics) = WidgetCardParser.parse(#"{"layout":{"type":"sparkline","values":[\#(many)]}}"#)
+        let (card, diagnostics) = WidgetCardParser.parse(#"{"vee_widget":1,"layout":{"type":"sparkline","values":[\#(many)]}}"#)
         XCTAssertEqual(card?.layout?.values?.count, 256)
         XCTAssertTrue(diagnostics.contains { $0.message.contains("sparkline") })
     }
@@ -115,7 +115,7 @@ final class WidgetCardLayoutTests: XCTestCase {
 
     func testCleanChartLeafParsesWithNoDiagnostics() {
         let json = """
-        {"layout":{"type":"chart","kind":"donut","values":[45,30,25],
+        {"vee_widget":1,"layout":{"type":"chart","kind":"donut","values":[45,30,25],
          "labels":["Documents","Photos","Apps"],"colors":["red","#00ff00"]}}
         """
         let (card, diagnostics) = WidgetCardParser.parse(json)
@@ -129,7 +129,7 @@ final class WidgetCardLayoutTests: XCTestCase {
 
     func testEveryChartKindIsAccepted() {
         for kind in ["pie", "donut", "stackedbar"] {
-            let (card, diagnostics) = WidgetCardParser.parse(#"{"layout":{"type":"chart","kind":"\#(kind)","values":[1,2]}}"#)
+            let (card, diagnostics) = WidgetCardParser.parse(#"{"vee_widget":1,"layout":{"type":"chart","kind":"\#(kind)","values":[1,2]}}"#)
             XCTAssertEqual(card?.layout?.kind, kind)
             XCTAssertEqual(diagnostics, [], kind)
         }
@@ -140,7 +140,7 @@ final class WidgetCardLayoutTests: XCTestCase {
     /// a malformed chart.
     func testUnknownChartKindDropsTheLeafAndKeepsTheCard() {
         let json = """
-        {"template":"stat","value":"38%","layout":{"type":"vstack","children":[
+        {"vee_widget":1,"template":"stat","value":"38%","layout":{"type":"vstack","children":[
           {"type":"text","text":"CPU"},
           {"type":"chart","kind":"sunburst","values":[1,2,3]}
         ]}}
@@ -152,7 +152,7 @@ final class WidgetCardLayoutTests: XCTestCase {
     }
 
     func testChartWithoutKindDropsTheLeaf() {
-        let (card, diagnostics) = WidgetCardParser.parse(#"{"layout":{"type":"chart","values":[1,2,3]}}"#)
+        let (card, diagnostics) = WidgetCardParser.parse(#"{"vee_widget":1,"layout":{"type":"chart","values":[1,2,3]}}"#)
         XCTAssertNil(card?.layout)
         XCTAssertEqual(diagnostics.count, 1)
         XCTAssertEqual(diagnostics.first?.severity, .warning)
@@ -161,7 +161,7 @@ final class WidgetCardLayoutTests: XCTestCase {
     /// Shares of a whole: a negative segment is as unmeaning as a NaN one, and
     /// `ChartParams.make` refuses both on the menu for the same reason.
     func testNegativeChartValuesAreDropped() {
-        let (card, diagnostics) = WidgetCardParser.parse(#"{"layout":{"type":"chart","kind":"pie","values":[45,-30,25]}}"#)
+        let (card, diagnostics) = WidgetCardParser.parse(#"{"vee_widget":1,"layout":{"type":"chart","kind":"pie","values":[45,-30,25]}}"#)
         XCTAssertEqual(card?.layout?.values, [45, 25])
         XCTAssertTrue(diagnostics.contains { $0.message.contains("negative") })
     }
@@ -170,7 +170,7 @@ final class WidgetCardLayoutTests: XCTestCase {
     /// slice that survived (`ChartParams.make`'s rule, applied to the leaf).
     func testOverlongChartIsFoldedIntoAnOtherSegment() {
         let json = """
-        {"layout":{"type":"chart","kind":"pie","values":[10,10,10,10,10,10,10,4,3,2,1],
+        {"vee_widget":1,"layout":{"type":"chart","kind":"pie","values":[10,10,10,10,10,10,10,4,3,2,1],
          "labels":["a","b","c","d","e","f","g","h","i","j","k"],"colors":["red","blue"]}}
         """
         let (card, diagnostics) = WidgetCardParser.parse(json)
@@ -186,7 +186,7 @@ final class WidgetCardLayoutTests: XCTestCase {
     /// wrong slice — so it just stays short.
     func testFoldedChartLeavesPartialLabelsAlone() {
         let values = (1...11).map(String.init).joined(separator: ",")
-        let (card, _) = WidgetCardParser.parse(#"{"layout":{"type":"chart","kind":"pie","values":[\#(values)],"labels":["a","b"]}}"#)
+        let (card, _) = WidgetCardParser.parse(#"{"vee_widget":1,"layout":{"type":"chart","kind":"pie","values":[\#(values)],"labels":["a","b"]}}"#)
         XCTAssertEqual(card?.layout?.labels, ["a", "b"])
         XCTAssertEqual(card?.layout?.values?.count, 8)
     }
@@ -195,7 +195,7 @@ final class WidgetCardLayoutTests: XCTestCase {
     /// its own (much larger) point budget.
     func testSparklineKeepsItsOwnCapAlongsideCharts() {
         let many = (0..<20).map(String.init).joined(separator: ",")
-        let (card, diagnostics) = WidgetCardParser.parse(#"{"layout":{"type":"sparkline","values":[\#(many)]}}"#)
+        let (card, diagnostics) = WidgetCardParser.parse(#"{"vee_widget":1,"layout":{"type":"sparkline","values":[\#(many)]}}"#)
         XCTAssertEqual(card?.layout?.values?.count, 20)
         XCTAssertEqual(diagnostics, [])
     }
@@ -203,10 +203,10 @@ final class WidgetCardLayoutTests: XCTestCase {
     // MARK: - Gauge value clamp
 
     func testGaugeValueClamped() {
-        let (over, _) = WidgetCardParser.parse(#"{"layout":{"type":"gauge","value":1.4}}"#)
+        let (over, _) = WidgetCardParser.parse(#"{"vee_widget":1,"layout":{"type":"gauge","value":1.4}}"#)
         XCTAssertEqual(over?.layout?.value, 1.0)
 
-        let (under, _) = WidgetCardParser.parse(#"{"layout":{"type":"gauge","value":-0.5}}"#)
+        let (under, _) = WidgetCardParser.parse(#"{"vee_widget":1,"layout":{"type":"gauge","value":-0.5}}"#)
         XCTAssertEqual(under?.layout?.value, 0.0)
     }
 
@@ -214,7 +214,7 @@ final class WidgetCardLayoutTests: XCTestCase {
 
     func testStyleNumericValuesAreClamped() {
         let json = """
-        {"layout":{"type":"text","text":"x","style":{
+        {"vee_widget":1,"layout":{"type":"text","text":"x","style":{
           "font":{"point_size":400},"padding":999,"line_limit":99,"min_scale":0.05
         }}}
         """
@@ -227,21 +227,21 @@ final class WidgetCardLayoutTests: XCTestCase {
     }
 
     func testGridColumnsClamped() {
-        let (card, _) = WidgetCardParser.parse(#"{"layout":{"type":"grid","columns":9,"children":[]}}"#)
+        let (card, _) = WidgetCardParser.parse(#"{"vee_widget":1,"layout":{"type":"grid","columns":9,"children":[]}}"#)
         XCTAssertEqual(card?.layout?.columns, 4)
     }
 
     // MARK: - Unknown types / forward compatibility
 
     func testUnknownNodeTypeYieldsDiagnosticButKeepsNode() {
-        let (card, diagnostics) = WidgetCardParser.parse(#"{"layout":{"type":"canvas","text":"x"}}"#)
+        let (card, diagnostics) = WidgetCardParser.parse(#"{"vee_widget":1,"layout":{"type":"canvas","text":"x"}}"#)
         XCTAssertEqual(card?.layout?.type, "canvas")
         XCTAssertTrue(diagnostics.contains { $0.message.contains("canvas") })
     }
 
     func testUnknownStyleAndNodeKeysAreIgnored() {
         let (card, diagnostics) = WidgetCardParser.parse(
-            #"{"layout":{"type":"text","text":"x","future_field":1,"style":{"future_style":2,"tint":"red"}}}"#
+            #"{"vee_widget":1,"layout":{"type":"text","text":"x","future_field":1,"style":{"future_style":2,"tint":"red"}}}"#
         )
         XCTAssertEqual(card?.layout?.style?.tint, .named("red"))
         XCTAssertEqual(diagnostics, [])

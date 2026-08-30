@@ -32,7 +32,7 @@ Swift Charts, and a widget is WidgetKit.
 
 A menu-bar chart occupies the row's **accessory slot** — the same slot for all
 of them, which is why a row draws one chart and not three. When a line carries
-more than one, the last one wins in the order `progress=` → `sparkline=` →
+more than one, the first one wins in the order `progress=` → `sparkline=` →
 share chart. `accessory=leading` moves it to the other edge of the row.
 
 Most of them are also clickable. A sparkline or a share chart opens a Liquid

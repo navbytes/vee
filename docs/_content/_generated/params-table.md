@@ -10,9 +10,9 @@ How the row's own text is drawn.
 | `font` | string | — | any line | Font family name for the text. |
 | `size` | points | — | any line | Font point size. Clamped to 4–144 points: the value becomes a real font size on a menu row that grows to fit it. |
 | `length` | characters | — | any line | Truncate the displayed text to this many characters. |
-| `trim` | boolean | — | any line | Trim surrounding whitespace from the text. |
+| `trim` | boolean | true | any line | Trim surrounding whitespace from the text. |
 | `ansi` | boolean | true | any line | Interpret ANSI color escape codes in the text. On by default; set `ansi=false` to disable. [More](#ansi-color) |
-| `emojize` | boolean | — | any line | Convert `:shortcode:` tokens (e.g. `:smile:`) into emoji. |
+| `emojize` | boolean | true | any line | Convert `:shortcode:` tokens (e.g. `:smile:`) into emoji. |
 | `md` / `markdown` | boolean | — | any line | Render the text as inline Markdown (bold, italics, etc.). [More](#markdown) |
 
 ### Behavior on click
