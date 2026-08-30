@@ -1076,10 +1076,59 @@ private struct NoticeBanner: View {
     }
 }
 
+/// Renders one `AsyncImagePhase` of a plugin card's screenshot at a fixed
+/// height — factored out of `PluginCard.preview` so "every phase is the same
+/// height" (the scroll-jank fix: `.empty`/`.failure` used to render 0pt,
+/// jumping the card's height once `.success` landed mid-scroll) is
+/// unit-testable without a real network fetch. Not `private`, unlike its
+/// sibling card views, so tests can construct it directly via `@testable
+/// import VeeUI` (mirroring `PluginBrowserModel.previewImageURL`, also
+/// internal for the same reason).
+struct PluginPreviewPhaseView: View {
+    let phase: AsyncImagePhase
+    let title: String
+    /// Fired only from the `.success` phase's own tap target.
+    let onTapSuccess: () -> Void
+
+    /// The 120pt cap `.success`'s image already used, now reserved by every
+    /// phase.
+    static let height: CGFloat = 120
+
+    var body: some View {
+        switch phase {
+        case .success(let image):
+            Button(action: onTapSuccess) {
+                image
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(maxWidth: .infinity, minHeight: Self.height, maxHeight: Self.height)
+                    .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("Screenshot of \(title)")
+            .accessibilityHint("Opens a larger preview")
+        case .empty:
+            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                .fill(Palette.hairline.opacity(0.3))
+                .frame(maxWidth: .infinity, minHeight: Self.height, maxHeight: Self.height)
+                .overlay(ProgressView().controlSize(.small))
+        case .failure:
+            // Reserves the same space but draws nothing — a broken-image icon
+            // would be a worse card than no image (pre-existing policy).
+            Color.clear.frame(maxWidth: .infinity, minHeight: Self.height, maxHeight: Self.height)
+        @unknown default:
+            Color.clear.frame(maxWidth: .infinity, minHeight: Self.height, maxHeight: Self.height)
+        }
+    }
+}
+
 /// One plugin card in the Discover grid.
 private struct PluginCard: View {
     @ObservedObject var model: PluginBrowserModel
     let entry: CatalogEntry
+    /// Drives the click-to-enlarge sheet — only ever set while `preview` has
+    /// an actual loaded image to show (the `.success` phase's own tap target).
+    @State private var showingFullImage = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: Space.sm) {
@@ -1105,22 +1154,26 @@ private struct PluginCard: View {
     /// the card that existed before, so nothing shifts for the plugins — the
     /// large majority — that publish none.
     ///
-    /// Height-capped because the declared image is arbitrary: a screenshot of a
-    /// menu is wide and short, and one that isn't must not be allowed to push
-    /// every other card off the grid. Failure draws nothing at all rather than a
-    /// broken-image placeholder, which would be a worse card than no image.
+    /// Height-capped (`PluginPreviewPhaseView.height`) because the declared
+    /// image is arbitrary: a screenshot of a menu is wide and short, and one
+    /// that isn't must not be allowed to push every other card off the grid.
+    /// Every phase reserves that same height (see `PluginPreviewPhaseView`),
+    /// so a card with a declared image never resizes once its `AsyncImage`
+    /// settles.
+    ///
+    /// A loaded image (`.success`) is the click target for the enlarge sheet —
+    /// the card itself stays reserved for its own Install/Update/View source
+    /// controls (see the no-hover-treatment note in `body`).
     @ViewBuilder
     private var preview: some View {
         if let url = model.previewImageURL(for: entry) {
             AsyncImage(url: url) { phase in
-                if case .success(let image) = phase {
-                    image
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .frame(maxWidth: .infinity, maxHeight: 120)
-                        .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
-                        .accessibilityLabel("Screenshot of \(model.title(for: entry))")
+                PluginPreviewPhaseView(phase: phase, title: model.title(for: entry)) {
+                    showingFullImage = true
                 }
+            }
+            .sheet(isPresented: $showingFullImage) {
+                PluginScreenshotSheet(url: url, title: model.title(for: entry))
             }
         }
     }
@@ -1229,6 +1282,50 @@ private struct PluginCard: View {
             .controlSize(.small)
             .disabled(isInstalling)
             .accessibilityLabel("Install \(model.title(for: entry))")
+    }
+}
+
+/// The click-to-enlarge sheet for a plugin card's screenshot — a plain, large
+/// resizable `AsyncImage` (the card's own already loaded it, so this refetches
+/// from URLSession's shared cache rather than round-tripping the network
+/// again) with a title bar and a close affordance. `⌘.`/Esc close it, matching
+/// the `Cancel` convention elsewhere (e.g. `AddStoreSheet`).
+private struct PluginScreenshotSheet: View {
+    let url: URL
+    let title: String
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        VStack(spacing: 0) {
+            HStack {
+                Text(title).font(TypeRole.cardTitle).lineLimit(1)
+                Spacer()
+                Button {
+                    dismiss()
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.title3)
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .keyboardShortcut(.cancelAction)
+                .accessibilityLabel("Close")
+            }
+            .padding(Space.md)
+            Divider()
+            AsyncImage(url: url) { phase in
+                switch phase {
+                case .success(let image):
+                    image.resizable().aspectRatio(contentMode: .fit)
+                case .failure:
+                    ContentUnavailableView("Couldn't load image", systemImage: "photo.badge.exclamationmark")
+                default:
+                    ProgressView()
+                }
+            }
+            .padding(Space.lg)
+        }
+        .frame(minWidth: 480, idealWidth: 720, minHeight: 320, idealHeight: 520)
     }
 }
 
