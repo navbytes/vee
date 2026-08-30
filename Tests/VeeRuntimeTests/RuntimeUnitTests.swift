@@ -147,6 +147,21 @@ final class ShebangLaunchTests: XCTestCase {
         XCTAssertEqual(path, "/bin/zsh", "the interpreter path itself must not carry a trailing \\r")
         XCTAssertEqual(args, [p])
     }
+
+    /// The shebang probe reads the first 256 BYTES of the file. A multi-byte
+    /// character straddling that boundary (an em-dash in a header comment) made
+    /// the strict UTF-8 decode fail, so a Python plugin silently fell back to
+    /// `/bin/bash` — a spurious exit 2 from lint/render and the app alike.
+    func testHonorsShebangWhenMultibyteCharacterStraddlesReadBoundary() {
+        let shebang = "#!/usr/bin/env python3\n"
+        let pad = "# " + String(repeating: "x", count: 255 - shebang.utf8.count - 2)
+        let contents = shebang + pad + "— an em-dash straddling byte 256\nprint('ok')\n"
+        XCTAssertEqual(Array(contents.utf8)[255], 0xE2, "test setup: the read boundary must split the em-dash")
+        let p = tempFile(contents); defer { try? FileManager.default.removeItem(atPath: p) }
+        let (path, args) = PluginExecutor.launchCommand(pluginPath: p, runInBash: true)
+        XCTAssertEqual(path, "/usr/bin/env")
+        XCTAssertEqual(args, ["python3", p])
+    }
 }
 
 final class PluginRuntimeTests: XCTestCase {
