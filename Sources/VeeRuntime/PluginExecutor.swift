@@ -67,7 +67,11 @@ public struct PluginExecutor: Sendable {
         // other line-oriented reader in Vee is CRLF-tolerant; this was the one
         // that wasn't, and a plugin edited on Windows or fetched through a tool
         // that rewrites line endings hits it.
-        guard let firstLine = String(data: data, encoding: .utf8)?
+        // Decodes leniently (same policy as `PluginSource`): the 256-byte read
+        // can end mid-way through a multi-byte character — an em-dash in a
+        // header comment straddling the boundary — and a strict decode turned
+        // that into "no shebang", running a Python plugin under /bin/bash.
+        guard let firstLine = String(decoding: data, as: UTF8.self)
             .split(maxSplits: 1, omittingEmptySubsequences: false, whereSeparator: \.isNewline).first,
             firstLine.hasPrefix("#!") else { return nil }
         let tokens = firstLine.dropFirst(2)
