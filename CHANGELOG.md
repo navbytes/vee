@@ -6,6 +6,21 @@ All notable changes to Vee are documented here. The format is based on
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-09-21
+
+The plugin SDKs are retired — the stdout format is the SDK — plus a curated
+built-in Discover store and a correctness pass over the Library window.
+
+### Added
+- **vee-plugins is a built-in Discover store**, listed before xbar. Fresh
+  installs ship with xbar's catalog disabled (existing installs keep it on);
+  `vee.disablePublicStore` now hides both built-ins.
+- **Store changes apply to an open Discover tab immediately** — enabling,
+  disabling, adding, or removing a store no longer needs a window reopen.
+- Discover screenshots can be zoomed, and cards keep a stable height.
+- Removing a custom store now asks for confirmation before deleting it and its
+  saved token.
+
 ### Removed
 - **BREAKING: the three official plugin SDKs (TypeScript, Python, Go) are
   retired.** `vee sdk` is gone, `vee new` no longer vendors an SDK file beside
@@ -41,6 +56,31 @@ All notable changes to Vee are documented here. The format is based on
   @navbytes/vee` (stays installable forever; no new versions). No new Go
   module tags will be cut for `plugins/go` — existing tags are immutable and
   remain resolvable forever.
+
+### Fixed
+- **The Library window no longer loses or misdirects edits.** Switching
+  between Installed, Discover, Variables, and General keeps one session instead
+  of rebuilding each tab; Installed and Variables stay current after installs
+  and file changes, keeping unsaved edits; changing the plugins folder rebinds
+  every tab to the new folder, asks before discarding unsaved edits, and blocks
+  while a Discover install is pending.
+- **Settings and Variables report save failures** instead of claiming success,
+  and keep your edits so you can retry. A plugin with only a hotkey can now be
+  saved.
+- Deleting a plugin removes it from Installed only after it reaches the Trash.
+- The General tab's Launch at Login toggle stays in sync with the menu bar and
+  the real system state.
+- Store edits that collide with another store's identity are rejected, and
+  store controls carry store-specific accessibility names.
+- A catalog manifest's timestamp no longer marks every unhashed plugin as having
+  an update.
+- A multi-byte character at byte 256 of a script can no longer hide its
+  shebang interpreter.
+- JSON output and widget cards now require the `vee` / `vee_widget` version key
+  the schema declares; a missing or mismatched version falls back to text (JSON)
+  or is rejected with a diagnostic (widget).
+- Discover's status and action labels stay readable at the window's minimum
+  width.
 
 ## [0.6.2] - 2026-08-29
 
@@ -1055,7 +1095,8 @@ lost. Comparison link below is `v0.1.1...v0.2.0` for the same reason.
 - Zero-dependency TypeScript SDK with a golden-fixture drift guard.
 - Developer-ID-signed, notarized distribution outside the Mac App Store.
 
-[Unreleased]: https://github.com/navbytes/vee/compare/v0.6.2...HEAD
+[Unreleased]: https://github.com/navbytes/vee/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/navbytes/vee/compare/v0.6.2...v0.7.0
 [0.6.2]: https://github.com/navbytes/vee/compare/v0.6.1...v0.6.2
 [0.6.1]: https://github.com/navbytes/vee/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/navbytes/vee/compare/v0.5.0...v0.6.0
