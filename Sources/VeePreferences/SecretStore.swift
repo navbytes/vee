@@ -6,7 +6,7 @@ import Security
 /// in-memory implementation is used in tests.
 public protocol SecretStoring: Sendable {
     func get(_ account: String) -> String?
-    func set(_ value: String?, for account: String)
+    func set(_ value: String?, for account: String) throws
     /// Deletes every secret in this store's namespace, regardless of account
     /// name — used when disk reconciliation confirms the plugin the
     /// namespace belongs to no longer has a file on disk (see
@@ -14,6 +14,10 @@ public protocol SecretStoring: Sendable {
     /// secret vars (several accounts under the same per-plugin service), so
     /// clearing one known account name isn't enough to fully clean up.
     func deleteAll()
+}
+
+public enum SecretStoreError: Error, Equatable, Sendable {
+    case operationFailed
 }
 
 /// Keychain-backed secret store (`kSecClassGenericPassword`), keyed by a
@@ -44,9 +48,10 @@ public struct KeychainSecretStore: SecretStoring {
         return String(data: data, encoding: .utf8)
     }
 
-    public func set(_ value: String?, for account: String) {
+    public func set(_ value: String?, for account: String) throws {
         guard let value, !value.isEmpty else {
-            SecItemDelete(baseQuery(account) as CFDictionary)
+            let status = SecItemDelete(baseQuery(account) as CFDictionary)
+            guard status == errSecSuccess || status == errSecItemNotFound else { throw SecretStoreError.operationFailed }
             return
         }
         let data = Data(value.utf8)
@@ -56,7 +61,9 @@ public struct KeychainSecretStore: SecretStoring {
             var add = baseQuery(account)
             add[kSecValueData as String] = data
             add[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlocked
-            SecItemAdd(add as CFDictionary, nil)
+            guard SecItemAdd(add as CFDictionary, nil) == errSecSuccess else { throw SecretStoreError.operationFailed }
+        } else if status != errSecSuccess {
+            throw SecretStoreError.operationFailed
         }
     }
 
@@ -83,7 +90,7 @@ public final class InMemorySecretStore: SecretStoring, @unchecked Sendable {
         lock.withLock { storage[account] }
     }
 
-    public func set(_ value: String?, for account: String) {
+    public func set(_ value: String?, for account: String) throws {
         lock.withLock { storage[account] = value }
     }
 

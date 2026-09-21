@@ -164,6 +164,12 @@ public final class StoreRegistry: @unchecked Sendable {
         guard !managedStores().contains(where: { $0.id == store.id }) else { throw StoreRegistryError.managedImmutable }
         var stores = try loadUserStoresOrThrow()
         guard let idx = stores.firstIndex(where: { $0.id == store.id }) else { throw StoreRegistryError.notFound(store.id.rawValue) }
+        if let identity = store.storeIdentity,
+           let clash = (BuiltInStores.all + stores + managedStores()).first(where: {
+               $0.id != store.id && $0.storeIdentity == identity
+           }) {
+            throw StoreRegistryError.duplicateStore(clash.displayName)
+        }
         var normalized = store
         normalized.isManaged = false
         normalized.isBuiltIn = false

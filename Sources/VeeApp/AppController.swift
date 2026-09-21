@@ -53,6 +53,9 @@ public final class AppController: NSObject, NSApplicationDelegate {
     /// since real Keychain access in a plain `swift test` binary is
     /// unreliable/prompts (there's no entitlement/signing for it there).
     private let secretStoreFactory: (PluginID) -> SecretStoring
+    private let trashItem: (URL) throws -> Void
+    private let loginItemIsEnabled: () -> Bool
+    private let setLoginItemEnabled: (Bool) -> Bool
 
     /// Live "combine everything into one menu bar item" toggle (issue #71 —
     /// one icon total in compact mode, not two side by side). Removed at
@@ -110,9 +113,18 @@ public final class AppController: NSObject, NSApplicationDelegate {
     /// The running controller, so App Intents (Shortcuts/Spotlight) can drive it.
     public static weak var shared: AppController?
 
-    public init(secretStoreFactory: ((PluginID) -> SecretStoring)? = nil, deletionGracePeriod: TimeInterval = 300) {
+    public init(
+        secretStoreFactory: ((PluginID) -> SecretStoring)? = nil,
+        deletionGracePeriod: TimeInterval = 300,
+        trashItem: ((URL) throws -> Void)? = nil,
+        loginItemIsEnabled: (() -> Bool)? = nil,
+        setLoginItemEnabled: ((Bool) -> Bool)? = nil
+    ) {
         self.secretStoreFactory = secretStoreFactory ?? { KeychainSecretStore(pluginID: $0.rawValue) }
         self.deletionGracePeriod = deletionGracePeriod
+        self.trashItem = trashItem ?? { try FileManager.default.trashItem(at: $0, resultingItemURL: nil) }
+        self.loginItemIsEnabled = loginItemIsEnabled ?? { LoginItemManager.isEnabled }
+        self.setLoginItemEnabled = setLoginItemEnabled ?? { LoginItemManager.setEnabled($0) }
         super.init()
         Self.shared = self
     }
@@ -145,7 +157,8 @@ public final class AppController: NSObject, NSApplicationDelegate {
             onDiscover: { [weak self] in self?.openBrowser() },
             onPreferences: { [weak self] in self?.openPreferences() },
             onRefreshAll: { [weak self] in self?.refreshAll() },
-            onOpenFolder: { [weak self] in self?.openFolder() }
+            onOpenFolder: { [weak self] in self?.openFolder() },
+            onToggleLogin: { [weak self] enabled in self?.applyLoginItemEnabled(enabled) }
         )
         // Issue #71 ("one icon total"): fold the app item's own controls under
         // the compact item's shared icon when compact mode is already on at
@@ -716,12 +729,16 @@ public final class AppController: NSObject, NSApplicationDelegate {
             guard now.timeIntervalSince(firstMissing) >= deletionGracePeriod else { continue }
             missingSince[filename] = nil
 
-            prefs.clearAllState(id: filename)
-            prefs.clearPluginHome(filename)
-            VarStore(pluginPath: (directory as NSString).appendingPathComponent(filename)).delete()
-            try? provenanceStore.remove(filename: filename)
-            secretStoreFactory(PluginID(rawValue: filename)).deleteAll()
+            clearSatelliteState(filename, provenanceStore: provenanceStore)
         }
+    }
+
+    private func clearSatelliteState(_ filename: String, provenanceStore: ProvenanceStore? = nil) {
+        prefs.clearAllState(id: filename)
+        prefs.clearPluginHome(filename)
+        VarStore(pluginPath: (directory as NSString).appendingPathComponent(filename)).delete()
+        try? (provenanceStore ?? ProvenanceStore(directory: directory)).remove(filename: filename)
+        secretStoreFactory(PluginID(rawValue: filename)).deleteAll()
     }
 
     /// Whether `id` currently has a live coordinator — i.e. it passed the
@@ -854,6 +871,13 @@ public final class AppController: NSObject, NSApplicationDelegate {
 
     private func openFolder() { NSWorkspace.shared.open(URL(fileURLWithPath: directory)) }
 
+    private func applyLoginItemEnabled(_ requested: Bool) {
+        let actual = setLoginItemEnabled(requested)
+        let failed = actual != requested
+        currentManagerModel?.setLaunchAtLoginState(actual, failed: failed)
+        generalSettingsModel?.setLaunchAtLoginState(actual, failed: failed)
+    }
+
     private func openManager() {
         LibraryWindow.shared.show(model: makeLibraryModel(section: .installed))
     }
@@ -870,14 +894,14 @@ public final class AppController: NSObject, NSApplicationDelegate {
         let manager = PluginManagerModel(
             rows: [],
             currentDirectory: directory,
-            launchAtLogin: LoginItemManager.isEnabled,
+            launchAtLogin: loginItemIsEnabled(),
             onToggleEnabled: { [weak self] id, enabled in self?.setEnabled(enabled, id: id) },
             onReveal: { [weak self] id in self?.reveal(id) },
             onSettings: { [weak self] id in self?.coordinators[id]?.showSettings() },
             onDebug: { [weak self] id in self?.coordinators[id]?.showDebugConsole() },
-            onDelete: { [weak self] id in self?.deletePlugin(id) },
+            onDelete: { [weak self] id in self?.deletePlugin(id) ?? false },
             onDiscover: { [weak self] in self?.openBrowser() },
-            onLaunchAtLogin: { enabled in LoginItemManager.setEnabled(enabled) },
+            onLaunchAtLogin: { [weak self] enabled in self?.applyLoginItemEnabled(enabled) },
             onOpenFolder: { [weak self] in self?.openFolder() },
             onChooseFolder: { [weak self] in self?.chooseFolder() },
             onRefreshAll: { [weak self] in self?.refreshAll() }
@@ -903,8 +927,8 @@ public final class AppController: NSObject, NSApplicationDelegate {
 
         let general = GeneralSettingsModel(
             currentDirectory: directory,
-            launchAtLogin: LoginItemManager.isEnabled,
-            onLaunchAtLogin: { LoginItemManager.setEnabled($0) },
+            launchAtLogin: loginItemIsEnabled(),
+            onLaunchAtLogin: { [weak self] enabled in self?.applyLoginItemEnabled(enabled) },
             onChooseFolder: { [weak self] in self?.chooseFolderFromPreferences() },
             onOpenFolder: { [weak self] in self?.openFolder() },
             onRefreshAll: { [weak self] in self?.refreshAll() },
@@ -1154,10 +1178,17 @@ public final class AppController: NSObject, NSApplicationDelegate {
     /// `reload()` below runs `reconcileDiskState()` first thing, and the file
     /// is already gone from disk by the time it does (`trashItem` isn't
     /// async) — see `reconcileDiskState`'s doc comment.
-    private func deletePlugin(_ id: String) {
-        guard let plugin = PluginDiscovery.enumerate(directory: directory).first(where: { $0.id.rawValue == id }) else { return }
-        try? FileManager.default.trashItem(at: URL(fileURLWithPath: plugin.path), resultingItemURL: nil)
-        reload()
+    private func deletePlugin(_ id: String) -> Bool {
+        guard let plugin = PluginDiscovery.enumerate(directory: directory).first(where: { $0.id.rawValue == id }) else { return false }
+        do {
+            try trashItem(URL(fileURLWithPath: plugin.path))
+            clearSatelliteState(id)
+            reload()
+            return true
+        } catch {
+            log.error("moving plugin to Trash failed for \(id, privacy: .public)")
+            return false
+        }
     }
 
     /// A per-plugin snapshot of the main-actor state a row needs (enabled,

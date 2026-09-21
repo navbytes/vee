@@ -39,8 +39,8 @@ public struct ManifestCatalogClient: CatalogFetching {
         return String(decoding: data, as: UTF8.self)
     }
 
-    /// The manifest carries the catalog's last-updated date; entries inherit it,
-    /// so no per-plugin call is needed.
+    /// Manifest stores do not currently expose per-plugin timestamps. The
+    /// catalog-wide `updated` value cannot identify which plugin changed.
     public func fetchLastUpdated(_ entry: CatalogEntry) async throws -> Date? {
         entry.lastUpdated
     }

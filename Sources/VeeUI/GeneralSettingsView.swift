@@ -10,6 +10,7 @@ import VeePreferences
 public final class GeneralSettingsModel: ObservableObject {
     @Published public var currentDirectory: String
     @Published public var launchAtLogin: Bool
+    @Published public private(set) var loginItemError: String?
     /// Opt-in "combine all plugins into one menu bar item" (issue #45 — menu-bar crowding).
     /// Unlike `launchAtLogin` (which needs `LoginItemManager`, a `VeeApp`-layer
     /// type `VeeUI` can't import) this reads/writes `AppPreferences` directly —
@@ -57,6 +58,13 @@ public final class GeneralSettingsModel: ObservableObject {
         self.focusWindowsHotkeyStatus = focusWindowsHotkeyStatus
         self.onApplyFocusWindowsHotkey = onApplyFocusWindowsHotkey
     }
+
+    public func setLaunchAtLoginState(_ enabled: Bool, failed: Bool) {
+        launchAtLogin = enabled
+        loginItemError = failed ? "Couldn’t change Launch at Login. Check System Settings and try again." : nil
+    }
+
+    public func dismissLoginItemError() { loginItemError = nil }
 
     /// Applies the current hotkey combination immediately (a hotkey is a
     /// live system resource, so it commits on change rather than on Save) and
@@ -110,9 +118,9 @@ public struct GeneralSettingsTab: View {
         Form {
             GeneralSettingsContent(
                 directory: model.currentDirectory,
-                launchAtLogin: Binding(
-                    get: { model.launchAtLogin },
-                    set: { model.launchAtLogin = $0; model.onLaunchAtLogin($0) }
+                    launchAtLogin: Binding(
+                        get: { model.launchAtLogin },
+                        set: { model.onLaunchAtLogin($0) }
                 ),
                 onChooseFolder: { model.onChooseFolder() }
             )
@@ -154,6 +162,14 @@ public struct GeneralSettingsTab: View {
                     Label("Open Plugins Folder", systemImage: "folder")
                 }
             }
+        }
+        .alert("Launch at Login Not Changed", isPresented: Binding(
+            get: { model.loginItemError != nil },
+            set: { if !$0 { model.dismissLoginItemError() } }
+        )) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(model.loginItemError ?? "")
         }
         .formStyle(.grouped)
     }

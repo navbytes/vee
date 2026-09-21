@@ -86,22 +86,22 @@ final class VarStoreTests: XCTestCase {
 }
 
 final class InMemorySecretStoreTests: XCTestCase {
-    func testSetGetDelete() {
+    func testSetGetDelete() throws {
         let store = InMemorySecretStore()
         XCTAssertNil(store.get("TOKEN"))
-        store.set("abc", for: "TOKEN")
+        try store.set("abc", for: "TOKEN")
         XCTAssertEqual(store.get("TOKEN"), "abc")
-        store.set(nil, for: "TOKEN")
+        try store.set(nil, for: "TOKEN")
         XCTAssertNil(store.get("TOKEN"))
     }
 
     /// `deleteAll()` clears every account in the namespace at once — a
     /// plugin can declare several secret vars (several accounts), so
     /// clearing one known name during disk-reconciliation GC isn't enough.
-    func testDeleteAllClearsEveryAccount() {
+    func testDeleteAllClearsEveryAccount() throws {
         let store = InMemorySecretStore()
-        store.set("abc", for: "API_TOKEN")
-        store.set("def", for: "PASSWORD")
+        try store.set("abc", for: "API_TOKEN")
+        try store.set("def", for: "PASSWORD")
 
         store.deleteAll()
 

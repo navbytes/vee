@@ -73,4 +73,18 @@ final class GeneralSettingsModelTests: XCTestCase {
         XCTAssertEqual(written, false, "flipping the toggle must forward the new value through onCompactMenuBar")
     }
 
+    func testLaunchAtLoginStateReflectsActualSuccessAndFailure() {
+        let model = GeneralSettingsModel(
+            currentDirectory: "/tmp", launchAtLogin: false, onLaunchAtLogin: { _ in },
+            onChooseFolder: {}, onOpenFolder: {}, onRefreshAll: {}
+        )
+        model.setLaunchAtLoginState(true, failed: false)
+        XCTAssertTrue(model.launchAtLogin)
+        XCTAssertNil(model.loginItemError)
+
+        model.setLaunchAtLoginState(true, failed: true)
+        XCTAssertTrue(model.launchAtLogin, "a rejected disable must retain the actual enabled state")
+        XCTAssertEqual(model.loginItemError, "Couldn’t change Launch at Login. Check System Settings and try again.")
+    }
+
 }

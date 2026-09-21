@@ -106,7 +106,6 @@ public enum CatalogManifestParser {
             throw ManifestError.tooManyPlugins(manifest.plugins.count)
         }
 
-        let lastUpdated = manifest.updatedDate
         return manifest.plugins.compactMap { plugin -> CatalogEntry? in
             guard isSafeRelativePath(plugin.path) else {
                 log.error("dropping manifest entry with unsafe path \(plugin.path, privacy: .public) from store \(storeID.rawValue, privacy: .public)")
@@ -129,7 +128,7 @@ public enum CatalogManifestParser {
                 category: category,
                 filename: filename,
                 rawURL: rawURL,
-                lastUpdated: lastUpdated,
+                lastUpdated: nil,
                 manifestTitle: plugin.title,
                 manifestSummary: plugin.summary,
                 declaredSHA256: plugin.sha256,

@@ -53,12 +53,14 @@ public final class PluginManagerModel: ObservableObject {
     @Published public var isLoaded: Bool = false
     @Published public var currentDirectory: String
     @Published public var launchAtLogin: Bool
+    @Published public private(set) var deleteError: String?
+    @Published public private(set) var loginItemError: String?
 
     public var onToggleEnabled: (String, Bool) -> Void
     public var onReveal: (String) -> Void
     public var onSettings: (String) -> Void
     public var onDebug: (String) -> Void
-    public var onDelete: (String) -> Void
+    public var onDelete: (String) -> Bool
     public var onDiscover: () -> Void
     public var onLaunchAtLogin: (Bool) -> Void
     public var onOpenFolder: () -> Void
@@ -73,7 +75,7 @@ public final class PluginManagerModel: ObservableObject {
         onReveal: @escaping (String) -> Void,
         onSettings: @escaping (String) -> Void,
         onDebug: @escaping (String) -> Void = { _ in },
-        onDelete: @escaping (String) -> Void = { _ in },
+        onDelete: @escaping (String) -> Bool = { _ in true },
         onDiscover: @escaping () -> Void = {},
         onLaunchAtLogin: @escaping (Bool) -> Void,
         onOpenFolder: @escaping () -> Void,
@@ -95,11 +97,26 @@ public final class PluginManagerModel: ObservableObject {
         self.onRefreshAll = onRefreshAll
     }
 
-    /// Removes the row from the list immediately for responsive feedback, then
-    /// asks the app to move the plugin file to the Trash.
-    func delete(_ id: String) {
+    public func delete(_ id: String) {
+        guard let row = rows.first(where: { $0.id == id }) else { return }
+        guard onDelete(id) else {
+            deleteError = "Couldn’t move \(row.name) to the Trash. Check file permissions and try again."
+            return
+        }
+        deleteError = nil
         rows.removeAll { $0.id == id }
-        onDelete(id)
+    }
+
+    func dismissDeleteError() { deleteError = nil }
+
+    func dismissActionError() {
+        deleteError = nil
+        loginItemError = nil
+    }
+
+    public func setLaunchAtLoginState(_ enabled: Bool, failed: Bool) {
+        launchAtLogin = enabled
+        loginItemError = failed ? "Couldn’t change Launch at Login. Check System Settings and try again." : nil
     }
 
     /// Updates one row's last-run error live while the window is open. Only
@@ -170,7 +187,7 @@ public struct PluginManagerView: View {
                     directory: model.currentDirectory,
                     launchAtLogin: Binding(
                         get: { model.launchAtLogin },
-                        set: { model.launchAtLogin = $0; model.onLaunchAtLogin($0) }
+                        set: { model.onLaunchAtLogin($0) }
                     ),
                     onChooseFolder: { model.onChooseFolder() }
                 )
@@ -197,6 +214,14 @@ public struct PluginManagerView: View {
             }
         }
         .frame(minWidth: 500, minHeight: 460)
+        .alert("Action Failed", isPresented: Binding(
+            get: { model.deleteError != nil || model.loginItemError != nil },
+            set: { if !$0 { model.dismissActionError() } }
+        )) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(model.deleteError ?? model.loginItemError ?? "")
+        }
     }
 }
 

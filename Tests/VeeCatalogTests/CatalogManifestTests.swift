@@ -31,7 +31,7 @@ final class CatalogManifestTests: XCTestCase {
         XCTAssertEqual(pager.signature, "sig==")
         XCTAssertEqual(pager.minMacOS, "26.0")
         XCTAssertEqual(pager.rawURL.absoluteString, rawBase + "Oncall/pager.1m.py")
-        XCTAssertEqual(pager.lastUpdated, ISO8601DateFormatter().date(from: "2026-07-01T00:00:00Z"))
+        XCTAssertNil(pager.lastUpdated, "a catalog-wide timestamp is not evidence that this plugin changed")
 
         let deploy = try XCTUnwrap(entries.first { $0.filename == "deploy.30s.sh" })
         XCTAssertEqual(deploy.category, "Deploy")               // explicit category wins

@@ -11,7 +11,8 @@ public enum LoginItemManager {
         SMAppService.mainApp.status == .enabled
     }
 
-    public static func setEnabled(_ enabled: Bool) {
+    @discardableResult
+    public static func setEnabled(_ enabled: Bool) -> Bool {
         do {
             if enabled {
                 try SMAppService.mainApp.register()
@@ -21,5 +22,6 @@ public enum LoginItemManager {
         } catch {
             log.error("login item \(enabled ? "register" : "unregister") failed: \(error.localizedDescription, privacy: .public)")
         }
+        return isEnabled
     }
 }
