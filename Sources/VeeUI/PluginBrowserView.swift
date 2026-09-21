@@ -117,9 +117,12 @@ public final class PluginBrowserModel: ObservableObject {
     private var clients: [StoreID: CatalogFetching]
     private let makeClient: (StoreConfig) -> CatalogFetching
     private let pluginsDirectory: String
+    public var installationDirectory: String { pluginsDirectory }
+    public var hasPendingInstall: Bool { prompt != nil || !installingEntryIDs.isEmpty }
     private let provenanceStore: ProvenanceStore
     private let freshnessStore: CatalogFreshnessStore
     private let onInstalled: () -> Void
+    private let isInstallationTargetValid: () -> Bool
     private static let log = VeeLog.make("plugin-browser")
     /// Fired after every fresh catalog load: the installed, catalog-tracked
     /// plugins that now have a newer version upstream (possibly empty), plus
@@ -130,7 +133,7 @@ public final class PluginBrowserModel: ObservableObject {
     private let onUpdatesFound: ([PluginUpdateCandidate], Set<String>) -> Void
 
     /// Multi-store initializer: builds a client per store via `makeClient`.
-    public init(stores: [StoreConfig], makeClient: @escaping (StoreConfig) -> CatalogFetching, pluginsDirectory: String, onInstalled: @escaping () -> Void, onUpdatesFound: @escaping ([PluginUpdateCandidate], Set<String>) -> Void = { _, _ in }) {
+    public init(stores: [StoreConfig], makeClient: @escaping (StoreConfig) -> CatalogFetching, pluginsDirectory: String, onInstalled: @escaping () -> Void, onUpdatesFound: @escaping ([PluginUpdateCandidate], Set<String>) -> Void = { _, _ in }, isInstallationTargetValid: @escaping () -> Bool = { true }) {
         self.stores = stores
         self.makeClient = makeClient
         var map: [StoreID: CatalogFetching] = [:]
@@ -142,6 +145,7 @@ public final class PluginBrowserModel: ObservableObject {
         self.freshnessStore = freshnessStore
         self.freshnessLedger = freshnessStore.all()
         self.onInstalled = onInstalled
+        self.isInstallationTargetValid = isInstallationTargetValid
         self.onUpdatesFound = onUpdatesFound
         seedFreshnessCache()
     }
@@ -165,8 +169,8 @@ public final class PluginBrowserModel: ObservableObject {
     /// `CatalogEntry.storeID` defaults to `BuiltInStores.xbarID`, so a fetcher
     /// built without an explicit store id (every test fixture here) only
     /// resolves against this store.
-    public convenience init(fetcher: CatalogFetching, pluginsDirectory: String, onInstalled: @escaping () -> Void, onUpdatesFound: @escaping ([PluginUpdateCandidate], Set<String>) -> Void = { _, _ in }) {
-        self.init(stores: [BuiltInStores.xbar], makeClient: { _ in fetcher }, pluginsDirectory: pluginsDirectory, onInstalled: onInstalled, onUpdatesFound: onUpdatesFound)
+    public convenience init(fetcher: CatalogFetching, pluginsDirectory: String, onInstalled: @escaping () -> Void, onUpdatesFound: @escaping ([PluginUpdateCandidate], Set<String>) -> Void = { _, _ in }, isInstallationTargetValid: @escaping () -> Bool = { true }) {
+        self.init(stores: [BuiltInStores.xbar], makeClient: { _ in fetcher }, pluginsDirectory: pluginsDirectory, onInstalled: onInstalled, onUpdatesFound: onUpdatesFound, isInstallationTargetValid: isInstallationTargetValid)
     }
 
     /// The client and config for an entry's store.
@@ -583,6 +587,7 @@ public final class PluginBrowserModel: ObservableObject {
         defer { installingEntryIDs.remove(entry.id) }
         do {
             let source = try await client.fetchSource(entry)
+            guard isInstallationTargetValid() else { return }
             // Verify the store's integrity guarantees (pinned hash / signature)
             // before anything else. A failure blocks the install with a banner.
             if let store = store(for: entry) {
@@ -622,6 +627,11 @@ public final class PluginBrowserModel: ObservableObject {
 
     func confirmInstall() {
         guard let prompt else { return }
+        guard isInstallationTargetValid() else {
+            self.prompt = nil
+            notice = CatalogNotice(kind: .failure, message: "The plugins folder changed. Start the installation again.")
+            return
+        }
         let filename = prompt.entry.filename
         do {
             try PluginInstaller.install(filename: filename, source: prompt.source, into: pluginsDirectory)
@@ -1228,7 +1238,9 @@ private struct PluginCard: View {
 
             VStack(spacing: 4) {
                 if model.isInstalled(entry) {
-                    Label("Installed", systemImage: "checkmark").font(.caption).foregroundStyle(.secondary)
+                    Label("Installed", systemImage: "checkmark")
+                        .font(.caption).foregroundStyle(.secondary)
+                        .lineLimit(1).fixedSize(horizontal: true, vertical: false)
                     ProvenanceBadge(status: model.provenanceStatus(for: entry))
                     updateButton
                 } else {
@@ -1242,6 +1254,8 @@ private struct PluginCard: View {
                     .accessibilityLabel("View source for \(model.title(for: entry))")
                 }
             }
+            .frame(minWidth: 82)
+            .fixedSize(horizontal: true, vertical: false)
         }
     }
 
@@ -1272,7 +1286,7 @@ private struct PluginCard: View {
         if isInstalling {
             ProgressView().controlSize(.small)
         } else {
-            Text(text)
+            Text(text).lineLimit(1).fixedSize(horizontal: true, vertical: false)
         }
     }
 

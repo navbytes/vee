@@ -104,4 +104,22 @@ final class StoresSettingsModelTests: XCTestCase {
         model.remove(config)
         XCTAssertEqual(fireCount, 2)
     }
+
+    func testRemovalRequiresNamedConfirmationAndCancelIsLossless() throws {
+        let (registry, suiteName) = makeRegistry()
+        defer { UserDefaults().removePersistentDomain(forName: suiteName) }
+        let model = StoresSettingsModel(registry: registry)
+        let config = StoreConfig(id: StoreID("private"), displayName: "Private Store", kind: .github, owner: "acme", repo: "plugins")
+        try model.add(config, token: nil)
+
+        model.requestRemoval(config)
+        XCTAssertEqual(model.removalTitle, "Remove Private Store?")
+        XCTAssertTrue(model.removalMessage.contains("deletes its saved token"))
+        model.cancelRemoval()
+        XCTAssertTrue(model.stores.contains { $0.id == config.id })
+
+        model.requestRemoval(config)
+        model.confirmRemoval()
+        XCTAssertFalse(model.stores.contains { $0.id == config.id })
+    }
 }

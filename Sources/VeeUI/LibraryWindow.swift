@@ -10,6 +10,7 @@ public final class LibraryWindow {
     public static let shared = LibraryWindow()
 
     private var window: NSWindow?
+    private var closeObserver: NSObjectProtocol?
 
     /// Whether the consolidated window is currently on screen — lets the app
     /// skip a "look at Discover" nudge the user is already looking at.
@@ -17,7 +18,7 @@ public final class LibraryWindow {
 
     public init() {}
 
-    public func show(model: LibraryModel) {
+    public func show(model: LibraryModel, onClose: @escaping @MainActor @Sendable () -> Void = {}) {
         let view = LibraryView(model: model)
         if let window {
             (window.contentViewController as? NSHostingController<LibraryView>)?.rootView = view
@@ -35,5 +36,15 @@ public final class LibraryWindow {
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
         self.window = window
+        closeObserver = NotificationCenter.default.addObserver(
+            forName: NSWindow.willCloseNotification, object: window, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                self?.window = nil
+                if let token = self?.closeObserver { NotificationCenter.default.removeObserver(token) }
+                self?.closeObserver = nil
+                onClose()
+            }
+        }
     }
 }

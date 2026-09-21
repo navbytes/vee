@@ -41,6 +41,7 @@ public final class StoresSettingsModel: ObservableObject {
     /// so the tab can show it instead of silently no-op'ing. Cleared on the
     /// next successful remove.
     @Published public var removeError: String?
+    @Published public private(set) var storePendingRemoval: StoreConfig?
 
     private let registry: StoreRegistry
     private let makeTokenStore: (StoreID) -> StoreTokenStoring
@@ -95,6 +96,19 @@ public final class StoresSettingsModel: ObservableObject {
             removeError = storeRegistryErrorMessage(error)
         }
         reloadAndNotify()
+    }
+
+    public func requestRemoval(_ store: StoreConfig) { storePendingRemoval = store }
+    public func cancelRemoval() { storePendingRemoval = nil }
+    public func confirmRemoval() {
+        guard let storePendingRemoval else { return }
+        remove(storePendingRemoval)
+        self.storePendingRemoval = nil
+    }
+    public var removalTitle: String { "Remove \(storePendingRemoval?.displayName ?? "Store")?" }
+    public var removalMessage: String {
+        guard let storePendingRemoval else { return "" }
+        return "This removes \(storePendingRemoval.displayName) and deletes its saved token."
     }
 
     /// Adds a user store, saving its token if one was provided. Gated on the
@@ -157,7 +171,7 @@ public struct StoresSettingsTab: View {
             }
             Section {
                 ForEach(model.stores) { store in
-                    StoreRow(model: model, store: store)
+                    StoreRow(model: model, store: store, onRemove: { model.requestRemoval(store) })
                 }
             } header: {
                 Text("Stores")
@@ -173,8 +187,21 @@ public struct StoresSettingsTab: View {
             }
         }
         .formStyle(.grouped)
+        .navigationTitle("Stores")
         .sheet(isPresented: $showingAdd) {
             AddStoreSheet(model: model, isPresented: $showingAdd)
+        }
+        .confirmationDialog(
+            model.removalTitle,
+            isPresented: Binding(get: { model.storePendingRemoval != nil }, set: { if !$0 { model.cancelRemoval() } }),
+            presenting: model.storePendingRemoval
+        ) { store in
+            Button("Remove \(store.displayName)", role: .destructive) {
+                model.confirmRemoval()
+            }
+            Button("Cancel", role: .cancel) { model.cancelRemoval() }
+        } message: { _ in
+            Text(model.removalMessage)
         }
     }
 }
@@ -183,6 +210,7 @@ public struct StoresSettingsTab: View {
 private struct StoreRow: View {
     @ObservedObject var model: StoresSettingsModel
     let store: StoreConfig
+    let onRemove: () -> Void
 
     var body: some View {
         HStack(spacing: 10) {
@@ -226,7 +254,7 @@ private struct StoreRow: View {
                 .accessibilityLabel("Enable \(store.displayName)")
                 if !store.isBuiltIn {
                     Button(role: .destructive) {
-                        model.remove(store)
+                        onRemove()
                     } label: {
                         Image(systemName: "trash")
                     }

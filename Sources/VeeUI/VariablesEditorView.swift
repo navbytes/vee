@@ -72,10 +72,12 @@ public final class VariablesEditorModel: ObservableObject {
     @Published public private(set) var groups: [Group]
     /// Buffered edits keyed `pluginID → (varName → value)`.
     @Published var values: [String: [String: String]] = [:]
+    private var persistedValues: [String: [String: String]] = [:]
     @Published public private(set) var saveFailures: [SaveFailure] = []
 
     private let onSaved: () -> Void
     private let persistValue: ((String, VarDeclaration, String) throws -> Void)?
+    private let secretStore: ((PluginID) -> SecretStoring)?
 
     /// Builds the editor from aggregated groups. `secretStore` lets tests inject
     /// an in-memory store; production uses the per-plugin Keychain store.
@@ -87,6 +89,7 @@ public final class VariablesEditorModel: ObservableObject {
     ) {
         self.onSaved = onSaved
         self.persistValue = persistValue
+        self.secretStore = secretStore
         var built: [Group] = []
         var initial: [String: [String: String]] = [:]
         for group in aggregated {
@@ -105,6 +108,49 @@ public final class VariablesEditorModel: ObservableObject {
         }
         self.groups = built
         self.values = initial
+        self.persistedValues = initial
+    }
+
+    public var isDirty: Bool { values != persistedValues }
+
+    public func bufferedValue(pluginID: String, field: String) -> String? { values[pluginID]?[field] }
+
+    public func setBufferedValue(_ value: String, pluginID: String, field: String) {
+        values[pluginID, default: [:]][field] = value
+    }
+
+    public func reconcile(groups aggregated: [PluginVariableGroup]) {
+        let previous = values
+        let previousDeclarations = Dictionary(uniqueKeysWithValues: groups.map { group in
+            (group.id, Dictionary(uniqueKeysWithValues: group.declarations.map { ($0.name, $0) }))
+        })
+        var built: [Group] = []
+        var reconciled: [String: [String: String]] = [:]
+        var persisted: [String: [String: String]] = [:]
+        for group in aggregated {
+            let prefs = PluginPreferences(
+                pluginPath: group.pluginPath, pluginID: group.pluginID, declarations: group.declarations,
+                secretStore: secretStore?(group.pluginID)
+            )
+            var current: [String: String] = [:]
+            var baseline: [String: String] = [:]
+            for declaration in group.declarations {
+                let stored = prefs.value(for: declaration)
+                baseline[declaration.name] = stored
+                let prior = previousDeclarations[group.pluginID.rawValue]?[declaration.name]
+                let compatible = prior?.kind == declaration.kind && prior?.isSecret == declaration.isSecret
+                let oldValue = previous[group.pluginID.rawValue]?[declaration.name]
+                let oldBaseline = persistedValues[group.pluginID.rawValue]?[declaration.name]
+                current[declaration.name] = compatible && oldValue != oldBaseline ? (oldValue ?? stored) : stored
+            }
+            built.append(Group(id: group.pluginID.rawValue, name: group.pluginName, declarations: group.declarations, prefs: prefs))
+            reconciled[group.pluginID.rawValue] = current
+            persisted[group.pluginID.rawValue] = baseline
+        }
+        groups = built
+        values = reconciled
+        persistedValues = persisted
+        saveFailures = []
     }
 
     func stringBinding(_ pluginID: String, _ declaration: VarDeclaration) -> Binding<String> {
@@ -142,6 +188,7 @@ public final class VariablesEditorModel: ObservableObject {
         }
         saveFailures = failures
         guard failures.isEmpty else { return false }
+        persistedValues = values
         onSaved()
         return true
     }
@@ -213,6 +260,7 @@ public struct VariablesEditorView: View {
                 }
             }
         }
+        .navigationTitle("Variables")
     }
 
     /// Persists edits and shows a brief "Saved" confirmation, so the fire-and-

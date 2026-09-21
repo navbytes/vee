@@ -56,4 +56,48 @@ final class VariablesEditorModelTests: XCTestCase {
         XCTAssertEqual(model.saveFailures, [.init(pluginName: "Weather", fieldName: "API_TOKEN")])
         XCTAssertEqual(model.values["weather.sh"]?["API_TOKEN"], "top-secret")
     }
+
+    func testReconcilePreservesOnlyCompatibleDrafts() {
+        let model = VariablesEditorModel(groups: [group()], secretStore: { _ in InMemorySecretStore() })
+        model.values["weather.sh"]?["API_TOKEN"] = "draft"
+        XCTAssertTrue(model.isDirty)
+
+        let added = VarDeclaration(name: "CITY", kind: .string, defaultValue: "HK", summary: "", options: [], isSecret: false)
+        model.reconcile(groups: [PluginVariableGroup(
+            pluginID: PluginID(rawValue: "weather.sh"), pluginName: "Weather", pluginPath: "/tmp/weather.sh",
+            declarations: [declaration, added]
+        )])
+        XCTAssertEqual(model.values["weather.sh"]?["API_TOKEN"], "draft")
+        XCTAssertEqual(model.values["weather.sh"]?["CITY"], "HK")
+
+        let changed = VarDeclaration(name: "API_TOKEN", kind: .boolean, defaultValue: "false", summary: "", options: [], isSecret: false)
+        model.reconcile(groups: [PluginVariableGroup(
+            pluginID: PluginID(rawValue: "weather.sh"), pluginName: "Weather", pluginPath: "/tmp/weather.sh",
+            declarations: [changed]
+        )])
+        XCTAssertEqual(model.values["weather.sh"]?["API_TOKEN"], "false")
+        XCTAssertNil(model.values["weather.sh"]?["CITY"])
+    }
+
+    func testReconcilePreservesDirtyFieldButAdoptsExternalChangeForCleanField() throws {
+        let path = NSTemporaryDirectory() + "weather-\(UUID().uuidString).sh"
+        let city = VarDeclaration(name: "CITY", kind: .string, defaultValue: "", summary: "", options: [], isSecret: false)
+        let units = VarDeclaration(name: "UNITS", kind: .string, defaultValue: "", summary: "", options: [], isSecret: false)
+        let group = PluginVariableGroup(
+            pluginID: PluginID(rawValue: "weather.sh"), pluginName: "Weather", pluginPath: path,
+            declarations: [city, units]
+        )
+        let store = VarStore(pluginPath: path)
+        defer { store.delete() }
+        try store.set("HK", for: "CITY")
+        try store.set("metric", for: "UNITS")
+        let model = VariablesEditorModel(groups: [group])
+        model.setBufferedValue("draft", pluginID: "weather.sh", field: "CITY")
+        try store.set("imperial", for: "UNITS")
+
+        model.reconcile(groups: [group])
+
+        XCTAssertEqual(model.bufferedValue(pluginID: "weather.sh", field: "CITY"), "draft")
+        XCTAssertEqual(model.bufferedValue(pluginID: "weather.sh", field: "UNITS"), "imperial")
+    }
 }
