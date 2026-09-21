@@ -172,6 +172,7 @@ public struct GeneralSettingsTab: View {
             Text(model.loginItemError ?? "")
         }
         .formStyle(.grouped)
+        .navigationTitle("General")
     }
 
 }

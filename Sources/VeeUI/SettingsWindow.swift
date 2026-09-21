@@ -54,6 +54,10 @@ public final class SettingsWindowManager {
         windows[pluginID]?.close()
     }
 
+    public func closeAll() {
+        for window in windows.values { window.close() }
+    }
+
     /// Evicts the closed window and unregisters its close observer — a
     /// leftover registration (and the state its block retains) would otherwise
     /// accumulate once per settings window ever opened.

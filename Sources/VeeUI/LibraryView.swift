@@ -41,16 +41,33 @@ public enum LibrarySection: String, CaseIterable, Identifiable, Hashable, Sendab
 @MainActor
 public final class LibraryModel: ObservableObject {
     @Published public var section: LibrarySection
-    public let manager: PluginManagerModel
+    @Published public private(set) var detailGeneration = 0
+    private var inventoryGeneration = 0
+    @Published public private(set) var manager: PluginManagerModel
     public let general: GeneralSettingsModel
     public let stores: StoresSettingsModel
-    public let variables: VariablesEditorModel
-    public let browser: PluginBrowserModel
+    @Published public private(set) var variables: VariablesEditorModel
+    @Published public private(set) var browser: PluginBrowserModel
     /// Resolves an installed plugin's id to its live Settings/Debug models so the
     /// Installed section can show them in-pane. Returns `nil` for an unknown id
     /// (e.g. a plugin removed while the window is open). Supplied by the app,
     /// which owns the per-plugin coordinators.
     public let pluginDetail: (String) -> PluginDetailModels?
+
+    public func invalidateDetail() { detailGeneration += 1 }
+    public func beginInventoryUpdate() -> Int {
+        inventoryGeneration += 1
+        return inventoryGeneration
+    }
+    public func isCurrentInventoryUpdate(_ generation: Int) -> Bool { inventoryGeneration == generation }
+
+    public func rebind(manager: PluginManagerModel, variables: VariablesEditorModel, browser: PluginBrowserModel, directory: String) {
+        self.manager = manager
+        self.variables = variables
+        self.browser = browser
+        general.currentDirectory = directory
+        invalidateDetail()
+    }
 
     public init(
         section: LibrarySection = .installed,
@@ -105,6 +122,7 @@ public struct LibraryView: View {
             NavigationStack {
                 detail
             }
+            .id(model.detailGeneration)
         }
         .frame(minWidth: 800, minHeight: 540)
     }

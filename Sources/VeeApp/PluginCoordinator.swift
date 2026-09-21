@@ -188,9 +188,28 @@ final class PluginCoordinator {
     /// Builds this plugin's settings model — the *single* construction path,
     /// shared by `openSettings()` (pop-out window) and the consolidated window's
     /// in-pane Settings tab. Building it does not open a window.
-    func settingsModel() -> PluginSettingsModel {
+    private var cachedSettingsModel: PluginSettingsModel?
+
+    func settingsModel(reusing existing: PluginSettingsModel? = nil) -> PluginSettingsModel {
         let id = plugin.id.rawValue
-        return PluginSettingsModel(
+        if let model = existing ?? cachedSettingsModel {
+            model.rebind(
+                prefs: preferences,
+                features: PluginFeatures(header: header),
+                hotkeyControllable: hotkeyControllable,
+                hotkeyEnabled: !AppPreferences.shared.isHotkeyDisabled(id),
+                hotkeyCombo: AppPreferences.shared.hotkeyBinding(id) ?? header.shortcut?.display ?? "",
+                hotkeyStatus: hotkeyStatus,
+                hotkeyPresentation: AppPreferences.shared.hotkeyPresentation(id),
+                onApplyHotkey: { [weak self] enabled, combo, presentation in
+                    self?.applyHotkey(enabled: enabled, combo: combo, presentation: presentation) ?? .none
+                },
+                onSaved: { [weak self] in self?.refresh() }
+            )
+            cachedSettingsModel = model
+            return model
+        }
+        let model = PluginSettingsModel(
             pluginName: plugin.filename.name,
             prefs: preferences,
             features: PluginFeatures(header: header),
@@ -204,7 +223,11 @@ final class PluginCoordinator {
             },
             onSaved: { [weak self] in self?.refresh() }
         )
+        cachedSettingsModel = model
+        return model
     }
+
+    func existingSettingsModel() -> PluginSettingsModel? { cachedSettingsModel }
 
     /// Returns this plugin's live debug console model (the cached instance,
     /// created on first use), populated with the last run. The same model the

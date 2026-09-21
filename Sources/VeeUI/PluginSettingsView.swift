@@ -5,13 +5,19 @@ import VeePreferences
 /// View model for a plugin's auto-generated settings form.
 @MainActor
 public final class PluginSettingsModel: ObservableObject {
+    public struct SaveFailure: Equatable, Sendable {
+        public let pluginName: String
+        public let fieldName: String
+    }
     public let pluginName: String
-    public let declarations: [VarDeclaration]
-    public let features: PluginFeatures
+    @Published public private(set) var declarations: [VarDeclaration]
+    @Published public private(set) var features: PluginFeatures
     @Published public var values: [String: String]
+    @Published public private(set) var saveFailures: [SaveFailure] = []
+    private var persistedValues: [String: String]
 
     /// Whether the plugin declares a global hotkey the user can control.
-    public let hotkeyControllable: Bool
+    @Published public private(set) var hotkeyControllable: Bool
     @Published public var hotkeyEnabled: Bool
     @Published public var hotkeyCombo: String
     @Published public var hotkeyStatus: HotkeyStatus
@@ -19,9 +25,11 @@ public final class PluginSettingsModel: ObservableObject {
     /// plugin did before this choice existed) or the detached window.
     @Published public var hotkeyPresentation: HotkeyPresentation
 
-    private let prefs: PluginPreferences
-    private let onSaved: () -> Void
-    private let onApplyHotkey: (Bool, String, HotkeyPresentation) -> HotkeyStatus
+    private var prefs: PluginPreferences
+    private var onSaved: () -> Void
+    private let persistValue: ((VarDeclaration, String) throws -> Void)?
+    private var onApplyHotkey: (Bool, String, HotkeyPresentation) -> HotkeyStatus
+    private var hotkeyComboBaseline: String
 
     public init(
         pluginName: String,
@@ -33,6 +41,7 @@ public final class PluginSettingsModel: ObservableObject {
         hotkeyStatus: HotkeyStatus = .none,
         hotkeyPresentation: HotkeyPresentation = .default,
         onApplyHotkey: @escaping (Bool, String, HotkeyPresentation) -> HotkeyStatus = { _, _, _ in .none },
+        persistValue: ((VarDeclaration, String) throws -> Void)? = nil,
         onSaved: @escaping () -> Void
     ) {
         self.pluginName = pluginName
@@ -44,13 +53,61 @@ public final class PluginSettingsModel: ObservableObject {
         self.hotkeyCombo = hotkeyCombo
         self.hotkeyStatus = hotkeyStatus
         self.hotkeyPresentation = hotkeyPresentation
+        self.hotkeyComboBaseline = hotkeyCombo
         self.onApplyHotkey = onApplyHotkey
+        self.persistValue = persistValue
         self.onSaved = onSaved
         var initial: [String: String] = [:]
         for declaration in prefs.declarations {
             initial[declaration.name] = prefs.value(for: declaration)
         }
         self.values = initial
+        self.persistedValues = initial
+    }
+
+    public var isDirty: Bool {
+        values != persistedValues || (hotkeyControllable && hotkeyCombo != hotkeyComboBaseline)
+    }
+    public var canSave: Bool { !declarations.isEmpty || hotkeyControllable }
+
+    public func rebind(
+        prefs: PluginPreferences,
+        features: PluginFeatures,
+        hotkeyControllable: Bool,
+        hotkeyEnabled: Bool,
+        hotkeyCombo: String,
+        hotkeyStatus: HotkeyStatus,
+        hotkeyPresentation: HotkeyPresentation,
+        onApplyHotkey: @escaping (Bool, String, HotkeyPresentation) -> HotkeyStatus,
+        onSaved: @escaping () -> Void
+    ) {
+        let oldDeclarations = Dictionary(declarations.map { ($0.name, $0) }, uniquingKeysWith: { first, _ in first })
+        let oldValues = values
+        self.prefs = prefs
+        self.declarations = prefs.declarations
+        self.features = features
+        self.hotkeyControllable = hotkeyControllable
+        self.hotkeyEnabled = hotkeyEnabled
+        if self.hotkeyCombo == hotkeyComboBaseline { self.hotkeyCombo = hotkeyCombo }
+        self.hotkeyComboBaseline = hotkeyCombo
+        self.hotkeyStatus = hotkeyStatus
+        self.hotkeyPresentation = hotkeyPresentation
+        self.onApplyHotkey = onApplyHotkey
+        self.onSaved = onSaved
+        var next: [String: String] = [:]
+        var baseline: [String: String] = [:]
+        for declaration in prefs.declarations {
+            let stored = prefs.value(for: declaration)
+            baseline[declaration.name] = stored
+            let old = oldDeclarations[declaration.name]
+            let compatible = old?.kind == declaration.kind && old?.isSecret == declaration.isSecret
+            let oldValue = oldValues[declaration.name]
+            let oldBaseline = persistedValues[declaration.name]
+            next[declaration.name] = compatible && oldValue != oldBaseline ? (oldValue ?? stored) : stored
+        }
+        values = next
+        persistedValues = baseline
+        saveFailures = []
     }
 
     func stringBinding(_ declaration: VarDeclaration) -> Binding<String> {
@@ -67,10 +124,23 @@ public final class PluginSettingsModel: ObservableObject {
         )
     }
 
-    public func save() {
+    @discardableResult
+    public func save() -> Bool {
+        var failures: [SaveFailure] = []
         for declaration in declarations {
-            try? prefs.setValue(values[declaration.name] ?? declaration.defaultValue, for: declaration)
+            let value = values[declaration.name] ?? declaration.defaultValue
+            do {
+                if let persistValue {
+                    try persistValue(declaration, value)
+                } else {
+                    try prefs.setValue(value, for: declaration)
+                }
+            } catch {
+                failures.append(SaveFailure(pluginName: pluginName, fieldName: declaration.name))
+            }
         }
+        saveFailures = failures
+        guard failures.isEmpty else { return false }
         // The typed hotkey combo only committed on `.onSubmit` (pressing Return
         // in the text field) — clicking Save directly after typing silently
         // dropped it. onApplyHotkey always derives the end state fresh from the
@@ -78,8 +148,11 @@ public final class PluginSettingsModel: ObservableObject {
         // user never touched the hotkey control.
         if hotkeyControllable {
             applyHotkey()
+            hotkeyComboBaseline = hotkeyCombo
         }
+        persistedValues = values
         onSaved()
+        return true
     }
 
     /// Applies the current hotkey enable/combo state immediately (a hotkey is a
@@ -118,6 +191,9 @@ public struct PluginSettingsFormContent: View {
                 )
             } else {
                 Form {
+                    if !model.saveFailures.isEmpty {
+                        Section { Text(saveFailureMessage).foregroundStyle(.red) }
+                    }
                     if !model.features.isEmpty {
                         Section("Features") {
                             if model.features.searchPanel {
@@ -145,13 +221,18 @@ public struct PluginSettingsFormContent: View {
                         Section {
                             Button("Save") { onSave() }
                                 .keyboardShortcut(.defaultAction)
-                                .disabled(model.declarations.isEmpty)
+                                .disabled(!model.canSave)
                         }
                     }
                 }
                 .formStyle(.grouped)
             }
         }
+    }
+
+    private var saveFailureMessage: String {
+        let fields = model.saveFailures.map { "\($0.pluginName): \($0.fieldName)" }.joined(separator: ", ")
+        return "Couldn’t save \(fields). Your edits are still here. Check permissions and try again."
     }
 
     private func row(for declaration: VarDeclaration) -> some View {
@@ -255,9 +336,9 @@ public struct PluginSettingsView: View {
                         Button("Cancel", role: .cancel) { onClose() }
                     }
                     ToolbarItem(placement: .confirmationAction) {
-                        Button("Save") { model.save(); onClose() }
+                        Button("Save") { if model.save() { onClose() } }
                             .keyboardShortcut(.defaultAction)
-                            .disabled(model.declarations.isEmpty)
+                            .disabled(!model.canSave)
                     }
                 }
         }

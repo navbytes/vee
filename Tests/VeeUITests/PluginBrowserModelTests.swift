@@ -100,6 +100,29 @@ final class PluginBrowserModelTests: XCTestCase {
         return dir
     }
 
+    func testFolderChangeInvalidatesPendingInstallBeforeDiskWrite() async throws {
+        let dir = tempDir()
+        defer { try? FileManager.default.removeItem(atPath: dir) }
+        let entry = makeEntry("folder-bound")
+        let fetcher = FakeCatalogFetcher(source: "#!/bin/bash\necho hi\n")
+        var targetIsValid = true
+        var installed = false
+        let model = PluginBrowserModel(
+            fetcher: fetcher, pluginsDirectory: dir, onInstalled: { installed = true },
+            isInstallationTargetValid: { targetIsValid }
+        )
+
+        await model.requestInstall(entry)
+        XCTAssertNotNil(model.prompt)
+        targetIsValid = false
+        model.confirmInstall()
+
+        XCTAssertFalse(installed)
+        XCTAssertNil(model.prompt)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: (dir as NSString).appendingPathComponent(entry.filename)))
+        XCTAssertEqual(model.notice?.kind, .failure)
+    }
+
     // MARK: - Sort order
 
     func testVisibleEntriesDefaultSortIsNameCaseInsensitive() {

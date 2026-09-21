@@ -25,6 +25,8 @@ public final class AppController: NSObject, NSApplicationDelegate {
     /// The Plugin Manager model while its window is open, held weakly so live
     /// per-plugin error updates can be pushed into it. Nil when the window is closed.
     private weak var currentManagerModel: PluginManagerModel?
+    private var currentLibraryModel: LibraryModel?
+    private var libraryInventoryGeneration = 0
     /// The Discover model, retained across window opens so the fetched catalog
     /// (and per-plugin freshness/header caches) survives a close/reopen instead
     /// of re-fetching the network from scratch every time. Rebuilt only when the
@@ -45,7 +47,7 @@ public final class AppController: NSObject, NSApplicationDelegate {
     private var wakeMonitor: WakeMonitor?
     private var mainMenu: MainMenuController?
     private var generalSettingsModel: GeneralSettingsModel?
-    private let prefs = AppPreferences.shared
+    private let prefs: AppPreferences
     private let log = VeeLog.make("app-controller")
     /// Builds the per-plugin secret store `reconcileDiskState()` clears a
     /// Keychain secret through. Defaults to the real Keychain; a test injects
@@ -118,8 +120,10 @@ public final class AppController: NSObject, NSApplicationDelegate {
         deletionGracePeriod: TimeInterval = 300,
         trashItem: ((URL) throws -> Void)? = nil,
         loginItemIsEnabled: (() -> Bool)? = nil,
-        setLoginItemEnabled: ((Bool) -> Bool)? = nil
+        setLoginItemEnabled: ((Bool) -> Bool)? = nil,
+        preferences: AppPreferences = .shared
     ) {
+        self.prefs = preferences
         self.secretStoreFactory = secretStoreFactory ?? { KeychainSecretStore(pluginID: $0.rawValue) }
         self.deletionGracePeriod = deletionGracePeriod
         self.trashItem = trashItem ?? { try FileManager.default.trashItem(at: $0, resultingItemURL: nil) }
@@ -569,7 +573,7 @@ public final class AppController: NSObject, NSApplicationDelegate {
     /// drive it directly — the same seam `makeLibraryModel` already is —
     /// without going through `applicationDidFinishLaunching`, which touches
     /// `NSApp` and is unsafe to invoke from a unit test.
-    func reload(reconcile: Bool = true) {
+    func reload(reconcile: Bool = true, preserveSettingsDrafts: Bool = true) {
         // Runs on EVERY call, unconditionally, before the early-return below:
         // a disabled plugin is excluded from `enabledPlugins()` (and so never
         // enters `signature`), so deleting a *disabled* plugin's file would
@@ -597,6 +601,9 @@ public final class AppController: NSObject, NSApplicationDelegate {
         if !coordinators.isEmpty, signature == loadedSignature { return }
         loadedSignature = signature
 
+        let settingsModels: [String: PluginSettingsModel] = preserveSettingsDrafts
+            ? coordinators.compactMapValues { $0.existingSettingsModel() }
+            : [:]
         coordinators.values.forEach { $0.stop() }
         coordinators.removeAll()
 
@@ -614,10 +621,16 @@ public final class AppController: NSObject, NSApplicationDelegate {
                 self?.currentManagerModel?.setError(self?.coordinators[id]?.displayError, id: id)
             }
             coordinators[id] = coordinator
+            if let settingsModel = settingsModels[id] { _ = coordinator.settingsModel(reusing: settingsModel) }
+            if !coordinator.hasSettings { SettingsWindowManager.shared.close(id) }
             coordinator.start()
+        }
+        for removedID in settingsModels.keys where coordinators[removedID] == nil {
+            SettingsWindowManager.shared.close(removedID)
         }
         // Drop widget entries for plugins that are no longer loaded.
         widgetPublisher.setLoaded(ids: Set(coordinators.keys))
+        refreshLibraryInventory()
     }
 
     /// Garbage-collects every satellite state store — disabled flag, hotkey
@@ -879,7 +892,27 @@ public final class AppController: NSObject, NSApplicationDelegate {
     }
 
     private func openManager() {
-        LibraryWindow.shared.show(model: makeLibraryModel(section: .installed))
+        showLibrary(section: .installed)
+    }
+
+    func libraryModel(section: LibrarySection) -> LibraryModel {
+        if let currentLibraryModel {
+            currentLibraryModel.section = section
+            return currentLibraryModel
+        }
+        let model = makeLibraryModel(section: section)
+        currentLibraryModel = model
+        refreshLibraryInventory()
+        return model
+    }
+
+    private func showLibrary(section: LibrarySection) {
+        let model = libraryModel(section: section)
+        LibraryWindow.shared.show(model: model) { [weak self, weak model] in
+            guard self?.currentLibraryModel === model else { return }
+            self?.currentLibraryModel = nil
+            self?.currentManagerModel = nil
+        }
     }
 
     /// Builds the model for the consolidated window (`LibraryView`): the
@@ -910,21 +943,6 @@ public final class AppController: NSObject, NSApplicationDelegate {
         // window; the window retains the model, so this nils out once it closes.
         currentManagerModel = manager
 
-        // Reading and parsing every plugin's source is the slow part, so build
-        // the rows off the main thread and populate the model when ready — the
-        // window opens immediately instead of blocking the menu action on a
-        // synchronous fan-out of file reads + header/trust parses. Inputs are
-        // snapshotted on the main actor first; only the disk read + parse runs
-        // detached (every type it touches is Sendable).
-        let inputs = managerRowInputs()
-        Task { [weak manager] in
-            let rows = await Task.detached(priority: .userInitiated) {
-                AppController.buildManagerRows(inputs)
-            }.value
-            manager?.rows = rows
-            manager?.isLoaded = true
-        }
-
         let general = GeneralSettingsModel(
             currentDirectory: directory,
             launchAtLogin: loginItemIsEnabled(),
@@ -947,7 +965,7 @@ public final class AppController: NSObject, NSApplicationDelegate {
             self?.handleStoresChanged(newStores)
         })
 
-        return LibraryModel(
+        let model = LibraryModel(
             section: section,
             manager: manager,
             general: general,
@@ -960,11 +978,24 @@ public final class AppController: NSObject, NSApplicationDelegate {
             pluginDetail: { [weak self] id in
                 guard let coordinator = self?.coordinators[id] else { return nil }
                 return PluginDetailModels(
-                    settings: coordinator.hasSettings ? coordinator.settingsModel() : nil,
+                    settings: coordinator.hasSettings ? coordinator.existingSettingsModel() ?? coordinator.settingsModel() : nil,
                     debug: coordinator.debugModel()
                 )
             }
         )
+        let initialDirectory = directory
+        let initialInputs = managerRowInputs()
+        let initialGeneration = model.beginInventoryUpdate()
+        Task { [model] in
+            let rows = await Task.detached(priority: .userInitiated) {
+                AppController.buildManagerRows(initialInputs)
+            }.value
+            guard model.isCurrentInventoryUpdate(initialGeneration),
+                  model.manager.currentDirectory == initialDirectory else { return }
+            model.manager.rows = rows
+            model.manager.isLoaded = true
+        }
+        return model
     }
 
     /// The retained Discover catalog model, embedded in the consolidated window's
@@ -985,6 +1016,7 @@ public final class AppController: NSObject, NSApplicationDelegate {
             return cached
         }
 
+        let targetDirectory = directory
         let model = PluginBrowserModel(
             stores: stores,
             makeClient: { store in
@@ -1001,7 +1033,8 @@ public final class AppController: NSObject, NSApplicationDelegate {
                 // surfaces them later. Pruning still runs either way.
                 let windowInFront = LibraryWindow.shared.isVisible && (NSApp?.isActive ?? false)
                 Notifier.notifyCatalogUpdates(windowInFront ? [] : candidates, installedFilenames: installed)
-            }
+            },
+            isInstallationTargetValid: { [weak self] in self?.directory == targetDirectory }
         )
         cachedBrowserModel = model
         cachedBrowserStores = stores
@@ -1026,7 +1059,7 @@ public final class AppController: NSObject, NSApplicationDelegate {
     /// wrapper (rather than inlined) so the ⌘D menu action, the Manager
     /// empty-state, and first-run all route through one place.
     private func openBrowser() {
-        LibraryWindow.shared.show(model: makeLibraryModel(section: .discover))
+        showLibrary(section: .discover)
     }
 
     /// Launch-time catalog-update scan against the on-disk snapshot written by
@@ -1103,7 +1136,32 @@ public final class AppController: NSObject, NSApplicationDelegate {
     /// app-level settings and a Variables tab aggregating every installed
     /// plugin's declared `<xbar.var>` variables.
     @objc private func openPreferences() {
-        LibraryWindow.shared.show(model: makeLibraryModel(section: .general))
+        showLibrary(section: .general)
+    }
+
+    private func refreshLibraryInventory() {
+        guard let model = currentLibraryModel else { return }
+        libraryInventoryGeneration += 1
+        let generation = libraryInventoryGeneration
+        let modelGeneration = model.beginInventoryUpdate()
+        let snapshotDirectory = directory
+        let inputs = managerRowInputs()
+        let groups = VariableAggregator.aggregate(plugins: aggregatablePlugins(), reader: HeaderVariableReader())
+        model.variables.reconcile(groups: groups)
+        model.invalidateDetail()
+        Task { [weak self, weak model] in
+            let rows = await Task.detached(priority: .userInitiated) {
+                AppController.buildManagerRows(inputs)
+            }.value
+            guard let self, let model,
+                  self.libraryInventoryGeneration == generation,
+                  model.isCurrentInventoryUpdate(modelGeneration),
+                  self.directory == snapshotDirectory,
+                  self.currentLibraryModel === model else { return }
+            model.manager.currentDirectory = snapshotDirectory
+            model.manager.rows = rows
+            model.manager.isLoaded = true
+        }
     }
 
     /// Every installed plugin, described for the pure variable aggregator.
@@ -1118,7 +1176,6 @@ public final class AppController: NSObject, NSApplicationDelegate {
     private func chooseFolderFromPreferences() {
         guard let path = promptForPluginsFolder() else { return }
         setPluginsDirectory(path)
-        generalSettingsModel?.currentDirectory = path
     }
 
     /// Prompts for a plugins folder (e.g. an existing SwiftBar folder) and
@@ -1140,7 +1197,22 @@ public final class AppController: NSObject, NSApplicationDelegate {
         return url.path
     }
 
-    private func setPluginsDirectory(_ path: String) {
+    @discardableResult
+    func setPluginsDirectory(_ path: String, confirmDiscard: (() -> Bool)? = nil) -> Bool {
+        guard path != directory else { return true }
+        guard currentLibraryModel?.browser.hasPendingInstall != true else {
+            showInstallInProgressAlert()
+            return false
+        }
+        let hasSettingsDraft = coordinators.values.contains { $0.existingSettingsModel()?.isDirty == true }
+        if currentLibraryModel?.variables.isDirty == true || hasSettingsDraft {
+            let confirmed = confirmDiscard?() ?? confirmDiscardedLibraryDrafts()
+            guard confirmed else { return false }
+        }
+        let activeModel = currentLibraryModel
+        currentLibraryModel = nil
+        libraryInventoryGeneration += 1
+        SettingsWindowManager.shared.closeAll()
         prefs.pluginsDirectory = path
         directory = path
         PluginsDirectory.ensureExists(directory)
@@ -1152,8 +1224,40 @@ public final class AppController: NSObject, NSApplicationDelegate {
         // records this reload would GC against belong to a folder Vee was
         // pointed at a moment ago — the safe pass is the one that runs after
         // the new folder has been listed at least once.
-        reload(reconcile: false)
+        reload(reconcile: false, preserveSettingsDrafts: false)
         startWatching()
+        if let activeModel {
+            let replacement = makeLibraryModel(section: activeModel.section)
+            activeModel.rebind(
+                manager: replacement.manager,
+                variables: replacement.variables,
+                browser: replacement.browser,
+                directory: path
+            )
+            currentLibraryModel = activeModel
+            currentManagerModel = activeModel.manager
+            generalSettingsModel = activeModel.general
+            refreshLibraryInventory()
+        }
+        generalSettingsModel?.currentDirectory = path
+        return true
+    }
+
+    private func confirmDiscardedLibraryDrafts() -> Bool {
+        let alert = NSAlert()
+        alert.messageText = "Change Plugins Folder?"
+        alert.informativeText = "Changing folders will discard unsaved plugin settings and Variables edits."
+        alert.addButton(withTitle: "Discard Changes and Change Folder")
+        alert.addButton(withTitle: "Cancel")
+        return alert.runModal() == .alertFirstButtonReturn
+    }
+
+    private func showInstallInProgressAlert() {
+        let alert = NSAlert()
+        alert.messageText = "Finish Installing First"
+        alert.informativeText = "Complete or cancel the pending Discover installation before changing the plugins folder."
+        alert.addButton(withTitle: "OK")
+        alert.runModal()
     }
 
     private func setEnabled(_ enabled: Bool, id: String) {
