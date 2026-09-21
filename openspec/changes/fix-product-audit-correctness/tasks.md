@@ -29,4 +29,4 @@
 - [x] 5.2 Generate the Xcode project and build the app target without signing
 - [x] 5.3 Use an injected-state native harness for UI proof if feasible; otherwise document why launching the production app would mutate user state
 - [x] 5.4 Obtain an independent review of the complete diff and resolve actionable findings
-- [ ] 5.5 Open a draft pull request with the final behavior, verification evidence, and deferred findings
+- [x] 5.5 Open a draft pull request with the final behavior, verification evidence, and deferred findings
