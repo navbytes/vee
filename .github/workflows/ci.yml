@@ -1,18 +1,21 @@
 name: CI
 
 on:
-  push:
-    branches: [main]
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
   workflow_dispatch:
   schedule:
     # Nightly reliability soak (the `soak` job below is gated to these events).
-    - cron: '0 7 * * *'
+    - cron: '0 7 * * 1'
 
 # Cancel superseded runs on a PR; let main runs finish.
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+  pull-requests: read
 
 jobs:
   # What this push or pull request actually touches. Every expensive job below
@@ -28,6 +31,7 @@ jobs:
   # A push (rather than a pull request) runs everything — main is where being
   # sure matters more than being quick.
   changes:
+    if: github.event_name == 'pull_request' && !github.event.pull_request.draft
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
@@ -36,35 +40,41 @@ jobs:
       - id: filter
         env:
           GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
         run: |
-          if [ "${{ github.event_name }}" != "pull_request" ]; then
-            echo "not a pull request — running everything"
-            echo "swift=true"   >> "$GITHUB_OUTPUT"
+          set -euo pipefail
+          if [ "$GITHUB_EVENT_NAME" != pull_request ]; then
+            echo 'swift=true' >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          files=$(gh api --paginate \
-            "repos/${{ github.repository }}/pulls/${{ github.event.number }}/files" \
-            --jq '.[].filename')
-          echo "changed files:"; echo "$files" | sed 's/^/  /'
-          match() { echo "$files" | grep -qE "$1"; }
-
-          # Swift, the app target, and the toolchain config that builds them.
-          if match '^(Sources|Tests|App|WidgetExtension)/|^plugins/fixtures/|^Package\.swift$|^project\.yml$|^\.swiftlint\.yml$|^\.github/workflows/(ci|lint)\.yml$'; then
-            echo "swift=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "swift=false" >> "$GITHUB_OUTPUT"
+          endpoint="repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER"
+          gh api "$endpoint" > "$RUNNER_TEMP/pr-before.json"
+          if ! jq -e --arg head "$PR_HEAD" --arg base "$PR_BASE" '.head.sha == $head and .base.sha == $base' "$RUNNER_TEMP/pr-before.json" >/dev/null; then
+            echo 'swift=true' >> "$GITHUB_OUTPUT"
+            exit 0
           fi
+          total=$(jq -er '.changed_files' "$RUNNER_TEMP/pr-before.json")
+          gh api --paginate --slurp "$endpoint/files" > "$RUNNER_TEMP/changed-files.json"
+          gh api "$endpoint" > "$RUNNER_TEMP/pr-after.json"
+          if ! jq -e --arg head "$PR_HEAD" --arg base "$PR_BASE" '.head.sha == $head and .base.sha == $base' "$RUNNER_TEMP/pr-after.json" >/dev/null; then
+            echo 'swift=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          value=$(jq --argjson total "$total" 'add | if length == 0 or length != $total then true else any(.[]; ([.filename, (.previous_filename // .filename)] | any(.[]; test("^(Sources|Tests|App|WidgetExtension|plugins/fixtures)/|^Package\\.(swift|resolved)$|^project\\.yml$|^\\.swiftlint\\.yml$|^\\.github/workflows/")))) end' "$RUNNER_TEMP/changed-files.json")
+          echo "swift=$value" >> "$GITHUB_OUTPUT"
 
   swift:
     name: Build & test (SwiftPM)
     needs: changes
-    if: needs.changes.outputs.swift == 'true' 
+    if: (github.event_name != 'pull_request' || !github.event.pull_request.draft) && (needs.changes.outputs.swift == 'true')
     # macos-26: the package targets .macOS("26.0") (Liquid Glass), which older
     # SDKs cannot build. All logic lives in library targets and is covered here.
     runs-on: macos-26
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1
         with:
           xcode-version: latest-stable
@@ -78,11 +88,11 @@ jobs:
   app:
     name: Build Vee.app (xcodebuild)
     needs: changes
-    if: needs.changes.outputs.swift == 'true' 
+    if: (github.event_name != 'pull_request' || !github.event.pull_request.draft) && (needs.changes.outputs.swift == 'true')
     runs-on: macos-26
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1
         with:
           xcode-version: latest-stable
@@ -104,11 +114,11 @@ jobs:
     # Opt-in: runs nightly and on manual dispatch only — never on every PR — so
     # normal CI stays fast. Proves the bounded-memory / no-refresh-death moat by
     # driving the real execution/refresh pipeline for a sustained window.
-    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    if: (github.event_name != 'pull_request' || !github.event.pull_request.draft) && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
     runs-on: macos-26
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1
         with:
           xcode-version: latest-stable
@@ -119,3 +129,20 @@ jobs:
           VEE_SOAK: "1"
           VEE_SOAK_DURATION_SECONDS: "120"
         run: swift test --filter MemorySoakBenchmarkTests
+
+  result:
+    name: ${{ github.workflow }} result
+    if: always() && github.event_name == 'pull_request' && !github.event.pull_request.draft
+    needs: [changes, swift, app, soak]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          python3 - <<'PYTHON'
+          import json, os
+          results = json.loads(os.environ['RESULTS'])
+          assert results['changes']['result'] == 'success', 'Change detection did not succeed'
+          assert all(job['result'] in ('success', 'skipped') for job in results.values()), results
+          PYTHON

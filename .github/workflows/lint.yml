@@ -1,20 +1,24 @@
 name: Lint
 
 on:
-  push:
-    branches: [main]
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
 
 # Cancel superseded runs on a PR; let main runs finish.
 concurrency:
   group: lint-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
+permissions:
+  contents: read
+  pull-requests: read
+
 jobs:
   # Which surfaces this change touches. Only SwiftLint is gated — it is the one
   # macOS runner here, billed at ten times the Linux rate, and it reads nothing
   # but Swift.
   changes:
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
@@ -23,27 +27,39 @@ jobs:
       - id: filter
         env:
           GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
         run: |
-          if [ "${{ github.event_name }}" != "pull_request" ]; then
-            echo "swift=true" >> "$GITHUB_OUTPUT"; exit 0
+          set -euo pipefail
+          if [ "$GITHUB_EVENT_NAME" != pull_request ]; then
+            echo 'swift=true' >> "$GITHUB_OUTPUT"
+            exit 0
           fi
-          files=$(gh api --paginate \
-            "repos/${{ github.repository }}/pulls/${{ github.event.number }}/files" \
-            --jq '.[].filename')
-          if echo "$files" | grep -qE '^(Sources|Tests|App|WidgetExtension)/|^Package\.swift$|^\.swiftlint\.yml$|^\.github/workflows/lint\.yml$'; then
-            echo "swift=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "swift=false" >> "$GITHUB_OUTPUT"
+          endpoint="repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER"
+          gh api "$endpoint" > "$RUNNER_TEMP/pr-before.json"
+          if ! jq -e --arg head "$PR_HEAD" --arg base "$PR_BASE" '.head.sha == $head and .base.sha == $base' "$RUNNER_TEMP/pr-before.json" >/dev/null; then
+            echo 'swift=true' >> "$GITHUB_OUTPUT"
+            exit 0
           fi
+          total=$(jq -er '.changed_files' "$RUNNER_TEMP/pr-before.json")
+          gh api --paginate --slurp "$endpoint/files" > "$RUNNER_TEMP/changed-files.json"
+          gh api "$endpoint" > "$RUNNER_TEMP/pr-after.json"
+          if ! jq -e --arg head "$PR_HEAD" --arg base "$PR_BASE" '.head.sha == $head and .base.sha == $base' "$RUNNER_TEMP/pr-after.json" >/dev/null; then
+            echo 'swift=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          value=$(jq --argjson total "$total" 'add | if length == 0 or length != $total then true else any(.[]; ([.filename, (.previous_filename // .filename)] | any(.[]; test("^(Sources|Tests|App|WidgetExtension|plugins/fixtures)/|^Package\\.(swift|resolved)$|^project\\.yml$|^\\.swiftlint\\.yml$|^\\.github/workflows/")))) end' "$RUNNER_TEMP/changed-files.json")
+          echo "swift=$value" >> "$GITHUB_OUTPUT"
 
   swiftlint:
     needs: changes
-    if: needs.changes.outputs.swift == 'true'
+    if: (github.event_name != 'pull_request' || !github.event.pull_request.draft) && (needs.changes.outputs.swift == 'true')
     # macos-26 to match the project's macOS 26 deployment target (Liquid Glass).
     runs-on: macos-26
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Install SwiftLint
         run: brew install swiftlint
       # Hard gate: the tree is kept clean of the enabled rules, so `--strict`
@@ -56,10 +72,11 @@ jobs:
   # documented surface to what Vee actually implements; none of them read the
   # rendered site, so they are unchanged by how it is built.
   docs:
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       # docs/api/params.json is the parameter surface as data, and the
       # published tables are generated from it rather than typed — the chart
       # surface alone is a six-by-three cross-product that went stale the
@@ -90,7 +107,7 @@ jobs:
       # be built fails on the pull request rather than on the deploy. This
       # replaces the guide-freshness and search-index guards: with no generated
       # output committed, neither staleness is a state the repository can be in.
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: 24
           cache: npm
@@ -101,3 +118,20 @@ jobs:
       - name: Docs site builds
         run: npm run build
         working-directory: docs-site
+
+  result:
+    name: ${{ github.workflow }} result
+    if: always() && (github.event_name != 'pull_request' || !github.event.pull_request.draft)
+    needs: [changes, swiftlint, docs]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          python3 - <<'PYTHON'
+          import json, os
+          results = json.loads(os.environ['RESULTS'])
+          assert results['changes']['result'] == 'success', 'Change detection did not succeed'
+          assert all(job['result'] in ('success', 'skipped') for job in results.values()), results
+          PYTHON

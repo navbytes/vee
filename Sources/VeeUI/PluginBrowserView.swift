@@ -1100,7 +1100,7 @@ struct PluginPreviewPhaseView: View {
             Button(action: onTapSuccess) {
                 image
                     .resizable()
-                    .aspectRatio(contentMode: .fit)
+                    .scaledToFit()
                     .frame(maxWidth: .infinity, minHeight: Self.height, maxHeight: Self.height)
                     .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
             }
@@ -1316,7 +1316,7 @@ private struct PluginScreenshotSheet: View {
             AsyncImage(url: url) { phase in
                 switch phase {
                 case .success(let image):
-                    image.resizable().aspectRatio(contentMode: .fit)
+                    image.resizable().scaledToFit()
                 case .failure:
                     ContentUnavailableView("Couldn't load image", systemImage: "photo.badge.exclamationmark")
                 default:

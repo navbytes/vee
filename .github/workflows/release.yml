@@ -8,6 +8,8 @@ name: Release
 # copy needs a one-time right-click → Open to pass Gatekeeper.
 on:
   push:
+    branches: [main]
+    paths: ['.github/release-request']
     tags: ["v*"]
   workflow_dispatch:
     inputs:
@@ -18,6 +20,11 @@ on:
 
 permissions:
   contents: write
+  pull-requests: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
 
 jobs:
   release:
@@ -39,7 +46,17 @@ jobs:
       HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
       APP_PATH: .build/xcode/Build/Products/Release/Vee.app
     steps:
-      - uses: actions/checkout@v7
+      - name: Require an authorized release PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ] && [ "$GITHUB_REF" != refs/heads/main ]; then
+            echo 'Manual releases must run from main'; exit 1
+          fi
+          gh api "repos/$GITHUB_REPOSITORY/commits/$GITHUB_SHA/pulls" --paginate --slurp > "$RUNNER_TEMP/release-prs.json"
+          jq -e --arg sha "$GITHUB_SHA" --arg repo "$GITHUB_REPOSITORY" 'add | any(.[]; .merged_at != null and .merge_commit_sha == $sha and .base.ref == "main" and .head.repo.full_name == $repo and (.head.ref | startswith("release/")))' "$RUNNER_TEMP/release-prs.json"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       # Idempotent on purpose. Everything after this step can fail — notarization,
       # the npm publish, the Homebrew sync — and the tag is already pushed by
@@ -50,17 +67,33 @@ jobs:
       #
       # Re-running against an existing tag is safe: the tag names a commit, and
       # the job rebuilds that same commit.
-      - name: Create + push tag (manual dispatch only)
-        if: github.event_name == 'workflow_dispatch'
+        with:
+          fetch-depth: 0
+
+      - name: Validate merged release and create its tag
+        id: release
         env:
-          TAG: ${{ inputs.tag }}
+          REQUESTED_TAG: ${{ inputs.tag }}
         run: |
-          if git ls-remote --exit-code --tags origin "refs/tags/${TAG}" >/dev/null 2>&1; then
-            echo "::notice::${TAG} already exists — re-running the release against it."
-            exit 0
+          set -euo pipefail
+          git fetch origin main
+          git merge-base --is-ancestor "$GITHUB_SHA" origin/main
+          tag="$REQUESTED_TAG"
+          if [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            tag="$GITHUB_REF_NAME"
+          elif [ -z "$tag" ]; then
+            tag="$(cat .github/release-request)"
           fi
-          git tag -a "$TAG" -m "Release $TAG"
-          git push origin "$TAG"
+          [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]] || { echo 'Invalid release tag'; exit 1; }
+          grep -Fq "MARKETING_VERSION: \"${tag#v}\"" project.yml || { echo "Project version and tag differ"; exit 1; }
+          if git rev-parse "refs/tags/$tag" >/dev/null 2>&1; then
+            [ "$(git rev-list -n 1 "$tag")" = "$GITHUB_SHA" ] || { echo 'Tag belongs to another commit'; exit 1; }
+          else
+            git tag "$tag" "$GITHUB_SHA"
+            git push origin "refs/tags/$tag"
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "RELEASE_TAG=$tag" >> "$GITHUB_ENV"
 
       - uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1
         with:
@@ -71,7 +104,7 @@ jobs:
 
       - name: Set app version from tag
         env:
-          TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+          TAG: ${{ steps.release.outputs.tag }}
         run: |
           version="${TAG#v}"
           sed -i '' "s/CFBundleShortVersionString: \"[^\"]*\"/CFBundleShortVersionString: \"${version}\"/" project.yml
@@ -147,7 +180,7 @@ jobs:
       - name: Publish to GitHub Release
         uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3
         with:
-          tag_name: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+          tag_name: ${{ steps.release.outputs.tag }}
           files: Vee.zip
           fail_on_unmatched_files: true
 
@@ -157,5 +190,5 @@ jobs:
       - name: Sync Homebrew cask (navbytes/homebrew-tap)
         if: env.HOMEBREW_TAP_TOKEN != ''
         env:
-          RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+          RELEASE_TAG: ${{ steps.release.outputs.tag }}
         run: bash scripts/update-homebrew-cask.sh
