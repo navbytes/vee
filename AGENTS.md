@@ -90,3 +90,5 @@ a lint finding.
 - `docs/_content/trust-model.md` — the `<vee.*>` capability tags.
 - `docs/_content/debugging.md` — `vee lint`/`vee dev`/`vee render` in full.
 - `docs/llms.txt` — the same pointers in `llms.txt` form.
+
+For change and release authorization, follow [.github/RELEASE-POLICY.md](.github/RELEASE-POLICY.md).
