@@ -80,9 +80,9 @@ a lint finding.
 
 ## Complete examples
 
-- [`plugins/showcase/hello-world.10s.sh`](plugins/showcase/hello-world.10s.sh) — the absolute basics: title, dropdown, a link, a submenu, `refresh=true`. No capabilities.
-- [`plugins/showcase/disk-usage.30m.sh`](plugins/showcase/disk-usage.30m.sh) — reading system state, color-coding by threshold, an SF Symbol, graceful degradation when a dependency is missing, and a `<vee.exec>` declaration.
-- [`plugins/showcase/kitchen-sink.1m.sh`](plugins/showcase/kitchen-sink.1m.sh) — every field of the JSON output format in one file: titles, rich controls (sparkline/toggle/slider/progress/charts), nested submenus, an alternate row.
+- [`plugins/showcase/hello-world.10s.sh`](showcase/hello-world.10s.sh) — the absolute basics: title, dropdown, a link, a submenu, `refresh=true`. No capabilities.
+- [`plugins/showcase/disk-usage.30m.sh`](showcase/disk-usage.30m.sh) — reading system state, color-coding by threshold, an SF Symbol, graceful degradation when a dependency is missing, and a `<vee.exec>` declaration.
+- [`plugins/showcase/kitchen-sink.1m.sh`](showcase/kitchen-sink.1m.sh) — every field of the JSON output format in one file: titles, rich controls (sparkline/toggle/slider/progress/charts), nested submenus, an alternate row.
 
 ## Further reading
 
