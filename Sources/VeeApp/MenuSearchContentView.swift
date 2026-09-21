@@ -298,7 +298,7 @@ private struct MenuRowView: View {
             Image(nsImage: nsImage)
                 .resizable()
                 .renderingMode(nsImage.isTemplate ? .template : .original)
-                .aspectRatio(contentMode: .fit)
+                .scaledToFit()
                 .foregroundStyle(selected ? AnyShapeStyle(.white) : AnyShapeStyle(.secondary))
                 .frame(width: 18, height: 18)
                 .padding(.trailing, 9)
