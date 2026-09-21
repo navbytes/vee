@@ -59,4 +59,52 @@ final class ManagerRowEnabledIndicatorTests: XCTestCase {
         XCTAssertTrue(AppPreferences.shared.isDisabled(filename), "the toggle must still actually disable a non-+x plugin")
         AppPreferences.shared.setDisabled(false, id: filename) // tidy up real UserDefaults.standard state
     }
+
+    func testTrashFailureKeepsInstalledRowFileAndRuntimeCoordinator() async throws {
+        let dir = tempDir()
+        defer { try? FileManager.default.removeItem(atPath: dir) }
+        setenv("VEE_PLUGINS_DIR", dir, 1)
+        defer { unsetenv("VEE_PLUGINS_DIR") }
+        let filename = "trash-failure-\(UUID().uuidString).sh"
+        let path = (dir as NSString).appendingPathComponent(filename)
+        try "#!/bin/bash\necho hi\n".write(toFile: path, atomically: true, encoding: .utf8)
+        let controller = AppController(trashItem: { _ in throw CocoaError(.fileWriteNoPermission) })
+        defer { controller.applicationWillTerminate(Notification(name: Notification.Name("test-cleanup"))) }
+        controller.reload()
+        XCTAssertTrue(controller.intentRefresh(name: filename))
+        let manager = controller.makeLibraryModel(section: .installed).manager
+        try await waitForLoad(manager)
+
+        manager.delete(filename)
+
+        XCTAssertTrue(FileManager.default.fileExists(atPath: path))
+        XCTAssertEqual(manager.rows.map(\.id), [filename])
+        XCTAssertTrue(controller.intentRefresh(name: filename))
+        XCTAssertNotNil(manager.deleteError)
+    }
+
+    func testTrashSuccessRemovesInstalledRowFileAndRuntimeCoordinator() async throws {
+        let dir = tempDir()
+        defer { try? FileManager.default.removeItem(atPath: dir) }
+        setenv("VEE_PLUGINS_DIR", dir, 1)
+        defer { unsetenv("VEE_PLUGINS_DIR") }
+        let filename = "trash-success-\(UUID().uuidString).sh"
+        let path = (dir as NSString).appendingPathComponent(filename)
+        try "#!/bin/bash\necho hi\n".write(toFile: path, atomically: true, encoding: .utf8)
+        let varStore = VarStore(pluginPath: path)
+        try varStore.set("saved", for: "CITY")
+        let controller = AppController(trashItem: { try FileManager.default.removeItem(at: $0) })
+        defer { controller.applicationWillTerminate(Notification(name: Notification.Name("test-cleanup"))) }
+        controller.reload()
+        let manager = controller.makeLibraryModel(section: .installed).manager
+        try await waitForLoad(manager)
+
+        manager.delete(filename)
+
+        XCTAssertFalse(FileManager.default.fileExists(atPath: path))
+        XCTAssertTrue(manager.rows.isEmpty)
+        XCTAssertFalse(controller.intentRefresh(name: filename))
+        XCTAssertNil(manager.deleteError)
+        XCTAssertNil(varStore.value(for: "CITY"), "confirmed in-app deletion should clear satellite state without the manual-delete grace period")
+    }
 }

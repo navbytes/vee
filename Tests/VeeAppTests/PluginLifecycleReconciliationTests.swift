@@ -74,7 +74,7 @@ final class PluginLifecycleReconciliationTests: XCTestCase {
         AppPreferences.shared.setHotkeyDisabled(true, id: filename)
         AppPreferences.shared.setHotkeyBinding("cmd+shift+j", id: filename)
         try VarStore(pluginPath: path).set("dark", for: "THEME")
-        secrets.set("s3cret", for: "API_TOKEN")
+        try secrets.set("s3cret", for: "API_TOKEN")
         let provenanceStore = ProvenanceStore(directory: dir)
         try provenanceStore.record(
             PluginProvenance(filename: filename, sourceURL: URL(string: "https://example.com/\(filename)")!, source: "x")
@@ -127,7 +127,7 @@ final class PluginLifecycleReconciliationTests: XCTestCase {
     /// GC pass run against folder B once saw every plugin of folder A as
     /// deleted and wiped its credentials, irreversibly, for files still sitting
     /// intact in A. `AppPreferences.pluginHome` is the missing scope.
-    func testSwitchingFoldersDoesNotGCTheOtherFoldersSecrets() {
+    func testSwitchingFoldersDoesNotGCTheOtherFoldersSecrets() throws {
         let folderA = tempDir()
         let folderB = tempDir()
         defer {
@@ -150,7 +150,7 @@ final class PluginLifecycleReconciliationTests: XCTestCase {
         inA.reload()
         AppPreferences.shared.setDisabled(true, id: filename)
         defer { AppPreferences.shared.setDisabled(false, id: filename) }
-        secrets.set("s3cret", for: "API_TOKEN")
+        try secrets.set("s3cret", for: "API_TOKEN")
 
         // Now Vee is pointed at B — a fresh controller reconciling B is what a
         // relaunch after a folder change does, and it is the pass that used to
@@ -227,7 +227,7 @@ final class PluginLifecycleReconciliationTests: XCTestCase {
     /// and Keychain secret; the plugins then silently reappear re-enabled
     /// once the mount lands, tokens gone — unrecoverable. Fails before the
     /// `!onDisk.isEmpty` guard, passes after.
-    func testReloadDoesNotGCOnASuccessfulButEmptyListing() {
+    func testReloadDoesNotGCOnASuccessfulButEmptyListing() throws {
         let dir = tempDir() // mkdir'd, but nothing ever written into it
         setenv("VEE_PLUGINS_DIR", dir, 1)
         defer { unsetenv("VEE_PLUGINS_DIR") }
@@ -238,7 +238,7 @@ final class PluginLifecycleReconciliationTests: XCTestCase {
         AppPreferences.shared.setDisabled(true, id: filename)
         defer { AppPreferences.shared.setDisabled(false, id: filename) }
         let secrets = InMemorySecretStore()
-        secrets.set("s3cret", for: "API_TOKEN")
+        try secrets.set("s3cret", for: "API_TOKEN")
 
         let controller = AppController(secretStoreFactory: { _ in secrets }, deletionGracePeriod: 0)
         defer { cleanup(controller) }
@@ -267,7 +267,7 @@ final class PluginLifecycleReconciliationTests: XCTestCase {
 
         AppPreferences.shared.setDisabled(true, id: filename)
         defer { AppPreferences.shared.setDisabled(false, id: filename) }
-        secrets.set("s3cret", for: "API_TOKEN")
+        try secrets.set("s3cret", for: "API_TOKEN")
 
         // An in-place UPDATE — `PluginInstaller.install` again under the
         // same filename, the exact atomic temp+rename primitive Discover's
@@ -290,7 +290,7 @@ final class PluginLifecycleReconciliationTests: XCTestCase {
     /// `VeePreferencesTests` for that write-side test). This proves the
     /// GC/consume side directly, without needing `VarDeclaration` (a
     /// `VeePluginFormat` type this test target doesn't depend on).
-    func testSecretOnlyPluginIsStillGCdOnDelete() {
+    func testSecretOnlyPluginIsStillGCdOnDelete() throws {
         let dir = tempDir()
         defer { try? FileManager.default.removeItem(atPath: dir) }
         setenv("VEE_PLUGINS_DIR", dir, 1)
@@ -310,7 +310,7 @@ final class PluginLifecycleReconciliationTests: XCTestCase {
 
         // No disabled flag, no vars, no provenance — a secret is the ONLY
         // state, recorded the same way `PluginPreferences.setValue` does.
-        secrets.set("s3cret", for: "API_TOKEN")
+        try secrets.set("s3cret", for: "API_TOKEN")
         AppPreferences.shared.setHasSecret(true, id: filename)
 
         try? FileManager.default.removeItem(atPath: path)
@@ -346,7 +346,7 @@ final class PluginLifecycleReconciliationTests: XCTestCase {
         AppPreferences.shared.setDisabled(true, id: filename)
         defer { AppPreferences.shared.setDisabled(false, id: filename) }
         try VarStore(pluginPath: path).set("dark", for: "THEME")
-        secrets.set("s3cret", for: "API_TOKEN")
+        try secrets.set("s3cret", for: "API_TOKEN")
 
         // The file blinks out of existence — an editor mid-save — and the
         // watcher fires a reload right inside that window.

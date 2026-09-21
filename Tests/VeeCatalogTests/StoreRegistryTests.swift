@@ -317,6 +317,17 @@ final class StoreRegistryTests: XCTestCase {
         XCTAssertEqual(registry.userStores().first?.displayName, "Renamed")
     }
 
+    func testUpdateRejectsAnotherStoresEffectiveIdentityWithoutMutation() throws {
+        try registry.add(StoreConfig(id: StoreID("one"), displayName: "One", kind: .github, owner: "acme", repo: "one"))
+        try registry.add(StoreConfig(id: StoreID("two"), displayName: "Two", kind: .github, owner: "acme", repo: "two"))
+        let collision = StoreConfig(id: StoreID("two"), displayName: "Collision", kind: .github, owner: "ACME", repo: "one.git")
+
+        XCTAssertThrowsError(try registry.update(collision)) { error in
+            XCTAssertEqual(error as? StoreRegistryError, .duplicateStore("One"))
+        }
+        XCTAssertEqual(registry.userStores().map(\.displayName), ["One", "Two"])
+    }
+
     // MARK: - Enable / disable
 
     func testDisableBuiltInHidesItFromEnabled() {

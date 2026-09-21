@@ -55,6 +55,11 @@ public struct VarDeclarationField: View {
 /// in `values` and flushed on `save()`.
 @MainActor
 public final class VariablesEditorModel: ObservableObject {
+    public struct SaveFailure: Equatable, Sendable {
+        public let pluginName: String
+        public let fieldName: String
+    }
+
     /// A plugin's row-group as rendered in the editor, paired with the store
     /// that persists its values.
     public struct Group: Identifiable {
@@ -67,17 +72,21 @@ public final class VariablesEditorModel: ObservableObject {
     @Published public private(set) var groups: [Group]
     /// Buffered edits keyed `pluginID → (varName → value)`.
     @Published var values: [String: [String: String]] = [:]
+    @Published public private(set) var saveFailures: [SaveFailure] = []
 
     private let onSaved: () -> Void
+    private let persistValue: ((String, VarDeclaration, String) throws -> Void)?
 
     /// Builds the editor from aggregated groups. `secretStore` lets tests inject
     /// an in-memory store; production uses the per-plugin Keychain store.
     public init(
         groups aggregated: [PluginVariableGroup],
         secretStore: ((PluginID) -> SecretStoring)? = nil,
+        persistValue: ((String, VarDeclaration, String) throws -> Void)? = nil,
         onSaved: @escaping () -> Void = {}
     ) {
         self.onSaved = onSaved
+        self.persistValue = persistValue
         var built: [Group] = []
         var initial: [String: [String: String]] = [:]
         for group in aggregated {
@@ -114,14 +123,27 @@ public final class VariablesEditorModel: ObservableObject {
 
     /// Persists every buffered value through each plugin's `PluginPreferences`
     /// (secrets to the Keychain, the rest to the sidecar), then notifies.
-    public func save() {
+    @discardableResult
+    public func save() -> Bool {
+        var failures: [SaveFailure] = []
         for group in groups {
             for declaration in group.declarations {
                 let value = values[group.id]?[declaration.name] ?? declaration.defaultValue
-                try? group.prefs.setValue(value, for: declaration)
+                do {
+                    if let persistValue {
+                        try persistValue(group.id, declaration, value)
+                    } else {
+                        try group.prefs.setValue(value, for: declaration)
+                    }
+                } catch {
+                    failures.append(SaveFailure(pluginName: group.name, fieldName: declaration.name))
+                }
             }
         }
+        saveFailures = failures
+        guard failures.isEmpty else { return false }
         onSaved()
+        return true
     }
 }
 
@@ -181,6 +203,14 @@ public struct VariablesEditorView: View {
                 }
                 .padding(12)
                 .animation(.easeInOut(duration: 0.2), value: justSaved)
+                if !model.saveFailures.isEmpty {
+                    Text(saveFailureMessage)
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                        .padding(.horizontal, 12)
+                        .padding(.bottom, 12)
+                        .accessibilityLabel(saveFailureMessage)
+                }
             }
         }
     }
@@ -188,11 +218,19 @@ public struct VariablesEditorView: View {
     /// Persists edits and shows a brief "Saved" confirmation, so the fire-and-
     /// forget Save button gives visible feedback that changes took effect.
     private func save() {
-        model.save()
+        guard model.save() else {
+            justSaved = false
+            return
+        }
         justSaved = true
         Task {
             try? await Task.sleep(for: .seconds(2))
             justSaved = false
         }
+    }
+
+    private var saveFailureMessage: String {
+        let fields = model.saveFailures.map { "\($0.pluginName): \($0.fieldName)" }.joined(separator: ", ")
+        return "Couldn’t save \(fields). Check storage permissions and try again."
     }
 }

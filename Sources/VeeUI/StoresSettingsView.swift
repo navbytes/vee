@@ -223,6 +223,7 @@ private struct StoreRow: View {
                     set: { model.setEnabled($0, store) }
                 ))
                 .labelsHidden()
+                .accessibilityLabel("Enable \(store.displayName)")
                 if !store.isBuiltIn {
                     Button(role: .destructive) {
                         model.remove(store)
@@ -231,6 +232,7 @@ private struct StoreRow: View {
                     }
                     .buttonStyle(.borderless)
                     .help("Remove this store")
+                    .accessibilityLabel("Remove \(store.displayName)")
                 }
             }
         }

@@ -213,6 +213,14 @@ struct InstalledPluginsList: View {
         }
         .formStyle(.grouped)
         .navigationTitle("Installed")
+        .alert("Plugin Not Deleted", isPresented: Binding(
+            get: { model.deleteError != nil },
+            set: { if !$0 { model.dismissActionError() } }
+        )) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(model.deleteError ?? "")
+        }
         .navigationDestination(for: String.self) { id in
             if let models = pluginDetail(id) {
                 PluginDetailView(name: name(for: id), models: models)

@@ -19,6 +19,7 @@ final class MainMenuController: NSObject, NSMenuDelegate {
     private let onPreferences: () -> Void
     private let onRefreshAll: () -> Void
     private let onOpenFolder: () -> Void
+    private let onToggleLogin: (Bool) -> Void
     private var loginItem: NSMenuItem!
 
     /// This controller's own standalone menu — built unconditionally (even
@@ -38,12 +39,13 @@ final class MainMenuController: NSObject, NSMenuDelegate {
     /// to visible, matching the app always showing its icon prior to #71.
     private(set) var isVisible = true
 
-    init(onManager: @escaping () -> Void, onDiscover: @escaping () -> Void, onPreferences: @escaping () -> Void, onRefreshAll: @escaping () -> Void, onOpenFolder: @escaping () -> Void, attachesStatusItem: Bool = true) {
+    init(onManager: @escaping () -> Void, onDiscover: @escaping () -> Void, onPreferences: @escaping () -> Void, onRefreshAll: @escaping () -> Void, onOpenFolder: @escaping () -> Void, onToggleLogin: @escaping (Bool) -> Void = { LoginItemManager.setEnabled($0) }, attachesStatusItem: Bool = true) {
         self.onManager = onManager
         self.onDiscover = onDiscover
         self.onPreferences = onPreferences
         self.onRefreshAll = onRefreshAll
         self.onOpenFolder = onOpenFolder
+        self.onToggleLogin = onToggleLogin
         self.attachesStatusItem = attachesStatusItem
         super.init()
 
@@ -106,7 +108,7 @@ final class MainMenuController: NSObject, NSMenuDelegate {
     @objc private func discover() { onDiscover() }
     @objc private func refreshAll() { onRefreshAll() }
     @objc private func openFolder() { onOpenFolder() }
-    @objc private func toggleLogin() { LoginItemManager.setEnabled(!LoginItemManager.isEnabled) }
+    @objc private func toggleLogin() { onToggleLogin(!LoginItemManager.isEnabled) }
     @objc private func quit() { NSApp.terminate(nil) }
 
     /// Shows/hides this controller's own status item — hidden while compact

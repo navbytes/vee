@@ -30,7 +30,7 @@ public struct PluginPreferences {
 
     public func setValue(_ value: String, for declaration: VarDeclaration) throws {
         if declaration.isSecret {
-            secretStore.set(value, for: declaration.name)
+            try secretStore.set(value, for: declaration.name)
             // Marks this filename as worth checking for disk-reconciliation
             // GC (AppController.reconcileDiskState) — a plugin that only
             // ever has a secret (no disabled flag, vars, or provenance)
