@@ -81,7 +81,7 @@ public final class PluginSettingsModel: ObservableObject {
         onApplyHotkey: @escaping (Bool, String, HotkeyPresentation) -> HotkeyStatus,
         onSaved: @escaping () -> Void
     ) {
-        let oldDeclarations = Dictionary(uniqueKeysWithValues: declarations.map { ($0.name, $0) })
+        let oldDeclarations = Dictionary(declarations.map { ($0.name, $0) }, uniquingKeysWith: { first, _ in first })
         let oldValues = values
         self.prefs = prefs
         self.declarations = prefs.declarations

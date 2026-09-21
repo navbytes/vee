@@ -122,7 +122,7 @@ public final class VariablesEditorModel: ObservableObject {
     public func reconcile(groups aggregated: [PluginVariableGroup]) {
         let previous = values
         let previousDeclarations = Dictionary(uniqueKeysWithValues: groups.map { group in
-            (group.id, Dictionary(uniqueKeysWithValues: group.declarations.map { ($0.name, $0) }))
+            (group.id, Dictionary(group.declarations.map { ($0.name, $0) }, uniquingKeysWith: { first, _ in first }))
         })
         var built: [Group] = []
         var reconciled: [String: [String: String]] = [:]

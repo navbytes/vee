@@ -978,7 +978,7 @@ public final class AppController: NSObject, NSApplicationDelegate {
             pluginDetail: { [weak self] id in
                 guard let coordinator = self?.coordinators[id] else { return nil }
                 return PluginDetailModels(
-                    settings: coordinator.hasSettings ? coordinator.settingsModel() : nil,
+                    settings: coordinator.hasSettings ? coordinator.existingSettingsModel() ?? coordinator.settingsModel() : nil,
                     debug: coordinator.debugModel()
                 )
             }
@@ -1236,6 +1236,7 @@ public final class AppController: NSObject, NSApplicationDelegate {
             )
             currentLibraryModel = activeModel
             currentManagerModel = activeModel.manager
+            generalSettingsModel = activeModel.general
             refreshLibraryInventory()
         }
         generalSettingsModel?.currentDirectory = path
