@@ -40,19 +40,30 @@ jobs:
       - id: filter
         env:
           GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
         run: |
           set -euo pipefail
-          total=$(gh api "repos/${{ github.repository }}/pulls/${{ github.event.number }}" --jq .changed_files)
-          gh api --paginate --slurp "repos/${{ github.repository }}/pulls/${{ github.event.number }}/files" > "$RUNNER_TEMP/changed-files.json"
-          swift=$(jq --argjson total "$total" 'add | if length == 0 or length != $total then true else any(.[]; ([.filename, (.previous_filename // .filename)] | any(.[]; test("^(Sources|Tests|App|WidgetExtension|plugins/fixtures)/|^Package\\.(swift|resolved)$|^project\\.yml$|^\\.swiftlint\\.yml$|^\\.github/workflows/")))) end' "$RUNNER_TEMP/changed-files.json")
-          echo "swift=$swift" >> "$GITHUB_OUTPUT"
-
-          # Swift, the app target, and the toolchain config that builds them.
-          if match '^(Sources|Tests|App|WidgetExtension)/|^plugins/fixtures/|^Package\.swift$|^project\.yml$|^\.swiftlint\.yml$|^\.github/workflows/(ci|lint)\.yml$'; then
-            echo "swift=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "swift=false" >> "$GITHUB_OUTPUT"
+          if [ "$GITHUB_EVENT_NAME" != pull_request ]; then
+            echo 'swift=true' >> "$GITHUB_OUTPUT"
+            exit 0
           fi
+          endpoint="repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER"
+          gh api "$endpoint" > "$RUNNER_TEMP/pr-before.json"
+          if ! jq -e --arg head "$PR_HEAD" --arg base "$PR_BASE" '.head.sha == $head and .base.sha == $base' "$RUNNER_TEMP/pr-before.json" >/dev/null; then
+            echo 'swift=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          total=$(jq -er '.changed_files' "$RUNNER_TEMP/pr-before.json")
+          gh api --paginate --slurp "$endpoint/files" > "$RUNNER_TEMP/changed-files.json"
+          gh api "$endpoint" > "$RUNNER_TEMP/pr-after.json"
+          if ! jq -e --arg head "$PR_HEAD" --arg base "$PR_BASE" '.head.sha == $head and .base.sha == $base' "$RUNNER_TEMP/pr-after.json" >/dev/null; then
+            echo 'swift=true' >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          value=$(jq --argjson total "$total" 'add | if length == 0 or length != $total then true else any(.[]; ([.filename, (.previous_filename // .filename)] | any(.[]; test("^(Sources|Tests|App|WidgetExtension|plugins/fixtures)/|^Package\\.(swift|resolved)$|^project\\.yml$|^\\.swiftlint\\.yml$|^\\.github/workflows/")))) end' "$RUNNER_TEMP/changed-files.json")
+          echo "swift=$value" >> "$GITHUB_OUTPUT"
 
   swift:
     name: Build & test (SwiftPM)
