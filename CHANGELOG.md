@@ -6,6 +6,13 @@ All notable changes to Vee are documented here. The format is based on
 
 ## [Unreleased]
 
+### Changed
+- **Discover is a clean, uniform row list** instead of an uneven card grid.
+  Every plugin row is the same height whether or not it has a screenshot,
+  Install/Update and View source no longer truncate, categories are native
+  section headers with counts, and a declared screenshot is a fixed thumbnail
+  that opens the full-size preview.
+
 ## [0.7.0] - 2026-09-21
 
 The plugin SDKs are retired — the stdout format is the SDK — plus a curated

@@ -209,6 +209,67 @@ public extension View {
 
 // MARK: - Reusable views
 
+/// Lays its children out left-to-right and wraps to a new line when the next
+/// child would exceed the proposed width. A row's badge run uses this so a
+/// crowded entry wraps onto a second line instead of overflowing: `TrustChip`/
+/// `MetaChip` are `.fixedSize` (a capsule must keep its natural width rather
+/// than hyphenate mid-word), so a plain `HStack` of them can't shrink and would
+/// instead force SwiftUI to squeeze whatever sits beside it.
+public struct WrappingHStack: Layout {
+    public var spacing: CGFloat
+    public var lineSpacing: CGFloat
+
+    public init(spacing: CGFloat = 8, lineSpacing: CGFloat? = nil) {
+        self.spacing = spacing
+        self.lineSpacing = lineSpacing ?? spacing
+    }
+
+    public func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        // A nil/zero proposal is "unbounded" (the measuring pass), so nothing
+        // wraps and the natural width is reported.
+        let maxWidth = proposal.width ?? .infinity
+        var lineWidth: CGFloat = 0
+        var lineHeight: CGFloat = 0
+        var widestLine: CGFloat = 0
+        var totalHeight: CGFloat = 0
+        for subview in subviews {
+            let size = subview.sizeThatFits(.unspecified)
+            let needed = lineWidth == 0 ? size.width : lineWidth + spacing + size.width
+            if lineWidth > 0, needed > maxWidth {
+                widestLine = max(widestLine, lineWidth)
+                totalHeight += lineHeight + lineSpacing
+                lineWidth = size.width
+                lineHeight = size.height
+            } else {
+                lineWidth = needed
+                lineHeight = max(lineHeight, size.height)
+            }
+        }
+        widestLine = max(widestLine, lineWidth)
+        totalHeight += lineHeight
+        // Fill the proposed width when bounded, so the run left-aligns inside
+        // the row instead of centering in a bare content-size box.
+        return CGSize(width: maxWidth.isFinite ? maxWidth : widestLine, height: totalHeight)
+    }
+
+    public func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        var x = bounds.minX
+        var y = bounds.minY
+        var lineHeight: CGFloat = 0
+        for subview in subviews {
+            let size = subview.sizeThatFits(.unspecified)
+            if x > bounds.minX, x + size.width > bounds.maxX {
+                x = bounds.minX
+                y += lineHeight + lineSpacing
+                lineHeight = 0
+            }
+            subview.place(at: CGPoint(x: x, y: y), anchor: .topLeading, proposal: ProposedViewSize(size))
+            x += size.width + spacing
+            lineHeight = max(lineHeight, size.height)
+        }
+    }
+}
+
 /// A small capsule showing an SF Symbol + short label in a tint. Filled — so its
 /// weight is reserved for **state that matters** (trust level, error, severity).
 /// For descriptive metadata (store, surface, freshness) use ``MetaChip`` instead.
