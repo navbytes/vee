@@ -908,28 +908,32 @@ public struct DiscoverContentView: View {
         return store.displayName
     }
 
-    /// The shared column spec for every Discover grid (skeleton, sectioned,
-    /// and flat) — kept in one place so the three branches below can't drift.
-    private var gridColumns: [GridItem] {
-        [GridItem(.adaptive(minimum: 300, maximum: 460), spacing: Space.md)]
-    }
-
     private func pluginsSubtitle(_ count: Int) -> String {
         count == 1 ? "1 plugin" : "\(count) plugins"
+    }
+
+    /// The grouped row list every non-empty Discover state shares, so the
+    /// sectioned and flat branches can't drift apart — and so Discover reads as
+    /// the same surface as the Installed tab (`InstalledPluginsList`).
+    private func catalogList<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
+        Form { content() }
+            .formStyle(.grouped)
+            .navigationTitle(model.visibleTitle)
+            .navigationSubtitle(pluginsSubtitle(model.visibleEntries.count))
     }
 
     @ViewBuilder
     private var detail: some View {
         if model.isLoading {
-            // Skeleton cards in the real grid, so the catalog settles into place
-            // instead of the whole pane flipping from a centered spinner to a full
-            // grid (the fetch can take a beat over the network).
-            ScrollView {
-                LazyVGrid(columns: gridColumns, spacing: Space.md) {
-                    ForEach(0..<6, id: \.self) { _ in SkeletonPluginCard() }
+            // Skeleton rows in the real list, so the catalog settles into place
+            // instead of the whole pane flipping from a centered spinner to a
+            // full list (the fetch can take a beat over the network).
+            Form {
+                Section {
+                    ForEach(0..<6, id: \.self) { _ in SkeletonPluginRow() }
                 }
-                .padding(Space.lg)
             }
+            .formStyle(.grouped)
             .navigationTitle("Discover")
         } else if let error = model.errorMessage {
             ContentUnavailableView {
@@ -977,39 +981,35 @@ public struct DiscoverContentView: View {
             .navigationTitle("Discover")
         } else if model.selectedCategory.isEmpty {
             // "All Categories" — group into sections so a large catalog scans
-            // by category instead of one undifferentiated wall of cards. A
+            // by category instead of one undifferentiated wall of rows. A
             // single category is already a scoped list, so it stays flat (a
             // lone repeated header would just be noise).
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: Space.lg) {
-                    ForEach(model.sectionedEntries, id: \.category) { section in
-                        VStack(alignment: .leading, spacing: Space.sm) {
-                            CategorySectionHeader(name: section.category, count: section.entries.count)
-                            LazyVGrid(columns: gridColumns, spacing: Space.md) {
-                                ForEach(section.entries) { entry in
-                                    PluginCard(model: model, entry: entry)
-                                        .task { await model.loadHeader(for: entry) }
-                                }
-                            }
+            catalogList {
+                ForEach(model.sectionedEntries, id: \.category) { section in
+                    Section {
+                        ForEach(section.entries) { entry in
+                            PluginCatalogRow(model: model, entry: entry)
+                                .task { await model.loadHeader(for: entry) }
+                        }
+                    } header: {
+                        HStack {
+                            Text(section.category)
+                            Spacer()
+                            Text("\(section.entries.count)")
+                                .foregroundStyle(.secondary)
                         }
                     }
                 }
-                .padding(Space.lg)
             }
-            .navigationTitle(model.visibleTitle)
-            .navigationSubtitle(pluginsSubtitle(model.visibleEntries.count))
         } else {
-            ScrollView {
-                LazyVGrid(columns: gridColumns, spacing: Space.md) {
+            catalogList {
+                Section {
                     ForEach(model.visibleEntries) { entry in
-                        PluginCard(model: model, entry: entry)
+                        PluginCatalogRow(model: model, entry: entry)
                             .task { await model.loadHeader(for: entry) }
                     }
                 }
-                .padding(Space.lg)
             }
-            .navigationTitle(model.visibleTitle)
-            .navigationSubtitle(pluginsSubtitle(model.visibleEntries.count))
         }
     }
 }
@@ -1033,27 +1033,7 @@ public struct PluginBrowserView: View {
     }
 }
 
-/// A category header above one section of the grouped-by-category Discover
-/// grid — muted, uppercase, matching the weight of a section label rather
-/// than competing with the plugin cards below it.
-private struct CategorySectionHeader: View {
-    let name: String
-    let count: Int
-
-    var body: some View {
-        HStack(spacing: Space.xs) {
-            Text(name)
-                .font(.caption.weight(.semibold))
-                .foregroundStyle(.secondary)
-                .textCase(.uppercase)
-            Text("\(count)")
-                .font(.caption)
-                .foregroundStyle(.tertiary)
-        }
-    }
-}
-
-/// A transient success/failure banner shown over the Discover grid after an
+/// A transient success/failure banner shown over the Discover list after an
 /// install, with a manual dismiss in addition to the auto-timeout.
 private struct NoticeBanner: View {
     let notice: CatalogNotice
@@ -1086,99 +1066,153 @@ private struct NoticeBanner: View {
     }
 }
 
-/// Renders one `AsyncImagePhase` of a plugin card's screenshot at a fixed
-/// height — factored out of `PluginCard.preview` so "every phase is the same
-/// height" (the scroll-jank fix: `.empty`/`.failure` used to render 0pt,
-/// jumping the card's height once `.success` landed mid-scroll) is
-/// unit-testable without a real network fetch. Not `private`, unlike its
-/// sibling card views, so tests can construct it directly via `@testable
-/// import VeeUI` (mirroring `PluginBrowserModel.previewImageURL`, also
-/// internal for the same reason).
-struct PluginPreviewPhaseView: View {
+/// Renders one `AsyncImagePhase` of a plugin's screenshot as a fixed-size
+/// thumbnail — factored out of `PluginCatalogRow` so "every phase is the same
+/// size" (an `.empty`/`.failure` that rendered 0pt used to change a row's
+/// height the moment `.success` landed mid-scroll) is unit-testable without a
+/// real network fetch. Not `private`, unlike its sibling row views, so tests
+/// can construct it directly via `@testable import VeeUI` (mirroring
+/// `PluginBrowserModel.previewImageURL`, also internal for the same reason).
+struct PluginThumbnail: View {
     let phase: AsyncImagePhase
     let title: String
     /// Fired only from the `.success` phase's own tap target.
     let onTapSuccess: () -> Void
 
-    /// The 120pt cap `.success`'s image already used, now reserved by every
-    /// phase.
-    static let height: CGFloat = 120
+    /// One size for every phase, and one small enough that it never dictates a
+    /// row's height — see `PluginCatalogRow.metadataMinHeight`.
+    static let size = CGSize(width: 96, height: 54)
+
+    private let corner: CGFloat = 6
 
     var body: some View {
-        switch phase {
-        case .success(let image):
-            Button(action: onTapSuccess) {
-                image
-                    .resizable()
-                    .scaledToFit()
-                    .frame(maxWidth: .infinity, minHeight: Self.height, maxHeight: Self.height)
-                    .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+        Group {
+            switch phase {
+            case .success(let image):
+                Button(action: onTapSuccess) {
+                    image
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: Self.size.width, height: Self.size.height)
+                        .clipShape(RoundedRectangle(cornerRadius: corner, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: corner, style: .continuous)
+                                .stroke(Palette.hairline, lineWidth: 1)
+                        )
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Screenshot of \(title)")
+                .accessibilityHint("Opens a larger preview")
+            case .empty:
+                RoundedRectangle(cornerRadius: corner, style: .continuous)
+                    .fill(Palette.hairline.opacity(0.3))
+                    .frame(width: Self.size.width, height: Self.size.height)
+                    .overlay(ProgressView().controlSize(.small))
+            case .failure:
+                // Reserves the same space but draws nothing — a broken-image
+                // icon would be a worse row than no image (pre-existing policy).
+                Color.clear.frame(width: Self.size.width, height: Self.size.height)
+            @unknown default:
+                Color.clear.frame(width: Self.size.width, height: Self.size.height)
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel("Screenshot of \(title)")
-            .accessibilityHint("Opens a larger preview")
-        case .empty:
-            RoundedRectangle(cornerRadius: 6, style: .continuous)
-                .fill(Palette.hairline.opacity(0.3))
-                .frame(maxWidth: .infinity, minHeight: Self.height, maxHeight: Self.height)
-                .overlay(ProgressView().controlSize(.small))
-        case .failure:
-            // Reserves the same space but draws nothing — a broken-image icon
-            // would be a worse card than no image (pre-existing policy).
-            Color.clear.frame(maxWidth: .infinity, minHeight: Self.height, maxHeight: Self.height)
-        @unknown default:
-            Color.clear.frame(maxWidth: .infinity, minHeight: Self.height, maxHeight: Self.height)
         }
+        .frame(width: Self.size.width, height: Self.size.height)
     }
 }
 
-/// One plugin card in the Discover grid.
-private struct PluginCard: View {
+/// One plugin row in the Discover catalog list. Mirrors the Installed tab's
+/// `ManagerRow`: a category tile, a metadata block (title, optional store chip,
+/// author, description, ranked badge row), and a trailing area with the entry's
+/// screenshot thumbnail, its primary action, and a View source link.
+///
+/// Internal (not `private`) so tests can render it directly and pin the
+/// "same height with and without a screenshot" contract — mirroring
+/// `PluginThumbnail`.
+struct PluginCatalogRow: View {
     @ObservedObject var model: PluginBrowserModel
     let entry: CatalogEntry
-    /// Drives the click-to-enlarge sheet — only ever set while `preview` has
-    /// an actual loaded image to show (the `.success` phase's own tap target).
+    /// Drives the click-to-enlarge sheet — only ever set by the thumbnail's
+    /// `.success` phase tap target.
     @State private var showingFullImage = false
 
+    /// A floor for the metadata block. The author, description, and badges
+    /// arrive after the row first appears (they stream in with the
+    /// lazily-fetched header), so without a reserved height the row would grow
+    /// underneath the cursor mid-scroll. Deliberately at least as tall as
+    /// `PluginThumbnail.size.height` so a screenshot can never make a row
+    /// taller than one without it.
+    static let metadataMinHeight: CGFloat = 84
+
     var body: some View {
-        VStack(alignment: .leading, spacing: Space.sm) {
-            details
-            preview
+        HStack(alignment: .center, spacing: 11) {
+            PluginTile(symbol: CategoryStyle.symbol(for: entry.category),
+                       tint: CategoryStyle.tint(for: entry.category))
+
+            metadata
+
+            Spacer(minLength: Space.sm)
+
+            screenshot
+
+            actions
         }
-        .padding(Space.md)
-        // No hover treatment: `veeCardSurface`'s accent-on-hover border is the
-        // app's affordance for "this whole surface is clickable," but the card
-        // itself has no click action — only its own Install/Update/View source
-        // controls do, and those already get their own hover feedback from
-        // AppKit. Hovering the card used to promise an action it didn't have.
-        .veeCardSurface()
+        .padding(.vertical, 2)
         .task { await model.loadLastUpdated(for: entry) }
+    }
+
+    /// The name/author/description/badges block, reserved to a stable height.
+    /// The badges wrap rather than sitting in a fixed one-line row, so a
+    /// crowded entry grows the row instead of squeezing the controls beside it.
+    private var metadata: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(model.title(for: entry)).fontWeight(.medium).lineLimit(1)
+            if model.hasMultipleStores, let storeName = model.storeName(for: entry) {
+                MetaChip(symbol: "shippingbox", label: storeName)
+            }
+            if let author = model.author(for: entry) {
+                Text("by \(author)").font(.caption).foregroundStyle(.secondary).lineLimit(1)
+            }
+            if let desc = model.summary(for: entry), !desc.isEmpty {
+                Text(desc).font(.caption).foregroundStyle(.secondary).lineLimit(2)
+            }
+            // One ranked badge row instead of a vertical ladder of same-weight
+            // pills: a filled chip for state that matters (trust, deprecation),
+            // muted text for metadata (surface, freshness).
+            WrappingHStack(spacing: Space.sm) {
+                if entry.deprecated {
+                    TrustChip(symbol: "exclamationmark.triangle.fill", label: "Deprecated", tint: .red)
+                        .help("The store that lists this plugin marks it deprecated")
+                }
+                // Shown for `.undeclared` too — a plugin declaring no
+                // permissions at all is exactly the state a trust chip exists
+                // to surface. A `nil` level (header not fetched yet) still
+                // shows nothing, same as before.
+                if let level = model.trustLevel(for: entry) {
+                    TrustChip(symbol: level.symbol, label: level.label, tint: level.color)
+                }
+                SurfaceBadge(surface: entry.manifestSurface)
+                if let date = model.lastUpdatedDate(for: entry), let freshness = model.freshness(for: entry) {
+                    FreshnessBadge(date: date, freshness: freshness)
+                }
+            }
+            .padding(.top, 2)
+        }
+        .frame(minHeight: Self.metadataMinHeight, alignment: .top)
     }
 
     /// The plugin's own screenshot (`<xbar.image>`), when it publishes one from
     /// the same host as its source — see `PluginBrowserModel.previewImageURL`.
     ///
-    /// `AsyncImage` rather than a hand-rolled loader: the grid is lazy, so this
-    /// only fetches for cards actually on screen, and URLSession's shared cache
-    /// means scrolling back doesn't refetch. A card without an image is exactly
-    /// the card that existed before, so nothing shifts for the plugins — the
-    /// large majority — that publish none.
-    ///
-    /// Height-capped (`PluginPreviewPhaseView.height`) because the declared
-    /// image is arbitrary: a screenshot of a menu is wide and short, and one
-    /// that isn't must not be allowed to push every other card off the grid.
-    /// Every phase reserves that same height (see `PluginPreviewPhaseView`),
-    /// so a card with a declared image never resizes once its `AsyncImage`
-    /// settles.
-    ///
-    /// A loaded image (`.success`) is the click target for the enlarge sheet —
-    /// the card itself stays reserved for its own Install/Update/View source
-    /// controls (see the no-hover-treatment note in `body`).
+    /// `AsyncImage` rather than a hand-rolled loader: the list is lazy, so this
+    /// only fetches for rows actually on screen, and URLSession's shared cache
+    /// means scrolling back doesn't refetch. Drawn at a fixed size
+    /// (`PluginThumbnail.size`) so a declared image can never change a row's
+    /// height, and clickable to open the enlarge sheet.
     @ViewBuilder
-    private var preview: some View {
+    private var screenshot: some View {
         if let url = model.previewImageURL(for: entry) {
             AsyncImage(url: url) { phase in
-                PluginPreviewPhaseView(phase: phase, title: model.title(for: entry)) {
+                PluginThumbnail(phase: phase, title: model.title(for: entry)) {
                     showingFullImage = true
                 }
             }
@@ -1190,73 +1224,31 @@ private struct PluginCard: View {
 
     private var isInstalling: Bool { model.installingEntryIDs.contains(entry.id) }
 
-    private var details: some View {
-        HStack(alignment: .top, spacing: 11) {
-            PluginTile(symbol: CategoryStyle.symbol(for: entry.category), tint: CategoryStyle.tint(for: entry.category))
-
-            VStack(alignment: .leading, spacing: 3) {
-                Text(model.title(for: entry)).font(TypeRole.cardTitle).lineLimit(1)
-                if model.hasMultipleStores, let storeName = model.storeName(for: entry) {
-                    MetaChip(symbol: "shippingbox", label: storeName)
-                }
-                if let author = model.author(for: entry) {
-                    Text("by \(author)").font(.caption).foregroundStyle(.secondary).lineLimit(1)
-                }
-                if let desc = model.summary(for: entry), !desc.isEmpty {
-                    Text(desc).font(.caption).foregroundStyle(.secondary).lineLimit(2)
-                }
-                // One ranked badge row instead of a vertical ladder of
-                // same-weight pills: a filled chip for state that matters (trust,
-                // deprecation), muted text for metadata (surface, freshness).
-                HStack(spacing: Space.sm) {
-                    if entry.deprecated {
-                        TrustChip(symbol: "exclamationmark.triangle.fill", label: "Deprecated", tint: .red)
-                            .help("The store that lists this plugin marks it deprecated")
-                    }
-                    // Shown for `.undeclared` too — a plugin declaring no
-                    // permissions at all is exactly the state a trust chip
-                    // exists to surface. A `nil` level (header not fetched
-                    // yet) still shows nothing, same as before.
-                    if let level = model.trustLevel(for: entry) {
-                        TrustChip(symbol: level.symbol, label: level.label, tint: level.color)
-                    }
-                    SurfaceBadge(surface: entry.manifestSurface)
-                    if let date = model.lastUpdatedDate(for: entry), let freshness = model.freshness(for: entry) {
-                        FreshnessBadge(date: date, freshness: freshness)
-                    }
-                }
-                .padding(.top, 2)
+    private var actions: some View {
+        VStack(alignment: .trailing, spacing: 4) {
+            if model.isInstalled(entry) {
+                Label("Installed", systemImage: "checkmark")
+                    .font(.caption).foregroundStyle(.secondary)
+                    .lineLimit(1).fixedSize(horizontal: true, vertical: false)
+                ProvenanceBadge(status: model.provenanceStatus(for: entry))
+                updateButton
+            } else {
+                installButton
             }
-            // Reserves room for the metadata that streams in after the card
-            // first appears (author, description, trust/freshness badges) so
-            // the card doesn't grow underneath the cursor mid-scroll — the
-            // model already fixed this exact hazard for sort order (see
-            // `PluginBrowserModel.sortKey`); the layout was still doing it.
-            .frame(minHeight: 84, alignment: .top)
-
-            Spacer(minLength: 6)
-
-            VStack(spacing: 4) {
-                if model.isInstalled(entry) {
-                    Label("Installed", systemImage: "checkmark")
-                        .font(.caption).foregroundStyle(.secondary)
-                        .lineLimit(1).fixedSize(horizontal: true, vertical: false)
-                    ProvenanceBadge(status: model.provenanceStatus(for: entry))
-                    updateButton
-                } else {
-                    installButton
+            if let url = model.sourceURL(for: entry) {
+                Link(destination: url) {
+                    Text("View source").font(.caption)
                 }
-                if let url = model.sourceURL(for: entry) {
-                    Link(destination: url) {
-                        Text("View source").font(.caption)
-                    }
-                    .help("Open this plugin's source")
-                    .accessibilityLabel("View source for \(model.title(for: entry))")
-                }
+                // Inside a grouped Form row a bare Link can pick up the
+                // surrounding control style; plain keeps it the small text link
+                // it is (and keeps the whole action area fixed-width).
+                .buttonStyle(.plain)
+                .help("Open this plugin's source")
+                .accessibilityLabel("View source for \(model.title(for: entry))")
             }
-            .frame(minWidth: 82)
-            .fixedSize(horizontal: true, vertical: false)
         }
+        .frame(minWidth: 82)
+        .fixedSize(horizontal: true, vertical: false)
     }
 
     /// Re-fetches the catalog source and re-opens the trust gate. Its style
@@ -1299,11 +1291,11 @@ private struct PluginCard: View {
     }
 }
 
-/// The click-to-enlarge sheet for a plugin card's screenshot — a plain, large
-/// resizable `AsyncImage` (the card's own already loaded it, so this refetches
-/// from URLSession's shared cache rather than round-tripping the network
-/// again) with a title bar and a close affordance. `⌘.`/Esc close it, matching
-/// the `Cancel` convention elsewhere (e.g. `AddStoreSheet`).
+/// The click-to-enlarge sheet for a plugin row's screenshot — a plain, large
+/// resizable `AsyncImage` (the row's own thumbnail already loaded it, so this
+/// refetches from URLSession's shared cache rather than round-tripping the
+/// network again) with a title bar and a close affordance. `⌘.`/Esc close it,
+/// matching the `Cancel` convention elsewhere (e.g. `AddStoreSheet`).
 private struct PluginScreenshotSheet: View {
     let url: URL
     let title: String
@@ -1343,12 +1335,12 @@ private struct PluginScreenshotSheet: View {
     }
 }
 
-/// A placeholder card shown while the catalog loads — neutral bars in
-/// ``PluginCard``'s shape (tile · title/lines/badge · action), on the same
-/// `veeCardSurface`, so the grid holds its layout instead of popping in.
-private struct SkeletonPluginCard: View {
+/// A placeholder row shown while the catalog loads — neutral bars in
+/// ``PluginCatalogRow``'s shape (tile · title/lines/badge · thumbnail · action),
+/// so the list holds its layout instead of popping in.
+private struct SkeletonPluginRow: View {
     var body: some View {
-        HStack(alignment: .top, spacing: 11) {
+        HStack(spacing: 11) {
             RoundedRectangle(cornerRadius: 9, style: .continuous)
                 .fill(Palette.hairline)
                 .frame(width: 34, height: 34)
@@ -1358,11 +1350,14 @@ private struct SkeletonPluginCard: View {
                 Capsule().fill(Palette.hairline).frame(width: 150, height: 8)
                 Capsule().fill(Palette.hairline).frame(width: 72, height: 16).padding(.top, 2)
             }
-            Spacer(minLength: 6)
+            .frame(minHeight: PluginCatalogRow.metadataMinHeight, alignment: .top)
+            Spacer(minLength: Space.sm)
+            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                .fill(Palette.hairline)
+                .frame(width: PluginThumbnail.size.width, height: PluginThumbnail.size.height)
             Capsule().fill(Palette.hairline).frame(width: 58, height: 22)
         }
-        .padding(Space.md)
-        .veeCardSurface()
+        .padding(.vertical, 2)
         .accessibilityHidden(true)
     }
 }
