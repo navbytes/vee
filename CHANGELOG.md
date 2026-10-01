@@ -6,6 +6,10 @@ All notable changes to Vee are documented here. The format is based on
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-10-01
+
+Discover drops the ragged card grid for a clean, uniform row list.
+
 ### Changed
 - **Discover is a clean, uniform row list** instead of an uneven card grid.
   Every plugin row is the same height whether or not it has a screenshot,
