@@ -1,0 +1,54 @@
+name: Fluid
+
+# Fluid is a separate SwiftPM package under Fluid/ (the Swift-plugin successor
+# to Vee). It has its own job so a Fluid change never runs Vee's matrix and a
+# Vee change never runs this one.
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - 'Fluid/**'
+      - '.github/workflows/fluid.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: fluid-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  # The plugin contract, the runtime and the supervisor are Foundation-only,
+  # so the cheap Linux runner exercises all of them, including a real plugin
+  # build through PluginBuilder.
+  linux:
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
+    runs-on: ubuntu-latest
+    container: swift:6.2
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: Fluid
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - run: swift build
+      - run: swift test
+        env:
+          FLUID_BUILD_TESTS: '1'
+
+  # The only place the AppKit/SwiftUI app target actually compiles.
+  macos:
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
+    runs-on: macos-26
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: Fluid
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: maxim-lobanov/setup-xcode@ed7a3b1fda3918c0306d1b724322adc0b8cc0a90 # v1
+        with:
+          xcode-version: latest-stable
+      - run: swift build
+      - run: swift test
